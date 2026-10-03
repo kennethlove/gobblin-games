@@ -1,0 +1,49 @@
+---
+source: game/tests/patron_affinity_snapshot.rs
+expression: snapshot
+---
+- - Aesthete
+  - Character0
+  - 8
+- - Aesthete
+  - Character1
+  - 8
+- - Aesthete
+  - Character2
+  - -4
+- - Aesthete
+  - Character3
+  - -4
+- - Loyalist
+  - Character0
+  - -5
+- - Loyalist
+  - Character1
+  - -5
+- - Loyalist
+  - Character4
+  - -8
+- - Sadist
+  - Character2
+  - 11
+- - Sadist
+  - Character3
+  - 11
+- - Compassionate
+  - Character2
+  - -8
+- - Compassionate
+  - Character3
+  - -8
+- - Strategist
+  - Character0
+  - 6
+- - Strategist
+  - Character1
+  - 6
+- - Strategist
+  - Character2
+  - 4
+- - Strategist
+  - Character3
+  - 4

@@ -1,0 +1,2 @@
+-- Migrate items from quantity-based to durability-based wear model.
+-- NOTE: Destructive DELETE statements removed — already applied.

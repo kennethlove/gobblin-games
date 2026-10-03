@@ -1,0 +1,19 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ../..:/workspaces:cached
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/workspaces/hangrier_games/target
+    command: sleep infinity
+    # SurrealDB is installed inside this container (see Dockerfile) and started
+    # by `just dev` / `just db`. It listens on localhost:8000.
+    ports:
+      - "3000:3000"  # API
+      - "8025:8025"  # Mailpit UI (runs as binary inside dev container, started by just dev)
+
+volumes:
+  cargo-cache:
+  target-cache:

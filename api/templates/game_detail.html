@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="broadcast-theme">
+  <div hx-ext="sse" sse-connect="/api/games/{{ game.identifier }}/events">
+
+    {# ══ BROADCAST HEADER ══ #}
+    <div class="broad-header">
+      <div class="broad-header-row">
+        <div class="broad-emblem">
+          <div class="broad-emblem-inner"></div>
+        </div>
+        <span class="round-id">
+          DAY <span class="hl">{{ current_day }}</span>
+        </span>
+        <span class="location">{{ game.name | upper }}</span>
+      </div>
+      <div class="broad-header-meta"></div>
+      <div class="broad-stats">
+        <div class="stat">
+          <span class="num alive">{{ alive }}</span>
+          <span class="stat-label">ALIVE</span>
+        </div>
+        <div class="stat">
+          <span class="num fallen">{{ fallen }}</span>
+          <span class="stat-label">FALLEN</span>
+        </div>
+        <div class="stat">
+          <span class="num">{{ total }}</span>
+          <span class="stat-label">TOTAL</span>
+        </div>
+      </div>
+    </div>
+
+    {# ══ DAY NAV ══ #}
+    <div class="day-nav">
+      <div class="day-left">
+        <span class="day-label">DAY</span>
+        {% if current_day > 1 %}
+          <a href="/games/{{ game.identifier }}?day={{ current_day - 1 }}" class="day-arrow" title="Previous day">&laquo;</a>
+        {% else %}
+          <span class="day-arrow disabled">&laquo;</span>
+        {% endif %}
+        <select class="day-nav-select" onchange="window.location.href='/games/{{ game.identifier }}?day=' + this.value + '&phase={{ current_phase }}'">
+          {% for d in range(start=1, end=day_count) %}
+            <option value="{{ d }}" {% if d == current_day %}selected{% endif %}>{{ d }}</option>
+          {% endfor %}
+        </select>
+        {% if current_day < game.day %}
+          <a href="/games/{{ game.identifier }}?day={{ current_day + 1 }}" class="day-arrow" title="Next day">&raquo;</a>
+        {% else %}
+          <span class="day-arrow disabled">&raquo;</span>
+        {% endif %}
+        <span class="day-nav-divider">/</span>
+        {% set all_phases = ["dawn", "day", "dusk", "night"] %}
+        <select class="day-nav-select" onchange="window.location.href='/games/{{ game.identifier }}?day={{ current_day }}&phase=' + this.value">
+          {% for p in all_phases %}
+            <option value="{{ p }}" {% if current_phase == p %}selected{% endif %}>{{ p | upper }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="day-right">
+        {% if game.is_mine and game.status == 'InProgress' %}
+          <button
+            class="phase-btn"
+            hx-put="/api/games/{{ game.identifier }}/next"
+            hx-swap="none"
+            hx-disabled-elt="this"
+            hx-indicator="#play-spinner"
+            hx-on::after-request="window.location.href='/games/{{ game.identifier }}'">
+            ADVANCE +
+            <span id="play-spinner" class="htmx-indicator">
+              <svg class="spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-opacity="0.25"></circle>
+                <path fill="currentColor" fill-opacity="0.75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+            </span>
+          </button>
+        {% elif game.is_mine and game.status == 'NotStarted' %}
+          <button
+            class="phase-btn"
+            hx-put="/api/games/{{ game.identifier }}/next"
+            hx-swap="none"
+            hx-disabled-elt="this"
+            hx-indicator="#start-spinner"
+            hx-on::after-request="window.location.href='/games/{{ game.identifier }}'">
+            START
+            <span id="start-spinner" class="htmx-indicator">
+              <svg class="spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-opacity="0.25"></circle>
+                <path fill="currentColor" fill-opacity="0.75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+            </span>
+          </button>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ══ TICKER BAR ══ #}
+    <div class="ticker-bar">
+      <div class="ticker-left">
+        <span class="live-dot"></span>
+        <span class="live-label">LIVE</span>
+        <span class="ticker-divider"></span>
+        <span class="ticker-text" id="tickerText">
+          {% if messages | length > 0 %}
+            LATEST: {{ messages[-1].content }}
+          {% else %}
+            ARENA SURVEILLANCE ACTIVE — <span class="hl">{{ total }} GOBLINS</span> IN PLAY
+          {% endif %}
+        </span>
+      </div>
+      <div class="ticker-right">
+        <span class="ticker-stat">
+          EVENTS: <span class="num">{{ messages | length }}</span>
+        </span>
+      </div>
+    </div>
+
+    {% if game.status == 'Finished' and game.winner is defined and game.winner %}
+      <div class="winner-banner winner-banner-gold">
+        <span>☠ WINNER: {{ game.winner.name }} ☠</span>
+      </div>
+    {% endif %}
+
+    {# ══ MAIN GRID — 50/50 ══ #}
+    <div class="broad-grid">
+
+      {# ── LEFT PANEL ── #}
+      <div class="broad-left-panel">
+
+        <div class="map-section">
+          <div class="section-header">
+            <span class="title">ARENA SURVEILLANCE</span>
+          </div>
+          <div class="map-container">
+            {{ hex_map | safe }}
+          </div>
+        </div>
+
+        <div class="roster-section">
+          <div class="section-header">
+            <span class="title">GOBLIN ROSTER</span>
+            <div class="roster-controls">
+              <button class="roster-sort roster-sort-btn">
+                CLAN
+              </button>
+              <span class="count">{{ alive }}/{{ total }}</span>
+            </div>
+          </div>
+          <div class="roster-scroll">
+            {% if character_rows | length == 0 %}
+              <div class="empty-state roster-empty">No goblins yet.</div>
+            {% else %}
+              {{ character_rows | safe }}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      {# ── RIGHT PANEL — Event Feed ── #}
+      <div class="feed-section">
+        <div class="feed-header">
+          <span class="title">
+            EVENT <span class="hl">FEED</span>
+          </span>
+          <div class="feed-tabs">
+            <button class="feed-tab active">ALL</button>
+            <button class="feed-tab">ACTION</button>
+            <button class="feed-tab">DEATH</button>
+            <button class="feed-tab">EVENT</button>
+            <button class="feed-tab">COMMENTARY</button>
+          </div>
+        </div>
+        <div class="feed-scroll" id="feedScroll"
+          hx-trigger="sse:{{ sse_events }}"
+          hx-get="/api/games/{{ game.identifier }}/log"
+          hx-target="#feedScroll"
+          hx-swap="innerHTML">
+          {% if event_cards | length == 0 %}
+            <div class="empty-state">No events yet.</div>
+          {% else %}
+            {{ event_cards | safe }}
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div id="game-status" style="display:none;"></div>
+  </div>
+</div>
+<script src="/assets/broadcast.js"></script>
+{% endblock %}

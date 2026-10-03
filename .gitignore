@@ -1,0 +1,43 @@
+/target
+/dist
+/.idea
+.aider*
+.DS_Store
+/.vscode
+**/node_modules
+.env
+
+# SurrealDB on-disk data (persistent dev database)
+.surrealdb/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+
+# Jujutsu
+.jj/
+
+# Large asset archives (not committed)
+*.zip
+
+# Superpowers (local agent state)
+.superpowers/
+
+# Local Crush config (contains MCP tokens)
+.crush.json
+
+.indxr-cache/
+
+# OpenCode
+.opencode/
+history.txt
+.codegraph/
+.reasonix/
+
+# Cate IDE
+.cate/
+package-lock.json
+
+# Beads / Dolt files (added by bd init)
+.beads/proxieddb/

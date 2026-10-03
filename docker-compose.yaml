@@ -1,0 +1,39 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      args:
+        - 'SURREAL_HOST=${SURREAL_HOST:-surrealdb}'
+        - 'SURREAL_USER=${SURREAL_USER:-root}'
+        - 'SURREAL_PASS=${SURREAL_PASS:-root}'
+      dockerfile: api.Dockerfile
+      cache_from:
+        - ${REGISTRY_URL:-localhost}/hg_backend:latest
+    image: ${REGISTRY_URL:-localhost}/hg_backend:latest
+    restart: unless-stopped
+    ports:
+      - "${SERVICE_PORT_BACKEND:-3000}:3000"
+    environment:
+      - SERVICE_FQDN_BACKEND_3000
+      - 'SERVICE_FQDN_BACKEND=${SERVICE_FQDN_BACKEND:-http://backend:3000}'
+      - 'SURREAL_HOST=${SURREAL_HOST:-surrealdb}'
+      - 'SURREAL_USER=${SURREAL_USER:-root}'
+      - 'SURREAL_PASS=${SURREAL_PASS:-root}'
+      - 'PRODUCTION=${PRODUCTION:-true}'
+    labels:
+      - "coolify.managed=true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+networks:
+    internal:
+        name: "${COMPOSE_PROJECT_NAME:-app}_internal"
+        labels:
+        - "coolify.managed=true"
+        driver: bridge

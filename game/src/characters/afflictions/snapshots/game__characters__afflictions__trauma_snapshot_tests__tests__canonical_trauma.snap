@@ -1,0 +1,49 @@
+---
+source: game/src/characters/afflictions/trauma_snapshot_tests.rs
+expression: json
+---
+{
+  "kind": "trauma",
+  "body_part": null,
+  "severity": "severe",
+  "source": {
+    "cascade": {
+      "from": [
+        "trauma",
+        null
+      ]
+    }
+  },
+  "acquired_cycle": 10,
+  "last_progressed_cycle": 15,
+  "trauma_metadata": {
+    "sources": [
+      {
+        "witnessed_ally_death": {
+          "ally": "characters:gnawpaw",
+          "cause": {
+            "kind": "fire"
+          }
+        }
+      },
+      {
+        "betrayal": {
+          "by": "characters:scabface"
+        }
+      },
+      {
+        "mass_casualty": {
+          "cause_class": "combat",
+          "deaths_this_cycle": 5
+        }
+      }
+    ],
+    "cycles_since_last_event": 0,
+    "observed_by": [
+      "characters:rendmaw"
+    ],
+    "observer_seen_cycle": {
+      "characters:rendmaw": 14
+    }
+  }
+}
