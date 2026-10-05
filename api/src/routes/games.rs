@@ -908,7 +908,7 @@ pub async fn create_game_post_handler(
     }
 
     let character_futures = (0..24)
-        .map(|idx| api::characters::create_character(None, &game_identifier, &user_db, idx % 12));
+        .map(|idx| api::characters::create_character(None, &game_identifier, &user_db, idx % 8));
     let character_results = futures::future::join_all(character_futures).await;
     if character_results.into_iter().any(|r| r.is_err()) {
         return Redirect::to("/games/new").into_response();

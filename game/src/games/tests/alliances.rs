@@ -284,8 +284,8 @@ fn run_character_cycle_enqueues_death_recorded_for_recently_dead_ally() {
     deceased.status = CharacterStatus::RecentlyDead;
     deceased.area = Area::Hub;
     survivor.area = Area::Hub;
-    deceased.clan = 11;
-    survivor.clan = 12;
+    deceased.clan = 7;
+    survivor.clan = 8;
 
     let did = deceased.id;
     let sid = survivor.id;
@@ -386,9 +386,9 @@ fn run_character_cycle_consumes_recently_killed_by_for_combat_death() {
     deceased.area = Area::Hub;
     killer.area = Area::Hub;
     survivor.area = Area::Hub;
-    deceased.clan = 11;
+    deceased.clan = 7;
     killer.clan = 2;
-    survivor.clan = 12;
+    survivor.clan = 8;
 
     let mut game =
         create_test_game_with_characters(vec![deceased.clone(), killer.clone(), survivor.clone()]);
@@ -440,8 +440,8 @@ fn run_character_cycle_environmental_death_emits_killer_none() {
 
     deceased.area = Area::Hub;
     survivor.area = Area::Hub;
-    deceased.clan = 11;
-    survivor.clan = 12;
+    deceased.clan = 7;
+    survivor.clan = 8;
 
     let mut game = create_test_game_with_characters(vec![deceased.clone(), survivor.clone()]);
     game.areas

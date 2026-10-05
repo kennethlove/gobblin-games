@@ -152,9 +152,9 @@ fn brain_missing_field_defaults() {
 
 #[rstest]
 fn new() {
-    let character = Character::new("Snaggletooth".to_string(), Some(12), None);
+    let character = Character::new("Snaggletooth".to_string(), Some(8), None);
     assert_eq!(character.name, "Snaggletooth");
-    assert_eq!(character.clan, 12);
+    assert_eq!(character.clan, 8);
     // Attributes::new() randomizes health in 50..=max_health.
     assert!(
         (50..=100).contains(&character.effective_health()),
@@ -167,7 +167,7 @@ fn new() {
 fn random() {
     let character = Character::random();
     assert!(!character.name.is_empty());
-    assert!(character.clan >= 1 && character.clan <= 12);
+    assert!(character.clan >= 1 && character.clan <= 8);
 }
 
 #[rstest]
@@ -319,7 +319,7 @@ fn consume_pending_trust_shock_no_break_when_sanity_above_threshold() {
 
 #[rstest]
 fn new_character_has_traits_for_valid_clan() {
-    let character = Character::new("Snaggletooth".to_string(), Some(12), None);
+    let character = Character::new("Snaggletooth".to_string(), Some(8), None);
     // generate_traits rolls 2..=6 traits from the clan pool.
     assert!((2..=6).contains(&character.traits.len()));
 }
@@ -327,9 +327,9 @@ fn new_character_has_traits_for_valid_clan() {
 #[rstest]
 fn pick_target_skips_allies() {
     // An ally is in the same area but must not be picked as a target.
-    let mut me = Character::new("Snaggletooth".to_string(), Some(12), None);
+    let mut me = Character::new("Snaggletooth".to_string(), Some(8), None);
     // No mental conditions → effective_sanity = 100 → not suicidal
-    let ally = Character::new("Grubworm".to_string(), Some(12), None);
+    let ally = Character::new("Grubworm".to_string(), Some(8), None);
     me.allies.push(ally.id);
 
     let mut events: Vec<TaggedEvent> = vec![];
@@ -341,8 +341,8 @@ fn pick_target_skips_allies() {
 #[rstest]
 fn pick_target_allows_same_clan_when_not_ally() {
     // Same-clan characters can now be targeted unless they're allies.
-    let me = Character::new("Snaggletooth".to_string(), Some(12), None);
-    let same_clan = Character::new("Grubworm".to_string(), Some(12), None);
+    let me = Character::new("Snaggletooth".to_string(), Some(8), None);
+    let same_clan = Character::new("Grubworm".to_string(), Some(8), None);
 
     let mut events: Vec<TaggedEvent> = vec![];
     let target = me.pick_target(vec![same_clan.clone()], 5, &mut events);
@@ -353,9 +353,9 @@ fn pick_target_allows_same_clan_when_not_ally() {
 #[rstest]
 fn pick_target_final_confrontation_overrides_alliance() {
     // When only two characters remain alive, even an ally is a valid target.
-    let mut me = Character::new("Snaggletooth".to_string(), Some(12), None);
+    let mut me = Character::new("Snaggletooth".to_string(), Some(8), None);
     // No mental conditions → effective_sanity = 100 → not suicidal
-    let ally = Character::new("Grubworm".to_string(), Some(12), None);
+    let ally = Character::new("Grubworm".to_string(), Some(8), None);
     me.allies.push(ally.id);
 
     let mut events: Vec<TaggedEvent> = vec![];

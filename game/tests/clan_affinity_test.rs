@@ -14,10 +14,6 @@ use rstest::rstest;
 #[case(6, BaseTerrain::Grasslands, vec![BaseTerrain::Clearing, BaseTerrain::Highlands])]
 #[case(7, BaseTerrain::Forest, vec![BaseTerrain::Jungle, BaseTerrain::Wetlands])]
 #[case(8, BaseTerrain::Grasslands, vec![BaseTerrain::Clearing, BaseTerrain::Wetlands])]
-#[case(9, BaseTerrain::Grasslands, vec![BaseTerrain::Clearing, BaseTerrain::Highlands])]
-#[case(10, BaseTerrain::Grasslands, vec![BaseTerrain::Highlands, BaseTerrain::Badlands])]
-#[case(11, BaseTerrain::Grasslands, vec![BaseTerrain::Clearing, BaseTerrain::Forest])]
-#[case(12, BaseTerrain::Tundra, vec![BaseTerrain::Mountains, BaseTerrain::Badlands])]
 fn test_clan_primary_affinity(
     #[case] clan: u8,
     #[case] expected_primary: BaseTerrain,
@@ -62,7 +58,7 @@ fn test_clan_primary_affinity(
 #[test]
 fn test_affinity_count() {
     // Test each clan multiple times
-    for clan in 1..=12 {
+    for clan in 1..=8 {
         let character = Character::new(format!("Character from Clan {}", clan), Some(clan), None);
 
         let affinity_count = character.terrain_affinity.len();
@@ -102,7 +98,7 @@ fn test_bonus_affinity_probability() {
 #[test]
 fn test_affinity_terrains_valid() {
     // Ensure all terrain affinities are valid BaseTerrain variants
-    for clan in 1..=12 {
+    for clan in 1..=8 {
         let character = Character::new(format!("Character from Clan {}", clan), Some(clan), None);
 
         for terrain in &character.terrain_affinity {

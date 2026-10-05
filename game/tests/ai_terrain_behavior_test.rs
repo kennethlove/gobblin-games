@@ -64,7 +64,7 @@ fn test_destination_scoring_favors_affinity_terrain(
 #[rstest]
 fn test_harsh_terrain_penalty_applied() {
     let brain = Brain::default();
-    let character = Character::new("Grubworm".to_string(), Some(12), None);
+    let character = Character::new("Grubworm".to_string(), Some(8), None);
 
     let areas = vec![
         // Grasslands (Mild harshness) - should score higher
@@ -171,7 +171,7 @@ fn test_desperate_characters_flee_to_affinity_terrain() {
 #[rstest]
 fn test_concealed_visibility_bonus() {
     let brain = Brain::default();
-    let character = Character::new("Snaggletooth".to_string(), Some(12), None);
+    let character = Character::new("Snaggletooth".to_string(), Some(8), None);
 
     let areas = vec![
         // Jungle is Concealed - good for hiding

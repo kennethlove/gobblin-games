@@ -11,8 +11,8 @@ pub struct ClanProfile {
     pub bonus_affinity_pool: [BaseTerrain; 2],
 }
 
-/// All 12 clan profiles with their industries and terrain affinities
-pub const CLAN_PROFILES: [ClanProfile; 12] = [
+/// All 8 clan profiles with their industries and terrain affinities
+pub const CLAN_PROFILES: [ClanProfile; 8] = [
     ClanProfile {
         number: 1,
         industry: "Luxury",
@@ -61,36 +61,12 @@ pub const CLAN_PROFILES: [ClanProfile; 12] = [
         primary_affinity: BaseTerrain::Grasslands,
         bonus_affinity_pool: [BaseTerrain::Clearing, BaseTerrain::Wetlands],
     },
-    ClanProfile {
-        number: 9,
-        industry: "Grain",
-        primary_affinity: BaseTerrain::Grasslands,
-        bonus_affinity_pool: [BaseTerrain::Clearing, BaseTerrain::Highlands],
-    },
-    ClanProfile {
-        number: 10,
-        industry: "Livestock",
-        primary_affinity: BaseTerrain::Grasslands,
-        bonus_affinity_pool: [BaseTerrain::Highlands, BaseTerrain::Badlands],
-    },
-    ClanProfile {
-        number: 11,
-        industry: "Agriculture",
-        primary_affinity: BaseTerrain::Grasslands,
-        bonus_affinity_pool: [BaseTerrain::Clearing, BaseTerrain::Forest],
-    },
-    ClanProfile {
-        number: 12,
-        industry: "Mining",
-        primary_affinity: BaseTerrain::Tundra,
-        bonus_affinity_pool: [BaseTerrain::Mountains, BaseTerrain::Badlands],
-    },
 ];
 
 /// Assigns terrain affinity to a character based on their clan
 ///
 /// # Arguments
-/// * `clan` - Clan number (1-12)
+/// * `clan` - Clan number (1-8)
 /// * `rng` - Random number generator
 ///
 /// # Returns
@@ -99,7 +75,7 @@ pub const CLAN_PROFILES: [ClanProfile; 12] = [
 /// - 40% chance to add one random terrain from the bonus pool
 pub fn assign_terrain_affinity(clan: u8, rng: &mut impl Rng) -> Vec<BaseTerrain> {
     // Handle invalid clans by returning empty vec
-    if !(1..=12).contains(&clan) {
+    if !(1..=8).contains(&clan) {
         return vec![];
     }
 
@@ -115,8 +91,8 @@ pub fn assign_terrain_affinity(clan: u8, rng: &mut impl Rng) -> Vec<BaseTerrain>
     affinities
 }
 
-/// Display epithets for the 12 clans, indexed by clan number minus one.
-pub const CLAN_EPITHETS: [&str; 12] = [
+/// Display epithets for the 8 clans, indexed by clan number minus one.
+pub const CLAN_EPITHETS: [&str; 8] = [
     "Mangletooth",
     "Bogmaw",
     "Rustnib",
@@ -125,13 +101,9 @@ pub const CLAN_EPITHETS: [&str; 12] = [
     "Mudlark",
     "Bonepick",
     "Scabridge",
-    "Gnawpool",
-    "Tallowhide",
-    "Cindersnout",
-    "Snapjaw",
 ];
 
-/// Epithet for a clan number (1..=12). Unknown numbers fall back to the
+/// Epithet for a clan number (1..=8). Unknown numbers fall back to the
 /// first epithet so bad data still renders.
 pub fn clan_epithet(clan: u32) -> &'static str {
     CLAN_EPITHETS
@@ -149,7 +121,7 @@ mod tests {
 
     #[test]
     fn test_clan_profiles_count() {
-        assert_eq!(CLAN_PROFILES.len(), 12);
+        assert_eq!(CLAN_PROFILES.len(), 8);
     }
 
     #[rstest]
@@ -161,10 +133,6 @@ mod tests {
     #[case(6, "Transportation", BaseTerrain::Grasslands)]
     #[case(7, "Lumber", BaseTerrain::Forest)]
     #[case(8, "Textiles", BaseTerrain::Grasslands)]
-    #[case(9, "Grain", BaseTerrain::Grasslands)]
-    #[case(10, "Livestock", BaseTerrain::Grasslands)]
-    #[case(11, "Agriculture", BaseTerrain::Grasslands)]
-    #[case(12, "Mining", BaseTerrain::Tundra)]
     fn test_clan_profile_data(
         #[case] clan: u8,
         #[case] expected_industry: &str,
@@ -181,7 +149,7 @@ mod tests {
     fn test_assign_terrain_affinity_always_includes_primary() {
         let mut rng = SmallRng::seed_from_u64(42);
 
-        for clan in 1..=12 {
+        for clan in 1..=8 {
             let affinities = assign_terrain_affinity(clan, &mut rng);
             assert!(!affinities.is_empty());
 
@@ -194,7 +162,7 @@ mod tests {
     fn test_assign_terrain_affinity_returns_one_or_two() {
         let mut rng = SmallRng::seed_from_u64(42);
 
-        for clan in 1..=12 {
+        for clan in 1..=8 {
             let affinities = assign_terrain_affinity(clan, &mut rng);
             assert!(!affinities.is_empty() && affinities.len() <= 2);
         }
@@ -228,7 +196,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(42);
 
         assert_eq!(assign_terrain_affinity(0, &mut rng).len(), 0);
-        assert_eq!(assign_terrain_affinity(13, &mut rng).len(), 0);
+        assert_eq!(assign_terrain_affinity(9, &mut rng).len(), 0);
         assert_eq!(assign_terrain_affinity(255, &mut rng).len(), 0);
     }
 }

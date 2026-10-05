@@ -366,7 +366,7 @@ impl Character {
 
         // Assign terrain affinity, traits, and personality based on clan
         let mut rng = SmallRng::from_rng(&mut rand::rng());
-        let terrain_affinity = if (1..=12).contains(&clan) {
+        let terrain_affinity = if (1..=8).contains(&clan) {
             crate::clans::assign_terrain_affinity(clan as u8, &mut rng)
         } else {
             vec![]
@@ -436,7 +436,7 @@ impl Character {
         let id: String = id_uuid.to_string();
 
         // Assign terrain affinity, traits, and personality based on clan
-        let terrain_affinity = if (1..=12).contains(&clan) {
+        let terrain_affinity = if (1..=8).contains(&clan) {
             crate::clans::assign_terrain_affinity(clan as u8, rng)
         } else {
             vec![]
@@ -494,7 +494,7 @@ impl Character {
     pub fn random() -> Self {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
         let name = crate::naming::goblin_name(&mut rng);
-        let clan = rng.random_range(1..=12);
+        let clan = rng.random_range(1..=8);
         Character::new(name, Some(clan), None)
     }
 
@@ -1892,9 +1892,9 @@ mod tests {
 
     #[rstest]
     fn new() {
-        let character = Character::new("Snaggletooth".to_string(), Some(12), None);
+        let character = Character::new("Snaggletooth".to_string(), Some(8), None);
         assert_eq!(character.name, "Snaggletooth");
-        assert_eq!(character.clan, 12);
+        assert_eq!(character.clan, 8);
         assert_eq!(character.blood, 1000, "blood starts at full");
     }
 
@@ -1902,7 +1902,7 @@ mod tests {
     fn random() {
         let character = Character::random();
         assert!(!character.name.is_empty());
-        assert!(character.clan >= 1 && character.clan <= 12);
+        assert!(character.clan >= 1 && character.clan <= 8);
     }
 
     #[rstest]
@@ -2055,7 +2055,7 @@ mod tests {
 
     #[rstest]
     fn new_character_has_traits_for_valid_clan() {
-        let character = Character::new("Snaggletooth".to_string(), Some(12), None);
+        let character = Character::new("Snaggletooth".to_string(), Some(8), None);
         // generate_traits rolls 2..=6 traits from the clan pool.
         assert!((2..=6).contains(&character.traits.len()));
     }
@@ -2063,9 +2063,9 @@ mod tests {
     #[rstest]
     fn pick_target_skips_allies() {
         // An ally is in the same area but must not be picked as a target.
-        let mut me = Character::new("Snaggletooth".to_string(), Some(12), None);
+        let mut me = Character::new("Snaggletooth".to_string(), Some(8), None);
         // No mental conditions → effective_sanity = 100 → not suicidal
-        let ally = Character::new("Grubworm".to_string(), Some(12), None);
+        let ally = Character::new("Grubworm".to_string(), Some(8), None);
         me.allies.push(ally.id);
 
         let mut events: Vec<TaggedEvent> = vec![];
@@ -2077,8 +2077,8 @@ mod tests {
     #[rstest]
     fn pick_target_allows_same_clan_when_not_ally() {
         // Same-clan characters can now be targeted unless they're allies.
-        let me = Character::new("Snaggletooth".to_string(), Some(12), None);
-        let same_clan = Character::new("Grubworm".to_string(), Some(12), None);
+        let me = Character::new("Snaggletooth".to_string(), Some(8), None);
+        let same_clan = Character::new("Grubworm".to_string(), Some(8), None);
 
         let mut events: Vec<TaggedEvent> = vec![];
         let target = me.pick_target(vec![same_clan.clone()], 5, &mut events);
@@ -2089,9 +2089,9 @@ mod tests {
     #[rstest]
     fn pick_target_final_confrontation_overrides_alliance() {
         // When only two characters remain alive, even an ally is a valid target.
-        let mut me = Character::new("Snaggletooth".to_string(), Some(12), None);
+        let mut me = Character::new("Snaggletooth".to_string(), Some(8), None);
         // No mental conditions → effective_sanity = 100 → not suicidal
-        let ally = Character::new("Grubworm".to_string(), Some(12), None);
+        let ally = Character::new("Grubworm".to_string(), Some(8), None);
         me.allies.push(ally.id);
 
         let mut events: Vec<TaggedEvent> = vec![];

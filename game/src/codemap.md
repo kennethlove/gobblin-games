@@ -116,7 +116,7 @@ run_day_night_cycle(day: bool)
   - `phases` — Per-phase pipeline scaffolding (environmental conditions, light levels)
   - `patrons` — Patron archetypes, budget bands, affinity tracking
   - `config` — `GameConfig` struct with runtime-tunable game constants
-  - `clans` — 12 clan profiles with industry and terrain affinities
+  - `clans` — 8 clan profiles with industry and terrain affinities
   - `pathfinding` — Generic A* graph pathfinding
   - `witty_phrase_generator` — Random name generation for games
 - **External Crates**:
@@ -205,7 +205,7 @@ Module aggregator. Exports all submodules and declares `witty_phrase_generator` 
 - **Design**: Runtime-configurable for difficulty modes and feature toggles
 
 ### **clans.rs** (209 lines) — **Clan Profiles**
-- **Purpose**: 12 clan profiles mapping number → industry → terrain affinities
+- **Purpose**: 8 clan profiles mapping number → industry → terrain affinities
 - **Key Struct**: `ClanProfile` (number, industry, primary_affinity, bonus_affinity_pool)
 - **Usage**: `character.clan` maps to profile for trait bonuses and alliance affinity
 

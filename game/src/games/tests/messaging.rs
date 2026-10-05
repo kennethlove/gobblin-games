@@ -100,7 +100,7 @@ fn spawn_patrons_creates_six_with_loyalist_clan() {
         .find(|s| s.archetype == shared::patrons::ArchetypeId::Loyalist)
         .expect("Loyalist must spawn");
     let clan = loyalist.bound_clan.expect("Loyalist gets a clan");
-    assert!((1u8..=12).contains(&clan));
+    assert!((1u8..=8).contains(&clan));
 }
 
 #[test]

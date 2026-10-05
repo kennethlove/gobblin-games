@@ -112,7 +112,7 @@ async fn test_game_auto_spawns_characters() {
         assert!(t.get("name").is_some());
         assert!(t.get("clan").is_some());
         let clan = t["clan"].as_u64().expect("clan is u64");
-        assert!((1..=12).contains(&clan), "clan {} out of range", clan);
+        assert!((1..=8).contains(&clan), "clan {} out of range", clan);
     }
 
     test_db.cleanup().await;
@@ -232,7 +232,7 @@ async fn test_delete_character() {
     test_db.cleanup().await;
 }
 
-/// Test that the auto-spawn roster covers every clan 1..=12.
+/// Test that the auto-spawn roster covers every clan 1..=8.
 #[tokio::test]
 async fn test_auto_spawn_clan_coverage() {
     let test_db = TestDb::new().await;
@@ -254,8 +254,8 @@ async fn test_auto_spawn_clan_coverage() {
     let unique: std::collections::BTreeSet<_> = clans.iter().copied().collect();
     assert_eq!(
         unique,
-        (1..=12u64).collect(),
-        "every clan 1..=12 should be represented"
+        (1..=8u64).collect(),
+        "every clan 1..=8 should be represented"
     );
 
     test_db.cleanup().await;

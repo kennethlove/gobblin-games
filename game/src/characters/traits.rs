@@ -144,29 +144,6 @@ pub const CLAN_8_POOL: &[(Trait, u8)] = &[
     (Trait::Loyal, 3),
     (Trait::Asthmatic, 2),
 ];
-pub const CLAN_9_POOL: &[(Trait, u8)] = &[
-    (Trait::Cautious, 3),
-    (Trait::Friendly, 3),
-    (Trait::Asthmatic, 2),
-];
-pub const CLAN_10_POOL: &[(Trait, u8)] = &[
-    (Trait::Resilient, 4),
-    (Trait::Defensive, 3),
-    (Trait::Tough, 3),
-];
-pub const CLAN_11_POOL: &[(Trait, u8)] = &[
-    (Trait::Loyal, 3),
-    (Trait::Friendly, 4),
-    (Trait::Resilient, 3),
-    (Trait::Tough, 2),
-];
-pub const CLAN_12_POOL: &[(Trait, u8)] = &[
-    (Trait::Resilient, 3),
-    (Trait::LoneWolf, 3),
-    (Trait::Cunning, 3),
-    (Trait::Asthmatic, 2),
-];
-
 pub fn pool_for(clan: u8) -> &'static [(Trait, u8)] {
     match clan {
         1 => CLAN_1_POOL,
@@ -177,10 +154,6 @@ pub fn pool_for(clan: u8) -> &'static [(Trait, u8)] {
         6 => CLAN_6_POOL,
         7 => CLAN_7_POOL,
         8 => CLAN_8_POOL,
-        9 => CLAN_9_POOL,
-        10 => CLAN_10_POOL,
-        11 => CLAN_11_POOL,
-        12 => CLAN_12_POOL,
         _ => CLAN_1_POOL,
     }
 }
@@ -388,13 +361,13 @@ mod tests {
     fn pool_for_returns_correct_pool_per_clan() {
         let p1 = pool_for(1);
         assert!(p1.iter().any(|(t, _)| *t == Trait::Loyal));
-        let p12 = pool_for(12);
-        assert!(p12.iter().any(|(t, _)| *t == Trait::LoneWolf));
+        let p8 = pool_for(8);
+        assert!(p8.iter().any(|(t, _)| *t == Trait::Friendly));
     }
 
     #[test]
     fn pool_for_unknown_clan_falls_back() {
-        // Clans outside 1..=12 fall back to clan 1's pool; assert non-panic.
+        // Clans outside 1..=8 fall back to clan 1's pool; assert non-panic.
         let _ = pool_for(99);
     }
 

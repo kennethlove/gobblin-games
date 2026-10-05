@@ -78,7 +78,7 @@ pub async fn create_game(
 
     // Create characters concurrently
     let character_futures = (0..24)
-        .map(|idx| crate::characters::create_character(None, &game_identifier, &db, idx % 12));
+        .map(|idx| crate::characters::create_character(None, &game_identifier, &db, idx % 8));
     let character_results = futures::future::join_all(character_futures).await;
 
     if let Some(err) = character_results.into_iter().find_map(Result::err) {
@@ -148,7 +148,7 @@ pub async fn quickstart(
 
     // Create 24 characters
     let character_futures = (0..24)
-        .map(|idx| crate::characters::create_character(None, &game_identifier, &db, idx % 12));
+        .map(|idx| crate::characters::create_character(None, &game_identifier, &db, idx % 8));
     let character_results = futures::future::join_all(character_futures).await;
     if let Some(err) = character_results.into_iter().find_map(Result::err) {
         return Err(AppError::InternalServerError(format!(
