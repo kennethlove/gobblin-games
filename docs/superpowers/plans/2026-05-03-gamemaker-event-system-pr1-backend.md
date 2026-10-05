@@ -1099,7 +1099,7 @@ for f in fireball mutt_pack force_field area_closure convergence weather_overrid
 done
 ```
 
-(Run from the `hangrier_games` crate root, not the specs worktree.)
+(Run from the `gobblin-games` crate root, not the specs worktree.)
 
 - [ ] **Step 5: Run tests:**
 

@@ -1,5 +1,5 @@
 {
-  "name": "hangrier-games-assets",
+  "name": "gobblin-games-assets",
   "private": true,
   "devDependencies": {
     "@tailwindcss/cli": "^4.0.0",

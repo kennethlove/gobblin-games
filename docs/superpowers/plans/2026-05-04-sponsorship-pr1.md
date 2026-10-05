@@ -440,7 +440,7 @@ jj describe -m "feat(shared): add Sponsor archetype catalog (#dvd PR1)"
 
 - [ ] **Step 1: Locate `game/src/lib.rs` mod declarations**
 
-Run: `grep -n "^pub mod" /Users/klove/ghq/github.com/kennethlove/hangrier_games/game/src/lib.rs`
+Run: `grep -n "^pub mod" /Users/klove/ghq/github.com/kennethlove/gobblin-games/game/src/lib.rs`
 
 Expected: list of `pub mod ...;` lines.
 
@@ -537,7 +537,7 @@ mod tests {
 
 - [ ] **Step 4: Verify Tribute exposes identifier**
 
-Run: `grep -n "fn identifier\|pub identifier" /Users/klove/ghq/github.com/kennethlove/hangrier_games/game/src/tributes/mod.rs | head -3`
+Run: `grep -n "fn identifier\|pub identifier" /Users/klove/ghq/github.com/kennethlove/gobblin-games/game/src/tributes/mod.rs | head -3`
 
 Expected: an `identifier(&self) -> &str` method or `pub identifier: String` field. If only field exists, change `t.identifier() == identifier` to `t.identifier == identifier`.
 
@@ -561,7 +561,7 @@ jj describe -m "feat(game): add sponsors module skeleton (#dvd PR1)"
 
 - [ ] **Step 1: Read the Game struct**
 
-Run: `grep -n "^pub struct Game\|^}" /Users/klove/ghq/github.com/kennethlove/hangrier_games/game/src/games.rs | head -10`
+Run: `grep -n "^pub struct Game\|^}" /Users/klove/ghq/github.com/kennethlove/gobblin-games/game/src/games.rs | head -10`
 
 Identify the closing `}` of `pub struct Game`. Read those lines with `view`.
 
@@ -676,7 +676,7 @@ Append to `game/src/games.rs`'s `#[cfg(test)] mod tests { ... }`:
 Run: `cargo test -p game spawn_sponsors`
 Expected: 3 passed.
 
-If `Game::default()` doesn't exist, construct with whatever the existing tests use (search: `grep -n "fn new(" /Users/klove/ghq/github.com/kennethlove/hangrier_games/game/src/games.rs | head -3`) and adjust the test bootstrap accordingly. The behavior of the assertions stays the same.
+If `Game::default()` doesn't exist, construct with whatever the existing tests use (search: `grep -n "fn new(" /Users/klove/ghq/github.com/kennethlove/gobblin-games/game/src/games.rs | head -3`) and adjust the test bootstrap accordingly. The behavior of the assertions stays the same.
 
 - [ ] **Step 6: Commit**
 
@@ -693,7 +693,7 @@ jj describe -m "feat(game): add Game::sponsors + spawn_sponsors (#dvd PR1)"
 
 - [ ] **Step 1: Confirm payload variants**
 
-Run: `grep -n "TributeKilled\|TributeWounded\|AllianceFormed\|BetrayalTriggered\|AreaEvent" /Users/klove/ghq/github.com/kennethlove/hangrier_games/shared/src/messages.rs | head`
+Run: `grep -n "TributeKilled\|TributeWounded\|AllianceFormed\|BetrayalTriggered\|AreaEvent" /Users/klove/ghq/github.com/kennethlove/gobblin-games/shared/src/messages.rs | head`
 
 Expected variants present: `TributeKilled`, `TributeWounded`, `AllianceFormed`, `BetrayalTriggered`, `AreaEvent`.
 
@@ -1000,7 +1000,7 @@ jj describe -m "feat(game): update_affinities w/ clamp + Loyalist/Aesthete mods 
 
 - [ ] **Step 1: Verify proptest dep**
 
-Run: `grep -n "proptest" /Users/klove/ghq/github.com/kennethlove/hangrier_games/game/Cargo.toml`
+Run: `grep -n "proptest" /Users/klove/ghq/github.com/kennethlove/gobblin-games/game/Cargo.toml`
 If absent: append under `[dev-dependencies]`:
 
 ```toml
@@ -1132,7 +1132,7 @@ jj describe -m "feat(game): wire sponsor affinity update per cycle (#dvd PR1)"
 
 - [ ] **Step 1: Verify insta dep**
 
-Run: `grep -n "insta" /Users/klove/ghq/github.com/kennethlove/hangrier_games/game/Cargo.toml`
+Run: `grep -n "insta" /Users/klove/ghq/github.com/kennethlove/gobblin-games/game/Cargo.toml`
 If absent: add to `[dev-dependencies]`:
 
 ```toml
@@ -1194,7 +1194,7 @@ Expected: format clean, clippy clean, tests green.
 - [ ] **Step 2: Mirror & push from specs worktree per repo convention**
 
 ```bash
-cd /Users/klove/ghq/github.com/kennethlove/hangrier_games
+cd /Users/klove/ghq/github.com/kennethlove/gobblin-games
 jj git fetch
 jj rebase -d main@origin
 jj describe -m "feat(sponsorship): PR1 — data model + affinity tracking (#dvd)"

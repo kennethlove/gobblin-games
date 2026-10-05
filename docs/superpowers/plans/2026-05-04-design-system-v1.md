@@ -1,4 +1,4 @@
-# Hangrier Games Design System v1 — Implementation Plan
+# Gobblin Games Design System v1 — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -63,7 +63,7 @@ The new `:root` / `.dark` / `.light` blocks must come *before* the existing `@va
 Add this block after the existing `@source` lines and before `@variant theme1`:
 
 ```css
-/* ---- Hangrier Games v1 design tokens ---- */
+/* ---- Gobblin Games v1 design tokens ---- */
 :root, .dark {
   --color-bg: #19121A;
   --color-surface: #241829;
@@ -858,7 +858,7 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn Navbar() -> Element {
-    let mut storage = use_persistent("hangry-games", AppState::default);
+    let mut storage = use_persistent("gobblin-games", AppState::default);
     let mut theme_signal: Signal<Theme> = use_context();
     use_context_provider(|| Signal::new(crate::components::timeline::PeriodFilters::default()));
 
@@ -877,7 +877,7 @@ pub fn Navbar() -> Element {
     };
 
     rsx! {
-        TopBar { brand: "HANGRIER GAMES".to_string(),
+        TopBar { brand: "GOBBLIN GAMES".to_string(),
             nav {
                 aria_label: "Main navigation",
                 class: "flex items-center gap-6 font-text font-bold text-[11px] uppercase tracking-[0.16em] text-text-muted",

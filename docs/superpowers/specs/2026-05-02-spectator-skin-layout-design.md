@@ -2,7 +2,7 @@
 
 **Status:** Draft
 **Date:** 2026-05-02
-**Scope:** The structural and behavioral foundation of the default "spectator" view of Hangrier Games — grid layout, HUD, panel system, resize/collapse interactions, and chrome treatment. Visual identity (palette, typography, texture, iconography) is deferred to a companion spec.
+**Scope:** The structural and behavioral foundation of the default "spectator" view of Gobblin Games — grid layout, HUD, panel system, resize/collapse interactions, and chrome treatment. Visual identity (palette, typography, texture, iconography) is deferred to a companion spec.
 
 ## Goals
 

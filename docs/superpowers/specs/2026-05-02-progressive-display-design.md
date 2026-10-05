@@ -346,7 +346,7 @@ Chronological condensed log, growing downward. **Newest event at the bottom (clo
 
 **Auto-scroll behavior:** auto-scroll only when the user is at the bottom (within ~100px). If the user has scrolled up to read history, the ticker stays put; a "↓ N new events" badge appears at the bottom indicating new content. Clicking the badge or scrolling back to bottom resumes auto-scroll. Standard chat-app pattern.
 
-**Empty state (no events yet):** ticker shows **"The Hangry Games will start shortly!"** in the body face, muted-foreground, optionally with a subtle Panem seal watermark behind it (polish detail). No empty void.
+**Empty state (no events yet):** ticker shows **"The Gobblin Games will start shortly!"** in the body face, muted-foreground, optionally with a subtle Panem seal watermark behind it (polish detail). No empty void.
 
 **WebSocket disconnect / reconnect:** the live indicator surfaces connection state — "● Live" → "● Reconnecting…" (heraldic red, briefly) → "● Live" on success, or "○ Offline" with reconnect button on failure. Ticker continues to allow scrubbing through accumulated history while disconnected. Specifics depend on `use_game_websocket` connection-state surfacing — filed as an open implementation question.
 

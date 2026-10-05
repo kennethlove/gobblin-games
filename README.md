@@ -72,8 +72,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/kennethlove/hangrier_games.git
-cd hangrier_games
+git clone https://github.com/kennethlove/gobblin-games.git
+cd gobblin-games
 
 # Install all dependencies (Node packages)
 just setup
@@ -144,7 +144,7 @@ just test-all
 ##  Project Structure
 
 ```
-hangrier_games/
+gobblin-games/
 ├── game/          # Pure Rust simulation engine (no I/O)
 │   ├── areas/     # Arena topology and item management
 │   ├── items/     # Weapons, shields, consumables
@@ -277,4 +277,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Current Status**: Active development  
 **Last Updated**: May 2026
 
-For questions or issues, please [open an issue](https://github.com/kennethlove/hangrier_games/issues).
+For questions or issues, please [open an issue](https://github.com/kennethlove/gobblin-games/issues).

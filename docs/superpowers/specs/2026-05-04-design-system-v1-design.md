@@ -1,4 +1,4 @@
-# Hangrier Games — Design System (v1)
+# Gobblin Games — Design System (v1)
 
 **Date:** 2026-05-04
 **Status:** Approved foundations. Special UI elements (e.g. arena map, kill-cam, victor card) deferred to follow-up specs.

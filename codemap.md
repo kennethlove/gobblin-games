@@ -184,8 +184,8 @@ just api  # API server only (http://localhost:3000) - requires SurrealDB running
 
 ```bash
 # Clone repository
-git clone https://github.com/kennethlove/hangrier_games
-cd hangrier_games
+git clone https://github.com/kennethlove/gobblin-games
+cd gobblin-games
 
 # Install all dependencies (Node packages)
 just setup

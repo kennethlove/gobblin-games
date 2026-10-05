@@ -518,7 +518,7 @@ Expected: FAIL — `TributeStat::Intelligence` may not exist as a variant. Check
 If `TributeStat` does not exist (or the variant names differ), use the actual stat type. Common alternatives: `Tribute.intelligence` field directly, or a different enum name. Run:
 
 ```bash
-grep -rn "Intelligence\|Strength" /Users/klove/ghq/github.com/kennethlove/hangrier_games/game/src/tributes/traits.rs /Users/klove/ghq/github.com/kennethlove/hangrier_games/game/src/tributes/mod.rs | head -20
+grep -rn "Intelligence\|Strength" /Users/klove/ghq/github.com/kennethlove/gobblin-games/game/src/tributes/traits.rs /Users/klove/ghq/github.com/kennethlove/gobblin-games/game/src/tributes/mod.rs | head -20
 ```
 
 Adjust the imports and field references to match the actual stat representation.
@@ -897,7 +897,7 @@ This task assumes `lsis` introduces `AfflictionMetadataPayload` (or equivalent) 
 
 - [ ] **Step 1: Inspect the current API**
 
-Run: `grep -n "AfflictionMetadataPayload\|try_acquire_affliction\|AfflictionDraft" /Users/klove/ghq/github.com/kennethlove/hangrier_games/game/src/tributes/afflictions/mod.rs`
+Run: `grep -n "AfflictionMetadataPayload\|try_acquire_affliction\|AfflictionDraft" /Users/klove/ghq/github.com/kennethlove/gobblin-games/game/src/tributes/afflictions/mod.rs`
 
 Confirm the shape of the metadata dispatch. The plan continues assuming a `AfflictionMetadataPayload` enum with variants per metadata-bearing kind.
 
@@ -1576,7 +1576,7 @@ jj commit -m "feat(game): legacy trapped status save migration via Deserialize s
 - [ ] **Step 1: Find all references**
 
 ```bash
-grep -rn "TributeDrowned" /Users/klove/ghq/github.com/kennethlove/hangrier_games/game/src /Users/klove/ghq/github.com/kennethlove/hangrier_games/shared/src 2>&1
+grep -rn "TributeDrowned" /Users/klove/ghq/github.com/kennethlove/gobblin-games/game/src /Users/klove/ghq/github.com/kennethlove/gobblin-games/shared/src 2>&1
 ```
 
 Expected sites:

@@ -6,7 +6,7 @@
 
 ## Overview
 
-Add a terrain/biome system to the Hangrier Games that makes each region feel distinct and affects gameplay through movement costs, event probabilities, item distributions, and AI behavior. Pair this with user-facing game customization options for items, tribute attributes, and event frequency.
+Add a terrain/biome system to the Gobblin Games that makes each region feel distinct and affects gameplay through movement costs, event probabilities, item distributions, and AI behavior. Pair this with user-facing game customization options for items, tribute attributes, and event frequency.
 
 ## Goals
 
