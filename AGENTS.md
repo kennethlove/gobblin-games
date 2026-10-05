@@ -13,6 +13,26 @@ This project uses **bd** (beads) for issue tracking. Run `bd prime` for full wor
 > source of truth; don't `bd import` during normal operation; don't
 > reach for third-party Dolt hosting before trying the default).
 
+## Version Control (jj)
+
+**Jujutsu (jj) is the primary VCS for this repository.**
+
+```bash
+jj commit -m "type(scope): summary"   # describe working copy + advance (preferred)
+jj describe -m "..."                 # set message without advancing
+jj new                               # start a new change on top
+jj status / jj log                    # read state (git status/diff also fine)
+jj git push                          # push (add `origin` first if missing)
+```
+
+Rules:
+
+- **Never `git commit` / `git add`.** Raw git commits move HEAD under jj and
+  leave empty diverged snapshots behind that need manual `jj abandon` cleanup.
+- Reading with `git status`, `git diff`, `git show` is fine.
+- If a raw git commit already happened, reconcile: `jj status` to see the
+  debris, then `jj abandon` the empty no-description commits.
+
 ## Quick Reference
 
 ```bash
