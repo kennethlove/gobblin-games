@@ -41,3 +41,6 @@ package-lock.json
 
 # Beads / Dolt files (added by bd init)
 .beads/proxieddb/
+
+# Beads tracker (local only, never committed)
+.beads/
