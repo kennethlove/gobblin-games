@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 echo "==> Fixing volume ownership (named volumes mount as root by default)"
-sudo chown -R vscode:vscode /usr/local/cargo/registry /workspaces/hangrier_games/target 2>/dev/null || true
+sudo chown -R vscode:vscode /usr/local/cargo/registry /workspaces/gobblin-games/target 2>/dev/null || true
 
 echo "==> Cleaning stale build cache (host toolchain may differ from container)"
 cargo clean 2>/dev/null || true

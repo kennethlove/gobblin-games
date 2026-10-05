@@ -1,10 +1,9 @@
 {
-    "name": "Hangrier Games",
+    "name": "Gobblin Games",
     "dockerComposeFile": "docker-compose.yml",
     "service": "dev",
-    "workspaceFolder": "/workspaces/hangrier_games",
+    "workspaceFolder": "/workspaces/gobblin-games",
     "shutdownAction": "stopCompose",
-
     "features": {
         "ghcr.io/devcontainers/features/github-cli:1": {},
         "ghcr.io/guiyomh/features/just:0": {},
@@ -12,27 +11,36 @@
         "ghcr.io/devcontainers/features/node:1": {},
         "ghcr.io/devcontainers-community/features/surrealdb": {}
     },
-
-    "forwardPorts": [3000, 8000, 8025],
+    "forwardPorts": [
+        3000,
+        8000,
+        8025
+    ],
     "portsAttributes": {
-        "3000": { "label": "API", "onAutoForward": "notify" },
-        "8000": { "label": "SurrealDB", "onAutoForward": "silent" },
-        "8025": { "label": "Mailpit", "onAutoForward": "notify" }
+        "3000": {
+            "label": "API",
+            "onAutoForward": "notify"
+        },
+        "8000": {
+            "label": "SurrealDB",
+            "onAutoForward": "silent"
+        },
+        "8025": {
+            "label": "Mailpit",
+            "onAutoForward": "notify"
+        }
     },
-
     "remoteEnv": {
         "ENV": "development",
         "SURREAL_HOST": "ws://localhost:8000",
         "SURREAL_USER": "root",
         "SURREAL_PASS": "root",
         "EMAIL_BACKEND": "mailpit",
-        "EMAIL_FROM": "noreply@hangrier.fun",
+        "EMAIL_FROM": "noreply@gobblin.games",
         "MAILPIT_HOST": "localhost",
         "MAILPIT_PORT": "1025"
     },
-
     "postCreateCommand": "bash .devcontainer/post-create.sh",
-
     "customizations": {
         "vscode": {
             "extensions": [
@@ -51,6 +59,5 @@
             }
         }
     },
-
     "remoteUser": "vscode"
 }

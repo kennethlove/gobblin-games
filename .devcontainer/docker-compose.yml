@@ -6,7 +6,7 @@ services:
     volumes:
       - ../..:/workspaces:cached
       - cargo-cache:/usr/local/cargo/registry
-      - target-cache:/workspaces/hangrier_games/target
+      - target-cache:/workspaces/gobblin-games/target
     command: sleep infinity
     # SurrealDB is installed inside this container (see Dockerfile) and started
     # by `just dev` / `just db`. It listens on localhost:8000.
