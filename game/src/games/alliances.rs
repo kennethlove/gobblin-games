@@ -15,9 +15,9 @@ impl Game {
     pub fn process_alliance_events(&mut self, rng: &mut impl Rng) {
         use crate::characters::alliances::{AllianceEvent, sanity_break_roll};
 
-        // Collect drained events into a local Vec so we can release the
-        // borrow on `self.alliance_events` before mutating `self.characters`.
-        let drained: Vec<AllianceEvent> = self.alliance_events.drain(..).collect();
+        // Take the events into a local Vec so we can release the borrow on
+        // `self.alliance_events` before mutating `self.characters`.
+        let drained: Vec<AllianceEvent> = std::mem::take(&mut self.alliance_events);
 
         for ev in drained {
             match ev {
