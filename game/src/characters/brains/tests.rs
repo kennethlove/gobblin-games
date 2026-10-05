@@ -740,7 +740,7 @@ fn choose_destination_excludes_self_from_own_area_density(character: Character) 
     assert_eq!(chosen, Area::Sector1);
 }
 
-// ---- Sleep gating (PR2c.1, bd-9sjj) ----
+// ---- Sleep gating (PR2c.1) ----
 
 #[rstest]
 fn should_sleep_dominant_threshold_overrides_safety(character: Character, mut small_rng: SmallRng) {

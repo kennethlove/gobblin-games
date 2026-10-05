@@ -20,7 +20,7 @@ use scoring::*;
 
 const LOW_ENEMY_LIMIT: u32 = 6;
 
-/// Sleep gating thresholds (PR2c.1, bd-9sjj). See `Brain::should_sleep`.
+/// Sleep gating thresholds (PR2c.1). See `Brain::should_sleep`.
 const SLEEP_DOMINANT_THRESHOLD: u32 = 12;
 const SLEEP_WANT_THRESHOLD: u32 = 6;
 const SLEEP_EXHAUSTED_PCT: u32 = 25;
@@ -512,7 +512,7 @@ impl Brain {
         }
     }
 
-    /// Phase-aware sleep gate (PR2c.1, bd-9sjj). Decides whether the
+    /// Phase-aware sleep gate (PR2c.1). Decides whether the
     /// character should begin a multi-phase sleep *now*, returning
     /// `Some(Action::Sleep { duration_phases })` to preempt the standard
     /// brain pipeline, or `None` to defer to `act`.

@@ -1085,7 +1085,7 @@ fn combat_beat_stress_matches_engagement_horrified_line() {
 
 #[rstest]
 fn attacking_sleeping_target_emits_ambush_wake(mut small_rng: SmallRng) {
-    // Spec §6.4 PR2c.2 (bd-1zju): hitting a sleeping character must wake
+    // Spec §6.4 PR2c.2: hitting a sleeping character must wake
     // them with `WakeReason::Interrupted { Ambush }` BEFORE damage
     // resolution. The ambush still lands; we just verify the wake
     // event precedes any CharacterWounded / Killed event in `events`.

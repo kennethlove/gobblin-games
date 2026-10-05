@@ -210,7 +210,7 @@ impl Game {
                     }
                 }
                 AllianceEvent::AllianceSummons { summoner, target } => {
-                    // Spec §6.4 PR2c.2 (bd-1zju). When the target is asleep,
+                    // Spec §6.4 PR2c.2. When the target is asleep,
                     // an ally's summons interrupts the rest. Currently no
                     // production code emits this event; the handler is in
                     // place so future PRs (or test scaffolding) can wake

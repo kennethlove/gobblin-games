@@ -36,7 +36,6 @@ pub enum Area {
 // derived impls would emit/expect the bare variant identifier
 // (`"Sector1"`, no space) and reject the spaced form, breaking the
 // `/api/games/:id/areas` endpoint and the `<Map>` component.
-// See bead hangrier_games-2pce.
 impl Serialize for Area {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         s.serialize_str(&self.to_string())

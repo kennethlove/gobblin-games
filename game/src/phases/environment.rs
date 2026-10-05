@@ -17,7 +17,7 @@
 //! - [`roll_environmental_afflictions`] — deterministic roll producing
 //!   `Vec<AfflictionDraft>` for `(phase, biome, weather, sheltered, rng)`.
 //!
-//! PR2b is substrate-only: callers do not yet exist. PR2c (bd-9sjj) wires
+//! PR2b is substrate-only: callers do not yet exist. PR2c wires
 //! these into [`crate::games::Game::execute_cycle`] and into per-character
 //! affliction application.
 

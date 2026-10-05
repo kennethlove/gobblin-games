@@ -114,7 +114,7 @@ impl RefreshToken {
 }
 
 /// Store a refresh token in the database. Uses the caller-provided
-/// `Surreal<Any>` (typically a per-request clone, see bd hangrier_games-c3ct)
+/// `Surreal<Any>` (typically a per-request clone)
 /// so the write happens under the right `$auth` for `refresh_token` table
 /// permissions.
 pub async fn store_refresh_token(
@@ -252,7 +252,7 @@ async fn refresh_token(
     // refresh_token table is permission-gated by `$auth`; the request
     // is unauthenticated (no JWT yet) so use a per-request clone of the
     // shared root-authed connection. The clone keeps the original
-    // session untouched. See bd hangrier_games-c3ct.
+    // session untouched.
     let user_db = (*state.db).clone();
     user_db
         .use_ns(&state.namespace)
@@ -307,7 +307,7 @@ async fn logout(
 
     if let Some(token) = refresh {
         // Best-effort revoke; clearing the cookie still happens either way.
-        // Use a per-request clone (see bd hangrier_games-c3ct).
+        // Use a per-request clone.
         let user_db = (*state.db).clone();
         if user_db
             .use_ns(&state.namespace)

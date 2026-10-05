@@ -26,7 +26,7 @@ pub static USERS_PUBLIC_ROUTER: LazyLock<Router<AppState>> = LazyLock::new(|| {
 
 /// Authenticated users routes. Must be mounted *behind* `surreal_jwt` so
 /// `session` reads `$auth` from the per-request authed `AuthDb` clone
-/// instead of the root-authed shared connection. See bd hangrier_games-p9p0.
+/// instead of the root-authed shared connection.
 pub static USERS_PROTECTED_ROUTER: LazyLock<Router<AppState>> = LazyLock::new(|| {
     Router::new()
         .route("/session", get(session))
@@ -39,7 +39,7 @@ pub static USERS_PROTECTED_ROUTER: LazyLock<Router<AppState>> = LazyLock::new(||
 ///
 /// Takes the per-request `Surreal<Any>` clone (already authenticated as
 /// the new/returning user via `signup`/`signin`) so the refresh-token
-/// write happens under the user's own `$auth`. See bd hangrier_games-c3ct.
+/// write happens under the user's own `$auth`.
 async fn create_token_pair(
     db: &surrealdb::Surreal<surrealdb::engine::any::Any>,
     jwt: String,

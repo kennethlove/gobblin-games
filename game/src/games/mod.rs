@@ -20,7 +20,7 @@ pub mod cycle_helpers;
 pub mod messages;
 pub mod patrons;
 
-/// Stamina restored per phase to a sleeping character (PR2c.1, bd-9sjj).
+/// Stamina restored per phase to a sleeping character (PR2c.1).
 /// Placeholder pending observability tuning per spec
 /// `2026-05-03-four-phase-day-design.md` §6.4.
 const SLEEP_STAMINA_PER_PHASE: u32 = 25;
@@ -30,7 +30,7 @@ const SLEEP_HP_PER_PHASE: u32 = 5;
 
 /// Project a game-side `AreaEvent` onto the cross-cutting
 /// `shared::messages::AreaEventKind` taxonomy used by sleep-interruption
-/// payloads (PR2c.2, bd-1zju). The mapping collapses several seasonal /
+/// payloads (PR2c.2). The mapping collapses several seasonal /
 /// terrain variants into the same broad "kind" so downstream consumers
 /// (UI badges, announcer prompts) can treat them uniformly.
 fn area_event_to_kind(ev: &AreaEvent) -> shared::messages::AreaEventKind {

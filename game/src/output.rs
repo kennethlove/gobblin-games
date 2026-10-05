@@ -26,7 +26,7 @@ pub enum GameOutput<'a> {
     /// Character wakes naturally after their planned sleep duration elapses.
     CharacterWakesRested(&'a str),
     /// Character is forcibly woken by an interruption (ambush, area event,
-    /// alliance summons). PR2c.2 / bd-1zju.
+    /// alliance summons). PR2c.2.
     CharacterWakesInterrupted(&'a str),
     /// Character wakes due to a sleep incident (theft, animal, etc.). Description
     /// is pre-formatted by the incident system.

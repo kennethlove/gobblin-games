@@ -1384,7 +1384,7 @@ impl Character {
         ));
     }
 
-    /// Wake an interrupted sleeper (PR2c.2, bd-1zju). Resets the sleep
+    /// Wake an interrupted sleeper (PR2c.2). Resets the sleep
     /// state and `cycles_awake` per spec §6.4 ("rude awakening = no rest")
     /// and pushes a `CharacterWoke { Interrupted }` event onto `events`.
     /// Returns `true` if the character was actually sleeping (and was woken),

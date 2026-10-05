@@ -27,7 +27,7 @@ pub struct AppState {
     /// Root-authenticated, shared SurrealDB connection. NEVER call
     /// `.signup()`, `.signin()`, or `.authenticate()` on this handle
     /// directly — those mutate connection-level session state and would
-    /// race across concurrent requests (see bd hangrier_games-c853).
+    /// race across concurrent requests.
     /// Per-request user auth is done on a `clone()` (see `surreal_jwt`
     /// middleware in `main.rs` and the `AuthDb` extractor below); the
     /// SurrealDB Rust SDK's documented multi-tenancy model gives each
@@ -46,7 +46,7 @@ pub struct AppState {
 /// extract this instead of touching `AppState::db` so `$auth`-gated
 /// queries see the calling user's identity. The wrapped `Surreal<Any>`
 /// is a clone of the shared connection — independent session state, same
-/// underlying socket. See bd hangrier_games-c3ct.
+/// underlying socket.
 #[derive(Clone)]
 pub struct AuthDb(pub Surreal<Any>);
 

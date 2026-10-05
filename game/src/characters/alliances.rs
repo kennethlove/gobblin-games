@@ -39,7 +39,7 @@ pub enum AllianceEvent {
     },
     /// An ally summons another ally to their location. When the target is
     /// asleep, the game loop wakes them via `Character::wake_interrupted`
-    /// with `InterruptionKind::AllianceSummons` (spec §6.4 PR2c.2, bd-1zju).
+    /// with `InterruptionKind::AllianceSummons` (spec §6.4 PR2c.2).
     AllianceSummons {
         summoner: Uuid,
         target: Uuid,

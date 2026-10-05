@@ -52,7 +52,7 @@ pub enum Action {
     /// brain pipeline while sleeping; the engine decrements the counter and
     /// emits `MessagePayload::CharacterWoke` on the wake-up phase. Defined here
     /// as the substrate for the four-phase sleep mechanic; the brain does
-    /// not yet score this action (see bd-xi0z follow-ups).
+    /// not yet score this action.
     Sleep {
         duration_phases: u8,
     },

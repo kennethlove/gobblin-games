@@ -49,7 +49,7 @@ impl Character {
         // otherwise break the derived PartialEq equality check below).
         let is_self_attack = self == target;
 
-        // Sleep ambush (PR2c.2, bd-1zju). If the target is asleep we wake
+        // Sleep ambush (PR2c.2). If the target is asleep we wake
         // them with `InterruptionKind::Ambush` BEFORE damage resolution so
         // the wake-event precedes any CharacterWounded / CharacterKilled
         // emission. The ambush still lands — sleeping targets still take

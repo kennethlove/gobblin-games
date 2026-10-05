@@ -292,7 +292,7 @@ impl Game {
                 let prior_hunger = hunger_band(character.hunger);
                 let prior_thirst = thirst_band(character.thirst);
 
-                // Sleep substrate (bd-s0je): once per phase, every living
+                // Sleep substrate: once per phase, every living
                 // character that did NOT spend the phase asleep ages by one
                 // cycle. The brain doesn't yet score `Action::Sleep`, so this
                 // simply tracks accumulated wakefulness for downstream PRs.
@@ -409,19 +409,19 @@ impl Game {
                 }
             }
 
-            // Sleep tick (PR2c.1, bd-9sjj). Sleeping characters skip the
+            // Sleep tick (PR2c.1). Sleeping characters skip the
             // brain pipeline entirely: regen stamina (always) and HP
             // (gated on absence of Wounded / Infected / Sick per spec
             // §6.4), then decrement `sleep_remaining`. When the
             // countdown drains to zero, flip `sleeping = false`, reset
             // `cycles_awake`, and emit `CharacterWoke { Rested }`.
-            // Interruption handling lives in PR2c.2 (bd-1zju); this PR
+            // Interruption handling lives in PR2c.2; this PR
             // ships the natural-wake path only.
             if character.sleeping {
                 use crate::messages::{CharacterRef, MessagePayload};
                 use shared::messages::WakeReason;
 
-                // Spec §6.4 PR2c.2 (bd-1zju). Before regenerating, check
+                // Spec §6.4 PR2c.2. Before regenerating, check
                 // whether an area event in the sleeper's current area is
                 // active. If so, wake the character with the appropriate
                 // `InterruptionKind::AreaEvent` and skip regen this phase

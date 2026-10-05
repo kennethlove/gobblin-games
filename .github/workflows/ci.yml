@@ -104,7 +104,7 @@ jobs:
           cache-on-failure: true
       - name: Test (api integration)
         # api/tests/common/mod.rs spins up an in-memory SurrealDB per test
-        # and sets SURREAL_MIG_PATH exactly once via OnceLock (bd-q077),
+        # and sets SURREAL_MIG_PATH exactly once via OnceLock,
         # so the integration suite is safe to run with default parallelism.
         run: cargo test --package api --tests
 

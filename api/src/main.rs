@@ -489,8 +489,8 @@ async fn surreal_jwt(State(state): State<AppState>, request: Request, next: Next
     // multi-tenancy) and authenticate the clone. The original
     // root-authenticated `state.db` is untouched, so concurrent requests
     // can no longer race on `$auth`. The clone is injected as a request
-    // extension so handlers (extractor `AuthDb`) see it. See bd
-    // hangrier_games-c3ct (replaces the global `auth_lock` from c853).
+    // extension so handlers (extractor `AuthDb`) see it (replaces the
+    // global `auth_lock`).
     let user_db = (*state.db).clone();
     if user_db
         .use_ns(&state.namespace)
