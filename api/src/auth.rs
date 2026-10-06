@@ -493,6 +493,8 @@ async fn complete_password_reset(
 ///
 /// For SurrealDB-issued JWTs (which lack a `sub` claim) this queries the
 /// database to resolve the real username from the user record.
+// Unit error is deliberate: binary auth gate, callers only redirect on Err.
+#[allow(clippy::result_unit_err)]
 pub async fn require_auth(
     state: &AppState,
     headers: &axum::http::HeaderMap,

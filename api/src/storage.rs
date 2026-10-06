@@ -28,6 +28,9 @@ impl Default for UploadConstraints {
 }
 
 /// Storage backend trait - allows swapping between local filesystem and S3/MinIO
+// async_trait's expansion puts a message-less #[must_use] on boxed-future
+// returns, which clippy 1.99 flags as double_must_use. Not fixable from here.
+#[allow(clippy::double_must_use)]
 #[async_trait::async_trait]
 pub trait StorageBackend: Send + Sync {
     /// Save a file and return its public URL path
