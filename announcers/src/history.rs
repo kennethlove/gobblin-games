@@ -42,7 +42,7 @@ pub struct CharacterHistories {
 impl CharacterHistories {
     /// Create a new history tracker from an initial character roster.
     ///
-    /// Each `CharacterDigest` in the roster should have `name`, `clan`,
+    /// Each `CharacterDigest` in the roster should have `name`, `team`,
     /// and the default `status: "alive"`, `injury_level: "unharmed"`,
     /// and an empty `location`.
     pub fn new(characters: Vec<CharacterDigest>) -> Self {
@@ -715,11 +715,11 @@ mod tests {
         uuid::Uuid::from_u128(hash as u128)
     }
 
-    fn make_character(name: &str, clan: u8) -> CharacterDigest {
+    fn make_character(name: &str, team: u8) -> CharacterDigest {
         CharacterDigest {
             identifier: test_uuid(name).to_string(),
             name: name.into(),
-            clan,
+            team,
             status: "alive".into(),
             injury_level: "unharmed".into(),
             location: "Hub".into(),
@@ -728,6 +728,22 @@ mod tests {
             highlights: vec![],
             notable_events: vec![],
         }
+    }
+
+    /// Rows persisted before the clan -> team rename carry `clan`; the
+    /// serde alias must keep them deserializing.
+    #[test]
+    fn legacy_digest_with_clan_key_deserializes() {
+        let digest: CharacterDigest = serde_json::from_value(serde_json::json!({
+            "identifier": "id-rendmaw",
+            "name": "Rendmaw",
+            "clan": 3,
+            "status": "alive",
+            "injury_level": "unharmed",
+            "location": "Hub"
+        }))
+        .expect("legacy clan-keyed digest should still deserialize");
+        assert_eq!(digest.team, 3);
     }
 
     fn tr(name: &str) -> CharacterRef {

@@ -31,9 +31,9 @@ const OPENERS: [&str; 4] = [
 ];
 
 const LEADER_LINES: [&str; 3] = [
-    "{name} of Clan {clan} has {kills} this phase and isn't slowing down.",
-    "The skull count belongs to {name} of Clan {clan}: {kills}.",
-    "The warrens mutter one name tonight — {name} of Clan {clan}, {kills}.",
+    "{name} of Team {team} has {kills} this phase and isn't slowing down.",
+    "The skull count belongs to {name} of Team {team}: {kills}.",
+    "The warrens mutter one name tonight — {name} of Team {team}, {kills}.",
 ];
 
 const SPREE_LINES: [&str; 3] = [
@@ -79,7 +79,7 @@ const EVENT_PREFIXES: [(EventKind, [&str; 2]); 10] = [
     ),
     (
         EventKind::Allied,
-        ["Friends are a weakness —", "Clan mates close in —"],
+        ["Friends are a weakness —", "Teammates close in —"],
     ),
     (
         EventKind::Betrayal,
@@ -131,7 +131,7 @@ impl Chronicler {
         if let Some(leader) = header.kill_leaders.first() {
             let text = LEADER_LINES[pick(&seed, "leader", LEADER_LINES.len())]
                 .replace("{name}", &leader.name)
-                .replace("{clan}", &leader.clan.to_string())
+                .replace("{team}", &leader.team.to_string())
                 .replace(
                     "{kills}",
                     &format!(
@@ -229,7 +229,7 @@ mod tests {
             alive_count: 12,
             kill_leaders: vec![KillLeader {
                 name: "Tears of the Mushroom".into(),
-                clan: 4,
+                team: 4,
                 kill_count: 2,
             }],
             alliances: vec![],
@@ -239,7 +239,7 @@ mod tests {
             }],
             killing_sprees: vec![KillingSpree {
                 name: "Shine on the Moon".into(),
-                clan: 7,
+                team: 7,
                 streak: 3,
                 label: "on fire".into(),
             }],

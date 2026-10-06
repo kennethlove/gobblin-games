@@ -89,7 +89,7 @@ async fn generate_commentary_pipeline() {
         alive_count: 22,
         kill_leaders: vec![announcers::KillLeader {
             name: "Rendmaw".into(),
-            clan: 2,
+            team: 2,
             kill_count: 2,
         }],
         alliances: vec![],
@@ -143,7 +143,7 @@ fn broadcast_package_with_leaders_and_sprees() {
         alive_count: 20,
         kill_leaders: vec![announcers::KillLeader {
             name: "Rendmaw".into(),
-            clan: 2,
+            team: 2,
             kill_count: 2,
         }],
         alliances: vec![],
@@ -153,7 +153,7 @@ fn broadcast_package_with_leaders_and_sprees() {
         }],
         killing_sprees: vec![announcers::KillingSpree {
             name: "Rendmaw".into(),
-            clan: 2,
+            team: 2,
             streak: 4,
             label: "on fire".into(),
         }],
@@ -202,7 +202,7 @@ fn make_msg(payload: MessagePayload) -> shared::messages::GameMessage {
 
 fn character_digest(
     name: &str,
-    clan: u8,
+    team: u8,
     status: &str,
     injury_level: &str,
     location: &str,
@@ -210,7 +210,7 @@ fn character_digest(
     announcers::CharacterDigest {
         identifier: format!("id-{name}"),
         name: name.into(),
-        clan,
+        team,
         status: status.into(),
         injury_level: injury_level.into(),
         location: location.into(),

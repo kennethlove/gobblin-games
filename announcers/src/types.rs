@@ -53,7 +53,9 @@ pub struct EventLine {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KillLeader {
     pub name: String,
-    pub clan: u8,
+    /// Team number; the `clan` alias keeps legacy persisted rows loading.
+    #[serde(alias = "clan")]
+    pub team: u8,
     pub kill_count: u32,
 }
 
@@ -71,7 +73,9 @@ pub struct KillLeader {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KillingSpree {
     pub name: String,
-    pub clan: u8,
+    /// Team number; the `clan` alias keeps legacy persisted rows loading.
+    #[serde(alias = "clan")]
+    pub team: u8,
     pub streak: u32,
     pub label: String,
 }
@@ -134,7 +138,9 @@ pub struct CharacterDigest {
     /// Stable identifier (matches `CharacterRef.identifier`).
     pub identifier: String,
     pub name: String,
-    pub clan: u8,
+    /// Team number; the `clan` alias keeps legacy persisted rows loading.
+    #[serde(alias = "clan")]
+    pub team: u8,
     /// "alive" or "deceased"
     pub status: String,
     /// Narrative injury level (derived via severity mapping).
