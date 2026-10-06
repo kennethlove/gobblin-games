@@ -1,6 +1,6 @@
 //! Tunable knobs for combat: existing magic numbers (decisive-win multiplier,
 //! stress contributions) plus the new stamina-as-combat-resource constants
-//! introduced by `hangrier_games-93m`.
+//! introduced by the stamina combat-resource design.
 //!
 //! All defaults preserve current behavior; tuning is a separate post-ship pass.
 //! See `docs/superpowers/specs/2026-05-03-stamina-combat-resource-design.md`.

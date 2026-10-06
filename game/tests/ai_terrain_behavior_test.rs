@@ -65,7 +65,7 @@ fn test_destination_scoring_favors_affinity_terrain(
 fn test_harsh_terrain_penalty_applied() {
     let brain = Brain::default();
     let mut character = Character::new("Grubworm".to_string(), Some(8), None);
-    // Pin affinity: rolls are per-goblin random now (dww.7); without this the
+    // Pin affinity: rolls are per-goblin random now; without this the
     // roll can include Desert and flip the choice.
     character.terrain_affinity = vec![BaseTerrain::Grasslands];
 

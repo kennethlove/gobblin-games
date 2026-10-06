@@ -1,4 +1,4 @@
-//! Round-trip test for hangrier_games-33r (PR2: movement + turn-phase slice).
+//! Round-trip test for event unification (PR2: movement + turn-phase slice).
 //!
 //! Verifies that movement and turn-phase narration emitted by
 //! `Character::travels`, `process_turn_phase` (rest/hide/take-item/patron-gift,

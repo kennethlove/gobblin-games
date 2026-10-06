@@ -201,9 +201,9 @@ pub struct Character {
     /// What they like to go by
     pub name: String,
     /// Per-game color team slot (1..=8). Drives alliance bias only.
-    /// Renamed from `clan`; the `alias` lets legacy rows that only carry a
-    /// `clan` column still load.
-    #[serde(default, alias = "clan")]
+    /// Per-game state lives on the character record because a goblin plays
+    /// one game at a time — same home as stamina/area/allies, reset on entry.
+    #[serde(default)]
     pub team: u32,
     /// Persistent clan name (lore only — no mechanics). Empty until a
     /// generator or editor fills it in.

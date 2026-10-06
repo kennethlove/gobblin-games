@@ -494,8 +494,7 @@ pub enum MessagePayload {
     },
 
     // Lifecycle / cycle-boundary announcements (formerly an AreaEvent fallback
-    // synthesised by Game::log() for MessageSource::Game; see
-    // hangrier_games-xamw).
+    // synthesised by Game::log() for MessageSource::Game).
     /// Emitted at the very start of a day or night phase.
     CycleStart {
         day: u32,

@@ -1,4 +1,4 @@
-//! Round-trip test for hangrier_games-33r (PR1: combat slice).
+//! Round-trip test for event unification (PR1: combat slice).
 //!
 //! Verifies that combat events emitted by `Character::attacks`,
 //! `attack_contest`, and `apply_combat_results` are now collected into

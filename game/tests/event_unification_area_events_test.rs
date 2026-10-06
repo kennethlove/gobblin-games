@@ -1,4 +1,4 @@
-//! Round-trip test for hangrier_games-33r (PR3: area-event survival slice).
+//! Round-trip test for event unification (PR3: area-event survival slice).
 //!
 //! Verifies that area-event narration emitted by `process_event_for_area`
 //! and `announce_area_events` reaches `Game.messages` with the correct

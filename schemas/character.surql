@@ -7,6 +7,8 @@ DEFINE FIELD OVERWRITE identifier ON character;
 DEFINE FIELD OVERWRITE status ON character;
 DEFINE FIELD OVERWRITE avatar ON character;
 DEFINE FIELD OVERWRITE name ON character;
+-- Per-game team: stored on the character because a goblin plays one game
+-- at a time — all per-game state rides the record and resets on entry.
 DEFINE FIELD OVERWRITE team ON character;
 DEFINE FIELD OVERWRITE clan_name ON character TYPE string DEFAULT '';
 DEFINE FIELD OVERWRITE area ON character;

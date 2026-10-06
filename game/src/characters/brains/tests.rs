@@ -678,7 +678,7 @@ fn brain_act_routes_first_hop_to_non_neighbor_goal(
     }
 }
 
-/// hangrier_games-4wnj — When two areas score identically on terrain
+/// When two areas score identically on terrain
 /// signals but one is empty and the other holds enemies, the crowd
 /// penalty in `choose_destination` must steer the character toward the
 /// empty one. Excludes the character itself from its own area's count.

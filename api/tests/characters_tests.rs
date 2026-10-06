@@ -86,8 +86,8 @@ async fn first_character_id(server: &TestServer, user: &TestUser, game_id: &str)
 
 /// Verify that creating a game auto-spawns the full 24-character roster.
 ///
-/// Replaces the old `POST /api/games/{id}/characters` test: per
-/// `hangrier_games-0jl`, manual character creation is intentionally not exposed.
+/// Replaces the old `POST /api/games/{id}/characters` test: manual
+/// character creation is intentionally not exposed.
 /// Every game starts with 24 server-generated characters which users edit in
 /// place via `PUT /api/games/{id}/characters/{id}`.
 #[tokio::test]
@@ -261,7 +261,7 @@ async fn test_auto_spawn_team_coverage() {
     test_db.cleanup().await;
 }
 
-/// Per `gobblin-games-09j`, the auto-spawn must spread the 24-character
+/// The auto-spawn must spread the 24-character
 /// roster evenly: exactly 3 characters in each team 1..=8.
 #[tokio::test]
 async fn test_auto_spawn_three_characters_per_team() {

@@ -416,7 +416,7 @@ mod tests {
         assert_eq!(again, original);
     }
 
-    /// Regression for hangrier_games-2pce: `Area`'s serde representation
+    /// Regression: `Area`'s serde representation
     /// must use the human-readable `Display` form ("Sector 1" with a
     /// space) so it round-trips cleanly through SurrealDB rows written
     /// by `api/src/games.rs::create_game_area` (which stores

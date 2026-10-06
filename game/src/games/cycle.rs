@@ -61,8 +61,7 @@ impl Game {
 
         // Per-area living-character density. Threaded into `EnvironmentContext`
         // so `Brain::choose_destination` can apply a per-enemy crowd penalty
-        // and disperse crowded areas without a call-site escape hatch
-        // (hangrier_games-4wnj).
+        // and disperse crowded areas without a call-site escape hatch.
         let enemy_density: HashMap<Area, u32> = characters_by_area
             .iter()
             .map(|(area, characters)| (*area, characters.len() as u32))
