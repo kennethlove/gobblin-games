@@ -41,8 +41,8 @@ fn combat_events_reach_game_messages_with_character_source() {
     defender.blood = 50;
     defender.attributes.defense = 0;
     defender.statistics.game = game.identifier.clone();
-    // Different clan so attacker classifies them as an enemy.
-    defender.clan = (attacker.clan % 8) + 1;
+    // Different team so attacker classifies them as an enemy.
+    defender.team = (attacker.team % 8) + 1;
 
     let attacker_id = attacker.identifier.clone();
     let defender_id = defender.identifier.clone();

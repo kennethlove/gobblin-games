@@ -32,7 +32,7 @@ DEFINE FUNCTION OVERWRITE fn::get_full_game($game_id: string) {
         (
             SELECT *, ->owns->item[*] AS items
             FROM <-playing_in<-character[*]
-            ORDER clan
+            ORDER team
         )
         AS characters, (
             SELECT *, ->items->item[*] AS items
@@ -41,7 +41,7 @@ DEFINE FUNCTION OVERWRITE fn::get_full_game($game_id: string) {
         count(SELECT id FROM <-playing_in<-character) AS character_count,
         count(<-playing_in<-character.id) == 24
         AND
-        count(array::distinct(<-playing_in<-character.clan)) == 8
+        count(array::distinct(<-playing_in<-character.team)) == 8
         AS ready
     FROM game
     WHERE identifier = $game_id;
@@ -51,7 +51,7 @@ DEFINE FUNCTION OVERWRITE fn::get_display_game($game_id: string) {
     LET $characters = (
         SELECT  in.id,
                 in.name,
-                in.clan,
+                in.team,
                 in.attributes.health
         FROM playing_in
         WHERE out.identifier = $game_id
@@ -79,7 +79,7 @@ DEFINE FUNCTION OVERWRITE fn::get_display_game($game_id: string) {
         count($characters.in) as character_count,
         count(SELECT * FROM $characters.in WHERE attributes.health > 0) AS living_count,
         count($characters.in) == 24 AND
-            count(array::distinct(<-playing_in<-character.clan)) == 8 AS ready,
+            count(array::distinct(<-playing_in<-character.team)) == 8 AS ready,
         $winner AS winner
     FROM game
     WHERE identifier = $game_id
@@ -94,7 +94,7 @@ DEFINE FUNCTION OVERWRITE fn::get_list_games($limit: int, $offset: int) {
     count(SELECT id FROM <-playing_in<-character WHERE attributes.health > 0) AS living_count,
     count(<-playing_in<-character.id) == 24
     AND
-    count(array::distinct(<-playing_in<-character.clan)) == 8
+    count(array::distinct(<-playing_in<-character.team)) == 8
     AS ready
     FROM game
     LIMIT $limit START $offset
@@ -111,13 +111,13 @@ DEFINE FUNCTION OVERWRITE fn::get_detail_game($game_id: string) {
             SELECT *,
             ->owns->item[*] AS items
             FROM <-playing_in<-character[*]
-            ORDER clan
+            ORDER team
         ) AS characters, (
             SELECT *, ->items->item[*] AS items
             FROM ->areas->area
         ) AS areas,
         count(SELECT id FROM <-playing_in<-character) AS character_count,
-        count(<-playing_in<-character.id) == 24 AND count(array::distinct(<-playing_in<-character.clan)) == 8 AS ready,
+        count(<-playing_in<-character.id) == 24 AND count(array::distinct(<-playing_in<-character.team)) == 8 AS ready,
         created_by.id == $auth.id AS is_mine,
         created_by.username
     FROM game
@@ -128,7 +128,7 @@ DEFINE FUNCTION OVERWRITE fn::get_characters_by_game($game_id: string) {
     RETURN SELECT (
         SELECT *, ->owns->item[*] AS items
         FROM <-playing_in<-character
-        ORDER clan
+        ORDER team
     ) AS characters
     FROM game WHERE identifier = $game_id
 };

@@ -643,7 +643,7 @@ h1, h2, h3, h4 { text-wrap: balance; }
   .card-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
-/* Clan / section header */
+/* Team / section header */
 .section-header {
   font-size: var(--fs-meta);
   font-weight: 600;

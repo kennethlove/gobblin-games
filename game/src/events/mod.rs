@@ -627,7 +627,7 @@ mod tests {
             character_a_name: "Alice".into(),
             character_b_id: uid_b(),
             character_b_name: "Bob".into(),
-            factor: "shared clan".into(),
+            factor: "shared team".into(),
         });
     }
 

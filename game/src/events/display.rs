@@ -137,7 +137,7 @@ impl Display for GameEvent {
             } => {
                 write!(
                     f,
-                    "🫡 {} follows their clan mate to {}",
+                    "🫡 {} follows their team mate to {}",
                     character_name, area
                 )
             }

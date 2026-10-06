@@ -19,16 +19,16 @@ impl<'a> PatronContext<'a> {
         }
     }
 
-    pub fn character_clan(&self, identifier: &str) -> Option<u8> {
+    pub fn character_team(&self, identifier: &str) -> Option<u8> {
         self.characters
             .iter()
             .find(|t| t.identifier == identifier)
-            .map(|t| t.clan as u8)
+            .map(|t| t.team as u8)
     }
 }
 
 pub trait ArchetypeModifiers {
-    fn clan_loyalty_modifier(&self, _ev: &AudienceEvent, _ctx: &PatronContext) -> f32 {
+    fn team_loyalty_modifier(&self, _ev: &AudienceEvent, _ctx: &PatronContext) -> f32 {
         1.0
     }
     fn combat_style_modifier(&self, _ev: &AudienceEvent, _ctx: &PatronContext) -> f32 {
@@ -49,7 +49,7 @@ pub fn modifiers_for(id: ArchetypeId) -> Box<dyn ArchetypeModifiers> {
 
 pub struct LoyalistModifiers;
 impl ArchetypeModifiers for LoyalistModifiers {
-    fn clan_loyalty_modifier(&self, _ev: &AudienceEvent, _ctx: &PatronContext) -> f32 {
+    fn team_loyalty_modifier(&self, _ev: &AudienceEvent, _ctx: &PatronContext) -> f32 {
         // Real impl in Task 6 — stub returns 1.0 so other tasks can compile.
         1.0
     }
@@ -160,9 +160,9 @@ pub fn update_affinities(game: &mut Game, events: &[AudienceEvent]) {
             }
 
             let event_modifier = (ev.magnitude_score() as f32) / 5.0;
-            let clan_mod = match patron.archetype {
+            let team_mod = match patron.archetype {
                 ArchetypeId::Loyalist => {
-                    loyalist_clan_modifier(patron.bound_clan, ev, &characters_snapshot)
+                    loyalist_team_modifier(patron.bound_team, ev, &characters_snapshot)
                 }
                 _ => 1.0,
             };
@@ -172,7 +172,7 @@ pub fn update_affinities(game: &mut Game, events: &[AudienceEvent]) {
             };
 
             let _ = mods; // silence unused (modifiers trait used by PR2 callers)
-            let delta = (base as f32 * event_modifier * clan_mod * style_mod) as i32;
+            let delta = (base as f32 * event_modifier * team_mod * style_mod) as i32;
 
             for character in ev.affected_characters() {
                 let entry = patron
@@ -185,28 +185,28 @@ pub fn update_affinities(game: &mut Game, events: &[AudienceEvent]) {
     }
 }
 
-fn loyalist_clan_modifier(
+fn loyalist_team_modifier(
     bound: Option<u8>,
     ev: &AudienceEvent,
     characters: &[crate::characters::Character],
 ) -> f32 {
-    let Some(clan) = bound else {
+    let Some(team) = bound else {
         return 1.0;
     };
-    let actor_in_clan = |tref: &shared::messages::CharacterRef| -> bool {
+    let actor_in_team = |tref: &shared::messages::CharacterRef| -> bool {
         characters
             .iter()
-            .any(|t| tref.identifier == t.identifier && t.clan as u8 == clan)
+            .any(|t| tref.identifier == t.identifier && t.team as u8 == team)
     };
     match ev {
         AudienceEvent::KillMade { actor, .. }
         | AudienceEvent::ClanLoyaltyAct { actor, .. }
         | AudienceEvent::RescueAlly { actor, .. }
-            if actor_in_clan(actor) =>
+            if actor_in_team(actor) =>
         {
             1.5
         }
-        AudienceEvent::KillReceived { victim, .. } if actor_in_clan(victim) => 1.5,
+        AudienceEvent::KillReceived { victim, .. } if actor_in_team(victim) => 1.5,
         _ => 1.0,
     }
 }

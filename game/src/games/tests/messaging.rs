@@ -88,7 +88,7 @@ fn message_subjects_are_prefixed_with_game_id() {
 }
 
 #[test]
-fn spawn_patrons_creates_six_with_loyalist_clan() {
+fn spawn_patrons_creates_six_with_loyalist_team() {
     let mut game = Game::default();
     let mut rng = SmallRng::seed_from_u64(42);
     game.spawn_patrons(&mut rng);
@@ -99,8 +99,8 @@ fn spawn_patrons_creates_six_with_loyalist_clan() {
         .iter()
         .find(|s| s.archetype == shared::patrons::ArchetypeId::Loyalist)
         .expect("Loyalist must spawn");
-    let clan = loyalist.bound_clan.expect("Loyalist gets a clan");
-    assert!((1u8..=8).contains(&clan));
+    let team = loyalist.bound_team.expect("Loyalist gets a team");
+    assert!((1u8..=8).contains(&team));
 }
 
 #[test]

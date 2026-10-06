@@ -243,7 +243,7 @@ pick_target(targets, living_characters_count)
     ├─> No targets available?
     │   └─> Sanity <= 9? → Attack self (suicide)
     │
-    ├─> Filter enemies (different clan)
+    ├─> Filter enemies (different team)
     │
     ├─> No enemies in area?
     │   ├─> Only 2 characters left alive? → Betray ally

@@ -64,13 +64,13 @@ async fn create_game_with_characters(
 
     // Add characters
     for i in 0..num_characters {
-        let clan = (i % 12) + 1;
+        let team = (i % 12) + 1;
         server
             .post(&format!("/api/games/{}/characters", game_id))
             .add_header("Authorization", user.auth_header())
             .json(&json!({
                 "name": format!("Character {}", i + 1),
-                "clan": clan,
+                "team": team,
             }))
             .await
             .assert_status_ok();

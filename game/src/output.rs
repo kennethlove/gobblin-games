@@ -204,7 +204,7 @@ impl<'a> Display for GameOutput<'a> {
                 write!(f, "🤔 {} is already in the {}, stays put", character, area)
             }
             GameOutput::CharacterTravelFollow(character, area) => {
-                write!(f, "🫡 {} follows their clan mate to {}", character, area)
+                write!(f, "🫡 {} follows their team mate to {}", character, area)
             }
             GameOutput::CharacterTravelStay(character, area) => {
                 write!(f, "🪑 {} stays in {}", character, area)

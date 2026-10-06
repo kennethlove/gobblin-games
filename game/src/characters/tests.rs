@@ -154,7 +154,7 @@ fn brain_missing_field_defaults() {
 fn new() {
     let character = Character::new("Snaggletooth".to_string(), Some(8), None);
     assert_eq!(character.name, "Snaggletooth");
-    assert_eq!(character.clan, 8);
+    assert_eq!(character.team, 8);
     // Attributes::new() randomizes health in 50..=max_health.
     assert!(
         (50..=100).contains(&character.effective_health()),
@@ -167,7 +167,7 @@ fn new() {
 fn random() {
     let character = Character::random();
     assert!(!character.name.is_empty());
-    assert!(character.clan >= 1 && character.clan <= 8);
+    assert!(character.team >= 1 && character.team <= 8);
 }
 
 #[rstest]
@@ -318,9 +318,9 @@ fn consume_pending_trust_shock_no_break_when_sanity_above_threshold() {
 }
 
 #[rstest]
-fn new_character_has_traits_for_valid_clan() {
+fn new_character_has_traits_for_any_team() {
     let character = Character::new("Snaggletooth".to_string(), Some(8), None);
-    // generate_traits rolls 2..=6 traits from the clan pool.
+    // generate_traits rolls 2..=6 traits from the shared pool.
     assert!((2..=6).contains(&character.traits.len()));
 }
 
@@ -339,15 +339,15 @@ fn pick_target_skips_allies() {
 }
 
 #[rstest]
-fn pick_target_allows_same_clan_when_not_ally() {
-    // Same-clan characters can now be targeted unless they're allies.
+fn pick_target_allows_same_team_when_not_ally() {
+    // Same-team characters can now be targeted unless they're allies.
     let me = Character::new("Snaggletooth".to_string(), Some(8), None);
-    let same_clan = Character::new("Grubworm".to_string(), Some(8), None);
+    let same_team = Character::new("Grubworm".to_string(), Some(8), None);
 
     let mut events: Vec<TaggedEvent> = vec![];
-    let target = me.pick_target(vec![same_clan.clone()], 5, &mut events);
+    let target = me.pick_target(vec![same_team.clone()], 5, &mut events);
     assert!(target.is_some());
-    assert_eq!(target.unwrap().id, same_clan.id);
+    assert_eq!(target.unwrap().id, same_team.id);
 }
 
 #[rstest]

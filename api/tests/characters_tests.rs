@@ -110,9 +110,9 @@ async fn test_game_auto_spawns_characters() {
     for t in &characters {
         assert!(t.get("identifier").is_some());
         assert!(t.get("name").is_some());
-        assert!(t.get("clan").is_some());
-        let clan = t["clan"].as_u64().expect("clan is u64");
-        assert!((1..=8).contains(&clan), "clan {} out of range", clan);
+        assert!(t.get("team").is_some());
+        let team = t["team"].as_u64().expect("team is u64");
+        assert!((1..=8).contains(&team), "team {} out of range", team);
     }
 
     test_db.cleanup().await;
@@ -143,7 +143,7 @@ async fn test_get_character() {
     let get_body = get_response.json::<serde_json::Value>();
     assert_eq!(get_body["identifier"], character_id);
     assert!(get_body.get("name").is_some());
-    assert!(get_body.get("clan").is_some());
+    assert!(get_body.get("team").is_some());
 
     test_db.cleanup().await;
 }
@@ -232,9 +232,9 @@ async fn test_delete_character() {
     test_db.cleanup().await;
 }
 
-/// Test that the auto-spawn roster covers every clan 1..=8.
+/// Test that the auto-spawn roster covers every team 1..=8.
 #[tokio::test]
-async fn test_auto_spawn_clan_coverage() {
+async fn test_auto_spawn_team_coverage() {
     let test_db = TestDb::new().await;
     let app_state = test_db.app_state();
     let router = create_test_router(app_state);
@@ -246,31 +246,31 @@ async fn test_auto_spawn_clan_coverage() {
     let characters = fetch_characters(&server, &user, &game_id).await;
     assert_eq!(characters.len(), 24);
 
-    let mut clans: Vec<u64> = characters
+    let mut teams: Vec<u64> = characters
         .iter()
-        .map(|t| t["clan"].as_u64().expect("clan is u64"))
+        .map(|t| t["team"].as_u64().expect("team is u64"))
         .collect();
-    clans.sort_unstable();
-    let unique: std::collections::BTreeSet<_> = clans.iter().copied().collect();
+    teams.sort_unstable();
+    let unique: std::collections::BTreeSet<_> = teams.iter().copied().collect();
     assert_eq!(
         unique,
         (1..=8u64).collect(),
-        "every clan 1..=8 should be represented"
+        "every team 1..=8 should be represented"
     );
 
     test_db.cleanup().await;
 }
 
 /// Per `gobblin-games-09j`, the auto-spawn must spread the 24-character
-/// roster evenly: exactly 3 characters in each clan 1..=8.
+/// roster evenly: exactly 3 characters in each team 1..=8.
 #[tokio::test]
-async fn test_auto_spawn_three_characters_per_clan() {
+async fn test_auto_spawn_three_characters_per_team() {
     let test_db = TestDb::new().await;
     let app_state = test_db.app_state();
     let router = create_test_router(app_state);
     let server = TestServer::new(router);
 
-    let user = create_authenticated_user(&test_db, &server, "three_per_clan").await;
+    let user = create_authenticated_user(&test_db, &server, "three_per_team").await;
     let game_id = create_test_game(&server, &user).await;
 
     let characters = fetch_characters(&server, &user, &game_id).await;
@@ -280,19 +280,19 @@ async fn test_auto_spawn_three_characters_per_clan() {
         "auto-spawn should populate 24 characters"
     );
 
-    let mut per_clan: std::collections::BTreeMap<u64, usize> = std::collections::BTreeMap::new();
+    let mut per_team: std::collections::BTreeMap<u64, usize> = std::collections::BTreeMap::new();
     for character in &characters {
-        let clan = character["clan"].as_u64().expect("clan is u64");
-        *per_clan.entry(clan).or_insert(0) += 1;
+        let team = character["team"].as_u64().expect("team is u64");
+        *per_team.entry(team).or_insert(0) += 1;
     }
 
-    assert_eq!(per_clan.len(), 8, "clans must all lie within 1..=8");
-    for clan in 1..=8u64 {
+    assert_eq!(per_team.len(), 8, "teams must all lie within 1..=8");
+    for team in 1..=8u64 {
         assert_eq!(
-            per_clan.get(&clan),
+            per_team.get(&team),
             Some(&3),
-            "clan {} should have exactly 3 characters",
-            clan
+            "team {} should have exactly 3 characters",
+            team
         );
     }
 
@@ -300,7 +300,7 @@ async fn test_auto_spawn_three_characters_per_clan() {
 }
 
 /// A full spawn satisfies the readiness rule from `schemas/game.surql`
-/// (24 characters AND 8 distinct clans) through the real query paths:
+/// (24 characters AND 8 distinct teams) through the real query paths:
 /// `fn::get_detail_game` behind `GET /api/games/{id}`,
 /// `fn::get_list_games` behind `GET /api/games`, and the internal
 /// `fn::get_full_game` used by quickstart and websocket loads.

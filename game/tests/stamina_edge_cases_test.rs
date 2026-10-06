@@ -19,6 +19,9 @@ fn test_base_stamina_costs(#[case] action: Action, #[case] expected_base: u32) {
     let terrain = TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap();
     let mut character = Character::default();
     character.blood = 1000;
+    // Affinity rolls per goblin now; pin to none so the neutral-cost
+    // assertion stays deterministic.
+    character.terrain_affinity = vec![];
 
     let cost = calculate_stamina_cost(&action, &terrain, &character);
 
@@ -49,6 +52,7 @@ fn test_terrain_multiplier(#[case] base_terrain: BaseTerrain, #[case] multiplier
     character.blood = 1000;
 
     let action = Action::Move(None); // Base cost 20
+    character.terrain_affinity = vec![];
     let cost = calculate_stamina_cost(&action, &terrain, &character);
 
     let expected = (20.0 * multiplier).round() as u32;
@@ -103,6 +107,7 @@ fn test_desperation_multiplier(#[case] health: u32, #[case] desperation: f32) {
     let terrain = TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap();
     let mut character = Character::default();
     character.blood = health * 10;
+    character.terrain_affinity = vec![];
 
     let action = Action::Move(None); // Base 20
     let cost = calculate_stamina_cost(&action, &terrain, &character);
@@ -198,6 +203,7 @@ fn test_cost_exceeds_max_stamina() {
     let mut character = Character::default();
     character.blood = 10;
     character.max_stamina = 50; // Lower max stamina
+    character.terrain_affinity = vec![];
     character.stamina = 50;
 
     let action = Action::Attack; // Base 25
@@ -240,6 +246,7 @@ fn test_negative_health_clamped() {
     character.blood = 0;
 
     let action = Action::Move(None); // Base 20
+    character.terrain_affinity = vec![];
     let cost = calculate_stamina_cost(&action, &terrain, &character);
 
     // 20 * 1.0 * 1.0 * 1.5 = 30
@@ -267,6 +274,7 @@ fn test_action_type_ordering() {
     let terrain = TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap();
     let mut character = Character::default();
     character.blood = 1000;
+    character.terrain_affinity = vec![];
 
     let attack_cost = calculate_stamina_cost(&Action::Attack, &terrain, &character);
     let move_cost = calculate_stamina_cost(&Action::Move(None), &terrain, &character);

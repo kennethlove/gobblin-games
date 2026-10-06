@@ -97,72 +97,32 @@ pub fn conflicts_with(a: Trait, b: Trait) -> bool {
         .any(|(x, y)| (*x == a && *y == b) || (*x == b && *y == a))
 }
 
-pub const CLAN_1_POOL: &[(Trait, u8)] = &[
-    (Trait::Loyal, 4),
-    (Trait::Aggressive, 4),
+/// Weighted trait pool shared by every goblin. Weights sum the eight legacy
+/// clan-keyed pools, so the overall mix matches the old uniform-clan
+/// distribution without keying traits to any grouping. Traits roll per
+/// goblin from that goblin's own RNG.
+pub const TRAIT_POOL: &[(Trait, u8)] = &[
+    (Trait::Loyal, 13),
+    (Trait::Aggressive, 11),
+    (Trait::Tough, 9),
+    (Trait::Cunning, 8),
+    (Trait::Resilient, 8),
+    (Trait::Defensive, 7),
+    (Trait::Friendly, 7),
+    (Trait::Cautious, 6),
+    (Trait::Asthmatic, 5),
+    (Trait::Fragile, 5),
+    (Trait::Nearsighted, 4),
     (Trait::Paranoid, 3),
-    (Trait::Tough, 2),
-];
-pub const CLAN_2_POOL: &[(Trait, u8)] = &[
-    (Trait::Aggressive, 4),
-    (Trait::Defensive, 4),
-    (Trait::Loyal, 3),
-    (Trait::Tough, 2),
-];
-pub const CLAN_3_POOL: &[(Trait, u8)] = &[
-    (Trait::Cunning, 4),
-    (Trait::Cautious, 3),
     (Trait::Dim, 2),
-    (Trait::Nearsighted, 2),
-    (Trait::Asthmatic, 1),
-];
-pub const CLAN_4_POOL: &[(Trait, u8)] = &[
-    (Trait::Resilient, 4),
-    (Trait::Aggressive, 3),
-    (Trait::Loyal, 3),
-    (Trait::Tough, 2),
-];
-pub const CLAN_5_POOL: &[(Trait, u8)] = &[
-    (Trait::Cunning, 4),
-    (Trait::Cautious, 3),
     (Trait::Treacherous, 2),
 ];
-pub const CLAN_6_POOL: &[(Trait, u8)] = &[
-    (Trait::Fragile, 3),
-    (Trait::Friendly, 3),
-    (Trait::Asthmatic, 2),
-    (Trait::Nearsighted, 2),
-];
-pub const CLAN_7_POOL: &[(Trait, u8)] = &[
-    (Trait::Resilient, 4),
-    (Trait::Defensive, 3),
-    (Trait::Tough, 3),
-];
-pub const CLAN_8_POOL: &[(Trait, u8)] = &[
-    (Trait::Fragile, 2),
-    (Trait::Friendly, 4),
-    (Trait::Loyal, 3),
-    (Trait::Asthmatic, 2),
-];
-pub fn pool_for(clan: u8) -> &'static [(Trait, u8)] {
-    match clan {
-        1 => CLAN_1_POOL,
-        2 => CLAN_2_POOL,
-        3 => CLAN_3_POOL,
-        4 => CLAN_4_POOL,
-        5 => CLAN_5_POOL,
-        6 => CLAN_6_POOL,
-        7 => CLAN_7_POOL,
-        8 => CLAN_8_POOL,
-        _ => CLAN_1_POOL,
-    }
-}
 
-/// Generate a trait set for a character in `clan`. Rolls 2–6 uniformly,
-/// then draws weighted picks from the clan pool, rejecting conflicts and
+/// Generate a trait set for a single goblin. Rolls 2–6 uniformly,
+/// then draws weighted picks from [`TRAIT_POOL`], rejecting conflicts and
 /// duplicates. Stops early if the pool cannot satisfy the count; never spins.
-pub fn generate_traits(clan: u8, rng: &mut impl Rng) -> Vec<Trait> {
-    let pool = pool_for(clan);
+pub fn generate_traits(rng: &mut impl Rng) -> Vec<Trait> {
+    let pool = TRAIT_POOL;
     let target_count = rng.random_range(2..=6);
     let mut chosen: Vec<Trait> = Vec::with_capacity(target_count);
 
@@ -358,23 +318,19 @@ mod tests {
     }
 
     #[test]
-    fn pool_for_returns_correct_pool_per_clan() {
-        let p1 = pool_for(1);
-        assert!(p1.iter().any(|(t, _)| *t == Trait::Loyal));
-        let p8 = pool_for(8);
-        assert!(p8.iter().any(|(t, _)| *t == Trait::Friendly));
-    }
-
-    #[test]
-    fn pool_for_unknown_clan_falls_back() {
-        // Clans outside 1..=8 fall back to clan 1's pool; assert non-panic.
-        let _ = pool_for(99);
+    fn trait_pool_covers_expected_traits() {
+        // Spot-check the merged pool still carries traits from opposite
+        // legacy clan pools (Loyal was clan 1/2/4/8, Friendly 6/8).
+        assert!(TRAIT_POOL.iter().any(|(t, _)| *t == Trait::Loyal));
+        assert!(TRAIT_POOL.iter().any(|(t, _)| *t == Trait::Friendly));
+        let total: u32 = TRAIT_POOL.iter().map(|(_, w)| *w as u32).sum();
+        assert_eq!(total, 90, "weights sum the eight legacy pools");
     }
 
     #[test]
     fn generate_respects_count_when_pool_supports() {
         let mut rng = StdRng::seed_from_u64(42);
-        let traits = generate_traits(1, &mut rng);
+        let traits = generate_traits(&mut rng);
         assert!(traits.len() >= 2 && traits.len() <= 6);
         for i in 0..traits.len() {
             for j in (i + 1)..traits.len() {
@@ -386,7 +342,7 @@ mod tests {
     #[test]
     fn generate_no_duplicates() {
         let mut rng = StdRng::seed_from_u64(7);
-        let traits = generate_traits(2, &mut rng);
+        let traits = generate_traits(&mut rng);
         let mut sorted: Vec<_> = traits.clone();
         sorted.sort_by_key(|t| *t as u8);
         sorted.dedup();

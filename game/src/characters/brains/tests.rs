@@ -416,9 +416,11 @@ fn decide_on_action_heavily_surrounded_no_sanity_and_intelligence(
 }
 
 #[rstest]
-fn test_psychotic_break_triggers_at_low_sanity(mut small_rng: SmallRng) {
-    let mut character = Character::default();
-    set_sanity(&mut character, 3); // Below typical break threshold
+fn test_psychotic_break_triggers_at_low_sanity(mut character: Character, mut small_rng: SmallRng) {
+    // Uses the deterministic fixture (brain = Brain::default()): per-goblin
+    // trait rolls can push the break threshold as low as 1, so a random
+    // Character::default() would make this flaky.
+    set_sanity(&mut character, 3); // Below the default break threshold
 
     character
         .brain

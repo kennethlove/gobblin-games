@@ -104,7 +104,7 @@ Uses `axum-test` crate for easy HTTP testing:
 -  Character log endpoint
 -  Character items relationship
 -  Validation (missing fields)
--  Clan validation
+-  Team validation
 
 ### Simulation (8 tests)
 -  Advance game
