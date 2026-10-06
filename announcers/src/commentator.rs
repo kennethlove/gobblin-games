@@ -13,6 +13,9 @@ use crate::types::{BroadcastPackage, CommentaryError, CommentaryLine, Commentary
 /// async API handlers via `Arc<dyn Commentator>`. The default
 /// implementation is [`crate::Chronicler`]: deterministic template
 /// narration with no network or model dependencies.
+// async_trait's expansion puts a message-less #[must_use] on the boxed-future
+// return, which clippy 1.99 flags as double_must_use. Not fixable from here.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait Commentator: Send + Sync {
     /// Generate a commentary segment for one phase.
