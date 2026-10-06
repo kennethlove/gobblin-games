@@ -71,11 +71,11 @@ fn make_msg(payload: MessagePayload) -> GameMessage {
     }
 }
 
-fn make_character(name: &str, clan: u8) -> CharacterDigest {
+fn make_character(name: &str, team: u8) -> CharacterDigest {
     CharacterDigest {
         identifier: test_uuid(name).to_string(),
         name: name.into(),
-        clan,
+        team,
         status: "alive".into(),
         injury_level: "unharmed".into(),
         location: "Hub".into(),
@@ -314,7 +314,7 @@ async fn package_includes_kill_leaders() {
         .into_iter()
         .map(|(name, count)| announcers::KillLeader {
             name,
-            clan: 0,
+            team: 0,
             kill_count: count,
         })
         .collect();

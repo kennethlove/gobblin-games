@@ -401,7 +401,7 @@ async fn run_game_cycles(
                     .unwrap_or(0);
                 announcers::KillLeader {
                     name,
-                    clan: team,
+                    team,
                     kill_count: count,
                 }
             })
@@ -449,7 +449,7 @@ async fn run_game_cycles(
             .filter(|d| d.kill_streak >= 2)
             .map(|d| announcers::KillingSpree {
                 name: d.name.clone(),
-                clan: d.clan,
+                team: d.team,
                 streak: d.kill_streak,
                 label: announcers::spree_label(d.kill_streak).to_string(),
             })
@@ -708,7 +708,7 @@ fn build_character_digest(t: &game::characters::Character) -> announcers::Charac
     announcers::CharacterDigest {
         identifier: t.identifier.to_string(),
         name: t.name.clone(),
-        clan: t.team as u8,
+        team: t.team as u8,
         status: if t.is_alive() {
             "alive".into()
         } else {
