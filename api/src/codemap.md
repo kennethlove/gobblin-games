@@ -159,8 +159,8 @@ Endpoints return `Result<Json<T>, AppError>`, Axum auto-converts errors to HTTP 
 
 Parallel creation/updates using `futures::join_all`:
 ```rust
-// Create 24 characters concurrently
-let futures = (0..24).map(|i| create_character(..., i));
+// Create 24 characters concurrently (clan cycles through 8)
+let futures = (0..24).map(|idx| create_character(None, &game_identifier, &db, idx % 8));
 let results = futures::future::join_all(futures).await;
 
 // Save areas in parallel

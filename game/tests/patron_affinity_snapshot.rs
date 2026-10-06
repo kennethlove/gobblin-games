@@ -22,7 +22,7 @@ fn build_test_game() -> Game {
     game.areas.push(area);
 
     for i in 0..6 {
-        let mut character = Character::new(format!("Character{}", i), Some((i % 12) + 1), None);
+        let mut character = Character::new(format!("Character{}", i), Some((i % 8) + 1), None);
         character.area = Area::Sector1;
         character.blood = 1000;
         character.statistics.game = game.identifier.clone();

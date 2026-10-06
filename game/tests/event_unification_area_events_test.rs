@@ -44,7 +44,7 @@ fn area_event_survival_narration_reaches_game_messages() {
     bravo.area = area;
     bravo.blood = 1000;
     bravo.statistics.game = game.identifier.clone();
-    bravo.clan = (alpha.clan % 12) + 1;
+    bravo.clan = (alpha.clan % 8) + 1;
     let bravo_id = bravo.identifier.clone();
 
     game.characters.push(alpha);

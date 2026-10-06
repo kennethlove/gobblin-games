@@ -261,6 +261,115 @@ async fn test_auto_spawn_clan_coverage() {
     test_db.cleanup().await;
 }
 
+/// Per `gobblin-games-09j`, the auto-spawn must spread the 24-character
+/// roster evenly: exactly 3 characters in each clan 1..=8.
+#[tokio::test]
+async fn test_auto_spawn_three_characters_per_clan() {
+    let test_db = TestDb::new().await;
+    let app_state = test_db.app_state();
+    let router = create_test_router(app_state);
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "three_per_clan").await;
+    let game_id = create_test_game(&server, &user).await;
+
+    let characters = fetch_characters(&server, &user, &game_id).await;
+    assert_eq!(
+        characters.len(),
+        24,
+        "auto-spawn should populate 24 characters"
+    );
+
+    let mut per_clan: std::collections::BTreeMap<u64, usize> = std::collections::BTreeMap::new();
+    for character in &characters {
+        let clan = character["clan"].as_u64().expect("clan is u64");
+        *per_clan.entry(clan).or_insert(0) += 1;
+    }
+
+    assert_eq!(per_clan.len(), 8, "clans must all lie within 1..=8");
+    for clan in 1..=8u64 {
+        assert_eq!(
+            per_clan.get(&clan),
+            Some(&3),
+            "clan {} should have exactly 3 characters",
+            clan
+        );
+    }
+
+    test_db.cleanup().await;
+}
+
+/// A full spawn satisfies the readiness rule from `schemas/game.surql`
+/// (24 characters AND 8 distinct clans) through the real query paths:
+/// `fn::get_detail_game` behind `GET /api/games/{id}`,
+/// `fn::get_list_games` behind `GET /api/games`, and the internal
+/// `fn::get_full_game` used by quickstart and websocket loads.
+#[tokio::test]
+async fn test_full_spawn_marks_game_ready() {
+    let test_db = TestDb::new().await;
+    let app_state = test_db.app_state();
+    let router = create_test_router(app_state);
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "game_ready_checker").await;
+    let game_id = create_test_game(&server, &user).await;
+
+    // fn::get_detail_game via GET /api/games/{id}.
+    let detail_response = server
+        .get(&format!("/api/games/{}", game_id))
+        .add_header("Authorization", user.auth_header())
+        .await;
+    detail_response.assert_status_ok();
+    let detail_body = detail_response.json::<serde_json::Value>();
+    assert_eq!(
+        detail_body["ready"],
+        json!(true),
+        "fn::get_detail_game should mark a full spawn ready"
+    );
+
+    // fn::get_list_games via GET /api/games.
+    let list_response = server
+        .get("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .await;
+    list_response.assert_status_ok();
+    let list_body = list_response.json::<serde_json::Value>();
+    let listed_game = list_body["games"]
+        .as_array()
+        .expect("games should be an array")
+        .iter()
+        .find(|game| game["identifier"] == game_id)
+        .expect("created game should appear in the list");
+    assert_eq!(
+        listed_game["ready"],
+        json!(true),
+        "fn::get_list_games should mark a full spawn ready"
+    );
+
+    // fn::get_full_game via the same internal query `api::games::get_full_game` runs.
+    let mut full_game = test_db
+        .db
+        .query("SELECT * FROM fn::get_full_game($identifier)")
+        .bind(("identifier", game_id.clone()))
+        .await
+        .expect("fn::get_full_game should run");
+    let full_game_rows: Vec<serde_json::Value> = full_game
+        .take(0)
+        .expect("fn::get_full_game result should deserialize");
+    assert_eq!(
+        full_game_rows.len(),
+        1,
+        "fn::get_full_game should find the game"
+    );
+    assert_eq!(
+        full_game_rows[0]["ready"],
+        json!(true),
+        "fn::get_full_game should mark a full spawn ready"
+    );
+
+    test_db.cleanup().await;
+}
+
 /// Test the per-character log endpoint.
 #[tokio::test]
 async fn test_character_log() {

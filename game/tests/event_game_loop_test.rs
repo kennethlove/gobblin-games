@@ -25,7 +25,7 @@ fn test_event_survival_integration_with_game_loop() {
 
     // Create characters in forest with vulnerable health
     for i in 0..5 {
-        let mut character = Character::new(format!("Character{}", i), Some((i % 12) + 1), None);
+        let mut character = Character::new(format!("Character{}", i), Some((i % 8) + 1), None);
         character.area = Area::Sector1;
         character.blood = 500;
         character.terrain_affinity = vec![]; // No protection
@@ -97,7 +97,7 @@ fn test_trigger_cycle_events_calls_process_event() {
 
     // Create characters in each area
     for i in 0..6 {
-        let mut character = Character::new(format!("Character{}", i), Some((i % 12) + 1), None);
+        let mut character = Character::new(format!("Character{}", i), Some((i % 8) + 1), None);
         character.area = if i < 3 { Area::Sector1 } else { Area::Sector4 };
         character.blood = 500;
         character.terrain_affinity = vec![];
