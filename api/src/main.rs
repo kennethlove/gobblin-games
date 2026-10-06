@@ -293,29 +293,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|e| format!("Failed to start cleanup scheduler: {}", e))?;
     tracing::info!("Cleanup scheduler initialized");
 
-    let api_routes = Router::new()
-        .route(
-            "/version",
-            axum::routing::get(|| async { Json(env!("CARGO_PKG_VERSION")) }),
-        )
-        .nest(
-            "/games",
-            GAMES_ROUTER.clone().layer(middleware::from_fn_with_state(
-                app_state.clone(),
-                surreal_jwt,
-            )),
-        )
-        .nest("/users", USERS_PUBLIC_ROUTER.clone())
-        .nest(
-            "/users",
-            USERS_PROTECTED_ROUTER
-                .clone()
-                .layer(middleware::from_fn_with_state(
+    let api_routes =
+        Router::new()
+            .route(
+                "/version",
+                axum::routing::get(|| async { Json(env!("CARGO_PKG_VERSION")) }),
+            )
+            .nest(
+                "/games",
+                GAMES_ROUTER.clone().layer(middleware::from_fn_with_state(
                     app_state.clone(),
                     surreal_jwt,
                 )),
-        )
-        .nest("/auth", AUTH_ROUTER.clone());
+            )
+            .nest(
+                "/characters",
+                api::characters::OWNED_CHARACTERS_ROUTER.clone().layer(
+                    middleware::from_fn_with_state(app_state.clone(), surreal_jwt),
+                ),
+            )
+            .nest("/users", USERS_PUBLIC_ROUTER.clone())
+            .nest(
+                "/users",
+                USERS_PROTECTED_ROUTER
+                    .clone()
+                    .layer(middleware::from_fn_with_state(
+                        app_state.clone(),
+                        surreal_jwt,
+                    )),
+            )
+            .nest("/auth", AUTH_ROUTER.clone());
 
     let router = Router::new()
         .nest("/api", api_routes)

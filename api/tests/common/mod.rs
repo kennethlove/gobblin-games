@@ -256,6 +256,12 @@ pub fn create_test_router(state: AppState) -> Router {
                 .clone()
                 .layer(middleware::from_fn_with_state(state.clone(), surreal_jwt)),
         )
+        .nest(
+            "/characters",
+            api::characters::OWNED_CHARACTERS_ROUTER
+                .clone()
+                .layer(middleware::from_fn_with_state(state.clone(), surreal_jwt)),
+        )
         .nest("/users", USERS_PUBLIC_ROUTER.clone())
         .nest(
             "/users",

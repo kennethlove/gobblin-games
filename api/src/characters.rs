@@ -8,6 +8,7 @@ use axum::{Json, Router};
 use game::characters::Character;
 use game::items::Item;
 use game::messages::GameMessage;
+use game::naming::{clan_name, goblin_name};
 use serde::{Deserialize, Serialize};
 use shared::EditCharacter;
 use std::sync::LazyLock;
@@ -15,6 +16,7 @@ use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
 use surrealdb_types::{RecordId, SerdeWrapper};
 use uuid::Uuid;
+use validator::Validate;
 
 pub static CHARACTERS_ROUTER: LazyLock<Router<AppState>> = LazyLock::new(|| {
     Router::new()
@@ -28,6 +30,123 @@ pub static CHARACTERS_ROUTER: LazyLock<Router<AppState>> = LazyLock::new(|| {
         .route("/{identifier}/avatar", post(upload_avatar))
         .route("/{identifier}/log", get(character_log))
 });
+
+/// Top-level CRUD for a player's own persistent characters, mounted at
+/// `/api/characters`. Distinct from [`CHARACTERS_ROUTER`], which nests
+/// under a game at `/api/games/{game}/characters`. Both mount behind the
+/// `surreal_jwt` middleware, so handlers run on an authenticated
+/// connection where `$auth` is the calling user — required by the
+/// ownership checks below.
+pub static OWNED_CHARACTERS_ROUTER: LazyLock<Router<AppState>> = LazyLock::new(|| {
+    Router::new()
+        .route("/", get(list_owned_characters).post(create_owned_character))
+        .route(
+            "/{identifier}",
+            get(owned_character_detail)
+                .put(owned_character_update)
+                .delete(owned_character_delete),
+        )
+});
+
+/// Payload for `POST /api/characters`. Missing or blank strings both
+/// mean "generate it server-side": a random goblin name for `name`, a
+/// goblin-flavored clan name for `clan_name`.
+#[derive(Debug, Deserialize, Validate)]
+pub struct CreateOwnedCharacter {
+    #[validate(length(max = 50, message = "Name must be at most 50 characters"))]
+    pub name: Option<String>,
+    #[validate(length(max = 100, message = "Clan name must be at most 100 characters"))]
+    pub clan_name: Option<String>,
+}
+
+/// Payload for `PUT /api/characters/{identifier}` (owner-only edit).
+///
+/// - `name`: optional; when present it must be 1-50 characters — a
+///   character's name cannot be blanked.
+/// - `clan_name`: optional; a blank value regenerates the clan name
+///   (the same "blank means generate" rule as creation).
+#[derive(Debug, Deserialize, Validate)]
+pub struct EditOwnedCharacter {
+    #[validate(length(min = 1, max = 50, message = "Name must be 1-50 characters"))]
+    pub name: Option<String>,
+    #[validate(length(max = 100, message = "Clan name must be at most 100 characters"))]
+    pub clan_name: Option<String>,
+}
+
+/// Response body for `GET /api/characters`.
+#[derive(Debug, Serialize)]
+pub struct OwnedCharacterList {
+    pub characters: Vec<Character>,
+}
+
+/// Trim a supplied string and treat blank as absent, so "not sent" and
+/// "sent blank" behave identically for creation payloads.
+fn generated_unless_present(value: Option<String>) -> Option<String> {
+    value
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
+/// Load a character row for mutation, enforcing ownership: the row must
+/// exist and `created_by` must equal `$auth` on this request's
+/// authenticated connection.
+///
+/// The schema (`schemas/character.surql`) already restricts
+/// create/update/delete to `created_by = $auth`, but SurrealDB enforces
+/// that by *silently skipping* unauthorized rows — a foreign UPDATE
+/// affects 0 rows and a foreign DELETE removes nothing, neither with an
+/// error. Without this check the handlers would report success (or a
+/// misleading 500) for writes that did nothing, so ownership is asked
+/// explicitly. Requires an [`AuthDb`]-backed connection: on a root
+/// connection `$auth` is NONE and every character looks foreign.
+async fn require_owned_character(
+    db: &Surreal<Any>,
+    identifier: &str,
+) -> Result<serde_json::Value, AppError> {
+    let mut response = db
+        .query(
+            "SELECT name, clan_name, (created_by = $auth) AS is_owner
+             FROM character WHERE identifier = $identifier",
+        )
+        .bind(("identifier", identifier.to_owned()))
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to load character: {e}")))?;
+    let rows: Vec<serde_json::Value> = response
+        .take(0)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to read character: {e}")))?;
+    let row = rows
+        .into_iter()
+        .next()
+        .ok_or_else(|| AppError::NotFound("Character not found".to_string()))?;
+    if row["is_owner"].as_bool() == Some(true) {
+        Ok(row)
+    } else {
+        Err(AppError::Forbidden(
+            "You do not own this character".to_string(),
+        ))
+    }
+}
+
+/// Fetch a character through `fn::get_full_character` (items, log, and
+/// `editable` computed from the game's status).
+async fn fetch_full_character(db: &Surreal<Any>, identifier: &str) -> Result<Character, AppError> {
+    let mut result = db
+        .query("SELECT * FROM fn::get_full_character($identifier);")
+        .bind(("identifier", identifier.to_owned()))
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to fetch character: {e}")))?;
+
+    // Take as raw JSON to bypass the SurrealDB SDK custom deserializer
+    // (chokes on null fields like `game_day: null` inside Option<T>).
+    let raw: Vec<serde_json::Value> = result
+        .take(0)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to take character: {e}")))?;
+
+    raw.into_iter()
+        .next()
+        .and_then(|v| serde_json::from_value(v).ok())
+        .ok_or_else(|| AppError::NotFound("Character not found".to_string()))
+}
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct CharacterItemEdge {
@@ -113,14 +232,19 @@ pub async fn character_delete(
     Path((game_identifier, character_identifier)): Path<(String, String)>,
     Extension(AuthDb(db)): Extension<AuthDb>,
 ) -> Result<StatusCode, AppError> {
+    // Only the owner may delete. The schema makes foreign deletes silent
+    // no-ops, so ask explicitly: 404 when missing, 403 when not ours.
+    require_owned_character(&db, &character_identifier).await?;
+
     // The character was created with RecordId::new("character", identifier),
     // so its record ID is `character:<identifier>`. Delete by RecordId.
     let character_rid = surrealdb_types::RecordId::new("character", character_identifier.as_str());
 
-    // Delete the playing_in edge (character->playing_in->game)
+    // Delete the playing_in edge (character->playing_in->game: in =
+    // character, out = game).
     let _ = db
         .query(
-            "DELETE playing_in WHERE in.identifier = $game_id AND out.identifier = $character_id",
+            "DELETE playing_in WHERE in.identifier = $character_id AND out.identifier = $game_id",
         )
         .bind(("game_id", game_identifier.to_string()))
         .bind(("character_id", character_identifier.to_string()))
@@ -139,6 +263,11 @@ pub async fn character_update(
     Extension(AuthDb(db)): Extension<AuthDb>,
     Json(payload): Json<EditCharacter>,
 ) -> Result<StatusCode, AppError> {
+    // Only the owner may mutate. The schema makes foreign updates silent
+    // no-ops (0 rows), which this handler would otherwise report as a
+    // 500 — ask explicitly instead: 404 when missing, 403 when not ours.
+    require_owned_character(&db, &payload.identifier).await?;
+
     // Validate input
     if let Err(e) = validator::Validate::validate(&payload) {
         return Err(AppError::ValidationError(format!("{}", e)));
@@ -170,28 +299,9 @@ pub async fn character_detail(
     Path((_, character_identifier)): Path<(Uuid, Uuid)>,
     Extension(AuthDb(db)): Extension<AuthDb>,
 ) -> Result<Json<Character>, AppError> {
-    let character_identifier = character_identifier.to_string();
-    let mut result = db
-        .query("SELECT * FROM fn::get_full_character($identifier);")
-        .bind(("identifier", character_identifier))
-        .await
-        .map_err(|e| AppError::InternalServerError(format!("Failed to fetch character: {}", e)))?;
-
-    // Take as raw JSON to bypass SurrealDB SDK custom deserializer (chokes
-    // on null fields like `game_day: null` inside Option<T>).
-    let raw: Vec<serde_json::Value> = result
-        .take(0)
-        .map_err(|e| AppError::InternalServerError(format!("Failed to take character: {}", e)))?;
-
-    let character: Option<Character> = raw
-        .into_iter()
-        .next()
-        .and_then(|v| serde_json::from_value(v).ok());
-
-    match character {
-        Some(character) => Ok(Json(character)),
-        None => Err(AppError::NotFound("Character not found".to_string())),
-    }
+    Ok(Json(
+        fetch_full_character(&db, &character_identifier.to_string()).await?,
+    ))
 }
 
 pub async fn character_log(
@@ -222,6 +332,10 @@ pub async fn upload_avatar(
     mut multipart: Multipart,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let character_identifier = character_identifier.to_string();
+
+    // Only the owner may change the avatar; same explicit gate as the
+    // other mutation paths (404 missing / 403 foreign).
+    require_owned_character(&db, &character_identifier).await?;
 
     // Find the file field
     let mut file_data: Option<Vec<u8>> = None;
@@ -292,4 +406,173 @@ pub async fn upload_avatar(
             "path": saved_path
         })))
     }
+}
+
+/// `POST /api/characters` — create a persistent character owned by the
+/// caller (`created_by = $auth` via the schema's `VALUE $auth`).
+///
+/// Standalone by design: traits, brain, and terrain affinity are rolled
+/// by [`Character::new`], but no team, game relation, or items attach —
+/// those arrive on game entry. `team` stays 0 until a game assigns one.
+pub async fn create_owned_character(
+    Extension(AuthDb(db)): Extension<AuthDb>,
+    Json(payload): Json<CreateOwnedCharacter>,
+) -> Result<(StatusCode, Json<Character>), AppError> {
+    let payload = CreateOwnedCharacter {
+        name: generated_unless_present(payload.name),
+        clan_name: generated_unless_present(payload.clan_name),
+    };
+    if let Err(e) = validator::Validate::validate(&payload) {
+        return Err(AppError::ValidationError(format!("{}", e)));
+    }
+
+    // Generation happens before any await, so the RNG is never held
+    // across one.
+    let (name, generated_clan) = {
+        let mut rng = rand::rng();
+        (
+            payload.name.unwrap_or_else(|| goblin_name(&mut rng)),
+            payload.clan_name.unwrap_or_else(|| clan_name(&mut rng)),
+        )
+    };
+    let mut character = Character::new(name, None, None);
+    character.clan_name = generated_clan;
+
+    let body = serde_json::to_value(&character)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to encode character: {e}")))?;
+    let id = RecordId::new("character", character.identifier.as_str());
+    db.query("UPSERT $rid CONTENT $body")
+        .bind(("rid", id))
+        .bind(("body", body))
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to create character: {e}")))?;
+
+    Ok((StatusCode::CREATED, Json(character)))
+}
+
+/// `GET /api/characters` — every character created by the caller
+/// (`created_by = $auth`, backed by the `character_created_by` index).
+pub async fn list_owned_characters(
+    Extension(AuthDb(db)): Extension<AuthDb>,
+) -> Result<Json<OwnedCharacterList>, AppError> {
+    let mut response = db
+        .query("SELECT * FROM character WHERE created_by = $auth ORDER BY identifier")
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to list characters: {e}")))?;
+    let rows: Vec<serde_json::Value> = response
+        .take(0)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to take characters: {e}")))?;
+    let characters: Vec<Character> = rows
+        .into_iter()
+        .filter_map(|row| serde_json::from_value(row).ok())
+        .collect();
+    Ok(Json(OwnedCharacterList { characters }))
+}
+
+/// `GET /api/characters/{identifier}` — full character detail. Reads are
+/// unrestricted by the schema (`select FULL`), matching the game-scoped
+/// detail route; only mutations are owner-gated.
+pub async fn owned_character_detail(
+    Path(identifier): Path<Uuid>,
+    Extension(AuthDb(db)): Extension<AuthDb>,
+) -> Result<Json<Character>, AppError> {
+    Ok(Json(
+        fetch_full_character(&db, &identifier.to_string()).await?,
+    ))
+}
+
+/// `PUT /api/characters/{identifier}` — owner-only edit of `name` and
+/// `clan_name`.
+///
+/// Standalone characters are always editable. A character that is in a
+/// game can only be edited while that game is `NotStarted`, mirroring
+/// the `editable` expression in `fn::get_full_character`.
+pub async fn owned_character_update(
+    Path(identifier): Path<Uuid>,
+    Extension(AuthDb(db)): Extension<AuthDb>,
+    Json(payload): Json<EditOwnedCharacter>,
+) -> Result<Json<Character>, AppError> {
+    let identifier = identifier.to_string();
+    let row = require_owned_character(&db, &identifier).await?;
+
+    let payload = EditOwnedCharacter {
+        name: payload.name.map(|name| name.trim().to_string()),
+        clan_name: payload.clan_name.map(|clan| clan.trim().to_string()),
+    };
+    if let Err(e) = validator::Validate::validate(&payload) {
+        return Err(AppError::ValidationError(format!("{}", e)));
+    }
+
+    let mut status_response = db
+        .query(
+            "SELECT (->playing_in->game.status)[0] AS game_status
+             FROM character WHERE identifier = $identifier",
+        )
+        .bind(("identifier", identifier.clone()))
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to load game status: {e}")))?;
+    let statuses: Vec<serde_json::Value> = status_response
+        .take(0)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to take game status: {e}")))?;
+    let game_status = statuses
+        .first()
+        .and_then(|status_row| status_row["game_status"].as_str());
+    if let Some(status) = game_status
+        && status != "NotStarted"
+    {
+        return Err(AppError::Conflict(
+            "Character is in a game that has already started".to_string(),
+        ));
+    }
+
+    // Read-modify-write so omitted fields keep their current values.
+    let mut name = row["name"].as_str().unwrap_or_default().to_string();
+    let mut clan = row["clan_name"].as_str().unwrap_or_default().to_string();
+    if let Some(new_name) = payload.name {
+        name = new_name;
+    }
+    match payload.clan_name {
+        None => {}
+        Some(new_clan) if new_clan.is_empty() => {
+            let mut rng = rand::rng();
+            clan = clan_name(&mut rng);
+        }
+        Some(new_clan) => clan = new_clan,
+    }
+
+    db.query(
+        "UPDATE character SET name = $name, clan_name = $clan_name
+         WHERE identifier = $identifier",
+    )
+    .bind(("identifier", identifier.clone()))
+    .bind(("name", name))
+    .bind(("clan_name", clan))
+    .await
+    .map_err(|e| AppError::InternalServerError(format!("Failed to update character: {e}")))?;
+
+    Ok(Json(fetch_full_character(&db, &identifier).await?))
+}
+
+/// `DELETE /api/characters/{identifier}` — owner-only removal. Detaches
+/// the character from any game first so no `playing_in` edges are left
+/// behind (`playing_in`: in = character, out = game).
+pub async fn owned_character_delete(
+    Path(identifier): Path<Uuid>,
+    Extension(AuthDb(db)): Extension<AuthDb>,
+) -> Result<StatusCode, AppError> {
+    let identifier = identifier.to_string();
+    require_owned_character(&db, &identifier).await?;
+
+    db.query("DELETE playing_in WHERE in.identifier = $identifier")
+        .bind(("identifier", identifier.clone()))
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to detach character: {e}")))?;
+
+    let character_rid = RecordId::new("character", identifier.as_str());
+    let _: Option<serde_json::Value> = db
+        .delete(character_rid)
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to delete character: {e}")))?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
