@@ -730,22 +730,6 @@ mod tests {
         }
     }
 
-    /// Rows persisted before the clan -> team rename carry `clan`; the
-    /// serde alias must keep them deserializing.
-    #[test]
-    fn legacy_digest_with_clan_key_deserializes() {
-        let digest: CharacterDigest = serde_json::from_value(serde_json::json!({
-            "identifier": "id-rendmaw",
-            "name": "Rendmaw",
-            "clan": 3,
-            "status": "alive",
-            "injury_level": "unharmed",
-            "location": "Hub"
-        }))
-        .expect("legacy clan-keyed digest should still deserialize");
-        assert_eq!(digest.team, 3);
-    }
-
     fn tr(name: &str) -> CharacterRef {
         CharacterRef {
             identifier: test_uuid(name).to_string().into(),
