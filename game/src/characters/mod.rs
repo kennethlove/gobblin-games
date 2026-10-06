@@ -12,6 +12,7 @@ pub mod inventory;
 pub mod lifecycle;
 pub mod movement;
 pub mod rescue;
+pub mod revival;
 pub mod stamina_band;
 pub mod statuses;
 pub mod survival;
@@ -570,7 +571,7 @@ impl Character {
             // Emit CharacterBledOut if blood reached zero from wound bleed
             if self.blood == 0 {
                 events.push(TaggedEvent::new(
-                    format!("{} bled out from their wounds", self.name),
+                    format!("{} collapses, bleeding out from their wounds", self.name),
                     MessagePayload::CharacterBledOut {
                         character: CharacterRef {
                             identifier: self.identifier.clone().into(),

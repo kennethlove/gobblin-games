@@ -116,7 +116,7 @@ pub fn archetype_label(value: &Value, _: Kwargs, _: &State) -> TeraResult<Value>
     let archetype = value.as_str().unwrap_or("");
     let label = match archetype {
         "action" => "ACTION",
-        "death" => "DEATHS",
+        "death" => "DOWNED",
         "event" => "EVENTS",
         "commentary" => "COMMS",
         _ => "OTHER",

@@ -20,7 +20,7 @@ impl Display for GameEvent {
                 write!(f, "=== 😋 Day 3: The Scramble ===")
             }
             GameEvent::CharactersLeft { character_count } => {
-                write!(f, "=== 📌 Goblins alive: {} ===", character_count)
+                write!(f, "=== 📌 Goblins still standing: {} ===", character_count)
             }
             GameEvent::GameNightStart { day_number } => {
                 write!(f, "=== 🌙 Night {} begins ===", day_number)
@@ -29,10 +29,10 @@ impl Display for GameEvent {
                 write!(f, "=== 🌙 Night {} ends ===", day_number)
             }
             GameEvent::DailyDeathAnnouncement { death_count } => {
-                write!(f, "=== 💀 Goblins dead: {} ===", death_count)
+                write!(f, "=== 💀 Goblins downed: {} ===", death_count)
             }
             GameEvent::DeathAnnouncement { character_name, .. } => {
-                write!(f, "=== 🪦 {} has died ===", character_name)
+                write!(f, "=== 🪦 {} is downed ===", character_name)
             }
             GameEvent::NoOneWins => {
                 write!(f, "=== 🎭 No one wins! ===")
@@ -321,18 +321,14 @@ impl Display for GameEvent {
                 target_name,
                 ..
             } => {
-                write!(f, "☠️ {} is killed by {}", character_name, target_name)
+                write!(f, "☠️ {} is downed by {}", character_name, target_name)
             }
             GameEvent::CharacterAttackSuccessKill {
                 character_name,
                 target_name,
                 ..
             } => {
-                write!(
-                    f,
-                    "☠️ {} successfully kills {}",
-                    character_name, target_name
-                )
+                write!(f, "☠️ {} knocks out {}", character_name, target_name)
             }
             GameEvent::CharacterAttackHidden {
                 character_name,
@@ -379,27 +375,27 @@ impl Display for GameEvent {
                 status,
                 ..
             } => {
-                write!(f, "💀 {} dies from {}", character_name, status)
+                write!(f, "💀 {} is downed by {}", character_name, status)
             }
             GameEvent::CharacterDiesFromAreaEvent {
                 character_name,
                 area_event,
                 ..
             } => {
-                write!(f, "🪦 {} died in the {}.", character_name, area_event)
+                write!(f, "🪦 {} is downed in the {}.", character_name, area_event)
             }
             GameEvent::CharacterDiesFromCharacterEvent {
                 character_name,
                 character_event,
                 ..
             } => {
-                write!(f, "💀 {} dies by {}", character_name, character_event)
+                write!(f, "💀 {} is downed by {}", character_name, character_event)
             }
             GameEvent::CharacterAlreadyDead { character_name, .. } => {
-                write!(f, "‼️ {} is already dead!", character_name)
+                write!(f, "‼️ {} is already downed!", character_name)
             }
             GameEvent::CharacterDead { character_name, .. } => {
-                write!(f, "❗️ {} is dead!", character_name)
+                write!(f, "❗️ {} is downed!", character_name)
             }
             GameEvent::WeaponBreak {
                 character_name,
@@ -484,10 +480,10 @@ impl Display for GameEvent {
                 ..
             } => {
                 let area_short = area_name.replace("The ", "");
-                write!(f, "💥 {} died in the {}.", character_name, area_short)
+                write!(f, "💥 {} is downed in the {}.", character_name, area_short)
             }
             GameEvent::CharacterDeath { character_name, .. } => {
-                write!(f, "⚰️ {} has died.", character_name)
+                write!(f, "⚰️ {} is downed.", character_name)
             }
             GameEvent::CharacterBetrayal {
                 character_name,
@@ -539,7 +535,7 @@ impl Display for GameEvent {
             GameEvent::TrustShockBreak { character_name, .. } => {
                 write!(
                     f,
-                    "{} is shaken by their ally's death and breaks the bond.",
+                    "{} is shaken as their ally goes down and breaks the bond.",
                     character_name
                 )
             }

@@ -41,10 +41,10 @@ pub fn describe_damage(damage: u32) -> &'static str {
 /// | 50-74%  | wounded      |
 /// | 25-49%  | badly wounded|
 /// | 1-24%   | near death   |
-/// | 0%      | deceased     |
+/// | 0%      | downed       |
 pub fn describe_injury(hp_pct: f64) -> &'static str {
     if hp_pct <= 0.0 {
-        "deceased"
+        "downed"
     } else if hp_pct < 25.0 {
         "near death"
     } else if hp_pct < 50.0 {
@@ -123,7 +123,7 @@ mod tests {
         assert_eq!(describe_injury(25.0), "badly wounded");
         assert_eq!(describe_injury(24.9), "near death");
         assert_eq!(describe_injury(1.0), "near death");
-        assert_eq!(describe_injury(0.0), "deceased");
+        assert_eq!(describe_injury(0.0), "downed");
     }
 
     #[test]

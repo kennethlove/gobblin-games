@@ -135,7 +135,7 @@ pub struct CharacterDigest {
     pub identifier: String,
     pub name: String,
     pub team: u8,
-    /// "alive" or "deceased"
+    /// "alive" or "downed"
     pub status: String,
     /// Narrative injury level (derived via severity mapping).
     pub injury_level: String,

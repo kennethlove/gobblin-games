@@ -262,7 +262,8 @@ impl Game {
                                     ));
                                 }
                                 CascadeOutcome::DeathRoll { survived: false } => {
-                                    let line = format!("{} succumbs to {}.", character.name, kind);
+                                    let line =
+                                        format!("{} is brought low by {}.", character.name, kind);
                                     collected_events.push((
                                         character.identifier.to_string(),
                                         character.name.clone(),
@@ -391,7 +392,7 @@ impl Game {
                     } else {
                         DeathCause::Starvation
                     };
-                    let line = format!("{} succumbs to {}.", character.name, cause);
+                    let line = format!("{} is brought low by {}.", character.name, cause);
                     collected_events.push((
                         character.identifier.to_string(),
                         character.name.clone(),

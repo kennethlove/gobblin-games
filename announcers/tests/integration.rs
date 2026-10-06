@@ -168,10 +168,10 @@ async fn full_pipeline_from_roster_to_package() {
     // Verify history accumulation.
     let rendmaw = digests.iter().find(|d| d.name == "Rendmaw").unwrap();
     assert_eq!(rendmaw.status, "alive");
-    assert!(rendmaw.notable_events.iter().any(|e| e.contains("Killed")));
+    assert!(rendmaw.notable_events.iter().any(|e| e.contains("Downed")));
 
     let grubworm = digests.iter().find(|d| d.name == "Grubworm").unwrap();
-    assert_eq!(grubworm.status, "deceased");
+    assert_eq!(grubworm.status, "downed");
 
     let snaggletooth = digests.iter().find(|d| d.name == "Snaggletooth").unwrap();
     assert_eq!(snaggletooth.location, "Forest");
@@ -230,7 +230,7 @@ async fn histories_accumulate_across_phases() {
     let digests1 = histories.digests();
     let rendmaw1 = digests1.iter().find(|d| d.name == "Rendmaw").unwrap();
     assert_eq!(rendmaw1.notable_events.len(), 1);
-    assert!(rendmaw1.notable_events[0].contains("Killed"));
+    assert!(rendmaw1.notable_events[0].contains("Downed"));
 
     // Phase 2: Snaggletooth finds an item.
     let phase2 = vec![make_msg(MessagePayload::ItemFound {
@@ -245,7 +245,7 @@ async fn histories_accumulate_across_phases() {
     let snaggletooth2 = digests2.iter().find(|d| d.name == "Snaggletooth").unwrap();
 
     // Rendmaw still has phase 1's kill event.
-    assert!(rendmaw2.notable_events.iter().any(|e| e.contains("Killed")));
+    assert!(rendmaw2.notable_events.iter().any(|e| e.contains("Downed")));
 
     // Snaggletooth has phase 2's item find.
     assert!(
@@ -600,12 +600,12 @@ async fn permanent_highlights() {
     assert_eq!(rendmaw.highlights.len(), 20);
 
     // Each highlight mentions a kill.
-    assert!(rendmaw.highlights[0].contains("Killed"));
+    assert!(rendmaw.highlights[0].contains("Downed"));
 
     // Highlights survive serde_json round-trip (as they would through
     // SurrealDB persistence).
     let json = serde_json::to_value(rendmaw).unwrap();
     let restored: CharacterDigest = serde_json::from_value(json).unwrap();
     assert_eq!(restored.highlights.len(), 20);
-    assert!(restored.highlights[0].contains("Killed"));
+    assert!(restored.highlights[0].contains("Downed"));
 }

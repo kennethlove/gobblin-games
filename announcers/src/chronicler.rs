@@ -39,7 +39,7 @@ const LEADER_LINES: [&str; 3] = [
 const SPREE_LINES: [&str; 3] = [
     "{name} is on a streak — {streak} in a row.",
     "{streak} straight for {name}. Someone hide.",
-    "The streak lives: {name}, {streak} kills deep.",
+    "The streak lives: {name}, {streak} downings deep.",
 ];
 
 const ZONE_LINES: [&str; 2] = [
@@ -61,7 +61,7 @@ const CLOSERS: [&str; 4] = [
 ];
 
 const EVENT_PREFIXES: [(EventKind, [&str; 2]); 10] = [
-    (EventKind::Death, ["The tally grows —", "Skull pile —"]),
+    (EventKind::Death, ["The tally grows —", "Down they go —"]),
     (EventKind::Combat, ["Steel sings —", "Claws out —"]),
     (
         EventKind::Wound,
@@ -135,7 +135,7 @@ impl Chronicler {
                 .replace(
                     "{kills}",
                     &format!(
-                        "{} kill{}",
+                        "{} downing{}",
                         leader.kill_count,
                         if leader.kill_count == 1 { "" } else { "s" }
                     ),

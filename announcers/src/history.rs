@@ -58,7 +58,7 @@ impl CharacterHistories {
     /// For each `GameMessage`, the payload is inspected and the involved
     /// character(s) get their digest updated:
     ///
-    /// * **Deaths** — mark as deceased, append to victim + killer histories.
+    /// * **Downings** — mark as downed, append to victim + killer histories.
     /// * **Combat** — append to attacker + target histories.
     /// * **Alliance** — update allies lists, append to member histories.
     /// * **Movement** — update location, append to character history.
@@ -72,22 +72,22 @@ impl CharacterHistories {
                     killer,
                     cause,
                 } => {
-                    self.set_status(&victim.identifier, "deceased");
-                    self.set_injury_level(&victim.identifier, "deceased");
+                    self.set_status(&victim.identifier, "downed");
+                    self.set_injury_level(&victim.identifier, "downed");
                     self.push_event(
                         &victim.identifier,
-                        &format!("Killed by {}", killer_name(killer)),
+                        &format!("Downed by {}", killer_name(killer)),
                     );
                     if let Some(k) = killer {
                         self.push_event(
                             &k.identifier,
-                            &format!("Killed {} (cause: {cause})", victim.name),
+                            &format!("Downed {} (cause: {cause})", victim.name),
                         );
                         self.push_highlight(
                             &k.identifier,
-                            &format!("Killed {} ({})", victim.name, cause),
+                            &format!("Downed {} ({})", victim.name, cause),
                         );
-                        // Bump killer's spree streak; victim's resets on death.
+                        // Bump killer's spree streak; victim's resets on downing.
                         self.bump_streak(&k.identifier);
                     }
                     self.reset_streak(&victim.identifier);
@@ -133,7 +133,7 @@ impl CharacterHistories {
                 // ------- Combat -------
                 MessagePayload::Combat(engagement) => {
                     let outcome_label = match &engagement.outcome {
-                        shared::messages::CombatOutcome::Killed => "killed",
+                        shared::messages::CombatOutcome::Killed => "downed",
                         shared::messages::CombatOutcome::Wounded => {
                             // Target lost — streak breaks. Attacker won the
                             // exchange (even without a kill) so streak holds.
@@ -180,9 +180,9 @@ impl CharacterHistories {
                         SwingOutcome::SelfAttackWound { .. } => "self-wound",
                         SwingOutcome::Suicide { .. } => "suicide",
                         SwingOutcome::FumbleSurvive { .. } => "fumble (survived)",
-                        SwingOutcome::FumbleDeath { .. } => "fumble (died)",
-                        SwingOutcome::AttackerDied { .. } => "attacker died",
-                        SwingOutcome::Kill { .. } => "kill",
+                        SwingOutcome::FumbleDeath { .. } => "fumble (downed)",
+                        SwingOutcome::AttackerDied { .. } => "attacker downed",
+                        SwingOutcome::Kill { .. } => "downed",
                     };
                     self.push_event(
                         &beat.attacker.identifier,
@@ -636,7 +636,7 @@ impl CharacterHistories {
             let new_label = crate::types::spree_label(new);
             if !new_label.is_empty() && new_label != old_label {
                 let name = digest.name.clone();
-                let milestone = format!("{name} is {new_label} — {} kills in a row!", new);
+                let milestone = format!("{name} is {new_label} — {} downings in a row!", new);
                 // Push directly (can't call self.push_event recursively
                 // in the same scope).
                 digest.notable_events.insert(0, milestone);
@@ -768,7 +768,7 @@ mod tests {
     }
 
     #[test]
-    fn killed_marks_as_deceased() {
+    fn downed_marks_as_downed() {
         let roster = vec![make_character("Snaggletooth", 12)];
         let mut h = CharacterHistories::new(roster);
         h.update(&[make_msg(MessagePayload::CharacterKilled {
@@ -777,9 +777,9 @@ mod tests {
             cause: shared::afflictions::DeathCause::Starvation,
         })]);
         let d = h.get(&test_uuid("Snaggletooth").to_string()).unwrap();
-        assert_eq!(d.status, "deceased");
-        assert_eq!(d.injury_level, "deceased");
-        assert_eq!(d.notable_events[0], "Killed by unknown causes");
+        assert_eq!(d.status, "downed");
+        assert_eq!(d.injury_level, "downed");
+        assert_eq!(d.notable_events[0], "Downed by unknown causes");
     }
 
     #[test]
