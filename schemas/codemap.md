@@ -63,10 +63,10 @@ Complex queries encapsulated in reusable functions (prefix `fn::`):
 **5. Game Rule Enforcement**
 
 **Readiness Validation:**
-Games are ready when: 24 characters AND 8 unique clans (3 goblins per clan)
+Games are ready when: 24 characters AND 8 unique teams (3 goblins per team)
 ```sql
 count(<-playing_in<-character.id) == 24
-AND count(array::distinct(<-playing_in<-character.clan)) == 8
+AND count(array::distinct(<-playing_in<-character.team)) == 8
 ```
 
 **Winner Determination:**
@@ -104,7 +104,7 @@ Messages/migrations cannot be modified after creation
 
 ### Game Lifecycle
 1. **Setup:** User creates `game` → User creates 24 `character` records → Characters linked via `playing_in` relation
-2. **Validation:** `ready` flag calculated (24 characters, 8 clans)
+2. **Validation:** `ready` flag calculated (24 characters, 8 teams)
 3. **Execution:** Game core (`game/` crate) runs simulation → API creates `message` records for events
 4. **Announcements:** LLM (`announcers/` crate) queries messages → Generates `summary` records
 5. **Completion:** Game status updated to "Finished" → Winner determined (last character with health > 0)
@@ -176,7 +176,7 @@ API → Custom function (fn::get_*) → Graph traversal → Aggregation → Retu
 
 **Nested Queries:** Custom functions use subqueries and `$parent` context for correlated queries
 
-**Array Functions:** `array::distinct()` used for clan uniqueness validation
+**Array Functions:** `array::distinct()` used for team uniqueness validation
 
 **String Functions:** `string::starts_with()`, `string::contains()` for message filtering
 

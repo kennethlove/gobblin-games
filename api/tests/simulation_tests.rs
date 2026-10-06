@@ -64,13 +64,13 @@ async fn create_game_with_characters(
 
     // Add characters
     for i in 0..num_characters {
-        let clan = (i % 12) + 1;
+        let team = (i % 12) + 1;
         server
             .post(&format!("/api/games/{}/characters", game_id))
             .add_header("Authorization", user.auth_header())
             .json(&json!({
                 "name": format!("Character {}", i + 1),
-                "clan": clan,
+                "team": team,
             }))
             .await
             .assert_status_ok();
@@ -81,7 +81,7 @@ async fn create_game_with_characters(
 
 /// Test advancing game to next step
 #[tokio::test]
-#[ignore = "blocked on hangrier_games-0jl: characters auto-spawn vs manual POST conflict"]
+#[ignore = "blocked: characters auto-spawn vs manual POST conflict"]
 async fn test_advance_game() {
     let test_db = TestDb::new().await;
     let app_state = test_db.app_state();
@@ -111,7 +111,7 @@ async fn test_advance_game() {
 
 /// Test game status transitions (setup -> running -> finished)
 #[tokio::test]
-#[ignore = "blocked on hangrier_games-0jl: characters auto-spawn vs manual POST conflict"]
+#[ignore = "blocked: characters auto-spawn vs manual POST conflict"]
 async fn test_game_status_transitions() {
     let test_db = TestDb::new().await;
     let app_state = test_db.app_state();
@@ -145,7 +145,7 @@ async fn test_game_status_transitions() {
 
 /// Test game day logs
 #[tokio::test]
-#[ignore = "blocked on hangrier_games-0jl: characters auto-spawn vs manual POST conflict"]
+#[ignore = "blocked: characters auto-spawn vs manual POST conflict"]
 async fn test_game_day_logs() {
     let test_db = TestDb::new().await;
     let app_state = test_db.app_state();
@@ -178,7 +178,7 @@ async fn test_game_day_logs() {
 
 /// Test character-specific logs
 #[tokio::test]
-#[ignore = "blocked on hangrier_games-0jl: characters auto-spawn vs manual POST conflict"]
+#[ignore = "blocked: characters auto-spawn vs manual POST conflict"]
 async fn test_character_day_logs() {
     let test_db = TestDb::new().await;
     let app_state = test_db.app_state();
@@ -221,7 +221,7 @@ async fn test_character_day_logs() {
 
 /// Test multiple game advancement cycles
 #[tokio::test]
-#[ignore = "blocked on hangrier_games-0jl: characters auto-spawn vs manual POST conflict"]
+#[ignore = "blocked: characters auto-spawn vs manual POST conflict"]
 async fn test_multiple_game_cycles() {
     let test_db = TestDb::new().await;
     let app_state = test_db.app_state();
@@ -260,7 +260,7 @@ async fn test_multiple_game_cycles() {
 
 /// Test game finishes when only one character remains
 #[tokio::test]
-#[ignore = "blocked on hangrier_games-0jl: characters auto-spawn vs manual POST conflict"]
+#[ignore = "blocked: characters auto-spawn vs manual POST conflict"]
 async fn test_game_finishes_with_winner() {
     let test_db = TestDb::new().await;
     let app_state = test_db.app_state();
@@ -298,7 +298,7 @@ async fn test_game_finishes_with_winner() {
 
 /// Test advancing finished game (should return error or no-op)
 #[tokio::test]
-#[ignore = "blocked on hangrier_games-0jl: characters auto-spawn vs manual POST conflict"]
+#[ignore = "blocked: characters auto-spawn vs manual POST conflict"]
 async fn test_advance_finished_game() {
     let test_db = TestDb::new().await;
     let app_state = test_db.app_state();
@@ -342,7 +342,7 @@ async fn test_advance_finished_game() {
 
 /// Test game state persistence between cycles
 #[tokio::test]
-#[ignore = "blocked on hangrier_games-0jl: characters auto-spawn vs manual POST conflict"]
+#[ignore = "blocked: characters auto-spawn vs manual POST conflict"]
 async fn test_game_state_persistence() {
     let test_db = TestDb::new().await;
     let app_state = test_db.app_state();

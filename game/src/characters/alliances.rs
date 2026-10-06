@@ -62,19 +62,19 @@ pub fn passes_gate(self_traits: &[Trait], target_traits: &[Trait]) -> bool {
 pub fn roll_chance(
     self_traits: &[Trait],
     target_traits: &[Trait],
-    same_clan: bool,
+    same_team: bool,
     self_allies_len: usize,
     target_allies_len: usize,
 ) -> f64 {
     let trait_factor = geometric_mean_affinity(self_traits);
     let target_factor = geometric_mean_affinity(target_traits);
-    let clan_bonus = if same_clan { 1.5 } else { 1.0 };
+    let team_bonus = if same_team { 1.5 } else { 1.0 };
     let self_cap_pen = ((MAX_ALLIES as f64) - (self_allies_len as f64)) / (MAX_ALLIES as f64);
     let target_cap_pen = ((MAX_ALLIES as f64) - (target_allies_len as f64)) / (MAX_ALLIES as f64);
     let raw = BASE_ALLIANCE_CHANCE
         * trait_factor
         * target_factor
-        * clan_bonus
+        * team_bonus
         * self_cap_pen.max(0.0)
         * target_cap_pen.max(0.0);
     raw.clamp(0.0, 0.95)
@@ -83,7 +83,7 @@ pub fn roll_chance(
 /// Human-readable deciding factor for a successful alliance roll.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DecidingFactor {
-    SameClan,
+    SameTeam,
     TraitOnSelf(Trait),
     TraitOnTarget(Trait),
 }
@@ -91,24 +91,24 @@ pub enum DecidingFactor {
 impl DecidingFactor {
     pub fn label(&self) -> &'static str {
         match self {
-            DecidingFactor::SameClan => "same clan",
+            DecidingFactor::SameTeam => "same team",
             DecidingFactor::TraitOnSelf(t) | DecidingFactor::TraitOnTarget(t) => t.label(),
         }
     }
 }
 
 /// Returns the deciding factor for a successful alliance roll, or `None`
-/// if no factor exceeded 1.0. Same-clan contributes a 1.5 weight; each
+/// if no factor exceeded 1.0. Same-team contributes a 1.5 weight; each
 /// trait contributes its `alliance_affinity`. Ties break by label sort to
 /// keep test output deterministic.
 pub fn deciding_factor(
     self_traits: &[Trait],
     target_traits: &[Trait],
-    same_clan: bool,
+    same_team: bool,
 ) -> Option<DecidingFactor> {
     let mut candidates: Vec<(f64, DecidingFactor)> = Vec::new();
-    if same_clan {
-        candidates.push((1.5, DecidingFactor::SameClan));
+    if same_team {
+        candidates.push((1.5, DecidingFactor::SameTeam));
     }
     for t in self_traits {
         let a = t.alliance_affinity();
@@ -176,7 +176,7 @@ pub fn trust_shock_roll(
 pub fn try_form_alliance(
     self_traits: &[Trait],
     target_traits: &[Trait],
-    same_clan: bool,
+    same_team: bool,
     self_allies_len: usize,
     target_allies_len: usize,
     phobia_penalty: f64,
@@ -190,7 +190,7 @@ pub fn try_form_alliance(
     let base_chance = roll_chance(
         self_traits,
         target_traits,
-        same_clan,
+        same_team,
         self_allies_len,
         target_allies_len,
     );
@@ -304,7 +304,7 @@ mod tests {
     }
 
     #[test]
-    fn roll_chance_friendly_same_clan_higher_than_base() {
+    fn roll_chance_friendly_same_team_higher_than_base() {
         // 0.20 * 1.5 * 1.5 * 1.5 = 0.675.
         let chance = roll_chance(&[Trait::Friendly], &[Trait::Friendly], true, 0, 0);
         assert!(chance > 0.6 && chance <= 0.95);
@@ -345,7 +345,7 @@ mod tests {
 
     #[test]
     fn deciding_factor_friendly_beats_loyal() {
-        // Friendly 1.5 > Loyal 1.4. Without same_clan, only the trait
+        // Friendly 1.5 > Loyal 1.4. Without same_team, only the trait
         // candidates are in play; Friendly wins.
         let f = deciding_factor(&[Trait::Friendly], &[Trait::Loyal], false);
         match f {
@@ -355,10 +355,10 @@ mod tests {
     }
 
     #[test]
-    fn deciding_factor_neutral_only_loses_to_clan() {
-        // No trait > 1.0, but same_clan adds 1.5 → SameClan wins.
+    fn deciding_factor_neutral_only_loses_to_team() {
+        // No trait > 1.0, but same_team adds 1.5 → SameTeam wins.
         let f = deciding_factor(&[Trait::Tough], &[Trait::Tough], true);
-        assert_eq!(f, Some(DecidingFactor::SameClan));
+        assert_eq!(f, Some(DecidingFactor::SameTeam));
     }
 
     // ---- Task 2.5: sanity_break_roll -------------------------------------
@@ -477,7 +477,7 @@ mod tests {
 
     #[test]
     fn try_form_alliance_can_succeed_for_high_chance_pair() {
-        // Friendly + same clan + 0 allies → ~0.675 chance. Sample many
+        // Friendly + same team + 0 allies → ~0.675 chance. Sample many
         // trials and assert at least some succeed.
         let mut rng = StdRng::seed_from_u64(547);
         let mut successes = 0;

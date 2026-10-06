@@ -197,6 +197,10 @@ mod tests {
 
     fn make_character_with_phobia(trigger: PhobiaTrigger, severity: Severity) -> Character {
         let mut character = Character::new("Test".to_string(), None, None);
+        // Trait rolls are per-goblin and random; pin to a baseline so exact
+        // penalty/override assertions stay deterministic. Tests that need a
+        // specific trait set it explicitly (see Reckless/Resilient/Fragile).
+        character.traits.clear();
         let draft = AfflictionDraft {
             kind: AfflictionKind::Phobia(trigger),
             body_part: None,
@@ -216,9 +220,7 @@ mod tests {
 
     #[test]
     fn phobia_override_freeze_returns_frozen() {
-        let mut character = make_character_with_phobia(PhobiaTrigger::Heights, Severity::Severe);
-        // Remove Reckless so freeze can trigger
-        character.traits.retain(|t| *t != Trait::Reckless);
+        let character = make_character_with_phobia(PhobiaTrigger::Heights, Severity::Severe);
 
         let area = make_area(BaseTerrain::Mountains, vec![]);
         let ctx = make_ctx(Some(&area), false, 0);

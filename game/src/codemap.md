@@ -116,7 +116,7 @@ run_day_night_cycle(day: bool)
   - `phases` — Per-phase pipeline scaffolding (environmental conditions, light levels)
   - `patrons` — Patron archetypes, budget bands, affinity tracking
   - `config` — `GameConfig` struct with runtime-tunable game constants
-  - `clans` — 8 clan profiles with industry and terrain affinities
+  - `clans` — team color palette, mascot epithets, per-goblin terrain affinity rolls
   - `pathfinding` — Generic A* graph pathfinding
   - `witty_phrase_generator` — Random name generation for games
 - **External Crates**:
@@ -159,7 +159,7 @@ Module aggregator. Exports all submodules and declares `witty_phrase_generator` 
 - **Key Function**: `fallback_payload()` — transitional helper pending full typed payload migration
 
 ### **games/patrons.rs** (48 lines) — **Patron Spawning**
-- **Purpose**: Spawn one patron per archetype with clan-loyalist binding
+- **Purpose**: Spawn one patron per archetype with team-loyalist binding
 - **Key Functions**: `spawn_patrons()`, `patron_affinity_snapshot()`
 
 ### **games/tests.rs** (1624 lines) — **Game Integration Tests**
@@ -204,10 +204,10 @@ Module aggregator. Exports all submodules and declares `witty_phrase_generator` 
 - **Key Fields**: `low_character_threshold`, `feast_*_count`, `day/night_event_frequency`, `trauma_enabled`, `phobias_enabled`, `fixations_enabled`, `addiction_enabled`, `event_severity_multiplier`
 - **Design**: Runtime-configurable for difficulty modes and feature toggles
 
-### **clans.rs** (209 lines) — **Clan Profiles**
-- **Purpose**: 8 clan profiles mapping number → industry → terrain affinities
-- **Key Struct**: `ClanProfile` (number, industry, primary_affinity, bonus_affinity_pool)
-- **Usage**: `character.clan` maps to profile for trait bonuses and alliance affinity
+### **clans.rs** (201 lines) — **Team Colors & Terrain Affinity**
+- **Purpose**: 8-color team palette + mascot epithets; per-goblin terrain affinity rolls
+- **Key Struct**: `TeamColor` (name, hex)
+- **Usage**: `character.team` picks the display color/epithet; `roll_terrain_affinity()` rolls 1–2 terrains from the goblin's own RNG
 
 ### **pathfinding.rs** (178 lines) — **Graph Pathfinding**
 - **Purpose**: Generic A* pathfinding over weighted directed graphs

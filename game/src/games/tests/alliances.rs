@@ -131,8 +131,8 @@ fn run_character_cycle_forms_alliance_between_compatible_same_area_characters() 
     use crate::characters::traits::Trait;
     let mut t1 = create_character("Snipsnout", true);
     let mut t2 = create_character("Pricklepaw", true);
-    t1.clan = 1;
-    t2.clan = 1;
+    t1.team = 1;
+    t2.team = 1;
     t1.traits = vec![Trait::Friendly];
     t2.traits = vec![Trait::Friendly];
     t1.area = Area::Hub;
@@ -171,7 +171,7 @@ fn run_character_cycle_forms_alliance_between_compatible_same_area_characters() 
     }
     assert!(
         formed,
-        "Friendly same-clan pair must form an alliance within a few cycles"
+        "Friendly same-team pair must form an alliance within a few cycles"
     );
 }
 
@@ -189,8 +189,8 @@ fn run_character_cycle_treacherous_character_betrays_same_area_ally_when_timer_e
     betrayer.turns_since_last_betrayal = TREACHEROUS_BETRAYAL_INTERVAL;
     betrayer.area = Area::Hub;
     victim.area = Area::Hub;
-    betrayer.clan = 1;
-    victim.clan = 2;
+    betrayer.team = 1;
+    victim.team = 2;
 
     let bid = betrayer.id;
     let vid = victim.id;
@@ -237,8 +237,8 @@ fn run_character_cycle_treacherous_no_betrayal_without_same_area_ally_resets_tim
     loner.turns_since_last_betrayal = TREACHEROUS_BETRAYAL_INTERVAL;
     loner.area = Area::Sector1;
     other.area = Area::Sector4;
-    loner.clan = 5;
-    other.clan = 6;
+    loner.team = 5;
+    other.team = 6;
     let lid = loner.id;
 
     let mut game = create_test_game_with_characters(vec![loner.clone(), other.clone()]);
@@ -284,8 +284,8 @@ fn run_character_cycle_enqueues_death_recorded_for_recently_dead_ally() {
     deceased.status = CharacterStatus::RecentlyDead;
     deceased.area = Area::Hub;
     survivor.area = Area::Hub;
-    deceased.clan = 7;
-    survivor.clan = 8;
+    deceased.team = 7;
+    survivor.team = 8;
 
     let did = deceased.id;
     let sid = survivor.id;
@@ -333,9 +333,9 @@ fn run_character_cycle_three_way_preserves_existing_alliance() {
     a.area = Area::Hub;
     b.area = Area::Hub;
     c.area = Area::Hub;
-    a.clan = 1;
-    b.clan = 2;
-    c.clan = 3;
+    a.team = 1;
+    b.team = 2;
+    c.team = 3;
 
     let aid = a.id;
     let bid = b.id;
@@ -386,9 +386,9 @@ fn run_character_cycle_consumes_recently_killed_by_for_combat_death() {
     deceased.area = Area::Hub;
     killer.area = Area::Hub;
     survivor.area = Area::Hub;
-    deceased.clan = 7;
-    killer.clan = 2;
-    survivor.clan = 8;
+    deceased.team = 7;
+    killer.team = 2;
+    survivor.team = 8;
 
     let mut game =
         create_test_game_with_characters(vec![deceased.clone(), killer.clone(), survivor.clone()]);
@@ -440,8 +440,8 @@ fn run_character_cycle_environmental_death_emits_killer_none() {
 
     deceased.area = Area::Hub;
     survivor.area = Area::Hub;
-    deceased.clan = 7;
-    survivor.clan = 8;
+    deceased.team = 7;
+    survivor.team = 8;
 
     let mut game = create_test_game_with_characters(vec![deceased.clone(), survivor.clone()]);
     game.areas
@@ -474,8 +474,8 @@ fn alliance_formation_emits_message_with_alliance_formed_kind() {
 
     let mut t1 = create_character("Snipsnout", true);
     let mut t2 = create_character("Pricklepaw", true);
-    t1.clan = 1;
-    t2.clan = 1;
+    t1.team = 1;
+    t2.team = 1;
     t1.traits = vec![Trait::Friendly];
     t2.traits = vec![Trait::Friendly];
     t1.area = Area::Hub;
@@ -539,8 +539,8 @@ fn betrayal_emits_message_with_betrayal_triggered_kind() {
     betrayer.turns_since_last_betrayal = TREACHEROUS_BETRAYAL_INTERVAL;
     betrayer.area = Area::Hub;
     victim.area = Area::Hub;
-    betrayer.clan = 1;
-    victim.clan = 2;
+    betrayer.team = 1;
+    victim.team = 2;
 
     let mut game = create_test_game_with_characters(vec![betrayer.clone(), victim.clone()]);
     game.areas
@@ -578,8 +578,8 @@ fn alliance_formed_message_content_matches_game_event_display() {
 
     let mut t1 = create_character("Snipsnout", true);
     let mut t2 = create_character("Pricklepaw", true);
-    t1.clan = 1;
-    t2.clan = 1;
+    t1.team = 1;
+    t2.team = 1;
     t1.traits = vec![Trait::Friendly];
     t2.traits = vec![Trait::Friendly];
     t1.area = Area::Hub;
@@ -661,8 +661,8 @@ fn betrayal_triggered_message_content_matches_game_event_display() {
     betrayer.turns_since_last_betrayal = TREACHEROUS_BETRAYAL_INTERVAL;
     betrayer.area = Area::Hub;
     victim.area = Area::Hub;
-    betrayer.clan = 1;
-    victim.clan = 2;
+    betrayer.team = 1;
+    victim.team = 2;
 
     let betrayer_id = betrayer.id;
     let victim_id = victim.id;

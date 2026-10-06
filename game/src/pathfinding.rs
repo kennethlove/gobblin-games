@@ -1,7 +1,7 @@
 //! Generic graph pathfinding (A*).
 //!
 //! Designed to be reused at multiple granularities — v1 operates on the
-//! 7-area top-level hex graph; sub-tile pathfinding (hangrier_games-le8l)
+//! 7-area top-level hex graph; sub-tile pathfinding
 //! will plug in a separate `Graph` impl over the sub-tile grid.
 
 use std::cmp::Ordering;

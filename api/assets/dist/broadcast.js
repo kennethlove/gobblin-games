@@ -110,13 +110,13 @@
   var rosterScroll = document.querySelector(".roster-scroll");
   if (rosterScroll) {
     var sortBtn = document.querySelector(".roster-sort");
-    var sortModes = ["clan", "health"];
+    var sortModes = ["team", "health"];
 
-    // Save original HTML (with group wrappers) for restoring clan view
+    // Save original HTML (with group wrappers) for restoring team view
     var originalRosterHTML = rosterScroll.innerHTML;
 
     // Restore saved sort mode from localStorage
-    var savedMode = localStorage.getItem("rosterSort") || "clan";
+    var savedMode = localStorage.getItem("rosterSort") || "team";
     var sortIdx = sortModes.indexOf(savedMode);
     if (sortIdx < 0) sortIdx = 0;
     if (sortBtn) sortBtn.textContent = sortModes[sortIdx].toUpperCase();
@@ -128,8 +128,9 @@
         sortBtn.textContent = mode.toUpperCase();
         localStorage.setItem("rosterSort", mode);
 
-        if (mode === "clan") {
-          // Restore original server-rendered HTML (with clan group wrappers)
+        if (mode === "team") {
+          // Restore original server-rendered HTML (with team group wrappers;
+          // the wrapper class is still `.clan-group`)
           rosterScroll.innerHTML = originalRosterHTML;
         } else {
           // Flatten: extract roster-rows from group wrappers, discard headers

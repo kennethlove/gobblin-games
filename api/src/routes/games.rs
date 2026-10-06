@@ -334,11 +334,11 @@ SELECT (
         event_cards.push_str(&game_detail::render_commentary_card(seg));
     }
 
-    // Pre-render character rows — grouped by clan
-    let clan_groups = game_detail::build_clan_groups(&sorted_characters);
+    // Pre-render character rows — grouped by team
+    let team_groups = game_detail::build_team_groups(&sorted_characters);
     let mut character_rows = String::new();
-    for group in &clan_groups {
-        character_rows.push_str(&game_detail::render_clan_group(group, &identifier));
+    for group in &team_groups {
+        character_rows.push_str(&game_detail::render_team_group(group, &identifier));
     }
 
     // Build hex arena map SVG
@@ -397,7 +397,7 @@ pub async fn game_characters_handler(
         Err(_) => vec![],
     };
 
-    // Pre-render character cards grouped by clan
+    // Pre-render character cards grouped by team
     let mut character_cards = String::new();
     for character in &characters {
         character_cards.push_str(&game_detail::render_character_card(character));

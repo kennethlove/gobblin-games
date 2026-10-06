@@ -64,7 +64,10 @@ fn test_destination_scoring_favors_affinity_terrain(
 #[rstest]
 fn test_harsh_terrain_penalty_applied() {
     let brain = Brain::default();
-    let character = Character::new("Grubworm".to_string(), Some(8), None);
+    let mut character = Character::new("Grubworm".to_string(), Some(8), None);
+    // Pin affinity: rolls are per-goblin random now; without this the
+    // roll can include Desert and flip the choice.
+    character.terrain_affinity = vec![BaseTerrain::Grasslands];
 
     let areas = vec![
         // Grasslands (Mild harshness) - should score higher
@@ -171,7 +174,10 @@ fn test_desperate_characters_flee_to_affinity_terrain() {
 #[rstest]
 fn test_concealed_visibility_bonus() {
     let brain = Brain::default();
-    let character = Character::new("Snaggletooth".to_string(), Some(8), None);
+    let mut character = Character::new("Snaggletooth".to_string(), Some(8), None);
+    // Pin empty affinity so only visibility drives the score (rolls are
+    // per-goblin random now; an affinity holding Desert would flip this).
+    character.terrain_affinity = vec![];
 
     let areas = vec![
         // Jungle is Concealed - good for hiding

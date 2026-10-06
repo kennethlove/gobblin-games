@@ -56,7 +56,7 @@ pub struct Patron {
     pub archetype: ArchetypeId,
     pub budget_remaining: u32,
     /// Some(d) for Loyalist, None for others.
-    pub bound_clan: Option<u8>,
+    pub bound_team: Option<u8>,
     /// keyed by `CharacterRef.identifier`
     pub affinity: HashMap<String, i32>,
 }

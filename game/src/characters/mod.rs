@@ -200,8 +200,15 @@ pub struct Character {
     pub human_player_name: Option<String>,
     /// What they like to go by
     pub name: String,
-    /// Where they're from
-    pub clan: u32,
+    /// Per-game color team slot (1..=8). Drives alliance bias only.
+    /// Per-game state lives on the character record because a goblin plays
+    /// one game at a time — same home as stamina/area/allies, reset on entry.
+    #[serde(default)]
+    pub team: u32,
+    /// Persistent clan name (lore only — no mechanics). Empty until a
+    /// generator or editor fills it in.
+    #[serde(default)]
+    pub clan_name: String,
     /// Stats like fights won
     pub statistics: Statistics,
     /// Stats and capabilities
@@ -356,22 +363,19 @@ impl Default for Character {
 
 impl Character {
     /// Creates a new Character with full health, sanity, and movement.
-    pub fn new(name: String, clan: Option<u32>, avatar: Option<String>) -> Self {
-        let clan = clan.unwrap_or(0);
+    pub fn new(name: String, team: Option<u32>, avatar: Option<String>) -> Self {
+        let team = team.unwrap_or(0);
         let attributes = Attributes::new();
         let statistics = Statistics::default();
 
         let id_uuid: Uuid = Uuid::new_v4();
         let id: String = id_uuid.to_string();
 
-        // Assign terrain affinity, traits, and personality based on clan
+        // Traits, brain, and terrain affinity roll from this goblin's own
+        // RNG — team no longer seeds them.
         let mut rng = SmallRng::from_rng(&mut rand::rng());
-        let terrain_affinity = if (1..=8).contains(&clan) {
-            crate::clans::assign_terrain_affinity(clan as u8, &mut rng)
-        } else {
-            vec![]
-        };
-        let traits = traits::generate_traits(clan as u8, &mut rng);
+        let terrain_affinity = crate::clans::roll_terrain_affinity(&mut rng);
+        let traits = traits::generate_traits(&mut rng);
         let brain = Brain::from_traits(&traits, &mut rng);
 
         Self {
@@ -379,7 +383,8 @@ impl Character {
             id: id_uuid,
             area: Area::Hub,
             name: name.clone(),
-            clan,
+            team,
+            clan_name: String::new(),
             brain,
             status: CharacterStatus::default(),
             avatar,
@@ -424,24 +429,21 @@ impl Character {
     #[cfg(test)]
     pub(crate) fn new_with_rng(
         name: String,
-        clan: Option<u32>,
+        team: Option<u32>,
         avatar: Option<String>,
         rng: &mut SmallRng,
     ) -> Self {
-        let clan = clan.unwrap_or(0);
+        let team = team.unwrap_or(0);
         let attributes = Attributes::new();
         let statistics = Statistics::default();
 
         let id_uuid: Uuid = Uuid::new_v4();
         let id: String = id_uuid.to_string();
 
-        // Assign terrain affinity, traits, and personality based on clan
-        let terrain_affinity = if (1..=8).contains(&clan) {
-            crate::clans::assign_terrain_affinity(clan as u8, rng)
-        } else {
-            vec![]
-        };
-        let traits = traits::generate_traits(clan as u8, rng);
+        // Traits, brain, and terrain affinity roll from the provided RNG —
+        // team no longer seeds them.
+        let terrain_affinity = crate::clans::roll_terrain_affinity(rng);
+        let traits = traits::generate_traits(rng);
         let brain = Brain::from_traits(&traits, rng);
 
         Self {
@@ -449,7 +451,8 @@ impl Character {
             id: id_uuid,
             area: Area::Hub,
             name,
-            clan,
+            team,
+            clan_name: String::new(),
             brain,
             status: CharacterStatus::default(),
             avatar,
@@ -494,8 +497,8 @@ impl Character {
     pub fn random() -> Self {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
         let name = crate::naming::goblin_name(&mut rng);
-        let clan = rng.random_range(1..=8);
-        Character::new(name, Some(clan), None)
+        let team = rng.random_range(1..=8);
+        Character::new(name, Some(team), None)
     }
 
     /// Builder: add a pre-existing affliction (addiction, missing limb, trauma, etc.).
@@ -823,7 +826,7 @@ impl Character {
     /// 1. If there are no targets and the character is suicidal (very low sanity),
     ///    target self.
     /// 2. Otherwise, filter out current allies — they are off-limits regardless
-    ///    of clan.
+    ///    of team.
     /// 3. If any non-allies remain, pick one at random.
     /// 4. If only allies are nearby (and we're not the last two alive), pick no
     ///    target. Final confrontation (only two alive) overrides alliance.
@@ -1333,11 +1336,11 @@ impl Character {
             .sum::<f64>()
             .abs();
 
-        let same_clan = self.clan == target.clan;
+        let same_team = self.team == target.team;
         let formed = try_form_alliance(
             &self.traits,
             &target.traits,
-            same_clan,
+            same_team,
             self.allies.len(),
             target.allies.len(),
             phobia_penalty,
@@ -1346,7 +1349,7 @@ impl Character {
             rng,
         );
         if formed {
-            let factor = deciding_factor(&self.traits, &target.traits, same_clan);
+            let factor = deciding_factor(&self.traits, &target.traits, same_team);
             let factor_label = factor
                 .as_ref()
                 .map(|f| f.label())
@@ -1894,7 +1897,7 @@ mod tests {
     fn new() {
         let character = Character::new("Snaggletooth".to_string(), Some(8), None);
         assert_eq!(character.name, "Snaggletooth");
-        assert_eq!(character.clan, 8);
+        assert_eq!(character.team, 8);
         assert_eq!(character.blood, 1000, "blood starts at full");
     }
 
@@ -1902,7 +1905,7 @@ mod tests {
     fn random() {
         let character = Character::random();
         assert!(!character.name.is_empty());
-        assert!(character.clan >= 1 && character.clan <= 8);
+        assert!(character.team >= 1 && character.team <= 8);
     }
 
     #[rstest]
@@ -2054,10 +2057,31 @@ mod tests {
     }
 
     #[rstest]
-    fn new_character_has_traits_for_valid_clan() {
+    fn new_character_has_traits_for_any_team() {
         let character = Character::new("Snaggletooth".to_string(), Some(8), None);
-        // generate_traits rolls 2..=6 traits from the clan pool.
+        // generate_traits rolls 2..=6 traits from the shared pool.
         assert!((2..=6).contains(&character.traits.len()));
+    }
+
+    #[rstest]
+    fn traits_and_affinity_do_not_depend_on_team() {
+        // Same seed, different team slots → identical rolls. Team must not
+        // seed traits, brain, or terrain affinity.
+        let mut rng_a = SmallRng::seed_from_u64(1234);
+        let mut rng_b = SmallRng::seed_from_u64(1234);
+        let a = Character::new_with_rng("Alpha".to_string(), Some(1), None, &mut rng_a);
+        let b = Character::new_with_rng("Beta".to_string(), Some(8), None, &mut rng_b);
+
+        assert_eq!(a.traits, b.traits);
+        assert_eq!(a.terrain_affinity, b.terrain_affinity);
+        assert_eq!(a.brain.thresholds, b.brain.thresholds);
+        assert_ne!(a.team, b.team, "the team slots themselves still differ");
+    }
+
+    #[rstest]
+    fn new_character_rolls_terrain_affinity_even_without_team() {
+        let character = Character::new("Teamless".to_string(), None, None);
+        assert!((1..=2).contains(&character.terrain_affinity.len()));
     }
 
     #[rstest]
@@ -2075,15 +2099,15 @@ mod tests {
     }
 
     #[rstest]
-    fn pick_target_allows_same_clan_when_not_ally() {
-        // Same-clan characters can now be targeted unless they're allies.
+    fn pick_target_allows_same_team_when_not_ally() {
+        // Same-team characters can now be targeted unless they're allies.
         let me = Character::new("Snaggletooth".to_string(), Some(8), None);
-        let same_clan = Character::new("Grubworm".to_string(), Some(8), None);
+        let same_team = Character::new("Grubworm".to_string(), Some(8), None);
 
         let mut events: Vec<TaggedEvent> = vec![];
-        let target = me.pick_target(vec![same_clan.clone()], 5, &mut events);
+        let target = me.pick_target(vec![same_team.clone()], 5, &mut events);
         assert!(target.is_some());
-        assert_eq!(target.unwrap().id, same_clan.id);
+        assert_eq!(target.unwrap().id, same_team.id);
     }
 
     #[rstest]

@@ -41,7 +41,7 @@ pub async fn create_character(
     character: Option<Character>,
     game_identifier: &str,
     db: &Surreal<Any>,
-    clan: u32,
+    team: u32,
 ) -> Result<Character, AppError> {
     let game_id = RecordId::new("game", game_identifier.to_owned());
     let mut character_count_resp = db
@@ -57,7 +57,7 @@ pub async fn create_character(
     }
 
     let mut character = character.unwrap_or_else(Character::random);
-    character.clan = clan + 1;
+    character.team = team + 1;
     character.statistics.game = game_identifier.to_owned();
 
     let id = RecordId::new("character", character.identifier.as_str());

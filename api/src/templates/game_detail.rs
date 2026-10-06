@@ -296,6 +296,7 @@ pub fn render_character_row(character: &game::characters::Character, game_id: &s
     let status_text = if is_alive { "ALIVE" } else { "DEAD" };
     let dead_class = if !is_alive { " dead" } else { "" };
     let character_id = &character.identifier;
+    let team_color = game::clans::team_color(character.team);
 
     format!(
         r#"<a href="/games/{game_id}/characters/{character_id}" class="roster-row{dead_class}" style="text-decoration:none;color:inherit;display:block;">
@@ -303,7 +304,7 @@ pub fn render_character_row(character: &game::characters::Character, game_id: &s
             <div class="roster-avatar" style="border-color:{avatar_color};color:{avatar_color}">{initial}</div>
             <div class="roster-info">
               <span class="roster-name">{name}</span>
-              <span class="roster-clan">D{clan}</span>
+              <span class="roster-clan" style="background:{team_hex};color:#fff;padding:1px 6px;border-radius:3px;" title="{team_title}">{team_name}</span>
             </div>
             <div class="roster-health">
               <div class="roster-health-bar">
@@ -314,7 +315,9 @@ pub fn render_character_row(character: &game::characters::Character, game_id: &s
           </div>
         </a>"#,
         name = html_escape(&character.name),
-        clan = character.clan,
+        team_hex = team_color.hex,
+        team_name = team_color.name,
+        team_title = game::clans::team_label(character.team),
     )
 }
 
@@ -402,6 +405,16 @@ pub fn render_character_detail(character: &game::characters::Character, _game_id
     let thirst_c = thirst_color(character.thirst);
     let stamina = stamina_label(character.stamina, character.max_stamina);
     let stamina_c = stamina_color(character.stamina, character.max_stamina);
+    let team_color = game::clans::team_color(character.team);
+    let team_label = game::clans::team_label(character.team);
+    let clan_name_line = if character.clan_name.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "<div style=\"color:var(--muted);\">Clan: {}</div>",
+            html_escape(&character.clan_name)
+        )
+    };
 
     let mut items_html = String::new();
     for item in &character.items {
@@ -428,7 +441,8 @@ pub fn render_character_detail(character: &game::characters::Character, _game_id
           <div>
             <h1>{name}</h1>
             <span class="card-status {status_class}">{status_text}</span>
-            Clan {clan} · {epithet}
+            <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:{team_hex};vertical-align:middle;margin-right:4px;"></span>{team_label}</div>
+            {clan_name_line}
           </div>
         </div>
         <div class="card-stats">
@@ -445,8 +459,9 @@ pub fn render_character_detail(character: &game::characters::Character, _game_id
         <div class="card-items">{items}</div>
         <div class="card-afflictions">{afflictions}</div>"#,
         name = html_escape(&character.name),
-        clan = character.clan,
-        epithet = game::clans::clan_epithet(character.clan),
+        team_hex = team_color.hex,
+        team_label = team_label,
+        clan_name_line = clan_name_line,
         strength = character.attributes.strength,
         defense = character.attributes.defense,
         intelligence = character.attributes.intelligence,
@@ -575,50 +590,51 @@ pub fn render_alliance_group(
     )
 }
 
-pub struct ClanGroup<'a> {
-    pub clan: u32,
+pub struct TeamGroup<'a> {
+    pub team: u32,
     pub alive_count: usize,
     pub total: usize,
     pub characters: Vec<&'a game::characters::Character>,
 }
 
-pub fn build_clan_groups<'a>(characters: &[&'a game::characters::Character]) -> Vec<ClanGroup<'a>> {
+pub fn build_team_groups<'a>(characters: &[&'a game::characters::Character]) -> Vec<TeamGroup<'a>> {
     let mut groups: std::collections::HashMap<u32, Vec<&game::characters::Character>> =
         std::collections::HashMap::new();
     for &character in characters {
-        groups.entry(character.clan).or_default().push(character);
+        groups.entry(character.team).or_default().push(character);
     }
-    let mut result: Vec<ClanGroup<'a>> = groups
+    let mut result: Vec<TeamGroup<'a>> = groups
         .into_iter()
-        .map(|(clan, members)| {
+        .map(|(team, members)| {
             let alive_count = members.iter().filter(|t| t.is_alive()).count();
-            ClanGroup {
-                clan,
+            TeamGroup {
+                team,
                 alive_count,
                 total: members.len(),
                 characters: members,
             }
         })
         .collect();
-    result.sort_by_key(|g| g.clan);
+    result.sort_by_key(|g| g.team);
     result
 }
 
-pub fn render_clan_group(group: &ClanGroup, game_id: &str) -> String {
+pub fn render_team_group(group: &TeamGroup, game_id: &str) -> String {
     let mut rows = String::new();
     for character in &group.characters {
         rows.push_str(&render_character_row(character, game_id));
     }
+    let team_color = game::clans::team_color(group.team);
     format!(
         r#"<div class="clan-group">
           <div class="alliance-header" style="border-left-color:var(--broad-accent);">
-            <span class="alliance-name">CLAN {clan} · {epithet}</span>
+            <span class="alliance-name"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:{hex};vertical-align:middle;margin-right:4px;"></span>{label}</span>
             <span class="alliance-count">{alive}/{total} alive</span>
           </div>
           {rows}
         </div>"#,
-        clan = group.clan,
-        epithet = game::clans::clan_epithet(group.clan),
+        hex = team_color.hex,
+        label = game::clans::team_label(group.team),
         alive = group.alive_count,
         total = group.total,
     )

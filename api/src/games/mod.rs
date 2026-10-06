@@ -393,15 +393,15 @@ async fn run_game_cycles(
         let mut kill_leaders: Vec<announcers::KillLeader> = kill_counts
             .into_iter()
             .map(|(name, count)| {
-                let clan = game
+                let team = game
                     .characters
                     .iter()
                     .find(|t| t.name == name)
-                    .map(|t| t.clan as u8)
+                    .map(|t| t.team as u8)
                     .unwrap_or(0);
                 announcers::KillLeader {
                     name,
-                    clan,
+                    clan: team,
                     kill_count: count,
                 }
             })
@@ -708,7 +708,7 @@ fn build_character_digest(t: &game::characters::Character) -> announcers::Charac
     announcers::CharacterDigest {
         identifier: t.identifier.to_string(),
         name: t.name.clone(),
-        clan: t.clan as u8,
+        clan: t.team as u8,
         status: if t.is_alive() {
             "alive".into()
         } else {

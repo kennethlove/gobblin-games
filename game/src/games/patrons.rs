@@ -3,7 +3,7 @@ use rand::Rng;
 
 impl Game {
     /// Spawn one patron per archetype using the shared catalog.
-    /// Loyalist gets a randomly-assigned clan (1..=8). Budget is rolled
+    /// Loyalist gets a randomly-assigned team (1..=8). Budget is rolled
     /// inside the archetype's budget band. Idempotent: no-op if `self.patrons`
     /// is already populated.
     pub fn spawn_patrons(&mut self, rng: &mut impl Rng) {
@@ -17,7 +17,7 @@ impl Game {
         for (idx, archetype) in ARCHETYPES.iter().enumerate() {
             let (lo, hi) = archetype.budget_band;
             let budget = rng.random_range(lo..=hi);
-            let bound_clan = if archetype.id == ArchetypeId::Loyalist {
+            let bound_team = if archetype.id == ArchetypeId::Loyalist {
                 Some(rng.random_range(1u8..=8))
             } else {
                 None
@@ -27,7 +27,7 @@ impl Game {
                 id: idx as u32,
                 archetype: archetype.id,
                 budget_remaining: budget,
-                bound_clan,
+                bound_team,
                 affinity: HashMap::new(),
             });
         }

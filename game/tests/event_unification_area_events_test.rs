@@ -1,4 +1,4 @@
-//! Round-trip test for hangrier_games-33r (PR3: area-event survival slice).
+//! Round-trip test for event unification (PR3: area-event survival slice).
 //!
 //! Verifies that area-event narration emitted by `process_event_for_area`
 //! and `announce_area_events` reaches `Game.messages` with the correct
@@ -44,7 +44,7 @@ fn area_event_survival_narration_reaches_game_messages() {
     bravo.area = area;
     bravo.blood = 1000;
     bravo.statistics.game = game.identifier.clone();
-    bravo.clan = (alpha.clan % 8) + 1;
+    bravo.team = (alpha.team % 8) + 1;
     let bravo_id = bravo.identifier.clone();
 
     game.characters.push(alpha);

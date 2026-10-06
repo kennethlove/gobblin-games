@@ -442,7 +442,7 @@ mod tests {
             b
         });
 
-        // --- Gap-coverage snapshots (hangrier_games-b84) ---
+        // --- Gap-coverage snapshots ---
 
         // `Pristine` wear must produce no extra lines (no-op branch).
         snap!(wound_with_pristine_weapon_and_shield, {

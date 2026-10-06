@@ -61,7 +61,7 @@ pub enum AudienceEvent {
     },
     ClanLoyaltyAct {
         actor: CharacterRef,
-        clan: u8,
+        team: u8,
     },
     Cowardice {
         character: CharacterRef,
