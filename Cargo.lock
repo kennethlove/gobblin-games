@@ -182,6 +182,7 @@ dependencies = [
  "game",
  "jsonwebtoken",
  "lettre",
+ "rand 0.10.1",
  "resend-rs",
  "serde",
  "serde_json",

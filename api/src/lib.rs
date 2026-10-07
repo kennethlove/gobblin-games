@@ -60,6 +60,8 @@ pub enum AppError {
     BadRequest(String),
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
     #[error("Game is full: {0}")]
     GameFull(String),
     #[error("Database error: {0}")]
@@ -85,6 +87,7 @@ impl IntoResponse for AppError {
             }
             AppError::BadRequest(message) => (StatusCode::BAD_REQUEST, message),
             AppError::Unauthorized(message) => (StatusCode::UNAUTHORIZED, message),
+            AppError::Forbidden(message) => (StatusCode::FORBIDDEN, message),
             AppError::GameFull(message) => (StatusCode::CONFLICT, message),
             AppError::DbError(message) => {
                 error!(error = %message, "database error");

@@ -13,6 +13,7 @@ confirm-email = "0.1"
 futures = "0.3.32"
 lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls"] }
 resend-rs = "0.25"
+rand = "0.10"
 game = { path = "../game" }
 jsonwebtoken = { version = "10.0", default-features = false, features = ["aws_lc_rs"] }
 serde = { version = "1.0.228", features = ["derive"] }

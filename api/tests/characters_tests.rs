@@ -461,3 +461,454 @@ async fn test_update_character_validation() {
 
     test_db.cleanup().await;
 }
+
+// ── Owned character CRUD: /api/characters ──────────────────────────────
+
+/// Create a standalone owned character via `POST /api/characters` and
+/// return the created character JSON (asserts 201).
+async fn create_standalone_character(
+    server: &TestServer,
+    user: &TestUser,
+    body: serde_json::Value,
+) -> serde_json::Value {
+    let response = server
+        .post("/api/characters")
+        .add_header("Authorization", user.auth_header())
+        .json(&body)
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    response.json::<serde_json::Value>()
+}
+
+/// Fetch `GET /api/characters/{id}` as the given user and assert 200.
+async fn get_owned_character(
+    server: &TestServer,
+    user: &TestUser,
+    identifier: &str,
+) -> serde_json::Value {
+    let response = server
+        .get(&format!("/api/characters/{}", identifier))
+        .add_header("Authorization", user.auth_header())
+        .await;
+    response.assert_status_ok();
+    response.json::<serde_json::Value>()
+}
+
+/// Collect the identifiers from `GET /api/characters` for a user.
+async fn list_owned_identifiers(
+    server: &TestServer,
+    user: &TestUser,
+) -> std::collections::BTreeSet<String> {
+    let response = server
+        .get("/api/characters")
+        .add_header("Authorization", user.auth_header())
+        .await;
+    response.assert_status_ok();
+    let body = response.json::<serde_json::Value>();
+    body["characters"]
+        .as_array()
+        .expect("characters should be an array")
+        .iter()
+        .filter_map(|c| c["identifier"].as_str().map(str::to_string))
+        .collect()
+}
+
+/// POST /api/characters with no fields generates both names, and both
+/// round-trip unchanged through the detail endpoint.
+#[tokio::test]
+async fn test_create_owned_character_generates_names_when_omitted() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+    let user = create_authenticated_user(&test_db, &server, "owned_default_names").await;
+
+    let created = create_standalone_character(&server, &user, json!({})).await;
+
+    let identifier = created["identifier"].as_str().expect("identifier");
+    let name = created["name"].as_str().expect("generated name");
+    let clan = created["clan_name"].as_str().expect("generated clan_name");
+    assert!(!name.is_empty(), "omitted name should be generated");
+    assert!(!clan.is_empty(), "omitted clan_name should be generated");
+
+    let fetched = get_owned_character(&server, &user, identifier).await;
+    assert_eq!(fetched["name"], created["name"]);
+    assert_eq!(fetched["clan_name"], created["clan_name"]);
+
+    test_db.cleanup().await;
+}
+
+/// A blank clan_name is generated just like an omitted one; supplied
+/// names round-trip through creation and detail. Team stays unassigned
+/// until a game assigns one at join.
+#[tokio::test]
+async fn test_create_owned_character_round_trips_supplied_names() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+    let user = create_authenticated_user(&test_db, &server, "owned_supplied_names").await;
+
+    let created = create_standalone_character(
+        &server,
+        &user,
+        json!({
+            "name": "Nibbles the Lesser",
+            "clan_name": "Clan of the Twilight the Darkness",
+        }),
+    )
+    .await;
+    assert_eq!(created["name"], "Nibbles the Lesser");
+    assert_eq!(created["clan_name"], "Clan of the Twilight the Darkness");
+    assert_eq!(
+        created["team"], 0,
+        "team is assigned at game join, not creation"
+    );
+
+    let identifier = created["identifier"].as_str().expect("identifier");
+    let fetched = get_owned_character(&server, &user, identifier).await;
+    assert_eq!(fetched["name"], "Nibbles the Lesser");
+    assert_eq!(fetched["clan_name"], "Clan of the Twilight the Darkness");
+
+    let blank_clan = create_standalone_character(
+        &server,
+        &user,
+        json!({ "name": "Grub", "clan_name": "   " }),
+    )
+    .await;
+    assert_eq!(blank_clan["name"], "Grub");
+    assert!(
+        !blank_clan["clan_name"]
+            .as_str()
+            .expect("clan_name")
+            .is_empty(),
+        "blank clan_name should be auto-generated"
+    );
+
+    test_db.cleanup().await;
+}
+
+/// GET /api/characters returns exactly the caller's own characters —
+/// never another player's.
+#[tokio::test]
+async fn test_list_owned_characters_returns_only_mine() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+    let alice = create_authenticated_user(&test_db, &server, "owned_alice").await;
+    let bob = create_authenticated_user(&test_db, &server, "owned_bob").await;
+
+    let a1 = create_standalone_character(&server, &alice, json!({ "name": "Alice One" })).await;
+    let a2 = create_standalone_character(&server, &alice, json!({ "name": "Alice Two" })).await;
+    let b1 = create_standalone_character(&server, &bob, json!({ "name": "Bob One" })).await;
+
+    let alice_ids = list_owned_identifiers(&server, &alice).await;
+    let expected_alice: std::collections::BTreeSet<String> = [a1, a2]
+        .iter()
+        .map(|c| c["identifier"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        alice_ids, expected_alice,
+        "list should only contain Alice's characters"
+    );
+
+    let bob_ids = list_owned_identifiers(&server, &bob).await;
+    let expected_bob: std::collections::BTreeSet<String> = [b1]
+        .iter()
+        .map(|c| c["identifier"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        bob_ids, expected_bob,
+        "list should only contain Bob's characters"
+    );
+
+    test_db.cleanup().await;
+}
+
+/// Every /api/characters endpoint requires authentication (401 without
+/// a token, not 403: no identity is presented at all).
+#[tokio::test]
+async fn test_owned_character_endpoints_require_auth() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+    let some_id = "00000000-0000-0000-0000-000000000000";
+
+    server
+        .get("/api/characters")
+        .await
+        .assert_status(axum::http::StatusCode::UNAUTHORIZED);
+    server
+        .post("/api/characters")
+        .json(&json!({}))
+        .await
+        .assert_status(axum::http::StatusCode::UNAUTHORIZED);
+    server
+        .get(&format!("/api/characters/{}", some_id))
+        .await
+        .assert_status(axum::http::StatusCode::UNAUTHORIZED);
+    server
+        .put(&format!("/api/characters/{}", some_id))
+        .json(&json!({ "name": "Nope" }))
+        .await
+        .assert_status(axum::http::StatusCode::UNAUTHORIZED);
+    server
+        .delete(&format!("/api/characters/{}", some_id))
+        .await
+        .assert_status(axum::http::StatusCode::UNAUTHORIZED);
+
+    test_db.cleanup().await;
+}
+
+/// The owner can edit name and clan_name; a blank clan_name regenerates,
+/// omitted fields keep their values, and a blank name is rejected.
+#[tokio::test]
+async fn test_update_owned_character_edits_name_and_clan() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+    let user = create_authenticated_user(&test_db, &server, "owned_editor").await;
+
+    let created = create_standalone_character(
+        &server,
+        &user,
+        json!({ "name": "Original", "clan_name": "Clan of the Bog" }),
+    )
+    .await;
+    let identifier = created["identifier"].as_str().unwrap().to_string();
+
+    let response = server
+        .put(&format!("/api/characters/{}", identifier))
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({
+            "name": "Renamed Goblin",
+            "clan_name": "Clan of the Moon",
+        }))
+        .await;
+    response.assert_status_ok();
+    let updated = response.json::<serde_json::Value>();
+    assert_eq!(updated["name"], "Renamed Goblin");
+    assert_eq!(updated["clan_name"], "Clan of the Moon");
+
+    // Blank clan_name regenerates; omitted name keeps its value.
+    let response = server
+        .put(&format!("/api/characters/{}", identifier))
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "clan_name": "" }))
+        .await;
+    response.assert_status_ok();
+    let updated = response.json::<serde_json::Value>();
+    assert_eq!(
+        updated["name"], "Renamed Goblin",
+        "omitted name must not change"
+    );
+    assert!(
+        !updated["clan_name"].as_str().expect("clan_name").is_empty(),
+        "blank clan_name should regenerate"
+    );
+
+    // A name cannot be blanked.
+    server
+        .put(&format!("/api/characters/{}", identifier))
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "   " }))
+        .await
+        .assert_status(axum::http::StatusCode::BAD_REQUEST);
+
+    test_db.cleanup().await;
+}
+
+/// Another player cannot update or delete a character they do not own,
+/// on either the top-level or the game-scoped routes, and the character
+/// survives untouched.
+#[tokio::test]
+async fn test_foreign_character_update_and_delete_rejected() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+    let alice = create_authenticated_user(&test_db, &server, "owned_victim").await;
+    let bob = create_authenticated_user(&test_db, &server, "owned_attacker").await;
+
+    let created =
+        create_standalone_character(&server, &alice, json!({ "name": "Untouchable" })).await;
+    let identifier = created["identifier"].as_str().unwrap().to_string();
+
+    server
+        .put(&format!("/api/characters/{}", identifier))
+        .add_header("Authorization", bob.auth_header())
+        .json(&json!({ "name": "Stolen" }))
+        .await
+        .assert_status(axum::http::StatusCode::FORBIDDEN);
+
+    server
+        .delete(&format!("/api/characters/{}", identifier))
+        .add_header("Authorization", bob.auth_header())
+        .await
+        .assert_status(axum::http::StatusCode::FORBIDDEN);
+
+    let fetched = get_owned_character(&server, &alice, identifier.as_str()).await;
+    assert_eq!(
+        fetched["name"], "Untouchable",
+        "foreign update must not change the character"
+    );
+    assert!(
+        list_owned_identifiers(&server, &alice)
+            .await
+            .contains(&identifier),
+        "foreign delete must not remove the character"
+    );
+
+    test_db.cleanup().await;
+}
+
+/// The game-scoped mutation routes answer honestly for foreign callers:
+/// 403 (previously a misleading 500 for updates and a false 204 for
+/// deletes, because the schema silently skips unauthorized rows).
+#[tokio::test]
+async fn test_foreign_game_scoped_character_mutation_rejected() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+    let alice = create_authenticated_user(&test_db, &server, "game_owner").await;
+    let bob = create_authenticated_user(&test_db, &server, "game_attacker").await;
+
+    let game_id = create_test_game(&server, &alice).await;
+    let character_id = first_character_id(&server, &alice, &game_id).await;
+
+    server
+        .put(&format!(
+            "/api/games/{}/characters/{}",
+            game_id, character_id
+        ))
+        .add_header("Authorization", bob.auth_header())
+        .json(&json!({
+            "identifier": character_id,
+            "name": "Bob was here",
+            "avatar": "",
+            "game_identifier": game_id,
+        }))
+        .await
+        .assert_status(axum::http::StatusCode::FORBIDDEN);
+
+    server
+        .delete(&format!(
+            "/api/games/{}/characters/{}",
+            game_id, character_id
+        ))
+        .add_header("Authorization", bob.auth_header())
+        .await
+        .assert_status(axum::http::StatusCode::FORBIDDEN);
+
+    let remaining = fetch_characters(&server, &alice, &game_id).await;
+    assert_eq!(
+        remaining.len(),
+        24,
+        "foreign delete must not remove the character"
+    );
+
+    test_db.cleanup().await;
+}
+
+/// The owner can delete their own character: 204, gone from detail and
+/// from the list.
+#[tokio::test]
+async fn test_delete_owned_character() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+    let user = create_authenticated_user(&test_db, &server, "owned_deleter").await;
+
+    let created = create_standalone_character(&server, &user, json!({})).await;
+    let identifier = created["identifier"].as_str().unwrap().to_string();
+
+    server
+        .delete(&format!("/api/characters/{}", identifier))
+        .add_header("Authorization", user.auth_header())
+        .await
+        .assert_status(axum::http::StatusCode::NO_CONTENT);
+
+    server
+        .get(&format!("/api/characters/{}", identifier))
+        .add_header("Authorization", user.auth_header())
+        .await
+        .assert_status(axum::http::StatusCode::NOT_FOUND);
+
+    assert!(
+        list_owned_identifiers(&server, &user).await.is_empty(),
+        "deleted character should leave the list"
+    );
+
+    test_db.cleanup().await;
+}
+
+/// An owned character that is in a game follows the editable/NotStarted
+/// rule: editable while the game is NotStarted, rejected with 409 once
+/// the game has started.
+#[tokio::test]
+async fn test_owned_edit_respects_started_game() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+    let user = create_authenticated_user(&test_db, &server, "owned_in_game").await;
+
+    let game_id = create_test_game(&server, &user).await;
+    let character_id = first_character_id(&server, &user, &game_id).await;
+
+    // NotStarted: the owner may edit.
+    server
+        .put(&format!("/api/characters/{}", character_id))
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Prepped" }))
+        .await
+        .assert_status_ok();
+
+    // Start the game directly through the root connection.
+    test_db
+        .db
+        .query("UPDATE game SET status = 'InProgress' WHERE identifier = $identifier")
+        .bind(("identifier", game_id.clone()))
+        .await
+        .expect("start the game");
+
+    // Started: the edit is rejected and nothing changes.
+    server
+        .put(&format!("/api/characters/{}", character_id))
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Too Late" }))
+        .await
+        .assert_status(axum::http::StatusCode::CONFLICT);
+
+    let fetched = get_owned_character(&server, &user, &character_id).await;
+    assert_eq!(fetched["name"], "Prepped");
+
+    test_db.cleanup().await;
+}
+
+/// Creation validates field lengths: an over-long name or clan_name is
+/// rejected with 400 and nothing is written.
+#[tokio::test]
+async fn test_create_owned_character_validates_lengths() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+    let user = create_authenticated_user(&test_db, &server, "owned_validator").await;
+
+    server
+        .post("/api/characters")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "x".repeat(51) }))
+        .await
+        .assert_status(axum::http::StatusCode::BAD_REQUEST);
+
+    server
+        .post("/api/characters")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "clan_name": "y".repeat(101) }))
+        .await
+        .assert_status(axum::http::StatusCode::BAD_REQUEST);
+
+    assert!(
+        list_owned_identifiers(&server, &user).await.is_empty(),
+        "rejected creations must not persist"
+    );
+
+    test_db.cleanup().await;
+}
