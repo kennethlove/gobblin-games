@@ -427,6 +427,53 @@ impl Character {
         }
     }
 
+    /// Reset everything that belongs to a single game when the goblin
+    /// enters a new one (the persistent-vs-per-game split): status and
+    /// health, stamina, area, hunger/thirst, shelter and drain steps,
+    /// allies and betrayals, afflictions, sleep and pending events,
+    /// per-game statistics, items, and a fresh terrain-affinity roll from
+    /// the goblin's own RNG. Untouched: identity, name, team, clan name,
+    /// avatar, traits, attributes, brain, lifetime statistics (kills,
+    /// wins, defeats, draws), and `ever_addicted_to`.
+    pub fn reset_for_new_game(&mut self) {
+        let mut rng = SmallRng::from_rng(&mut rand::rng());
+        self.set_status(CharacterStatus::default());
+        self.blood = default_blood();
+        self.wounds.clear();
+        self.area = Area::Hub;
+        self.stamina = 100;
+        self.max_stamina = 100;
+        self.terrain_affinity = crate::clans::roll_terrain_affinity(&mut rng);
+        self.items.clear();
+        self.events.clear();
+        self.allies.clear();
+        self.turns_since_last_betrayal = 0;
+        self.pending_trust_shock = false;
+        self.alliance_events.clear();
+        self.recently_killed_by = None;
+        self.hunger = 0;
+        self.thirst = 0;
+        self.sheltered_until = None;
+        self.starvation_drain_step = 0;
+        self.dehydration_drain_step = 0;
+        self.cycles_awake = 0;
+        self.sleeping = false;
+        self.sleep_remaining = 0;
+        self.pending_sleep_incident = None;
+        self.sleep_shelter = None;
+        self.afflictions.clear();
+        self.game_day = None;
+        self.addiction_use_count.clear();
+        self.hangover_cycles_remaining = 0;
+        self.was_ambushed = false;
+        self.pending_theft_target = None;
+        self.mental_conditions.clear();
+        self.statistics.day_killed = None;
+        self.statistics.killed_by = None;
+        self.statistics.game = String::new();
+        self.editable = true;
+    }
+
     #[cfg(test)]
     pub(crate) fn new_with_rng(
         name: String,
@@ -2099,6 +2146,66 @@ mod tests {
         let target = me.pick_target(vec![ally.clone()], 5, &mut events);
         // Only candidate was an ally and we're not in final confrontation.
         assert!(target.is_none());
+    }
+
+    #[rstest]
+    fn reset_for_new_game_clears_per_game_state_keeps_identity() {
+        use crate::areas::Area;
+        use crate::characters::statuses::CharacterStatus;
+        let mut me = Character::new(
+            "Stinky".to_string(),
+            Some(3),
+            Some("avatar.png".to_string()),
+        );
+        let traits_before = me.traits.clone();
+        let strength_before = me.attributes.strength;
+        let clan_before = me.clan_name.clone();
+
+        // Life leaves a mess behind.
+        me.set_status(CharacterStatus::Dead);
+        me.blood = 0;
+        me.hunger = 5;
+        me.thirst = 7;
+        me.stamina = 9;
+        me.max_stamina = 42;
+        me.allies.push(uuid::Uuid::new_v4());
+        me.turns_since_last_betrayal = 3;
+        me.sleeping = true;
+        me.sleep_remaining = 2;
+        me.cycles_awake = 4;
+        me.statistics.day_killed = Some(3);
+        me.statistics.killed_by = Some("Snaggletooth".to_string());
+        me.statistics.game = "old-game".to_string();
+        me.statistics.kills = 2;
+
+        me.reset_for_new_game();
+
+        // Per-game state is pristine.
+        assert_eq!(me.status, CharacterStatus::default());
+        assert!(me.is_alive());
+        assert!(me.wounds.is_empty());
+        assert!(matches!(me.area, Area::Hub));
+        assert_eq!(me.stamina, 100);
+        assert_eq!(me.max_stamina, 100);
+        assert_eq!(me.hunger, 0);
+        assert_eq!(me.thirst, 0);
+        assert!(me.allies.is_empty());
+        assert_eq!(me.turns_since_last_betrayal, 0);
+        assert!(!me.sleeping);
+        assert_eq!(me.sleep_remaining, 0);
+        assert_eq!(me.cycles_awake, 0);
+        assert_eq!(me.statistics.day_killed, None);
+        assert_eq!(me.statistics.killed_by, None);
+        assert_eq!(me.statistics.game, "");
+        assert_eq!(me.statistics.kills, 2, "lifetime kills persist");
+
+        // Identity and progression are untouched.
+        assert_eq!(me.name, "Stinky");
+        assert_eq!(me.team, 3);
+        assert_eq!(me.avatar.as_deref(), Some("avatar.png"));
+        assert_eq!(me.traits, traits_before);
+        assert_eq!(me.attributes.strength, strength_before);
+        assert_eq!(me.clan_name, clan_before);
     }
 
     #[rstest]
