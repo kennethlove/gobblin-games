@@ -382,3 +382,105 @@ async fn test_create_with_foreign_character_fails_cleanly() {
 
     test_db.cleanup().await;
 }
+
+#[tokio::test]
+async fn test_entry_resets_per_game_state_and_items() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "entry_reset").await;
+    let goblin = create_owned_goblin(&server, &user, "Stinky").await;
+
+    // Dirty the per-game state and leave a stale item behind.
+    let stale_item = game::items::Item::new_random(None);
+    let stale_id = stale_item.identifier.to_string();
+    let item_body = serde_json::to_value(&stale_item).unwrap();
+    test_db
+        .db
+        .query("UPSERT type::record('item', $id) CONTENT $body")
+        .bind(("id", stale_id.clone()))
+        .bind(("body", item_body))
+        .await
+        .unwrap();
+    test_db
+        .db
+        .query("RELATE $char->owns->$item")
+        .bind((
+            "char",
+            surrealdb_types::RecordId::new("character", goblin.clone()),
+        ))
+        .bind((
+            "item",
+            surrealdb_types::RecordId::new("item", stale_id.clone()),
+        ))
+        .await
+        .unwrap();
+    test_db
+        .db
+        .query(
+            "UPDATE character SET hunger = 5, thirst = 7, stamina = 9, \
+             max_stamina = 42, allies = [$ally], statistics.day_killed = 3, \
+             statistics.game = 'old-game' WHERE identifier = $id",
+        )
+        .bind(("id", goblin.clone()))
+        .bind(("ally", uuid::Uuid::new_v4().to_string()))
+        .await
+        .unwrap();
+
+    // Entry: creating the game with this goblin runs the join path.
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Fresh Start", "characters": [goblin.clone()] }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Per-game state is pristine; identity and progress survive.
+    let detail = server
+        .get(&format!("/api/characters/{}", goblin))
+        .add_header("Authorization", user.auth_header())
+        .await;
+    detail.assert_status_ok();
+    let body = detail.json::<serde_json::Value>();
+    assert_eq!(body["hunger"], json!(0));
+    assert_eq!(body["thirst"], json!(0));
+    assert_eq!(body["stamina"], json!(100));
+    assert_eq!(body["max_stamina"], json!(100));
+    assert!(
+        body.get("allies")
+            .is_none_or(|a| a.as_array().is_some_and(|arr| arr.is_empty())),
+        "allies must be empty after entry"
+    );
+    assert_eq!(body["statistics"]["day_killed"], serde_json::Value::Null);
+    assert_eq!(body["statistics"]["game"], json!(game_id));
+    assert_eq!(body["team"], json!(1));
+    // Fresh items per game: exactly the new starter, stale one gone.
+    let items = body["items"].as_array().expect("items array");
+    assert_eq!(items.len(), 1, "entry leaves one fresh starter item");
+    assert!(
+        items.iter().all(|i| i["identifier"] != stale_id.as_str()),
+        "stale item from the previous game must be gone"
+    );
+
+    // A dead goblin cannot enter.
+    let doomed = create_owned_goblin(&server, &user, "Doomed").await;
+    test_db
+        .db
+        .query("UPDATE character SET status = 'Dead' WHERE identifier = $id")
+        .bind(("id", doomed.clone()))
+        .await
+        .unwrap();
+    server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Doomed Game", "characters": [doomed] }))
+        .await
+        .assert_status(axum::http::StatusCode::CONFLICT);
+
+    test_db.cleanup().await;
+}

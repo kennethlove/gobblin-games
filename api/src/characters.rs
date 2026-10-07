@@ -276,6 +276,13 @@ pub async fn join_game(
 
     require_owned_character(db, character_identifier).await?;
 
+    // A dead goblin cannot enter (revival runs at the end of the old
+    // game — this only guards stale rows).
+    let mut character = fetch_full_character(db, character_identifier).await?;
+    if !character.is_alive() {
+        return Err(AppError::Conflict("That goblin is dead".to_string()));
+    }
+
     let mut in_game_response = db
         .query("RETURN count(SELECT id FROM playing_in WHERE in.identifier = $character)")
         .bind(("character", character_identifier.to_owned()))
@@ -324,20 +331,40 @@ pub async fn join_game(
     }
 
     let team = fewest_team(db, game_identifier).await?;
-    db.query(
-        "UPDATE character SET team = $team, statistics.game = $game WHERE identifier = $character",
-    )
-    .bind(("team", team))
-    .bind(("game", game_identifier.to_owned()))
-    .bind(("character", character_identifier.to_owned()))
-    .await
-    .map_err(|e| AppError::InternalServerError(format!("Failed to enter game: {e}")))?;
+
+    // Entry: fresh per-game state, the assigned team, and the game
+    // pointer. UPSERT CONTENT re-stamps created_by = $auth through the
+    // schema's VALUE clause on this authenticated connection, so
+    // ownership survives the full-row write.
+    character.reset_for_new_game();
+    character.team = team;
+    character.statistics.game = game_identifier.to_owned();
+    let starter = Item::new_random(None);
+    let mut character_without_items = character.clone();
+    character_without_items.items = vec![];
+    let mut body = serde_json::to_value(&character_without_items)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to encode character: {e}")))?;
+    // `allies` skips serialization when empty, but the schema column is a
+    // required array — write it explicitly.
+    body["allies"] = serde_json::json!(character.allies);
+    let character_rid = RecordId::new("character", character_identifier);
+    let mut upsert = db
+        .query("UPSERT $rid CONTENT $body")
+        .bind(("rid", character_rid.clone()))
+        .bind(("body", body))
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to enter game: {e}")))?;
+    if let Some(err) = upsert.take_errors().remove(&0) {
+        return Err(AppError::InternalServerError(format!(
+            "Failed to enter game: {err}"
+        )));
+    }
+
+    // Fresh items per game: diff the owns edges down to just the starter.
+    crate::games::items::save_character_items(&vec![starter], character_rid.clone(), db).await?;
 
     db.query("RELATE $character->playing_in->$game")
-        .bind((
-            "character",
-            RecordId::new("character", character_identifier),
-        ))
+        .bind(("character", character_rid))
         .bind(("game", RecordId::new("game", game_identifier)))
         .await
         .map_err(|e| AppError::InternalServerError(format!("Failed to enter game: {e}")))?;
