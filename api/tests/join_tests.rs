@@ -596,3 +596,60 @@ async fn test_max_goblins_per_player() {
 
     test_db.cleanup().await;
 }
+
+#[tokio::test]
+async fn test_roster_ceiling() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "roster_ceiling").await;
+
+    // The roster size ceilings both the per-player allowance…
+    server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Too Generous", "team_count": 2, "goblins_per_team": 1, "max_goblins_per_player": 3 }))
+        .await
+        .assert_status(axum::http::StatusCode::BAD_REQUEST);
+
+    // …and the creator's chosen list (a 2-slot roster takes 2, not 3).
+    let g1 = create_owned_goblin(&server, &user, "One").await;
+    let g2 = create_owned_goblin(&server, &user, "Two").await;
+    let g3 = create_owned_goblin(&server, &user, "Three").await;
+    server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Chosen Over", "team_count": 2, "goblins_per_team": 1, "characters": [g1, g2, g3] }))
+        .await
+        .assert_status(axum::http::StatusCode::BAD_REQUEST);
+
+    // 10 × 5 = exactly 50 is allowed and fills to the brim.
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Maxed", "team_count": 10, "goblins_per_team": 5 }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // (The shared helper pages at ?limit=24 — ask for more here.)
+    let listing = server
+        .get(&format!("/api/games/{}/characters?limit=64", game_id))
+        .add_header("Authorization", user.auth_header())
+        .await;
+    listing.assert_status_ok();
+    let characters = listing.json::<serde_json::Value>()["characters"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(characters.len(), 50, "ceiling caps at 50 exactly");
+    let counts = team_counts(&characters);
+    assert_eq!(counts.len(), 10);
+    assert!(counts.values().all(|&c| c == 5), "{counts:?}");
+
+    test_db.cleanup().await;
+}

@@ -52,7 +52,7 @@ pub async fn create_game(
     let max_goblins_per_player = payload
         .max_goblins_per_player
         .unwrap_or(shared::DEFAULT_MAX_GOBINS_PER_PLAYER)
-        .clamp(1, 24);
+        .clamp(1, roster_cap);
 
     // Build the UPSERT body BEFORE constructing the Game struct so we can
     // use game_name before it moves into `Game { name }`.

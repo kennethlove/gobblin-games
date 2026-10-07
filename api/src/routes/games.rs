@@ -988,12 +988,13 @@ pub async fn create_game_post_handler(
     let goblins_per_team = form
         .goblins_per_team
         .unwrap_or(shared::DEFAULT_GOBLINS_PER_TEAM)
-        .clamp(1, 8);
+        .clamp(1, 8)
+        .min(shared::MAX_ROSTER_CAP / team_count);
     let roster_cap = team_count * goblins_per_team;
     let max_goblins_per_player = form
         .max_goblins_per_player
         .unwrap_or(shared::DEFAULT_MAX_GOBINS_PER_PLAYER)
-        .clamp(1, 24);
+        .clamp(1, roster_cap);
 
     use surrealdb_types::RecordId;
 
