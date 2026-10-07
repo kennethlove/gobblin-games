@@ -91,6 +91,13 @@ fn validate_uuid(value: &str) -> Result<(), ValidationError> {
         .map_err(|_| ValidationError::new("invalid_uuid"))
 }
 
+/// Default roster: 8 teams × 3 goblins = 24.
+pub const DEFAULT_TEAM_COUNT: u32 = 8;
+pub const DEFAULT_GOBLINS_PER_TEAM: u32 = 3;
+pub const DEFAULT_ROSTER_CAP: u32 = DEFAULT_TEAM_COUNT * DEFAULT_GOBLINS_PER_TEAM;
+/// How many goblins a joining (non-creator) player may bring by default.
+pub const DEFAULT_MAX_GOBINS_PER_PLAYER: u32 = 1;
+
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct CreateGame {
     #[validate(length(
@@ -118,6 +125,26 @@ pub struct CreateGame {
     #[serde(default)]
     #[validate(length(max = 24, message = "A game holds at most 24 characters"))]
     pub characters: Vec<String>,
+
+    /// Teams in the game; roster = team_count × goblins_per_team.
+    #[serde(default)]
+    #[validate(range(min = 2, max = 16, message = "Team count must be between 2 and 16"))]
+    pub team_count: Option<u32>,
+
+    /// Goblins each team fields (default 3).
+    #[serde(default)]
+    #[validate(range(min = 1, max = 8, message = "Goblins per team must be between 1 and 8"))]
+    pub goblins_per_team: Option<u32>,
+
+    /// How many goblins each joining player may bring (creator exempt,
+    /// unlimited). Default 1.
+    #[serde(default)]
+    #[validate(range(
+        min = 1,
+        max = 24,
+        message = "Goblins per player must be between 1 and 24"
+    ))]
+    pub max_goblins_per_player: Option<u32>,
 }
 
 pub type DeleteCharacter = String;
