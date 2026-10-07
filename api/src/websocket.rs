@@ -7,7 +7,7 @@ use axum::{
 };
 use futures::{sink::SinkExt, stream::StreamExt};
 use shared::WebSocketMessage;
-use shared::messages::{CharacterRef, GameMessage, MessagePayload, MessageSource, Phase};
+use shared::messages::{GameMessage, MessagePayload, MessageSource, Phase};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{debug, error, info, warn};
@@ -161,38 +161,6 @@ pub fn broadcast_game_started(broadcaster: &GameBroadcaster, game_id: &str, day:
         0,
         format!("game:{}", game_id),
         format!("Day {} dawns over the arena.", day),
-        payload,
-    );
-    broadcast_game_message(broadcaster, game_id, msg);
-}
-
-/// Synthesize and broadcast a lifecycle [`MessagePayload::GameEnded`] for a
-/// game that finished without an additional cycle being run (e.g. the
-/// 24-deaths-already early-finish path in `next_step`).
-pub fn broadcast_game_finished(
-    broadcaster: &GameBroadcaster,
-    game_id: &str,
-    winner: Option<String>,
-) {
-    let winner_ref = winner.map(|name| CharacterRef {
-        identifier: String::new().into(),
-        name,
-    });
-    let payload = MessagePayload::GameEnded {
-        winner: winner_ref.clone(),
-    };
-    let content = match &winner_ref {
-        Some(w) => format!("{} has won the game!", w.name),
-        None => "The game has ended with no survivors.".to_string(),
-    };
-    let msg = GameMessage::new(
-        MessageSource::Game(game_id.to_string()),
-        0,
-        Phase::Day,
-        0,
-        0,
-        format!("game:{}", game_id),
-        content,
         payload,
     );
     broadcast_game_message(broadcaster, game_id, msg);

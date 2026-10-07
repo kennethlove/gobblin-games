@@ -103,6 +103,15 @@ pub struct CharacterRef {
     pub name: String,
 }
 
+/// A team that won a game: slot number plus display label.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TeamRef {
+    /// Team slot (1..=8).
+    pub team: u32,
+    /// Display label, e.g. "Orange Mangletooths".
+    pub label: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AreaRef {
     pub identifier: AreaId,
@@ -545,10 +554,14 @@ pub enum MessagePayload {
         kind: SleepIncidentKind,
         description: String,
     },
-    /// Emitted when the game ends. `winner` is `Some` for the lone-survivor
-    /// case and `None` for "no survivors".
+    /// Emitted when the game ends. `winning_team` is `Some` for the last
+    /// team standing; `winner` is the legacy individual winner, kept so
+    /// pre-team-victory records still deserialize.
     GameEnded {
+        #[serde(default)]
         winner: Option<CharacterRef>,
+        #[serde(default)]
+        winning_team: Option<TeamRef>,
     },
 
     // Affliction events (health conditions PR2).

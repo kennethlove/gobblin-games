@@ -562,46 +562,17 @@ pub async fn next_step(
             Ok(Json(Some(game)))
         }
         GameStatus::InProgress => {
-            // Finish rule: the game ends once 24 goblins are dead;
-            // post-game recovery runs below before characters are written back.
-            let dead_character_count = super::get_dead_character_count(&db, id_str).await?;
+            let mut game = super::get_full_game(&id, &db).await?;
+            super::run_game_cycles(
+                &mut game,
+                &db,
+                &state.broadcaster,
+                state.commentator.clone(),
+                &state.db,
+            )
+            .await?;
 
-            if dead_character_count >= 24 {
-                super::update_game_status(&db, &record_id, GameStatus::Finished).await?;
-
-                let mut game = super::get_full_game(&id, &db).await?;
-                // Winner must be read while the game is still pre-recovery:
-                // `post_game_recovery` brings the dead back to life, which
-                // would poison "last standing".
-                let winner = game
-                    .characters
-                    .iter()
-                    .find(|t| t.is_alive())
-                    .map(|t| t.name.clone());
-
-                // SEAM: early-finish recovery. The DB status already
-                // flipped to Finished before this game object loaded, so
-                // `Game::end()` would no-op — run recovery directly, then
-                // persist the characters back before broadcasting.
-                game.post_game_recovery();
-                let _ = super::persist::save_game(&mut game, &db, &state.broadcaster).await?;
-
-                crate::websocket::broadcast_game_finished(&state.broadcaster, &id, winner);
-
-                Ok(Json(None))
-            } else {
-                let mut game = super::get_full_game(&id, &db).await?;
-                super::run_game_cycles(
-                    &mut game,
-                    &db,
-                    &state.broadcaster,
-                    state.commentator.clone(),
-                    &state.db,
-                )
-                .await?;
-
-                Ok(Json(Some(game)))
-            }
+            Ok(Json(Some(game)))
         }
         GameStatus::Finished => Ok(Json(None)),
     }

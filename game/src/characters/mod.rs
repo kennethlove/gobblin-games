@@ -867,8 +867,10 @@ impl Character {
             .collect();
 
         if enemies.is_empty() {
-            // Only allies in range. Final confrontation overrides loyalty.
-            if targets.len() == 1 && living_characters_count == 2 {
+            // Only allies in range. Final confrontation overrides loyalty —
+            // except between teammates: the last goblins of one team never
+            // turn on each other (team victory ends the game instead).
+            if targets.len() == 1 && living_characters_count == 2 && self.team != targets[0].team {
                 return Some(targets.pop().unwrap());
             }
             return None;
@@ -2113,16 +2115,30 @@ mod tests {
 
     #[rstest]
     fn pick_target_final_confrontation_overrides_alliance() {
-        // When only two characters remain alive, even an ally is a valid target.
+        // When only two characters remain alive, even an ally from another
+        // team is a valid target.
         let mut me = Character::new("Snaggletooth".to_string(), Some(8), None);
         // No mental conditions → effective_sanity = 100 → not suicidal
-        let ally = Character::new("Grubworm".to_string(), Some(8), None);
+        let ally = Character::new("Grubworm".to_string(), Some(3), None);
         me.allies.push(ally.id);
 
         let mut events: Vec<TaggedEvent> = vec![];
         let target = me.pick_target(vec![ally.clone()], 2, &mut events);
         assert!(target.is_some());
         assert_eq!(target.unwrap().id, ally.id);
+    }
+
+    #[rstest]
+    fn pick_target_final_confrontation_spares_teammates() {
+        // The last two goblins of the same team are never forced to fight:
+        // team victory ends the game instead.
+        let mut me = Character::new("Snaggletooth".to_string(), Some(8), None);
+        let teammate = Character::new("Grubworm".to_string(), Some(8), None);
+        me.allies.push(teammate.id);
+
+        let mut events: Vec<TaggedEvent> = vec![];
+        let target = me.pick_target(vec![teammate.clone()], 2, &mut events);
+        assert!(target.is_none());
     }
 
     #[rstest]

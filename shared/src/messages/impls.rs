@@ -71,7 +71,7 @@ impl MessagePayload {
             | TrapSet { character, .. } => refs.push(character),
             TrapTriggered { victim, .. } => refs.push(victim),
             PatronGift { recipient, .. } => refs.push(recipient),
-            GameEnded { winner } => {
+            GameEnded { winner, .. } => {
                 if let Some(w) = winner {
                     refs.push(w);
                 }

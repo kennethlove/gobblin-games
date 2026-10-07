@@ -14,7 +14,7 @@
 pub use shared::ids::{AreaId, CharacterId, ItemId};
 pub use shared::messages::{
     AreaEventKind, AreaRef, CharacterRef, CombatEngagement, CombatOutcome, GameMessage, ItemRef,
-    MessageKind, MessagePayload, MessageSource, ParsePhaseError, Phase,
+    MessageKind, MessagePayload, MessageSource, ParsePhaseError, Phase, TeamRef,
 };
 
 use crate::terrain::{BaseTerrain, Harshness, Visibility};

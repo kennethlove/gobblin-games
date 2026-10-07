@@ -421,11 +421,17 @@ impl BroadcastPackageBuilder {
             }),
 
             // ---- Game end ----
-            MessagePayload::GameEnded { winner } => {
+            MessagePayload::GameEnded {
+                winner,
+                winning_team,
+            } => {
                 let structured = serde_json::json!({
                     "type": "game_ended",
                     "winner": winner.as_ref().map(|w| {
                         serde_json::json!({ "id": w.identifier, "name": w.name })
+                    }),
+                    "winning_team": winning_team.as_ref().map(|t| {
+                        serde_json::json!({ "team": t.team, "label": t.label })
                     }),
                 });
                 Some(EventLine {
@@ -689,11 +695,28 @@ mod tests {
     fn classifies_game_ended() {
         let msg = make_msg(MessagePayload::GameEnded {
             winner: Some(tr("Snaggletooth")),
+            winning_team: None,
         });
         let line = BroadcastPackageBuilder::classify_event(&msg).unwrap();
         assert_eq!(line.kind, EventKind::Other);
         let data = line.structured.unwrap();
         assert_eq!(data["winner"]["name"], "Snaggletooth");
+    }
+
+    #[test]
+    fn classifies_team_winner() {
+        let msg = make_msg(MessagePayload::GameEnded {
+            winner: None,
+            winning_team: Some(shared::messages::TeamRef {
+                team: 3,
+                label: "Azure Chomps".to_string(),
+            }),
+        });
+        let line = BroadcastPackageBuilder::classify_event(&msg).unwrap();
+        assert_eq!(line.kind, EventKind::Other);
+        let data = line.structured.unwrap();
+        assert_eq!(data["winning_team"]["label"], "Azure Chomps");
+        assert_eq!(data["winning_team"]["team"], 3);
     }
 
     #[test]
@@ -805,7 +828,10 @@ mod tests {
     #[test]
     fn classifies_game_ended_no_winner() {
         // No survivors scenario.
-        let msg = make_msg(MessagePayload::GameEnded { winner: None });
+        let msg = make_msg(MessagePayload::GameEnded {
+            winner: None,
+            winning_team: None,
+        });
         let line = BroadcastPackageBuilder::classify_event(&msg).unwrap();
         assert_eq!(line.kind, EventKind::Other);
         let data = line.structured.unwrap();
