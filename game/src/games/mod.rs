@@ -411,8 +411,36 @@ impl Game {
     }
 
     /// Runs at the end of the game.
+    ///
+    /// NOTE: the revival roll does NOT fire here — `end()` runs at
+    /// the start of a phase, and remaining phases of the day must still see
+    /// dead goblins skip their turns. The roll runs once per game at the
+    /// API finish seam instead, right before characters are written back:
+    /// `api::games::run_game_cycles` (engine-finish path) and the 24-dead
+    /// early-finish branch of `next_step`. Winner determination happens
+    /// *before* `end()` in [`Self::check_for_winner`], so the roll never
+    /// poisons "last standing".
     pub fn end(&mut self) {
-        self.status = GameStatus::Finished
+        if self.status == GameStatus::Finished {
+            return;
+        }
+        self.status = GameStatus::Finished;
+    }
+
+    /// Run the post-game recovery ([`crate::characters::revival`]) before
+    /// characters are written back: every dead goblin runs the revival
+    /// roll (Clean / Penalty / Scar / Bonus) and the outcome lands as
+    /// persistent state (traits / attribute deltas); every survivor is
+    /// restored to full health.
+    pub fn post_game_recovery(&mut self) {
+        let mut rng = rand::rng();
+        for character in &mut self.characters {
+            if character.is_alive() {
+                crate::characters::revival::restore(character);
+            } else {
+                crate::characters::revival::revive(character, &mut rng);
+            }
+        }
     }
 
     /// Runs at the start of the game.
@@ -479,6 +507,11 @@ impl Game {
     }
 
     fn check_for_winner(&mut self) -> Result<(), GameError> {
+        // Already finished: never re-emit GameEnded (revival happens later
+        // at the API finish seam — see `Game::post_game_recovery`).
+        if self.status == GameStatus::Finished {
+            return Ok(());
+        }
         if let Some(winner) = self.winner() {
             let game_id = self.identifier.clone();
             let payload = crate::messages::MessagePayload::GameEnded {

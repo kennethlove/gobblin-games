@@ -12,6 +12,7 @@ pub mod inventory;
 pub mod lifecycle;
 pub mod movement;
 pub mod rescue;
+pub mod revival;
 pub mod stamina_band;
 pub mod statuses;
 pub mod survival;
