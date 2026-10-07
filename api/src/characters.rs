@@ -184,10 +184,15 @@ pub struct CharacterItemEdge {
     pub item: RecordId,
 }
 
-/// Team (1..=8) with the fewest members in the game right now; ties go to
-/// the lowest slot, so joins and bot-fill together divide a full roster
-/// into exactly 3 per team (the ready rule in `schemas/game.surql`).
-pub async fn fewest_team(db: &Surreal<Any>, game_identifier: &str) -> Result<u32, AppError> {
+/// Team (1..=team_count) with the fewest members in the game right now;
+/// ties go to the lowest slot, so joins and bot-fill together divide a
+/// full roster into exactly `goblins_per_team` per team (the ready rule
+/// in `schemas/game.surql`).
+pub async fn fewest_team(
+    db: &Surreal<Any>,
+    game_identifier: &str,
+    team_count: u32,
+) -> Result<u32, AppError> {
     let mut response = db
         .query("SELECT in.team AS team FROM playing_in WHERE out.identifier = $game")
         .bind(("game", game_identifier.to_owned()))
@@ -196,15 +201,18 @@ pub async fn fewest_team(db: &Surreal<Any>, game_identifier: &str) -> Result<u32
     let rows: Vec<serde_json::Value> = response
         .take(0)
         .map_err(|e| AppError::InternalServerError(format!("Failed to read roster: {e}")))?;
-    let mut counts = [0u32; 9];
+    let mut counts = vec![0u32; team_count as usize + 1];
     for row in rows {
         if let Some(team) = row["team"].as_u64()
-            && (1..=8).contains(&team)
+            && team >= 1
+            && team <= team_count as u64
         {
             counts[team as usize] += 1;
         }
     }
-    Ok((1..=8u32).min_by_key(|&t| counts[t as usize]).unwrap())
+    Ok((1..=team_count)
+        .min_by_key(|&t| counts[t as usize])
+        .unwrap_or(1))
 }
 
 /// Owned goblins that have not entered any game yet — the roster picker
@@ -252,7 +260,9 @@ pub async fn join_game(
     character_identifier: &str,
 ) -> Result<(), AppError> {
     let mut status_response = db
-        .query("SELECT status, created_by = $auth AS is_creator FROM game WHERE identifier = $game")
+        .query(
+            "SELECT status, team_count, goblins_per_team, max_goblins_per_player, created_by = $auth AS is_creator FROM game WHERE identifier = $game",
+        )
         .bind(("game", game_identifier.to_owned()))
         .await
         .map_err(|e| AppError::InternalServerError(format!("Failed to load game: {e}")))?;
@@ -268,6 +278,17 @@ pub async fn join_game(
         .first()
         .and_then(|row| row["is_creator"].as_bool())
         .unwrap_or(false);
+    let first_row = status_rows.first();
+    let team_count = first_row
+        .and_then(|row| row["team_count"].as_u64())
+        .unwrap_or(shared::DEFAULT_TEAM_COUNT as u64) as u32;
+    let goblins_per_team = first_row
+        .and_then(|row| row["goblins_per_team"].as_u64())
+        .unwrap_or(shared::DEFAULT_GOBLINS_PER_TEAM as u64) as u32;
+    let roster_cap = team_count * goblins_per_team;
+    let player_limit = first_row
+        .and_then(|row| row["max_goblins_per_player"].as_u64())
+        .unwrap_or(shared::DEFAULT_MAX_GOBINS_PER_PLAYER as u64) as u32;
     if status != "NotStarted" {
         return Err(AppError::Conflict(
             "The game has already started".to_string(),
@@ -309,9 +330,9 @@ pub async fn join_game(
         .take::<Option<u32>>(0)
         .map_err(|e| AppError::InternalServerError(format!("Failed to check roster: {e}")))?
         .unwrap_or(0);
-    // One goblin per player per game — except the game's creator, who may
-    // field as many of their own as they like.
-    if mine > 0 && !is_creator {
+    // Each joining player may bring `max_goblins_per_player` goblins —
+    // except the game's creator, who may field as many as they like.
+    if mine >= player_limit && !is_creator {
         return Err(AppError::Conflict(
             "You already have a goblin in this game".to_string(),
         ));
@@ -326,11 +347,11 @@ pub async fn join_game(
         .take::<Option<u32>>(0)
         .map_err(|e| AppError::InternalServerError(format!("Failed to count roster: {e}")))?
         .unwrap_or(0);
-    if roster >= 24 {
+    if roster >= roster_cap {
         return Err(AppError::GameFull("Game is full".to_string()));
     }
 
-    let team = fewest_team(db, game_identifier).await?;
+    let team = fewest_team(db, game_identifier, team_count).await?;
 
     // Entry: fresh per-game state, the assigned team, and the game
     // pointer. UPSERT CONTENT re-stamps created_by = $auth through the
@@ -379,6 +400,18 @@ pub async fn create_character(
     team: u32,
 ) -> Result<Character, AppError> {
     let game_id = RecordId::new("game", game_identifier.to_owned());
+    let mut cfg_response = db
+        .query("SELECT team_count, goblins_per_team FROM game WHERE identifier = $game")
+        .bind(("game", game_identifier.to_owned()))
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to load game config: {e}")))?;
+    let cfg_rows: Vec<serde_json::Value> = cfg_response
+        .take(0)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to read game config: {e}")))?;
+    let cfg = cfg_rows.first();
+    let roster_cap = cfg
+        .and_then(|row| Some(row["team_count"].as_u64()? * row["goblins_per_team"].as_u64()?))
+        .unwrap_or(shared::DEFAULT_ROSTER_CAP as u64) as u32;
     let mut character_count_resp = db
         .query("RETURN count(SELECT id FROM playing_in WHERE out.identifier=$game)")
         .bind(("game", game_identifier.to_owned()))
@@ -387,7 +420,7 @@ pub async fn create_character(
     let character_count: Option<u32> = character_count_resp.take(0).map_err(|e| {
         AppError::InternalServerError(format!("Failed to parse character count: {}", e))
     })?;
-    if character_count >= Some(24) {
+    if character_count.unwrap_or(0) >= roster_cap {
         return Err(AppError::GameFull("Game is full".to_string()));
     }
 

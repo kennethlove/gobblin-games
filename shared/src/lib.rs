@@ -91,7 +91,19 @@ fn validate_uuid(value: &str) -> Result<(), ValidationError> {
         .map_err(|_| ValidationError::new("invalid_uuid"))
 }
 
+/// Default roster: 8 teams × 3 goblins = 24.
+pub const DEFAULT_TEAM_COUNT: u32 = 8;
+pub const DEFAULT_GOBLINS_PER_TEAM: u32 = 3;
+pub const DEFAULT_ROSTER_CAP: u32 = DEFAULT_TEAM_COUNT * DEFAULT_GOBLINS_PER_TEAM;
+/// How many goblins a joining (non-creator) player may bring by default.
+pub const DEFAULT_MAX_GOBINS_PER_PLAYER: u32 = 1;
+/// Hard ceiling on a game's roster: every goblin costs processing, rows,
+/// and storage. Set to the component bounds' own product (16 × 8) so any
+/// valid team/goblins combination fits; stress testing tracked separately.
+pub const MAX_ROSTER_CAP: u32 = 128;
+
 #[derive(Debug, Serialize, Deserialize, Validate)]
+#[validate(schema(function = "validate_roster_size"))]
 pub struct CreateGame {
     #[validate(length(
         min = 1,
@@ -116,8 +128,55 @@ pub struct CreateGame {
     /// Creators may field as many of their own as they like; other
     /// players stay at one goblin per game (see `join_game`).
     #[serde(default)]
-    #[validate(length(max = 24, message = "A game holds at most 24 characters"))]
     pub characters: Vec<String>,
+
+    /// Teams in the game; roster = team_count × goblins_per_team.
+    #[serde(default)]
+    #[validate(range(min = 2, max = 16, message = "Team count must be between 2 and 16"))]
+    pub team_count: Option<u32>,
+
+    /// Goblins each team fields (default 3).
+    #[serde(default)]
+    #[validate(range(min = 1, max = 8, message = "Goblins per team must be between 1 and 8"))]
+    pub goblins_per_team: Option<u32>,
+
+    /// How many goblins each joining player may bring (creator exempt,
+    /// unlimited). Default 1.
+    #[serde(default)]
+    #[validate(range(min = 1, message = "Goblins per player must be at least 1"))]
+    pub max_goblins_per_player: Option<u32>,
+}
+
+/// Roster ceiling: team_count × goblins_per_team must stay within
+/// [`MAX_ROSTER_CAP`]. Component ranges are validated per-field.
+pub fn validate_roster_size(game: &CreateGame) -> Result<(), ValidationError> {
+    let teams = game.team_count.unwrap_or(DEFAULT_TEAM_COUNT);
+    let per_team = game.goblins_per_team.unwrap_or(DEFAULT_GOBLINS_PER_TEAM);
+    let cap = teams * per_team;
+    if cap > MAX_ROSTER_CAP {
+        let mut error = ValidationError::new("roster_too_large");
+        error.message = Some(
+            format!("A game may hold at most {MAX_ROSTER_CAP} goblins (teams x goblins per team)")
+                .into(),
+        );
+        return Err(error);
+    }
+    // The roster size is the ceiling for every count tied to it: the
+    // creator's chosen goblins and any per-player allowance.
+    if game.characters.len() as u32 > cap {
+        let mut error = ValidationError::new("too_many_characters");
+        error.message = Some(format!("A {cap}-goblin roster takes at most {cap} goblins").into());
+        return Err(error);
+    }
+    let allowance = game
+        .max_goblins_per_player
+        .unwrap_or(DEFAULT_MAX_GOBINS_PER_PLAYER);
+    if allowance > cap {
+        let mut error = ValidationError::new("player_allowance_too_large");
+        error.message = Some(format!("A player may bring at most {cap} goblins").into());
+        return Err(error);
+    }
+    Ok(())
 }
 
 pub type DeleteCharacter = String;

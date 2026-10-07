@@ -30,6 +30,22 @@
       <label for="private" class="text-sm text-gray-300">Private game</label>
     </div>
 
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label for="team_count" class="block text-sm font-medium text-gray-300 mb-1">Teams</label>
+        <input type="number" id="team_count" name="team_count" min="2" max="16" value="8" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-amber-500">
+      </div>
+      <div>
+        <label for="goblins_per_team" class="block text-sm font-medium text-gray-300 mb-1">Goblins per team</label>
+        <input type="number" id="goblins_per_team" name="goblins_per_team" min="1" max="8" value="3" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-amber-500">
+      </div>
+      <div>
+        <label for="max_goblins_per_player" class="block text-sm font-medium text-gray-300 mb-1">Goblins per player</label>
+        <input type="number" id="max_goblins_per_player" name="max_goblins_per_player" min="1" max="24" value="1" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-amber-500">
+        <p class="text-xs text-gray-500 mt-1">For joining players — you may always bring as many as you like.</p>
+      </div>
+    </div>
+
     {% if goblins %}
     <fieldset class="space-y-2">
       <legend class="text-sm font-medium text-gray-300">Bring your goblins</legend>

@@ -40,6 +40,19 @@ pub async fn create_game(
     let default_game = Game::default();
     let game_identifier = Uuid::new_v4().to_string();
     let game_name = payload.name.unwrap_or(default_game.name);
+    let team_count = payload
+        .team_count
+        .unwrap_or(shared::DEFAULT_TEAM_COUNT)
+        .clamp(2, 16);
+    let goblins_per_team = payload
+        .goblins_per_team
+        .unwrap_or(shared::DEFAULT_GOBLINS_PER_TEAM)
+        .clamp(1, 8);
+    let roster_cap = team_count * goblins_per_team;
+    let max_goblins_per_player = payload
+        .max_goblins_per_player
+        .unwrap_or(shared::DEFAULT_MAX_GOBINS_PER_PLAYER)
+        .clamp(1, roster_cap);
 
     // Build the UPSERT body BEFORE constructing the Game struct so we can
     // use game_name before it moves into `Game { name }`.
@@ -56,6 +69,9 @@ pub async fn create_game(
         "status": "NotStarted",
         "day": null,
         "private": true,
+        "team_count": team_count,
+        "goblins_per_team": goblins_per_team,
+        "max_goblins_per_player": max_goblins_per_player,
     });
 
     // Construct Game with server-controlled fields
@@ -85,8 +101,9 @@ pub async fn create_game(
     // player, and fewest-team balance all gate inside join_game). Empty
     // selection keeps the legacy fallback: a full 24-bot roster.
     if payload.characters.is_empty() {
-        let character_futures = (0..24)
-            .map(|idx| crate::characters::create_character(None, &game_identifier, &db, idx % 8));
+        let character_futures = (0..roster_cap).map(|idx| {
+            crate::characters::create_character(None, &game_identifier, &db, idx % team_count)
+        });
         let character_results = futures::future::join_all(character_futures).await;
 
         if let Some(err) = character_results.into_iter().find_map(Result::err) {
@@ -173,6 +190,9 @@ pub async fn quickstart(
         "status": "NotStarted",
         "day": null,
         "private": false,
+        "team_count": shared::DEFAULT_TEAM_COUNT,
+        "goblins_per_team": shared::DEFAULT_GOBLINS_PER_TEAM,
+        "max_goblins_per_player": shared::DEFAULT_MAX_GOBINS_PER_PLAYER,
     });
 
     db.query("UPSERT $rid CONTENT $body")
@@ -182,8 +202,14 @@ pub async fn quickstart(
         .map_err(|e| AppError::InternalServerError(format!("Failed to create game: {e}")))?;
 
     // Create 24 characters
-    let character_futures = (0..24)
-        .map(|idx| crate::characters::create_character(None, &game_identifier, &db, idx % 8));
+    let character_futures = (0..shared::DEFAULT_ROSTER_CAP).map(|idx| {
+        crate::characters::create_character(
+            None,
+            &game_identifier,
+            &db,
+            idx % shared::DEFAULT_TEAM_COUNT,
+        )
+    });
     let character_results = futures::future::join_all(character_futures).await;
     if let Some(err) = character_results.into_iter().find_map(Result::err) {
         return Err(AppError::InternalServerError(format!(
@@ -597,10 +623,32 @@ pub async fn next_step(
                 .take::<Option<u32>>(0)
                 .map_err(|e| AppError::InternalServerError(format!("Failed to count roster: {e}")))?
                 .unwrap_or(0);
-            for _ in roster..24 {
-                let team = crate::characters::fewest_team(&db, id_str).await?;
-                crate::characters::create_character(None, id_str, &db, team - 1).await?;
-            }
+            let roster_cap = {
+                let mut cfg = db
+                    .query("SELECT team_count, goblins_per_team FROM game WHERE identifier = $game")
+                    .bind(("game", id_str))
+                    .await
+                    .map_err(|e| {
+                        AppError::InternalServerError(format!("Failed to load roster config: {e}"))
+                    })?;
+                let rows: Vec<serde_json::Value> = cfg.take(0).map_err(|e| {
+                    AppError::InternalServerError(format!("Failed to read roster config: {e}"))
+                })?;
+                let row = rows.first();
+                let team_count =
+                    row.and_then(|r| r["team_count"].as_u64())
+                        .unwrap_or(shared::DEFAULT_TEAM_COUNT as u64) as u32;
+                let goblins_per_team = row
+                    .and_then(|r| r["goblins_per_team"].as_u64())
+                    .unwrap_or(shared::DEFAULT_GOBLINS_PER_TEAM as u64)
+                    as u32;
+                for _ in roster..team_count * goblins_per_team {
+                    let team = crate::characters::fewest_team(&db, id_str, team_count).await?;
+                    crate::characters::create_character(None, id_str, &db, team - 1).await?;
+                }
+                team_count * goblins_per_team
+            };
+            let _ = roster_cap;
 
             super::update_game_status(&db, &record_id, GameStatus::InProgress).await?;
             let mut game = super::get_full_game(&id, &db).await?;

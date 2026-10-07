@@ -39,6 +39,15 @@ pub struct CreateGameRequest {
     /// Goblins checked in the roster picker; empty = bot fallback.
     #[serde(default)]
     pub characters: Vec<String>,
+    /// Teams in the game (default 8, range 2-16).
+    #[serde(default)]
+    pub team_count: Option<u32>,
+    /// Goblins each team fields (default 3, range 1-8).
+    #[serde(default)]
+    pub goblins_per_team: Option<u32>,
+    /// Goblins each joining player may bring (default 1).
+    #[serde(default)]
+    pub max_goblins_per_player: Option<u32>,
 }
 
 // ── HTMX page handlers ──────────────────────────────────────────────
@@ -972,6 +981,20 @@ pub async fn create_game_post_handler(
     let game_identifier = uuid::Uuid::new_v4().to_string();
     let game_name = form.name.filter(|n| !n.is_empty()).unwrap_or(game.name);
     let is_private = form.private.is_some_and(|v| v == "true");
+    let team_count = form
+        .team_count
+        .unwrap_or(shared::DEFAULT_TEAM_COUNT)
+        .clamp(2, 16);
+    let goblins_per_team = form
+        .goblins_per_team
+        .unwrap_or(shared::DEFAULT_GOBLINS_PER_TEAM)
+        .clamp(1, 8)
+        .min(shared::MAX_ROSTER_CAP / team_count);
+    let roster_cap = team_count * goblins_per_team;
+    let max_goblins_per_player = form
+        .max_goblins_per_player
+        .unwrap_or(shared::DEFAULT_MAX_GOBINS_PER_PLAYER)
+        .clamp(1, roster_cap);
 
     use surrealdb_types::RecordId;
 
@@ -982,6 +1005,9 @@ pub async fn create_game_post_handler(
         "status": "NotStarted",
         "day": null,
         "private": is_private,
+        "team_count": team_count,
+        "goblins_per_team": goblins_per_team,
+        "max_goblins_per_player": max_goblins_per_player,
     });
 
     if user_db
@@ -998,8 +1024,8 @@ pub async fn create_game_post_handler(
     chosen.retain(|c| !c.is_empty());
     if chosen.is_empty() {
         // Legacy fallback: no goblin chosen, spawn the full bot roster.
-        let character_futures = (0..24).map(|idx| {
-            api::characters::create_character(None, &game_identifier, &user_db, idx % 8)
+        let character_futures = (0..roster_cap).map(|idx| {
+            api::characters::create_character(None, &game_identifier, &user_db, idx % team_count)
         });
         let character_results = futures::future::join_all(character_futures).await;
         if character_results.into_iter().any(|r| r.is_err()) {

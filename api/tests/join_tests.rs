@@ -484,3 +484,172 @@ async fn test_entry_resets_per_game_state_and_items() {
 
     test_db.cleanup().await;
 }
+
+#[tokio::test]
+async fn test_custom_roster_size() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "roster_config").await;
+
+    // 4 teams × 2 goblins = 8-slot roster, bot-filled at creation.
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Small Arena", "team_count": 4, "goblins_per_team": 2 }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let characters = fetch_characters(&server, &user, &game_id).await;
+    assert_eq!(characters.len(), 8, "cap = teams × goblins per team");
+    let counts = team_counts(&characters);
+    assert_eq!(counts.len(), 4, "exactly 4 teams represented");
+    assert!(
+        counts.values().all(|&c| c == 2),
+        "exactly 2 goblins per team: {counts:?}"
+    );
+
+    // Ready rule follows the config: full 8-slot roster with 4 teams.
+    let detail = server
+        .get(&format!("/api/games/{}", game_id))
+        .add_header("Authorization", user.auth_header())
+        .await;
+    detail.assert_status_ok();
+    assert_eq!(detail.json::<serde_json::Value>()["ready"], json!(true));
+
+    // The cap rejects further joins.
+    let bob = create_authenticated_user(&test_db, &server, "roster_config_bob").await;
+    let bob_goblin = create_owned_goblin(&server, &bob, "Billy Slick").await;
+    server
+        .post(&format!("/api/games/{}/join", game_id))
+        .add_header("Authorization", bob.auth_header())
+        .json(&json!({ "character_id": bob_goblin }))
+        .await
+        .assert_status(axum::http::StatusCode::CONFLICT);
+
+    // Out-of-range team counts are rejected.
+    server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "One Team", "team_count": 1 }))
+        .await
+        .assert_status(axum::http::StatusCode::BAD_REQUEST);
+
+    test_db.cleanup().await;
+}
+
+#[tokio::test]
+async fn test_max_goblins_per_player() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let alice = create_authenticated_user(&test_db, &server, "limit_alice").await;
+    let bob = create_authenticated_user(&test_db, &server, "limit_bob").await;
+
+    let alice_goblin = create_owned_goblin(&server, &alice, "Stinky").await;
+    let b1 = create_owned_goblin(&server, &bob, "Billy Slick").await;
+    let b2 = create_owned_goblin(&server, &bob, "Slick Two").await;
+    let b3 = create_owned_goblin(&server, &bob, "Slick Three").await;
+    let b4 = create_owned_goblin(&server, &bob, "Slick Four").await;
+
+    // Creator allows each joining player three goblins.
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({
+            "name": "Three Each",
+            "max_goblins_per_player": 3,
+            "characters": [alice_goblin],
+        }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    for goblin in [&b1, &b2, &b3] {
+        server
+            .post(&format!("/api/games/{}/join", game_id))
+            .add_header("Authorization", bob.auth_header())
+            .json(&json!({ "character_id": goblin }))
+            .await
+            .assert_status_ok();
+    }
+
+    // Fourth goblin exceeds the allowance.
+    server
+        .post(&format!("/api/games/{}/join", game_id))
+        .add_header("Authorization", bob.auth_header())
+        .json(&json!({ "character_id": b4 }))
+        .await
+        .assert_status(axum::http::StatusCode::CONFLICT);
+
+    let characters = fetch_characters(&server, &alice, &game_id).await;
+    assert_eq!(characters.len(), 4, "creator's 1 + Bob's 3");
+
+    test_db.cleanup().await;
+}
+
+#[tokio::test]
+async fn test_roster_ceiling() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "roster_ceiling").await;
+
+    // The roster size ceilings both the per-player allowance…
+    server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Too Generous", "team_count": 2, "goblins_per_team": 1, "max_goblins_per_player": 3 }))
+        .await
+        .assert_status(axum::http::StatusCode::BAD_REQUEST);
+
+    // …and the creator's chosen list (a 2-slot roster takes 2, not 3).
+    let g1 = create_owned_goblin(&server, &user, "One").await;
+    let g2 = create_owned_goblin(&server, &user, "Two").await;
+    let g3 = create_owned_goblin(&server, &user, "Three").await;
+    server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Chosen Over", "team_count": 2, "goblins_per_team": 1, "characters": [g1, g2, g3] }))
+        .await
+        .assert_status(axum::http::StatusCode::BAD_REQUEST);
+
+    // 10 × 5 = exactly 50 is allowed and fills to the brim.
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Maxed", "team_count": 10, "goblins_per_team": 5 }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // (The shared helper pages at ?limit=24 — ask for more here.)
+    let listing = server
+        .get(&format!("/api/games/{}/characters?limit=64", game_id))
+        .add_header("Authorization", user.auth_header())
+        .await;
+    listing.assert_status_ok();
+    let characters = listing.json::<serde_json::Value>()["characters"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(characters.len(), 50, "ceiling caps at 50 exactly");
+    let counts = team_counts(&characters);
+    assert_eq!(counts.len(), 10);
+    assert!(counts.values().all(|&c| c == 5), "{counts:?}");
+
+    test_db.cleanup().await;
+}

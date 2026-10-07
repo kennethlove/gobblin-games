@@ -13,6 +13,9 @@ DEFINE FIELD OVERWRITE status ON game;
 DEFINE FIELD OVERWRITE day ON game;
 DEFINE FIELD OVERWRITE created_by ON game VALUE $auth READONLY;
 DEFINE FIELD OVERWRITE private ON game DEFAULT true;
+DEFINE FIELD OVERWRITE team_count ON game TYPE int DEFAULT 8;
+DEFINE FIELD OVERWRITE goblins_per_team ON game TYPE int DEFAULT 3;
+DEFINE FIELD OVERWRITE max_goblins_per_player ON game TYPE int DEFAULT 1;
 
 DEFINE INDEX OVERWRITE game_identifier ON game FIELDS identifier UNIQUE;
 
@@ -40,9 +43,9 @@ DEFINE FUNCTION OVERWRITE fn::get_full_game($game_id: string) {
             FROM ->areas->area
         ) AS areas,
         count(SELECT id FROM <-playing_in<-character) AS character_count,
-        count(<-playing_in<-character.id) == 24
+        count(<-playing_in<-character.id) == team_count * goblins_per_team
         AND
-        count(array::distinct(<-playing_in<-character.team)) == 8
+        count(array::distinct(<-playing_in<-character.team)) == team_count
         AS ready
     FROM game
     WHERE identifier = $game_id;
@@ -79,8 +82,8 @@ DEFINE FUNCTION OVERWRITE fn::get_display_game($game_id: string) {
         $characters.in AS characters,
         count($characters.in) as character_count,
         count(SELECT * FROM $characters.in WHERE attributes.health > 0) AS living_count,
-        count($characters.in) == 24 AND
-            count(array::distinct(<-playing_in<-character.team)) == 8 AS ready,
+        count($characters.in) == team_count * goblins_per_team AND
+            count(array::distinct(<-playing_in<-character.team)) == team_count AS ready,
         $winner AS winner
     FROM game
     WHERE identifier = $game_id
@@ -93,9 +96,9 @@ DEFINE FUNCTION OVERWRITE fn::get_list_games($limit: int, $offset: int) {
     created_by.username,
     count(SELECT id FROM <-playing_in<-character) AS character_count,
     count(SELECT id FROM <-playing_in<-character WHERE attributes.health > 0) AS living_count,
-    count(<-playing_in<-character.id) == 24
+    count(<-playing_in<-character.id) == team_count * goblins_per_team
     AND
-    count(array::distinct(<-playing_in<-character.team)) == 8
+    count(array::distinct(<-playing_in<-character.team)) == team_count
     AS ready
     FROM game
     WHERE private = false OR created_by.id = $auth.id
@@ -119,7 +122,7 @@ DEFINE FUNCTION OVERWRITE fn::get_detail_game($game_id: string) {
             FROM ->areas->area
         ) AS areas,
         count(SELECT id FROM <-playing_in<-character) AS character_count,
-        count(<-playing_in<-character.id) == 24 AND count(array::distinct(<-playing_in<-character.team)) == 8 AS ready,
+        count(<-playing_in<-character.id) == team_count * goblins_per_team AND count(array::distinct(<-playing_in<-character.team)) == team_count AS ready,
         created_by.id == $auth.id AS is_mine,
         created_by.username
     FROM game
