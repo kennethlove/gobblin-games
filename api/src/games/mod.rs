@@ -365,14 +365,14 @@ async fn run_game_cycles(
     game.run_full_day()
         .map_err(|e| AppError::InternalServerError(format!("Failed to run game day: {}", e)))?;
 
-    // SEAM (dww.6): if the engine just finished the game (winner or no
-    // survivors, via `Game::end()` inside `check_for_winner`), run the
-    // post-game revival roll NOW — before `save_game` writes characters
+    // SEAM: if the engine just finished the game (winner or no
+    // survivors, via `Game::end()` inside `check_for_winner`), run
+    // post-game recovery NOW — before `save_game` writes characters
     // back, so persistent effects land on the records — and after winner
-    // determination, so "last standing" is decided pre-revival. Runs once:
+    // determination, so "last standing" is decided pre-recovery. Runs once:
     // subsequent `next_step` calls see status Finished and never reach here.
     if game.status == shared::GameStatus::Finished {
-        game.revive_dead_characters();
+        game.post_game_recovery();
     }
 
     // Clone messages before save_game drains them for commentary.

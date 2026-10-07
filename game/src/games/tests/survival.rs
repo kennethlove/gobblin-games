@@ -190,23 +190,26 @@ fn test_check_game_state_no_survivors() {
 }
 
 #[test]
-fn test_revive_dead_characters_wakes_all_dead() {
+fn test_post_game_recovery_wakes_dead_and_restores_survivor() {
     let alive = create_character("Stinky", true);
     let dead1 = create_character("Billy Slick", false);
     let dead2 = create_character("Snaggletooth", false);
     let mut game = create_test_game_with_characters(vec![alive.clone(), dead1, dead2]);
+    // Wound the survivor so the seam has something to heal.
+    game.characters[0].blood = 123;
 
     assert_eq!(game.living_characters().len(), 1);
 
-    game.revive_dead_characters();
+    game.post_game_recovery();
 
     // Everyone is alive again — the roll never leaves anyone dead.
     assert!(game.characters.iter().all(|c| c.is_alive()));
     assert_eq!(game.living_characters().len(), 3);
     // With 3 living there is no "last standing" winner post-revival:
-    // winner determination must run at the finish seam BEFORE this roll.
+    // winner determination must run at the finish seam BEFORE recovery.
     assert!(game.winner().is_none());
-    // The living character is not touched by the roll.
+    // The survivor is restored to full health (matches the fresh fixture:
+    // default blood, healthy, no wounds).
     assert_eq!(game.characters[0], alive);
     // Revived characters wake clean: healthy, blood restored, wounds gone.
     for c in &game.characters[1..] {

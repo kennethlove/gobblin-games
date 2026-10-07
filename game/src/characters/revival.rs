@@ -1,8 +1,7 @@
-//! Post-game revival roll (dww.6): every dead goblin wakes up after the
-//! game finishes — death is never permanent. The roll decides *how* they
+//! Post-game revival roll: every dead goblin wakes up after the game
+//! finishes — death is never permanent. The roll decides *how* they
 //! come back, and the outcome lands as persistent state on the character
-//! (traits / attribute deltas) so it feeds trait evolution across games
-//! (dww.1 decision 5).
+//! (traits / attribute deltas) so it feeds trait evolution across games.
 //!
 //! # V1 odds (percent of rolls, `roll()` draws 0..100)
 //!
@@ -19,7 +18,7 @@
 //! Trait picks skip traits the character already has and trait conflicts
 //! (`traits::CONFLICTS`). All draws go through an injected `Rng`, so tests
 //! are deterministic under a seed. The roll runs once per game at the
-//! finish seam — see `Game::revive_dead_characters` and the comments in
+//! finish seam — see `Game::post_game_recovery` and the comments in
 //! `api/src/games/{mod,handlers}.rs`.
 
 use crate::characters::Character;
@@ -122,10 +121,20 @@ fn pick_eligible<R: Rng + ?Sized>(
     eligible.choose(rng).copied()
 }
 
-/// Roll one revival for a dead goblin: apply the persistent outcome,
-/// then wake them up (status `Healthy`, blood restored to the default,
-/// wounds cleared, sleep cleared) so they are playable in future games.
-/// Returns the outcome that was applied.
+/// Restore a character to full playable health: healthy status, default
+/// blood, no wounds, no sleep. Applied to revived goblins after their roll
+/// and to every survivor at the game's finish seam.
+pub fn restore(character: &mut Character) {
+    character.set_status(CharacterStatus::Healthy);
+    character.blood = super::default_blood();
+    character.wounds.clear();
+    character.sleeping = false;
+    character.sleep_remaining = 0;
+}
+
+/// Roll one revival for a dead goblin: apply the persistent outcome, then
+/// [`restore`] them so they are playable in future games. Returns the
+/// outcome that was applied.
 pub fn revive<R: Rng + ?Sized>(character: &mut Character, rng: &mut R) -> RevivalOutcome {
     let outcome = roll(rng);
     match outcome {
@@ -134,11 +143,7 @@ pub fn revive<R: Rng + ?Sized>(character: &mut Character, rng: &mut R) -> Reviva
         RevivalOutcome::Scar => apply_scar(character, rng),
         RevivalOutcome::Bonus => apply_bonus(character, rng),
     }
-    character.set_status(CharacterStatus::Healthy);
-    character.blood = super::default_blood();
-    character.wounds.clear();
-    character.sleeping = false;
-    character.sleep_remaining = 0;
+    restore(character);
     outcome
 }
 

@@ -412,7 +412,7 @@ impl Game {
 
     /// Runs at the end of the game.
     ///
-    /// NOTE (dww.6): the revival roll does NOT fire here — `end()` runs at
+    /// NOTE: the revival roll does NOT fire here — `end()` runs at
     /// the start of a phase, and remaining phases of the day must still see
     /// dead goblins skip their turns. The roll runs once per game at the
     /// API finish seam instead, right before characters are written back:
@@ -427,15 +427,19 @@ impl Game {
         self.status = GameStatus::Finished;
     }
 
-    /// Run the post-game revival roll ([`crate::characters::revival`]) for
-    /// every dead character. Dead goblins are out of the current game but
-    /// never permanently lost: each one rolls Clean / Penalty / Scar /
-    /// Bonus, and the outcome lands as persistent state (traits / attribute
-    /// deltas) before the character record is saved.
-    pub fn revive_dead_characters(&mut self) {
+    /// Run the post-game recovery ([`crate::characters::revival`]) before
+    /// characters are written back: every dead goblin runs the revival
+    /// roll (Clean / Penalty / Scar / Bonus) and the outcome lands as
+    /// persistent state (traits / attribute deltas); every survivor is
+    /// restored to full health.
+    pub fn post_game_recovery(&mut self) {
         let mut rng = rand::rng();
-        for character in self.characters.iter_mut().filter(|c| !c.is_alive()) {
-            crate::characters::revival::revive(character, &mut rng);
+        for character in &mut self.characters {
+            if character.is_alive() {
+                crate::characters::revival::restore(character);
+            } else {
+                crate::characters::revival::revive(character, &mut rng);
+            }
         }
     }
 
@@ -504,7 +508,7 @@ impl Game {
 
     fn check_for_winner(&mut self) -> Result<(), GameError> {
         // Already finished: never re-emit GameEnded (revival happens later
-        // at the API finish seam — see `Game::revive_dead_characters`).
+        // at the API finish seam — see `Game::post_game_recovery`).
         if self.status == GameStatus::Finished {
             return Ok(());
         }
