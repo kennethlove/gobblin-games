@@ -252,7 +252,7 @@ pub async fn join_game(
     character_identifier: &str,
 ) -> Result<(), AppError> {
     let mut status_response = db
-        .query("SELECT status FROM game WHERE identifier = $game")
+        .query("SELECT status, created_by = $auth AS is_creator FROM game WHERE identifier = $game")
         .bind(("game", game_identifier.to_owned()))
         .await
         .map_err(|e| AppError::InternalServerError(format!("Failed to load game: {e}")))?;
@@ -264,6 +264,10 @@ pub async fn join_game(
         .and_then(|row| row["status"].as_str())
         .map(str::to_owned)
         .ok_or_else(|| AppError::NotFound("Game not found".to_string()))?;
+    let is_creator = status_rows
+        .first()
+        .and_then(|row| row["is_creator"].as_bool())
+        .unwrap_or(false);
     if status != "NotStarted" {
         return Err(AppError::Conflict(
             "The game has already started".to_string(),
@@ -298,7 +302,9 @@ pub async fn join_game(
         .take::<Option<u32>>(0)
         .map_err(|e| AppError::InternalServerError(format!("Failed to check roster: {e}")))?
         .unwrap_or(0);
-    if mine > 0 {
+    // One goblin per player per game — except the game's creator, who may
+    // field as many of their own as they like.
+    if mine > 0 && !is_creator {
         return Err(AppError::Conflict(
             "You already have a goblin in this game".to_string(),
         ));
