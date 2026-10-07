@@ -31,16 +31,18 @@
     </div>
 
     {% if goblins %}
-    <div>
-      <label for="bring-goblin" class="block text-sm font-medium text-gray-300 mb-1">Bring a goblin</label>
-      <select id="bring-goblin" name="characters" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-amber-500">
-        <option value="">None — the game fills with bots</option>
+    <fieldset class="space-y-2">
+      <legend class="text-sm font-medium text-gray-300">Bring your goblins</legend>
+      <p class="text-xs text-gray-500">Field as many of your own as you like — everyone else brings one. Unchecked slots fill with bots when you start.</p>
+      <div class="grid grid-cols-2 gap-2">
         {% for goblin in goblins %}
-          <option value="{{ goblin.identifier }}">{{ goblin.name }}</option>
+        <label class="flex items-center gap-2 text-sm text-white bg-gray-800 border border-gray-700 rounded px-2 py-1">
+          <input type="checkbox" name="characters" value="{{ goblin.identifier }}" class="rounded bg-gray-900 border-gray-600 text-amber-500 focus:ring-amber-500">
+          {{ goblin.name }}
+        </label>
         {% endfor %}
-      </select>
-      <p class="text-xs text-gray-500 mt-1">One goblin per player per game; others can join before you start.</p>
-    </div>
+      </div>
+    </fieldset>
     {% endif %}
 
     <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded relative" hx-indicator="#create-game-spinner">

@@ -106,14 +106,47 @@ async fn test_create_with_chosen_roster_skips_bots() {
     let teams = team_counts(&characters);
     assert_eq!(teams.keys().copied().collect::<Vec<_>>(), vec![1]);
 
-    // Two goblins from one player are rejected up front.
-    let spare = create_owned_goblin(&server, &user, "Spare").await;
-    server
+    // Creators may field several of their own goblins at once…
+    let second = create_owned_goblin(&server, &user, "Second").await;
+    let third = create_owned_goblin(&server, &user, "Third").await;
+    let response = server
         .post("/api/games")
         .add_header("Authorization", user.auth_header())
-        .json(&json!({ "name": "Greedy", "characters": [goblin, spare] }))
+        .json(&json!({ "name": "Creator Dozen", "characters": [second, third] }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let creator_game = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let creator_roster = fetch_characters(&server, &user, &creator_game).await;
+    assert_eq!(creator_roster.len(), 2);
+    assert_eq!(
+        team_counts(&creator_roster)
+            .keys()
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![1, 2]
+    );
+
+    // …and keep adding after creation (the one-per-player gate skips the
+    // creator; one active game per character still applies).
+    let fourth = create_owned_goblin(&server, &user, "Fourth").await;
+    server
+        .post(&format!("/api/games/{}/join", creator_game))
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "character_id": fourth }))
         .await
-        .assert_status(axum::http::StatusCode::BAD_REQUEST);
+        .assert_status_ok();
+    let creator_roster = fetch_characters(&server, &user, &creator_game).await;
+    assert_eq!(creator_roster.len(), 3);
+    assert_eq!(
+        team_counts(&creator_roster)
+            .keys()
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![1, 2, 3]
+    );
 
     test_db.cleanup().await;
 }
