@@ -27,7 +27,6 @@ pub static CHARACTERS_ROUTER: LazyLock<Router<AppState>> = LazyLock::new(|| {
                 .delete(character_delete)
                 .put(character_update),
         )
-        .route("/{identifier}/avatar", post(upload_avatar))
         .route("/{identifier}/log", get(character_log))
 });
 
@@ -46,6 +45,7 @@ pub static OWNED_CHARACTERS_ROUTER: LazyLock<Router<AppState>> = LazyLock::new(|
                 .put(owned_character_update)
                 .delete(owned_character_delete),
         )
+        .route("/{identifier}/avatar", post(upload_owned_character_avatar))
 });
 
 /// Payload for `POST /api/characters`. Missing or blank strings both
@@ -125,6 +125,34 @@ async fn require_owned_character(
             "You do not own this character".to_string(),
         ))
     }
+}
+
+/// Resolve a page path parameter to a character UUID owned by the caller:
+/// either the UUID itself or a slug of the character's name (`stinky`,
+/// `page-goblin`). Slugs match against the caller's own roster only.
+pub async fn resolve_owned_character_identifier(
+    db: &Surreal<Any>,
+    param: &str,
+) -> Result<Uuid, AppError> {
+    if let Ok(id) = Uuid::parse_str(param) {
+        require_owned_character(db, &id.to_string()).await?;
+        return Ok(id);
+    }
+    let mut response = db
+        .query("SELECT identifier, name FROM character WHERE created_by = $auth")
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to resolve character: {e}")))?;
+    let rows: Vec<serde_json::Value> = response
+        .take(0)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to read characters: {e}")))?;
+    rows.into_iter()
+        .find(|row| {
+            crate::pages::slugify(row["name"].as_str().unwrap_or(""))
+                == crate::pages::slugify(param)
+        })
+        .and_then(|row| row["identifier"].as_str().map(str::to_owned))
+        .and_then(|id| Uuid::parse_str(&id).ok())
+        .ok_or_else(|| AppError::NotFound("Character not found".to_string()))
 }
 
 /// Fetch a character through `fn::get_full_character` (items, log, and
@@ -323,19 +351,30 @@ pub async fn character_log(
     Ok(Json(logs))
 }
 
-/// Upload avatar for a character
-/// Accepts multipart/form-data with a file field named "avatar"
-pub async fn upload_avatar(
-    Path((_, character_identifier)): Path<(Uuid, Uuid)>,
+/// `POST /api/characters/{identifier}/avatar` — avatar upload for a
+/// standalone owned character, so pages like My Goblins can offer the
+/// action outside a game. Same storage rules as the game-scoped route.
+pub async fn upload_owned_character_avatar(
+    Path(identifier): Path<Uuid>,
     State(state): State<AppState>,
     Extension(AuthDb(db)): Extension<AuthDb>,
+    multipart: Multipart,
+) -> Result<Json<serde_json::Value>, AppError> {
+    store_character_avatar(&state, &db, identifier.to_string(), multipart).await
+}
+
+/// Shared body of both avatar upload routes: enforce ownership, then
+/// read the `avatar` file field, validate it, store it, and record the
+/// storage path on the character row.
+async fn store_character_avatar(
+    state: &AppState,
+    db: &Surreal<Any>,
+    character_identifier: String,
     mut multipart: Multipart,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let character_identifier = character_identifier.to_string();
-
     // Only the owner may change the avatar; same explicit gate as the
     // other mutation paths (404 missing / 403 foreign).
-    require_owned_character(&db, &character_identifier).await?;
+    require_owned_character(db, &character_identifier).await?;
 
     // Find the file field
     let mut file_data: Option<Vec<u8>> = None;

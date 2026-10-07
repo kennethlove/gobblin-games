@@ -6,9 +6,9 @@
 //! handshake) without the frontend having to manage `Authorization` headers
 //! or `localStorage`.
 //!
-//! - `hg_session` carries the SurrealDB-issued JWT (1h lifetime, mirrors
+//! - `gg_session` carries the SurrealDB-issued JWT (1h lifetime, mirrors
 //!   `generate_access_token`).
-//! - `hg_refresh` carries the rotation token (7d lifetime, mirrors
+//! - `gg_refresh` carries the rotation token (7d lifetime, mirrors
 //!   `RefreshToken::new`). Path is scoped to `/api/auth` so it isn't sent on
 //!   every request — only the refresh / logout endpoints need it.
 //!
@@ -20,9 +20,9 @@ use axum::http::HeaderValue;
 use axum::http::header::{COOKIE, SET_COOKIE};
 use axum::response::Response;
 
-pub const SESSION_COOKIE: &str = "hg_session";
-pub const REFRESH_COOKIE: &str = "hg_refresh";
-pub const CSRF_COOKIE: &str = "hg_csrf";
+pub const SESSION_COOKIE: &str = "gg_session";
+pub const REFRESH_COOKIE: &str = "gg_refresh";
+pub const CSRF_COOKIE: &str = "gg_csrf";
 
 const SESSION_MAX_AGE: i64 = 3600; // 1 hour, matches generate_access_token
 const REFRESH_MAX_AGE: i64 = 7 * 24 * 3600; // 7 days, matches RefreshToken::new

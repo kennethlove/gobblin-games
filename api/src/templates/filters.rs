@@ -165,6 +165,13 @@ pub fn lower(value: &Value, _: Kwargs, _: &State) -> TeraResult<Value> {
     Ok(Value::from(s.to_lowercase()))
 }
 
+/// URL slug of a name for friendly page links; mirrors
+/// [`crate::pages::slugify`], which the handlers resolve back.
+pub fn slug(value: &Value, _: Kwargs, _: &State) -> TeraResult<Value> {
+    let s = value.as_str().unwrap_or("");
+    Ok(Value::from(crate::pages::slugify(s)))
+}
+
 pub fn phase_label(value: &Value, _: Kwargs, _: &State) -> TeraResult<Value> {
     let phase = value.as_str().unwrap_or("");
     let label = match phase {

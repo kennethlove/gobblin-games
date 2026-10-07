@@ -24,6 +24,7 @@ pub static TERA: LazyLock<Tera> = LazyLock::new(|| {
     tera.register_filter("format_words", filters::format_words);
     tera.register_filter("upper", filters::upper);
     tera.register_filter("lower", filters::lower);
+    tera.register_filter("slug", filters::slug);
     tera.register_filter("phase_label", filters::phase_label);
     tera.register_filter("phase_class", filters::phase_class);
     tera.register_filter("json", filters::json);

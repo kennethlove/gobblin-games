@@ -493,8 +493,7 @@ pub enum MessagePayload {
         debt_recovered: u8,
     },
 
-    // Lifecycle / cycle-boundary announcements (formerly an AreaEvent fallback
-    // synthesised by Game::log() for MessageSource::Game).
+    // Lifecycle / cycle-boundary announcements.
     /// Emitted at the very start of a day or night phase.
     CycleStart {
         day: u32,

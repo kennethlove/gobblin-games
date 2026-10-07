@@ -1,5 +1,5 @@
 //! Terrain affinity rolls per goblin from that goblin's own RNG — team
-//! (formerly clan) never seeds it. Shape: one primary terrain drawn
+//! never seeds it. Shape: one primary terrain drawn
 //! uniformly from every `BaseTerrain`, plus a 40% chance of a second,
 //! distinct terrain.
 

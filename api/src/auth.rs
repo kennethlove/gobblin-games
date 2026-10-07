@@ -73,7 +73,7 @@ pub struct RefreshToken {
 
 #[derive(Serialize, Deserialize, Debug, Validate, Default)]
 pub struct RefreshTokenRequest {
-    /// Optional in the request body — preferred source is the `hg_refresh`
+    /// Optional in the request body — preferred source is the `gg_refresh`
     /// HttpOnly cookie. Body is kept for non-browser clients (tests, scripts).
     #[serde(default)]
     #[validate(length(min = 36, max = 36, message = "Invalid refresh token format"))]
@@ -230,7 +230,7 @@ pub fn generate_access_token(
 
 /// Refresh endpoint: exchange a refresh token for new access + refresh tokens.
 ///
-/// The token is read from the `hg_refresh` HttpOnly cookie (preferred) or,
+/// The token is read from the `gg_refresh` HttpOnly cookie (preferred) or,
 /// for non-browser clients, from the JSON body. New tokens are returned in
 /// the JSON body **and** as fresh `Set-Cookie` headers.
 async fn refresh_token(

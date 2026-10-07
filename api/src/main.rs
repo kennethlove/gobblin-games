@@ -2,9 +2,7 @@ extern crate core;
 
 use api::auth::AUTH_ROUTER;
 use api::cleanup::start_cleanup_scheduler;
-use api::cookies::{CSRF_COOKIE, SESSION_COOKIE, generate_csrf_token, read_cookie};
 use api::games::GAMES_ROUTER;
-use api::templates::AuthState;
 use api::users::{USERS_PROTECTED_ROUTER, USERS_PUBLIC_ROUTER};
 use api::{AppState, AuthDb};
 use axum::extract::{Request, State};
@@ -43,6 +41,11 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 mod routes;
 use routes::*;
+
+// Page-rendering helpers live in the library (`api::pages`) so integration
+// tests can mount the same handlers the binary serves; re-exported here so
+// the handlers in `routes/` keep importing them through `crate::`.
+pub use api::pages::{authenticate_db, extract_auth, html_with_csrf, validate_csrf};
 
 pub static DATABASE: LazyLock<Arc<Surreal<Any>>> = LazyLock::new(|| Arc::new(Surreal::init()));
 
@@ -366,6 +369,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/account/settings",
             axum::routing::get(account_settings_handler),
         )
+        .route(
+            "/my-goblins",
+            axum::routing::get(my_goblins_handler).post(my_goblins_create_handler),
+        )
+        .route(
+            "/my-goblins/{identifier}",
+            axum::routing::post(my_goblins_edit_handler),
+        )
+        .route(
+            "/my-goblins/{identifier}/delete",
+            axum::routing::post(my_goblins_delete_handler),
+        )
         .route("/auth", axum::routing::get(auth_handler))
         .route("/auth/login", axum::routing::post(login_post_handler))
         .route("/auth/logout", axum::routing::post(logout_handler))
@@ -455,7 +470,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn surreal_jwt(State(state): State<AppState>, request: Request, next: Next) -> Response {
-    // Prefer the HttpOnly `hg_session` cookie (browsers attach it on every
+    // Prefer the HttpOnly `gg_session` cookie (browsers attach it on every
     // same-site request, including the WebSocket upgrade). Fall back to
     // `Authorization: Bearer …` so non-browser clients (tests, scripts) still
     // work.
@@ -603,20 +618,6 @@ impl KeyExtractor for CompoundKeyExtractor {
     }
 }
 
-/// Render an HTML string as a response with the CSRF cookie attached.
-fn html_with_csrf(html: String, csrf: &str) -> Response {
-    let mut response = axum::response::Html(html).into_response();
-    api::cookies::set_csrf_cookie(&mut response, csrf);
-    response
-}
-
-// ── CSRF validation ─────────────────────────────────────────────────
-
-fn validate_csrf(headers: &axum::http::HeaderMap, form_token: &str) -> bool {
-    let cookie_token = read_cookie(headers, CSRF_COOKIE);
-    cookie_token.is_some_and(|t| t == form_token)
-}
-
 /// Redirect to an auth tab with an error message in the query string.
 /// Uses `url::form_urlencoded` for robust query construction and
 /// percent-encoding. Handles paths that already contain query strings.
@@ -642,95 +643,4 @@ fn urlencoding(s: &str) -> String {
         }
     }
     result
-}
-
-// ── Auth helpers ────────────────────────────────────────────────────
-
-/// Extract authentication state from request cookies, paired with the CSRF token.
-///
-/// The CSRF token is read from the existing `hg_csrf` cookie when present and
-/// only minted fresh when no cookie exists. This keeps the token stable across
-/// tabs and page loads so a form rendered on one page still validates after
-/// the user navigates elsewhere and back.
-fn extract_auth(headers: &axum::http::HeaderMap) -> (AuthState, String) {
-    let csrf = read_cookie(headers, CSRF_COOKIE)
-        .map(|s| s.to_owned())
-        .unwrap_or_else(generate_csrf_token);
-    let auth = extract_auth_state(headers, &csrf);
-    (auth, csrf)
-}
-
-fn extract_auth_state(headers: &axum::http::HeaderMap, csrf: &str) -> AuthState {
-    let token = match read_cookie(headers, SESSION_COOKIE) {
-        Some(t) => t.to_owned(),
-        None => return AuthState::guest(csrf),
-    };
-
-    let token_parts: Vec<&str> = token.split('.').collect();
-    if token_parts.len() != 3 {
-        return AuthState::guest(csrf);
-    }
-
-    let payload_base64 = token_parts[1].trim_start_matches('=');
-    let payload_bytes = match base64_url::decode(payload_base64) {
-        Ok(b) => b,
-        Err(_) => return AuthState::guest(csrf),
-    };
-
-    let payload_str = match String::from_utf8(payload_bytes) {
-        Ok(s) => s,
-        Err(_) => return AuthState::guest(csrf),
-    };
-
-    let payload: Value = match serde_json::from_str(&payload_str) {
-        Ok(v) => v,
-        Err(_) => return AuthState::guest(csrf),
-    };
-
-    let exp = payload.get("exp").and_then(|v| v.as_u64()).unwrap_or(0);
-    let now = OffsetDateTime::now_utc().unix_timestamp() as u64;
-    if exp < now {
-        return AuthState::guest(csrf);
-    }
-
-    let id = payload.get("id").and_then(|v| v.as_str()).map(String::from);
-    let username = payload
-        .get("sub")
-        .and_then(|v| v.as_str())
-        .map(String::from);
-
-    match (id, username) {
-        (Some(id), Some(name)) if !name.is_empty() => AuthState::authenticated(id, name, csrf),
-        _ => {
-            // No `sub` claim — this is a raw SurrealDB-issued JWT (only
-            // carries `ID: user:<record-id>` but encoded as lowercase `id`
-            // in our tokens). We refuse to surface the record id as a
-            // display name. The cookie will be replaced with a
-            // `sub`-bearing token on the next login or refresh.
-            tracing::warn!(
-                "session JWT missing `sub` or `id` claim; treating as guest for display"
-            );
-            AuthState::guest(csrf)
-        }
-    }
-}
-
-/// Clone the shared DB and authenticate with the given JWT.
-async fn authenticate_db(
-    state: &AppState,
-    token: &str,
-) -> Result<surrealdb::Surreal<Any>, Redirect> {
-    let user_db = (*state.db).clone();
-    if user_db
-        .use_ns(&state.namespace)
-        .use_db(&state.database)
-        .await
-        .is_err()
-    {
-        return Err(Redirect::to("/auth"));
-    }
-    if user_db.authenticate(Token::from(token)).await.is_err() {
-        return Err(Redirect::to("/auth"));
-    }
-    Ok(user_db)
 }
