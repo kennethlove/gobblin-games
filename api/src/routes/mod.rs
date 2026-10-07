@@ -8,6 +8,12 @@ pub use auth::{
     register_post_handler, resend_verification_handler, verify_email_handler,
 };
 pub use dev::dev_verify_email_handler;
+// My Goblins page handlers live in the library so integration tests can
+// mount them; re-exported here with the other page handlers for main.rs.
+pub use api::pages::{
+    my_goblins_create_handler, my_goblins_delete_handler, my_goblins_edit_handler,
+    my_goblins_handler,
+};
 pub use games::{
     account_handler, account_settings_handler, create_game_handler, create_game_post_handler,
     game_areas_handler, game_character_detail_handler, game_characters_handler,

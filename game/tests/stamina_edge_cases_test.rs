@@ -151,7 +151,7 @@ fn test_best_case_combined() {
     assert_eq!(cost, 11, "Best case hide should cost 11 stamina");
 }
 
-/// Edge case: stamina recovery (formerly "restoration")
+/// Edge case: stamina recovery
 #[test]
 fn test_stamina_restoration() {
     use game::characters::actions::Action;

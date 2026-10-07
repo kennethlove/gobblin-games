@@ -10,8 +10,8 @@ services:
         - 'SURREAL_PASS=${SURREAL_PASS:-root}'
       dockerfile: api.Dockerfile
       cache_from:
-        - ${REGISTRY_URL:-localhost}/hg_backend:latest
-    image: ${REGISTRY_URL:-localhost}/hg_backend:latest
+        - ${REGISTRY_URL:-localhost}/gg_backend:latest
+    image: ${REGISTRY_URL:-localhost}/gg_backend:latest
     restart: unless-stopped
     ports:
       - "${SERVICE_PORT_BACKEND:-3000}:3000"

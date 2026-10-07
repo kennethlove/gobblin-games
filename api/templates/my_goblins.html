@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block content %}
+<div>
+  <div class="mb-8 p-4 bg-gray-900 border border-gray-800 rounded-lg">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-xl font-bold text-amber-400">{{ "user" | icon | safe }} My Goblins</h1>
+        <p class="text-sm text-gray-400 mt-1">Your persistent goblins — ready to join any game.</p>
+      </div>
+      <a href="/account" class="text-sm text-gray-400 hover:text-white">
+        {{ "arrow-left" | icon | safe }}
+        Back to Account
+      </a>
+    </div>
+  </div>
+
+  {% if error %}
+    <div class="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">{{ error }}</div>
+  {% endif %}
+
+  <section class="mb-8 p-4 bg-gray-900 border border-gray-800 rounded-lg">
+    <h2 class="text-lg font-semibold text-amber-400 mb-4">Create a Goblin</h2>
+    <form method="POST" action="/my-goblins" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div>
+        <label for="goblin-name" class="block text-sm font-medium text-gray-300 mb-1">Name</label>
+        <input
+          type="text"
+          id="goblin-name"
+          name="name"
+          maxlength="50"
+          class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+          placeholder="Leave blank and a goblin name is generated for you"
+        >
+      </div>
+      <div>
+        <label for="goblin-clan" class="block text-sm font-medium text-gray-300 mb-1">Clan name</label>
+        <input
+          type="text"
+          id="goblin-clan"
+          name="clan_name"
+          maxlength="100"
+          class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+          placeholder="Leave blank and a clan name is generated for you"
+        >
+      </div>
+      <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded">Create Goblin</button>
+    </form>
+  </section>
+
+  <h2 class="text-lg font-semibold text-amber-400 mb-4">Your Goblins</h2>
+
+  {% if goblins | length == 0 %}
+    <p class="text-gray-400">No goblins yet — create one above.</p>
+  {% else %}
+    <div class="space-y-3">
+      {% for goblin in goblins %}
+        <div class="p-4 bg-gray-900 border border-gray-800 rounded-lg">
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+              {% if goblin.avatar_url %}
+                <img src="{{ goblin.avatar_url }}" alt="{{ goblin.name }}" class="w-16 h-16 rounded-full object-cover border-2 border-gray-700">
+              {% else %}
+                <div class="w-16 h-16 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-500 text-2xl">?</div>
+              {% endif %}
+              <div>
+                <h3 class="text-lg font-semibold text-white">{{ goblin.name }}</h3>
+                <p class="text-sm text-gray-400">
+                  {{ goblin.clan_name }}
+                  · <span class="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded">{{ goblin.status | capitalize }}</span>
+                </p>
+                <form
+                  method="POST"
+                  action="/api/characters/{{ goblin.identifier }}/avatar"
+                  enctype="multipart/form-data"
+                  hx-post="/api/characters/{{ goblin.identifier }}/avatar"
+                  hx-encoding="multipart/form-data"
+                  hx-swap="none"
+                  hx-on::after-request="window.location.reload()"
+                  class="mt-2 flex items-center gap-2"
+                >
+                  <input
+                    type="file"
+                    name="avatar"
+                    accept="image/png,image/jpeg,image/webp"
+                    class="text-xs text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-amber-600 file:text-white hover:file:bg-amber-700"
+                  >
+                  <button type="submit" class="reveal-btn">Upload Avatar</button>
+                </form>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <details>
+                <summary class="reveal-btn">Edit</summary>
+                <form method="POST" action="/my-goblins/{{ goblin.name | slug }}" class="mt-2 p-3 bg-gray-800 border border-gray-700 rounded space-y-2">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <div>
+                    <label for="edit-name-{{ goblin.identifier }}" class="block text-xs font-medium text-gray-300 mb-1">Name</label>
+                    <input
+                      type="text"
+                      id="edit-name-{{ goblin.identifier }}"
+                      name="name"
+                      value="{{ goblin.name }}"
+                      required
+                      minlength="1"
+                      maxlength="50"
+                      class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                    >
+                  </div>
+                  <div>
+                    <label for="edit-clan-{{ goblin.identifier }}" class="block text-xs font-medium text-gray-300 mb-1">Clan name</label>
+                    <input
+                      type="text"
+                      id="edit-clan-{{ goblin.identifier }}"
+                      name="clan_name"
+                      value="{{ goblin.clan_name }}"
+                      maxlength="100"
+                      class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                    >
+                    <p class="text-xs text-gray-500 mt-1">Clear the clan name to generate a new one.</p>
+                  </div>
+                  <button type="submit" class="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1.5 rounded text-sm">Save</button>
+                </form>
+              </details>
+              <form method="POST" action="/my-goblins/{{ goblin.name | slug }}/delete"
+                    onsubmit="return confirm('Delete this goblin? This cannot be undone.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit" class="reveal-btn danger">Delete</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

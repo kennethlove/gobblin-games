@@ -18,7 +18,7 @@ echo ""
 # 1. Get CSRF token by loading the auth page
 echo "1. Getting CSRF token..."
 curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" "$BASE/auth" -o /dev/null
-CSRF=$(awk '/hg_csrf/ {print $NF}' "$COOKIE_JAR" 2>/dev/null | head -1)
+CSRF=$(awk '/gg_csrf/ {print $NF}' "$COOKIE_JAR" 2>/dev/null | head -1)
 if [ -z "$CSRF" ]; then
   echo "   WARNING: Could not extract CSRF token from cookie."
   echo "   Continuing with placeholder. If requests fail, try:"
@@ -48,7 +48,7 @@ echo "   HTTP: $VERIFY_RESP"
 # 4. Get fresh CSRF token for login
 echo "4. Getting fresh CSRF token..."
 curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" "$BASE/auth" -o /dev/null
-CSRF=$(awk '/hg_csrf/ {print $NF}' "$COOKIE_JAR" 2>/dev/null | head -1)
+CSRF=$(awk '/gg_csrf/ {print $NF}' "$COOKIE_JAR" 2>/dev/null | head -1)
 [ -z "$CSRF" ] && CSRF="dev"
 
 # 5. Login
@@ -63,7 +63,7 @@ echo "   HTTP: $LOGIN_RESP"
 # 6. Create a game (needs its own CSRF token)
 echo "6. Getting CSRF for game creation..."
 curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" "$BASE/games/new" -o /dev/null
-CSRF=$(awk '/hg_csrf/ {print $NF}' "$COOKIE_JAR" 2>/dev/null | head -1)
+CSRF=$(awk '/gg_csrf/ {print $NF}' "$COOKIE_JAR" 2>/dev/null | head -1)
 [ -z "$CSRF" ] && CSRF="dev"
 
 echo "7. Creating test game..."

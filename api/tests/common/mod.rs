@@ -247,7 +247,7 @@ pub fn create_test_router(state: AppState) -> Router {
     use api::users::{USERS_PROTECTED_ROUTER, USERS_PUBLIC_ROUTER};
     use api::websocket::websocket_handler;
     use axum::middleware;
-    use axum::routing::get;
+    use axum::routing::{get, post};
 
     let api_routes = Router::new()
         .nest(
@@ -274,6 +274,18 @@ pub fn create_test_router(state: AppState) -> Router {
     Router::new()
         .nest("/api", api_routes)
         .route("/ws", get(websocket_handler))
+        .route(
+            "/my-goblins",
+            get(api::pages::my_goblins_handler).post(api::pages::my_goblins_create_handler),
+        )
+        .route(
+            "/my-goblins/{identifier}",
+            post(api::pages::my_goblins_edit_handler),
+        )
+        .route(
+            "/my-goblins/{identifier}/delete",
+            post(api::pages::my_goblins_delete_handler),
+        )
         .route(
             "/health",
             axum::routing::get(|| async { axum::Json(serde_json::json!({"status": "ok"})) }),

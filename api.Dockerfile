@@ -44,10 +44,10 @@ RUN adduser \
     --uid "10001" \
     api_user
 
-COPY --from=builder /app/api/target/release/api /usr/local/bin/hg_api
+COPY --from=builder /app/api/target/release/api /usr/local/bin/gg_api
 
-RUN chown -R api_user /usr/local/bin/hg_api && \
-    chmod +x /usr/local/bin/hg_api
+RUN chown -R api_user /usr/local/bin/gg_api && \
+    chmod +x /usr/local/bin/gg_api
 
 USER api_user
 WORKDIR /opt/api
@@ -58,4 +58,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl --fail http://localhost:3000/api/users || exit 1
 
 EXPOSE 3000
-ENTRYPOINT ["/usr/local/bin/hg_api"]
+ENTRYPOINT ["/usr/local/bin/gg_api"]

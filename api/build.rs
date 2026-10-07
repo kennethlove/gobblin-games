@@ -7,9 +7,8 @@ fn main() {
     let out_dir = PathBuf::from(&manifest_dir).join("assets").join("icons");
     fs::create_dir_all(&out_dir).unwrap();
 
-    // Icon sources previously lived in web/assets/icons/. With the web crate
-    // removed, these directories no longer exist and sprites are generated empty.
-    // Move icon sources here (api/assets/icons/src/) if needed in the future.
+    // No icon sources ship with this crate, so sprites generate empty.
+    // Add icon sources under api/assets/icons/src/ if icons are needed.
     let manifest_path = PathBuf::from(&manifest_dir);
     let icons_dir = manifest_path
         .parent()

@@ -201,8 +201,8 @@ async fn user_authenticate(
 }
 
 /// Build the auth response: still returns the token JSON body for non-browser
-/// clients (tests, scripts), but also sets HttpOnly `hg_session` and
-/// `hg_refresh` cookies so browsers don't have to manage tokens themselves.
+/// clients (tests, scripts), but also sets HttpOnly `gg_session` and
+/// `gg_refresh` cookies so browsers don't have to manage tokens themselves.
 fn token_response(pair: TokenResponse) -> Response {
     let access = pair.access_token.clone();
     let refresh = pair.refresh_token.clone();

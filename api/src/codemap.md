@@ -473,7 +473,7 @@ save_game(&game, db).await?;
 
 **Base URL**: `http://localhost:3000` (same server — no CORS needed)
 
-**Authentication**: HttpOnly cookies (`hg_session` JWT + `hg_refresh`), CSRF tokens for form mutations
+**Authentication**: HttpOnly cookies (`gg_session` JWT + `gg_refresh`), CSRF tokens for form mutations
 
 **Rendering Pipeline**:
 ```

@@ -360,8 +360,7 @@ type CollectedEvent = (
 ///
 /// Splitting these out gives gamemaker overrides (and future cycle
 /// modifiers) a typed seam between the "snapshot the world" phase and the
-/// "iterate `&mut self.characters`" phase that previously lived together
-/// in `run_character_cycle`.
+/// "iterate `&mut self.characters`" phase.
 struct CycleContext {
     /// True for the day half of the cycle, false for night.
     is_day: bool,

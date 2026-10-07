@@ -382,7 +382,7 @@ async fn require_auth_accepts_valid_session_cookie() {
     let mut headers = axum::http::HeaderMap::new();
     headers.insert(
         axum::http::header::COOKIE,
-        format!("hg_session={token}")
+        format!("gg_session={token}")
             .parse()
             .expect("cookie header value"),
     );

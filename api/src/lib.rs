@@ -16,6 +16,7 @@ pub mod email;
 pub mod games;
 
 pub mod characters;
+pub mod pages;
 pub mod sse;
 pub mod storage;
 pub mod templates;
