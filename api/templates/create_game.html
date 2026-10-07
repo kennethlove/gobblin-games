@@ -30,6 +30,19 @@
       <label for="private" class="text-sm text-gray-300">Private game</label>
     </div>
 
+    {% if goblins %}
+    <div>
+      <label for="bring-goblin" class="block text-sm font-medium text-gray-300 mb-1">Bring a goblin</label>
+      <select id="bring-goblin" name="characters" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-amber-500">
+        <option value="">None — the game fills with bots</option>
+        {% for goblin in goblins %}
+          <option value="{{ goblin.identifier }}">{{ goblin.name }}</option>
+        {% endfor %}
+      </select>
+      <p class="text-xs text-gray-500 mt-1">One goblin per player per game; others can join before you start.</p>
+    </div>
+    {% endif %}
+
     <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded relative" hx-indicator="#create-game-spinner">
       Create Game
       <span id="create-game-spinner" class="htmx-indicator absolute right-3 top-1/2 -translate-y-1/2">

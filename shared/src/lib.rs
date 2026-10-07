@@ -110,6 +110,13 @@ pub struct CreateGame {
 
     /// Starting health range for characters (optional, defaults to 80-100)
     pub starting_health_range: Option<(u32, u32)>,
+
+    /// Owned character the creator brings into the game at creation.
+    /// Empty = fallback: auto-spawn the legacy full 24-bot roster.
+    /// One goblin per player per game (the join gates enforce it too).
+    #[serde(default)]
+    #[validate(length(max = 1, message = "One goblin per player per game"))]
+    pub characters: Vec<String>,
 }
 
 pub type DeleteCharacter = String;
