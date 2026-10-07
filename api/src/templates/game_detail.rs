@@ -74,7 +74,7 @@ fn archetype_label(archetype: &str) -> &'static str {
 fn message_kind_label(payload: &shared::messages::MessagePayload) -> &'static str {
     use shared::messages::MessageKind::*;
     match payload.kind() {
-        CharacterKilled => "Downed",
+        CharacterKilled => "Death",
         Combat | CharacterAttacked | CharacterWounded | TrapSet | TrapTriggered => "Combat",
         CombatSwing => "Combat",
         AllianceFormed | AllianceProposed | AllianceDissolved | BetrayalTriggered
@@ -293,7 +293,7 @@ pub fn render_character_row(character: &game::characters::Character, game_id: &s
         "var(--broad-danger)"
     };
     let status_class = if is_alive { "alive" } else { "dead" };
-    let status_text = if is_alive { "ALIVE" } else { "DOWNED" };
+    let status_text = if is_alive { "ALIVE" } else { "DEAD" };
     let dead_class = if !is_alive { " dead" } else { "" };
     let character_id = &character.identifier;
     let team_color = game::clans::team_color(character.team);
@@ -334,7 +334,7 @@ pub fn render_character_card(character: &game::characters::Character) -> String 
         "empty"
     };
     let status_class = if is_alive { "alive" } else { "dead" };
-    let status_text = if is_alive { "ALIVE" } else { "DOWNED" };
+    let status_text = if is_alive { "ALIVE" } else { "DEAD" };
     let hunger = hunger_label(character.hunger);
     let hunger_c = hunger_color(character.hunger);
     let thirst = thirst_label(character.thirst);
@@ -398,7 +398,7 @@ pub fn render_character_detail(character: &game::characters::Character, _game_id
     let is_alive = character.is_alive();
     let health = character.effective_health();
     let status_class = if is_alive { "alive" } else { "dead" };
-    let status_text = if is_alive { "ALIVE" } else { "DOWNED" };
+    let status_text = if is_alive { "ALIVE" } else { "DEAD" };
     let hunger = hunger_label(character.hunger);
     let hunger_c = hunger_color(character.hunger);
     let thirst = thirst_label(character.thirst);

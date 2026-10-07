@@ -29,7 +29,7 @@
                 Day {{ game.day | default(value=0) }}
                 ·
                 <span style="color: {{ game.status | status_color }}">{{ game.status }}</span>
-                · {{ game.living_count }}/{{ game.character_count }} standing
+                · {{ game.living_count }}/{{ game.character_count }} alive
               </p>
             </div>
             <div class="flex items-center gap-2">

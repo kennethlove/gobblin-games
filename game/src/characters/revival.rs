@@ -1,4 +1,4 @@
-//! Post-game revival roll (dww.6): every downed goblin wakes up after the
+//! Post-game revival roll (dww.6): every dead goblin wakes up after the
 //! game finishes — death is never permanent. The roll decides *how* they
 //! come back, and the outcome lands as persistent state on the character
 //! (traits / attribute deltas) so it feeds trait evolution across games
@@ -19,7 +19,7 @@
 //! Trait picks skip traits the character already has and trait conflicts
 //! (`traits::CONFLICTS`). All draws go through an injected `Rng`, so tests
 //! are deterministic under a seed. The roll runs once per game at the
-//! finish seam — see `Game::revive_downed_characters` and the comments in
+//! finish seam — see `Game::revive_dead_characters` and the comments in
 //! `api/src/games/{mod,handlers}.rs`.
 
 use crate::characters::Character;
@@ -28,7 +28,7 @@ use crate::characters::traits::{self, Trait};
 use rand::RngExt;
 use rand::prelude::*;
 
-/// How the goblin came back from being downed.
+/// How the goblin came back from the dead.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RevivalOutcome {
     /// Wakes up untouched.
@@ -122,7 +122,7 @@ fn pick_eligible<R: Rng + ?Sized>(
     eligible.choose(rng).copied()
 }
 
-/// Roll one revival for a downed goblin: apply the persistent outcome,
+/// Roll one revival for a dead goblin: apply the persistent outcome,
 /// then wake them up (status `Healthy`, blood restored to the default,
 /// wounds cleared, sleep cleared) so they are playable in future games.
 /// Returns the outcome that was applied.
@@ -258,7 +258,7 @@ mod tests {
     }
 
     #[rstest]
-    fn revive_wakes_a_downed_goblin(mut character: Character) {
+    fn revive_wakes_a_dead_goblin(mut character: Character) {
         character.traits.clear();
         character.dies();
         assert!(!character.is_alive());

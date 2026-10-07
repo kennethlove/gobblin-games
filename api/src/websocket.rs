@@ -183,7 +183,7 @@ pub fn broadcast_game_finished(
     };
     let content = match &winner_ref {
         Some(w) => format!("{} has won the game!", w.name),
-        None => "The game has ended — every goblin is down but breathing.".to_string(),
+        None => "The game has ended with no survivors.".to_string(),
     };
     let msg = GameMessage::new(
         MessageSource::Game(game_id.to_string()),

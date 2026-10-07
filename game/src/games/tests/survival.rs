@@ -190,17 +190,17 @@ fn test_check_game_state_no_survivors() {
 }
 
 #[test]
-fn test_revive_downed_characters_wakes_all_downed() {
-    let alive = create_character("Alive", true);
-    let downed1 = create_character("Downed1", false);
-    let downed2 = create_character("Downed2", false);
-    let mut game = create_test_game_with_characters(vec![alive.clone(), downed1, downed2]);
+fn test_revive_dead_characters_wakes_all_dead() {
+    let alive = create_character("Stinky", true);
+    let dead1 = create_character("Billy Slick", false);
+    let dead2 = create_character("Snaggletooth", false);
+    let mut game = create_test_game_with_characters(vec![alive.clone(), dead1, dead2]);
 
     assert_eq!(game.living_characters().len(), 1);
 
-    game.revive_downed_characters();
+    game.revive_dead_characters();
 
-    // Everyone is standing again — the roll never leaves anyone downed.
+    // Everyone is alive again — the roll never leaves anyone dead.
     assert!(game.characters.iter().all(|c| c.is_alive()));
     assert_eq!(game.living_characters().len(), 3);
     // With 3 living there is no "last standing" winner post-revival:
@@ -208,7 +208,7 @@ fn test_revive_downed_characters_wakes_all_downed() {
     assert!(game.winner().is_none());
     // The living character is not touched by the roll.
     assert_eq!(game.characters[0], alive);
-    // Downed characters wake clean: healthy, blood restored, wounds gone.
+    // Revived characters wake clean: healthy, blood restored, wounds gone.
     for c in &game.characters[1..] {
         assert_eq!(c.status, CharacterStatus::Healthy);
         assert!(c.blood > 0);

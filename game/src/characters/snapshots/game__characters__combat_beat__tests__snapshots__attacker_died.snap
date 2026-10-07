@@ -1,7 +1,6 @@
 ---
-source: game/src/characters/combat_beat.rs
-assertion_line: 312
+source: game/src/tributes/combat_beat.rs
 expression: lines
 ---
 - "🤣 Bob attacks Alice, but loses!"
-- ☠️ Alice is downed by Bob
+- ☠️ Alice is killed by Bob

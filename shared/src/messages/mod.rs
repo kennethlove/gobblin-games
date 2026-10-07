@@ -547,8 +547,7 @@ pub enum MessagePayload {
         description: String,
     },
     /// Emitted when the game ends. `winner` is `Some` for the lone-survivor
-    /// case and `None` when every goblin is downed (they revive afterwards —
-    /// dww.6).
+    /// case and `None` for "no survivors".
     GameEnded {
         winner: Option<CharacterRef>,
     },

@@ -414,9 +414,9 @@ impl Game {
     ///
     /// NOTE (dww.6): the revival roll does NOT fire here — `end()` runs at
     /// the start of a phase, and remaining phases of the day must still see
-    /// downed goblins skip their turns. The roll runs once per game at the
+    /// dead goblins skip their turns. The roll runs once per game at the
     /// API finish seam instead, right before characters are written back:
-    /// `api::games::run_game_cycles` (engine-finish path) and the 24-downed
+    /// `api::games::run_game_cycles` (engine-finish path) and the 24-dead
     /// early-finish branch of `next_step`. Winner determination happens
     /// *before* `end()` in [`Self::check_for_winner`], so the roll never
     /// poisons "last standing".
@@ -428,11 +428,11 @@ impl Game {
     }
 
     /// Run the post-game revival roll ([`crate::characters::revival`]) for
-    /// every downed character. Downed goblins are out of the current game
-    /// but never permanently lost: each one rolls Clean / Penalty / Scar /
+    /// every dead character. Dead goblins are out of the current game but
+    /// never permanently lost: each one rolls Clean / Penalty / Scar /
     /// Bonus, and the outcome lands as persistent state (traits / attribute
     /// deltas) before the character record is saved.
-    pub fn revive_downed_characters(&mut self) {
+    pub fn revive_dead_characters(&mut self) {
         let mut rng = rand::rng();
         for character in self.characters.iter_mut().filter(|c| !c.is_alive()) {
             crate::characters::revival::revive(character, &mut rng);
@@ -504,7 +504,7 @@ impl Game {
 
     fn check_for_winner(&mut self) -> Result<(), GameError> {
         // Already finished: never re-emit GameEnded (revival happens later
-        // at the API finish seam — see `Game::revive_downed_characters`).
+        // at the API finish seam — see `Game::revive_dead_characters`).
         if self.status == GameStatus::Finished {
             return Ok(());
         }
@@ -532,7 +532,7 @@ impl Game {
             self.push_message(
                 crate::messages::MessageSource::Game(game_id.clone()),
                 format!("game:{}", game_id),
-                "The game has ended — every goblin is down but breathing.".to_string(),
+                "The game has ended with no survivors.".to_string(),
                 payload,
                 tick,
             );
@@ -758,7 +758,7 @@ impl Game {
                     (name, id, cause)
                 };
 
-                let content = format!("{} falls into a sinkhole and goes down.", name);
+                let content = format!("{} falls into a sinkhole and dies.", name);
                 let source = crate::messages::MessageSource::Character(id.to_string());
                 let subject = format!("character:{}", id);
                 let tick = self.tick_counter.next();
@@ -879,12 +879,12 @@ impl Game {
 
                     let content = if result.instant_death {
                         format!(
-                            "{} is swallowed by the catastrophic {}! {}",
+                            "{} is instantly killed by the catastrophic {}! {}",
                             character.name, most_severe_event, roll_detail
                         )
                     } else {
                         format!(
-                            "{} goes down to the {} {}",
+                            "{} dies from the {} {}",
                             character.name, most_severe_event, roll_detail
                         )
                     };

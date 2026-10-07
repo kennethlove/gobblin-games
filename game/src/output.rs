@@ -119,7 +119,7 @@ impl<'a> Display for GameOutput<'a> {
                 write!(f, "=== 😋 Day 3: The Scramble ===")
             }
             GameOutput::CharactersLeft(character_count) => {
-                write!(f, "=== 📌 Goblins still standing: {} ===", character_count)
+                write!(f, "=== 📌 Goblins alive: {} ===", character_count)
             }
             GameOutput::GameNightStart(day_number) => {
                 write!(f, "=== 🌙 Night {} begins ===", day_number)
@@ -128,10 +128,10 @@ impl<'a> Display for GameOutput<'a> {
                 write!(f, "=== 🌙 Night {} ends ===", day_number)
             }
             GameOutput::DailyDeathAnnouncement(death_count) => {
-                write!(f, "=== 💀 Goblins downed: {} ===", death_count)
+                write!(f, "=== 💀 Goblins dead: {} ===", death_count)
             }
             GameOutput::DeathAnnouncement(character) => {
-                write!(f, "=== 🪦 {} is downed ===", character)
+                write!(f, "=== 🪦 {} has died ===", character)
             }
             GameOutput::NoOneWins => {
                 write!(f, "=== 🎭 No one wins! ===")
@@ -259,10 +259,10 @@ impl<'a> Display for GameOutput<'a> {
                 kind,
             } => match kind {
                 TrapKind::Drowning => {
-                    write!(f, "💧 {} goes under, unconscious.", character_name)
+                    write!(f, "💧 {} drowned.", character_name)
                 }
                 TrapKind::Buried => {
-                    write!(f, "🪦 {} is buried alive and passes out.", character_name)
+                    write!(f, "🪦 {} suffocated, buried alive.", character_name)
                 }
                 TrapKind::Pitfall => {
                     write!(f, "🕳️ {} fell into a pitfall.", character_name)
@@ -320,10 +320,10 @@ impl<'a> Display for GameOutput<'a> {
                 write!(f, "😰 {} attacks {}, but misses!", character, target)
             }
             GameOutput::CharacterAttackDied(character, target) => {
-                write!(f, "☠️ {} is downed by {}", character, target)
+                write!(f, "☠️ {} is killed by {}", character, target)
             }
             GameOutput::CharacterAttackSuccessKill(character, target) => {
-                write!(f, "☠️ {} knocks out {}", character, target)
+                write!(f, "☠️ {} successfully kills {}", character, target)
             }
             GameOutput::CharacterAttackHidden(character, target) => {
                 write!(
@@ -350,19 +350,19 @@ impl<'a> Display for GameOutput<'a> {
                 )
             }
             GameOutput::CharacterDiesFromStatus(character, status) => {
-                write!(f, "💀 {} is downed by {}", character, status)
+                write!(f, "💀 {} dies from {}", character, status)
             }
             GameOutput::CharacterDiesFromAreaEvent(character, area_event) => {
-                write!(f, "🪦 {} is downed in the {}.", character, area_event)
+                write!(f, "🪦 {} died in the {}.", character, area_event)
             }
             GameOutput::CharacterDiesFromCharacterEvent(character, character_event) => {
-                write!(f, "💀 {} is downed by {}", character, character_event)
+                write!(f, "💀 {} dies by {}", character, character_event)
             }
             GameOutput::CharacterAlreadyDead(character) => {
-                write!(f, "‼️ {} is already downed!", character)
+                write!(f, "‼️ {} is already dead!", character)
             }
             GameOutput::CharacterDead(character) => {
-                write!(f, "❗️ {} is downed!", character)
+                write!(f, "❗️ {} is dead!", character)
             }
             GameOutput::WeaponBreak(character, weapon) => {
                 write!(f, "🗡️ {} breaks their {}", character, weapon)
@@ -422,10 +422,10 @@ impl<'a> Display for GameOutput<'a> {
             }
             GameOutput::DiedInArea(character, area) => {
                 let area_name = area.replace("The ", "");
-                write!(f, "💥 {} is downed in the {}.", character, area_name)
+                write!(f, "💥 {} died in the {}.", character, area_name)
             }
             GameOutput::CharacterDeath(character) => {
-                write!(f, "⚰️ {} is downed.", character)
+                write!(f, "⚰️ {} has died.", character)
             }
             GameOutput::CharacterBetrayal(character, target) => {
                 write!(f, "💔 {} betrays {}!", character, target)
@@ -452,7 +452,7 @@ impl<'a> Display for GameOutput<'a> {
             GameOutput::TrustShockBreak(shaken) => {
                 write!(
                     f,
-                    "{} is shaken as their ally goes down and breaks the bond.",
+                    "{} is shaken by their ally's death and breaks the bond.",
                     shaken
                 )
             }
@@ -484,7 +484,7 @@ mod tests {
         let s = GameOutput::TrustShockBreak("Nib").to_string();
         assert_eq!(
             s,
-            "Nib is shaken as their ally goes down and breaks the bond."
+            "Nib is shaken by their ally's death and breaks the bond."
         );
     }
 

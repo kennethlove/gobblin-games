@@ -1,7 +1,6 @@
 ---
-source: game/src/characters/combat_beat.rs
-assertion_line: 320
+source: game/src/tributes/combat_beat.rs
 expression: lines
 ---
 - 😵 Alice fumbles their attack badly and hurts themself!
-- ☠️ Alice is downed by themselves
+- ☠️ Alice is killed by themselves

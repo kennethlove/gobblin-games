@@ -73,7 +73,7 @@
                   </h3>
                   <div class="game-meta">
                     <span><span class="num">{{ game.character_count }}</span> goblins</span>
-                    <span><span class="num">{{ game.living_count }}</span> standing</span>
+                    <span><span class="num">{{ game.living_count }}</span> alive</span>
                     {% if game.day is defined and game.day %}
                       <span><span class="num">Day {{ game.day }}</span></span>
                     {% endif %}
@@ -85,7 +85,7 @@
                     {% if game.day is defined and game.day %}
                       <span class="num">Day {{ game.day }}</span> ·
                     {% endif %}
-                    <span class="num">{{ game.living_count }}</span> goblins standing
+                    <span class="num">{{ game.living_count }}</span> goblins alive
                   </div>
                   <div class="reveal-actions">
                     <a href="/games/{{ game.identifier }}" class="reveal-btn">Broadcast</a>
@@ -108,7 +108,7 @@
                   </h3>
                   <div class="game-meta">
                     <span><span class="num">{{ game.character_count }}</span> goblins</span>
-                    <span><span class="num">{{ game.living_count }}</span> standing</span>
+                    <span><span class="num">{{ game.living_count }}</span> alive</span>
                     {% if game.day is defined and game.day %}
                       <span><span class="num">Day {{ game.day }}</span></span>
                     {% endif %}
@@ -120,7 +120,7 @@
                     {% if game.day is defined and game.day %}
                       <span class="num">Day {{ game.day }}</span> ·
                     {% endif %}
-                    <span class="num">{{ game.living_count }}</span> goblins standing
+                    <span class="num">{{ game.living_count }}</span> goblins alive
                   </div>
                   <div class="reveal-actions">
                     <a href="/games/{{ game.identifier }}" class="reveal-btn">Broadcast</a>

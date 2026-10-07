@@ -562,10 +562,8 @@ pub async fn next_step(
             Ok(Json(Some(game)))
         }
         GameStatus::InProgress => {
-            // Finish rule (dww.6): the game ends once 24 goblins are downed.
-            // The status values still read "RecentlyDead"/"Dead" (identifiers
-            // kept per scope) but they mean downed — the revival roll runs
-            // below before characters are written back.
+            // Finish rule (dww.6): the game ends once 24 goblins are dead;
+            // the revival roll runs below before characters are written back.
             let dead_character_count = super::get_dead_character_count(&db, id_str).await?;
 
             if dead_character_count >= 24 {
@@ -573,8 +571,8 @@ pub async fn next_step(
 
                 let mut game = super::get_full_game(&id, &db).await?;
                 // Winner must be read while the game is still pre-revival:
-                // `revive_downed_characters` flips downed goblins back to
-                // alive, which would poison "last standing".
+                // `revive_dead_characters` flips dead goblins back to alive,
+                // which would poison "last standing".
                 let winner = game
                     .characters
                     .iter()
@@ -585,7 +583,7 @@ pub async fn next_step(
                 // flipped to Finished before this game object loaded, so
                 // `Game::end()` would no-op — run the roll directly, then
                 // persist the revived characters back before broadcasting.
-                game.revive_downed_characters();
+                game.revive_dead_characters();
                 let _ = super::persist::save_game(&mut game, &db, &state.broadcaster).await?;
 
                 crate::websocket::broadcast_game_finished(&state.broadcaster, &id, winner);

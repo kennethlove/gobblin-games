@@ -571,7 +571,7 @@ impl Character {
             // Emit CharacterBledOut if blood reached zero from wound bleed
             if self.blood == 0 {
                 events.push(TaggedEvent::new(
-                    format!("{} collapses, bleeding out from their wounds", self.name),
+                    format!("{} bled out from their wounds", self.name),
                     MessagePayload::CharacterBledOut {
                         character: CharacterRef {
                             identifier: self.identifier.clone().into(),

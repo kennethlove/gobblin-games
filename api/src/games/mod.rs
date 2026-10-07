@@ -372,7 +372,7 @@ async fn run_game_cycles(
     // determination, so "last standing" is decided pre-revival. Runs once:
     // subsequent `next_step` calls see status Finished and never reach here.
     if game.status == shared::GameStatus::Finished {
-        game.revive_downed_characters();
+        game.revive_dead_characters();
     }
 
     // Clone messages before save_game drains them for commentary.
@@ -722,7 +722,7 @@ fn build_character_digest(t: &game::characters::Character) -> announcers::Charac
         status: if t.is_alive() {
             "alive".into()
         } else {
-            "downed".into()
+            "deceased".into()
         },
         injury_level: "unknown".into(),
         location: t.area.to_string(),
