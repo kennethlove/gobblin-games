@@ -1,8 +1,9 @@
 DEFINE TABLE OVERWRITE game SCHEMAFULL
     PERMISSIONS
-        FOR select
-            WHERE private = false
-            OR created_by.id = $auth.id
+        -- Unlisted: anyone signed in can open a game they know the
+        -- identifier of (the URL is the invite). Listing visibility is
+        -- enforced in fn::get_list_games instead.
+        FOR select WHERE true
         FOR create, update, delete
             WHERE created_by.id = $auth.id;
 
@@ -97,6 +98,7 @@ DEFINE FUNCTION OVERWRITE fn::get_list_games($limit: int, $offset: int) {
     count(array::distinct(<-playing_in<-character.team)) == 8
     AS ready
     FROM game
+    WHERE private = false OR created_by.id = $auth.id
     LIMIT $limit START $offset
 };
 

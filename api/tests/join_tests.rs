@@ -187,13 +187,26 @@ async fn test_join_before_start_and_gates() {
         .as_str()
         .unwrap()
         .to_string();
-    // Private games are invisible to other players — publish so Bob can
-    // see and join it.
+    // Unlisted: Bob can open Alice's private game by URL …
     server
-        .put(&format!("/api/games/{}/publish", game_id))
-        .add_header("Authorization", alice.auth_header())
+        .get(&format!("/api/games/{}", game_id))
+        .add_header("Authorization", bob.auth_header())
         .await
         .assert_status_ok();
+    // … but it must not show up in his game list.
+    let listing = server
+        .get("/api/games")
+        .add_header("Authorization", bob.auth_header())
+        .await;
+    listing.assert_status_ok();
+    let listed = listing.json::<serde_json::Value>()["games"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        !listed.iter().any(|g| g["identifier"] == game_id),
+        "private games must stay out of other players' lists"
+    );
 
     // Bob joins with his own goblin → balanced onto team 2.
     server
@@ -237,11 +250,6 @@ async fn test_join_before_start_and_gates() {
         .unwrap()
         .to_string();
     server
-        .put(&format!("/api/games/{}/publish", game_two))
-        .add_header("Authorization", alice.auth_header())
-        .await
-        .assert_status_ok();
-    server
         .post(&format!("/api/games/{}/join", game_two))
         .add_header("Authorization", bob.auth_header())
         .json(&json!({ "character_id": alice_spare }))
@@ -273,11 +281,6 @@ async fn test_join_rejects_started_and_full_games() {
         .unwrap()
         .to_string();
     server
-        .put(&format!("/api/games/{}/publish", game_id))
-        .add_header("Authorization", alice.auth_header())
-        .await
-        .assert_status_ok();
-    server
         .put(&format!("/api/games/{}/next", game_id))
         .add_header("Authorization", alice.auth_header())
         .await
@@ -302,11 +305,6 @@ async fn test_join_rejects_started_and_full_games() {
         .as_str()
         .unwrap()
         .to_string();
-    server
-        .put(&format!("/api/games/{}/publish", full_game))
-        .add_header("Authorization", alice.auth_header())
-        .await
-        .assert_status_ok();
     server
         .post(&format!("/api/games/{}/join", full_game))
         .add_header("Authorization", bob.auth_header())
