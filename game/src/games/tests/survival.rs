@@ -54,9 +54,13 @@ fn test_game_winner() {
     game.characters.push(t1);
     game.characters.push(t2.clone());
     game.start().expect("Failed to start game");
-    assert_eq!(game.winner(), None);
+    // Two teams standing: no winner yet.
+    game.characters[0].team = 1;
+    game.characters[1].team = 2;
+    assert_eq!(game.winning_team(), None);
     game.characters[0].status = CharacterStatus::Dead;
-    assert_eq!(game.winner().unwrap().name, t2.name);
+    // Sole surviving team wins with its member(s) still alive.
+    assert_eq!(game.winning_team(), Some(2));
 }
 
 #[test]
@@ -167,7 +171,7 @@ fn test_check_game_state_winner_exists() {
         create_test_game_with_characters(vec![winner_character.clone(), loser_character.clone()]);
 
     assert_eq!(game.living_characters().len(), 1);
-    assert_eq!(game.winner(), Some(winner_character.clone()));
+    assert_eq!(game.winning_team(), Some(winner_character.team));
 
     let _ = game.check_for_winner();
 
@@ -182,7 +186,7 @@ fn test_check_game_state_no_survivors() {
         create_test_game_with_characters(vec![loser_character.clone(), loser2_character.clone()]);
 
     assert!(game.living_characters().is_empty());
-    assert!(game.winner().is_none());
+    assert!(game.winning_team().is_none());
 
     let _ = game.check_for_winner();
 
@@ -191,9 +195,12 @@ fn test_check_game_state_no_survivors() {
 
 #[test]
 fn test_post_game_recovery_wakes_dead_and_restores_survivor() {
-    let alive = create_character("Stinky", true);
-    let dead1 = create_character("Billy Slick", false);
-    let dead2 = create_character("Snaggletooth", false);
+    let mut alive = create_character("Stinky", true);
+    alive.team = 1;
+    let mut dead1 = create_character("Billy Slick", false);
+    dead1.team = 2;
+    let mut dead2 = create_character("Snaggletooth", false);
+    dead2.team = 3;
     let mut game = create_test_game_with_characters(vec![alive.clone(), dead1, dead2]);
     // Wound the survivor so the seam has something to heal.
     game.characters[0].blood = 123;
@@ -205,9 +212,9 @@ fn test_post_game_recovery_wakes_dead_and_restores_survivor() {
     // Everyone is alive again — the roll never leaves anyone dead.
     assert!(game.characters.iter().all(|c| c.is_alive()));
     assert_eq!(game.living_characters().len(), 3);
-    // With 3 living there is no "last standing" winner post-revival:
-    // winner determination must run at the finish seam BEFORE recovery.
-    assert!(game.winner().is_none());
+    // Three distinct teams stand after recovery — no winner, because
+    // winner determination runs at the finish seam BEFORE recovery.
+    assert!(game.winning_team().is_none());
     // The survivor is restored to full health (matches the fresh fixture:
     // default blood, healthy, no wounds).
     assert_eq!(game.characters[0], alive);
@@ -220,6 +227,25 @@ fn test_post_game_recovery_wakes_dead_and_restores_survivor() {
 }
 
 #[test]
+fn test_sole_team_wins_with_multiple_survivors() {
+    let stinky = create_character("Stinky", true);
+    let slick = create_character("Billy Slick", true);
+    let foe = create_character("Snaggletooth", false);
+    let mut game = create_test_game_with_characters(vec![stinky, slick, foe]);
+    game.characters[0].team = 5;
+    game.characters[1].team = 5;
+    game.characters[2].team = 2; // dead foe from another team
+
+    assert_eq!(game.living_characters().len(), 2);
+    // Last team standing wins with both members still alive.
+    assert_eq!(game.winning_team(), Some(5));
+
+    let _ = game.check_for_winner();
+
+    assert_eq!(game.status, GameStatus::Finished);
+}
+
+#[test]
 fn test_check_game_state_continues() {
     let living_character1 = create_character("Living1", true);
     let living_character2 = create_character("Living2", true);
@@ -228,9 +254,12 @@ fn test_check_game_state_continues() {
         living_character2.clone(),
     ]);
     let starting_state = game.status.clone();
+    // Two survivors from different teams: nobody has won yet.
+    game.characters[0].team = 1;
+    game.characters[1].team = 2;
 
     assert_eq!(game.living_characters().len(), 2);
-    assert!(game.winner().is_none());
+    assert!(game.winning_team().is_none());
 
     let _ = game.check_for_winner();
 

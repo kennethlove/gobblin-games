@@ -27,7 +27,10 @@ impl Game {
                 kind: AreaEventKind::Other,
                 description: String::new(),
             },
-            MessageSource::Game(_) => MessagePayload::GameEnded { winner: None },
+            MessageSource::Game(_) => MessagePayload::GameEnded {
+                winner: None,
+                winning_team: None,
+            },
         }
     }
 

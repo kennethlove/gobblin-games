@@ -121,7 +121,7 @@ async fn test_game_broadcaster_multi_subscriber() {
 /// Test broadcast helper functions
 #[tokio::test]
 async fn test_broadcast_helper_functions() {
-    use api::websocket::{GameBroadcaster, broadcast_game_finished, broadcast_game_started};
+    use api::websocket::{GameBroadcaster, broadcast_game_started};
     use shared::WebSocketMessage;
     use shared::messages::{MessagePayload, Phase};
     use tokio::time::{Duration, timeout};
@@ -143,37 +143,6 @@ async fn test_broadcast_helper_functions() {
                     day: 1,
                     phase: Phase::Day
                 }
-            ));
-        }
-        _ => panic!("Expected GameEvent"),
-    }
-
-    broadcast_game_finished(&broadcaster, "game1", Some("Winner".to_string()));
-    let got = timeout(Duration::from_secs(1), rx.recv())
-        .await
-        .unwrap()
-        .unwrap();
-    match got {
-        WebSocketMessage::GameEvent { game_id, message } => {
-            assert_eq!(game_id, "game1");
-            match &message.payload {
-                MessagePayload::GameEnded { winner: Some(w) } => assert_eq!(w.name, "Winner"),
-                other => panic!("Expected GameEnded with winner, got {other:?}"),
-            }
-        }
-        _ => panic!("Expected GameEvent"),
-    }
-
-    broadcast_game_finished(&broadcaster, "game1", None);
-    let got = timeout(Duration::from_secs(1), rx.recv())
-        .await
-        .unwrap()
-        .unwrap();
-    match got {
-        WebSocketMessage::GameEvent { message, .. } => {
-            assert!(matches!(
-                message.payload,
-                MessagePayload::GameEnded { winner: None }
             ));
         }
         _ => panic!("Expected GameEvent"),

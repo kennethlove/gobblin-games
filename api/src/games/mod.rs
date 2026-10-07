@@ -328,29 +328,6 @@ async fn update_game_status(
     }
 }
 
-async fn get_dead_character_count(db: &Surreal<Any>, identifier: &str) -> Result<u32, AppError> {
-    let result = db
-        .query(
-            r#"
-        RETURN count(
-            SELECT in.identifier
-            FROM playing_in
-            WHERE out.identifier = $identifier
-            AND in.status IN ["RecentlyDead", "Dead"]
-        );"#,
-        )
-        .bind(("identifier", identifier.to_string()))
-        .await;
-
-    match result {
-        Ok(mut result) => match result.take::<Option<u32>>(0) {
-            Ok(Some(dead_characters)) => Ok(dead_characters),
-            _ => Err(AppError::NotFound("Failed to find game".into())),
-        },
-        _ => Err(AppError::NotFound("Failed to find game".into())),
-    }
-}
-
 async fn run_game_cycles(
     game: &mut Game,
     db: &Surreal<Any>,
@@ -369,7 +346,7 @@ async fn run_game_cycles(
     // survivors, via `Game::end()` inside `check_for_winner`), run
     // post-game recovery NOW — before `save_game` writes characters
     // back, so persistent effects land on the records — and after winner
-    // determination, so "last standing" is decided pre-recovery. Runs once:
+    // determination, so the team victory is decided pre-recovery. Runs once:
     // subsequent `next_step` calls see status Finished and never reach here.
     if game.status == shared::GameStatus::Finished {
         game.post_game_recovery();

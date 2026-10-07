@@ -116,9 +116,9 @@
       </div>
     </div>
 
-    {% if game.status == 'Finished' and game.winner is defined and game.winner %}
+    {% if game.status == 'Finished' and winning_team is defined and winning_team %}
       <div class="winner-banner winner-banner-gold">
-        <span>☠ WINNER: {{ game.winner.name }} ☠</span>
+        <span>☠ WINNER: {{ winning_team }} ☠</span>
       </div>
     {% endif %}
 

@@ -411,14 +411,13 @@ impl Game {
 
     /// Runs at the end of the game.
     ///
-    /// NOTE: the revival roll does NOT fire here — `end()` runs at
+    /// NOTE: post-game recovery does NOT fire here — `end()` runs at
     /// the start of a phase, and remaining phases of the day must still see
-    /// dead goblins skip their turns. The roll runs once per game at the
-    /// API finish seam instead, right before characters are written back:
-    /// `api::games::run_game_cycles` (engine-finish path) and the 24-dead
-    /// early-finish branch of `next_step`. Winner determination happens
-    /// *before* `end()` in [`Self::check_for_winner`], so the roll never
-    /// poisons "last standing".
+    /// dead goblins skip their turns. Recovery runs once per game at the
+    /// API finish seam (`api::games::run_game_cycles`), right before
+    /// characters are written back. Winner determination happens *before*
+    /// `end()` in [`Self::check_for_winner`], so recovery never poisons
+    /// the team victory.
     pub fn end(&mut self) {
         if self.status == GameStatus::Finished {
             return;
@@ -472,11 +471,18 @@ impl Game {
             .collect()
     }
 
-    /// Returns the character that is the winner of the game if there is one.
-    pub fn winner(&self) -> Option<Character> {
-        let living: Vec<&Character> = self.characters.iter().filter(|t| t.is_alive()).collect();
-        match living.len() {
-            1 => Some(living[0].clone()),
+    /// Returns the team that has won the game: the only team with living
+    /// members. `None` while two or more teams stand or when nobody does —
+    /// teammates never have to be the last goblin alive.
+    pub fn winning_team(&self) -> Option<u32> {
+        let mut teams: std::collections::BTreeSet<u32> = self
+            .characters
+            .iter()
+            .filter(|t| t.is_alive())
+            .map(|t| t.team)
+            .collect();
+        match teams.len() {
+            1 => teams.pop_first(),
             _ => None,
         }
     }
@@ -511,26 +517,31 @@ impl Game {
         if self.status == GameStatus::Finished {
             return Ok(());
         }
-        if let Some(winner) = self.winner() {
+        if let Some(team) = self.winning_team() {
             let game_id = self.identifier.clone();
+            let label = crate::clans::team_label(team);
             let payload = crate::messages::MessagePayload::GameEnded {
-                winner: Some(crate::messages::CharacterRef {
-                    identifier: winner.identifier.clone().into(),
-                    name: winner.name.clone(),
+                winner: None,
+                winning_team: Some(crate::messages::TeamRef {
+                    team,
+                    label: label.clone(),
                 }),
             };
             let tick = self.tick_counter.boundary();
             self.push_message(
                 crate::messages::MessageSource::Game(game_id.clone()),
                 format!("game:{}", game_id),
-                format!("{} has won the game!", winner.name),
+                format!("{label} win the game!"),
                 payload,
                 tick,
             );
             self.end();
         } else if self.living_characters_count() == 0 {
             let game_id = self.identifier.clone();
-            let payload = crate::messages::MessagePayload::GameEnded { winner: None };
+            let payload = crate::messages::MessagePayload::GameEnded {
+                winner: None,
+                winning_team: None,
+            };
             let tick = self.tick_counter.boundary();
             self.push_message(
                 crate::messages::MessageSource::Game(game_id.clone()),
