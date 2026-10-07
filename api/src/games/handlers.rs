@@ -20,6 +20,11 @@ use validator::Validate;
 
 /// Creates a new game with fully initialized characters, areas, and items.
 /// The request body is validated before any database writes begin.
+#[derive(serde::Deserialize)]
+pub struct JoinGame {
+    pub character_id: String,
+}
+
 pub async fn create_game(
     Extension(AuthDb(db)): Extension<AuthDb>,
     Json(payload): Json<CreateGame>,
@@ -76,15 +81,32 @@ pub async fn create_game(
 
     let created_game = game;
 
-    // Create characters concurrently
-    let character_futures = (0..24)
-        .map(|idx| crate::characters::create_character(None, &game_identifier, &db, idx % 8));
-    let character_results = futures::future::join_all(character_futures).await;
+    // Chosen roster: enter the caller's owned goblins (ownership, one per
+    // player, and fewest-team balance all gate inside join_game). Empty
+    // selection keeps the legacy fallback: a full 24-bot roster.
+    if payload.characters.is_empty() {
+        let character_futures = (0..24)
+            .map(|idx| crate::characters::create_character(None, &game_identifier, &db, idx % 8));
+        let character_results = futures::future::join_all(character_futures).await;
 
-    if let Some(err) = character_results.into_iter().find_map(Result::err) {
-        return Err(AppError::InternalServerError(format!(
-            "Failed to create characters: {err}"
-        )));
+        if let Some(err) = character_results.into_iter().find_map(Result::err) {
+            return Err(AppError::InternalServerError(format!(
+                "Failed to create characters: {err}"
+            )));
+        }
+    } else {
+        for character_id in &payload.characters {
+            if let Err(err) =
+                crate::characters::join_game(&db, &game_identifier, character_id).await
+            {
+                // Best-effort cleanup so a rejected selection leaves no row.
+                let _ = db
+                    .query("DELETE $rid")
+                    .bind(("rid", game_rid.clone()))
+                    .await;
+                return Err(err);
+            }
+        }
     }
 
     // Apply game customization settings
@@ -119,6 +141,19 @@ pub async fn create_game(
         .headers_mut()
         .insert(axum::http::header::LOCATION, location);
     Ok(response)
+}
+
+/// `POST /api/games/{id}/join` — enter an owned goblin into a game that
+/// hasn't started. See [`crate::characters::join_game`] for the gates.
+pub async fn join_game_handler(
+    Path(identifier): Path<Uuid>,
+    Extension(AuthDb(db)): Extension<AuthDb>,
+    Json(payload): Json<JoinGame>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    crate::characters::join_game(&db, &identifier.to_string(), &payload.character_id).await?;
+    Ok(Json(
+        serde_json::json!({ "joined": true, "game": identifier.to_string() }),
+    ))
 }
 
 /// Quickstart: create a game with 24 characters, start it, run the first
@@ -548,6 +583,25 @@ pub async fn next_step(
 
     match game_status {
         GameStatus::NotStarted => {
+            // Bot-fill to 24 before the first cycle: whatever the roster
+            // holds (chosen + joined goblins), bots backfill the rest and
+            // the fewest-team rule keeps the full-game 3-per-team division.
+            let mut roster_response = db
+                .query("RETURN count(SELECT id FROM playing_in WHERE out.identifier = $game)")
+                .bind(("game", id_str))
+                .await
+                .map_err(|e| {
+                    AppError::InternalServerError(format!("Failed to count roster: {e}"))
+                })?;
+            let roster: u32 = roster_response
+                .take::<Option<u32>>(0)
+                .map_err(|e| AppError::InternalServerError(format!("Failed to count roster: {e}")))?
+                .unwrap_or(0);
+            for _ in roster..24 {
+                let team = crate::characters::fewest_team(&db, id_str).await?;
+                crate::characters::create_character(None, id_str, &db, team - 1).await?;
+            }
+
             super::update_game_status(&db, &record_id, GameStatus::InProgress).await?;
             let mut game = super::get_full_game(&id, &db).await?;
             game.status = GameStatus::InProgress;

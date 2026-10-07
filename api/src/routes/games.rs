@@ -36,6 +36,9 @@ pub struct CreateGameRequest {
     pub private: Option<String>,
     #[serde(default)]
     pub csrf_token: String,
+    /// Goblins checked in the roster picker; empty = bot fallback.
+    #[serde(default)]
+    pub characters: Vec<String>,
 }
 
 // ── HTMX page handlers ──────────────────────────────────────────────
@@ -139,6 +142,45 @@ fn filter_games_by_status(games: &[ListDisplayGame], status: Option<&str>) -> Ve
 pub struct DayQuery {
     pub day: Option<u32>,
     pub phase: Option<String>,
+    /// `?error=` after a failed join (POST/Redirect/GET).
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct GameJoinForm {
+    pub character_id: String,
+    pub csrf_token: String,
+}
+
+/// POST /games/{id}/join — enter one of your goblins into a not-started
+/// game, then redirect back to the game page (POST/Redirect/GET).
+pub async fn game_join_post_handler(
+    State(state): State<AppState>,
+    axum::extract::Path(game_identifier): axum::extract::Path<String>,
+    headers: axum::http::HeaderMap,
+    Form(form): Form<GameJoinForm>,
+) -> Response {
+    if !validate_csrf(&headers, &form.csrf_token) {
+        return Redirect::to("/auth").into_response();
+    }
+    let token = match read_cookie(&headers, SESSION_COOKIE) {
+        Some(t) => t.to_owned(),
+        None => return Redirect::to("/auth").into_response(),
+    };
+    let user_db = match authenticate_db(&state, &token).await {
+        Ok(db) => db,
+        Err(redirect) => return redirect.into_response(),
+    };
+    match api::characters::join_game(&user_db, &game_identifier, &form.character_id).await {
+        Ok(()) => Redirect::to(&format!("/games/{game_identifier}")).into_response(),
+        Err(error) => {
+            let query = url::form_urlencoded::Serializer::new(String::new())
+                .append_pair("error", &error.to_string())
+                .finish();
+            Redirect::to(&format!("/games/{game_identifier}?{query}")).into_response()
+        }
+    }
 }
 
 /// GET /games/{id} — game detail page (broadcast interface).
@@ -361,8 +403,18 @@ SELECT (
         }
     };
 
+    let joinable_goblins = if game.status == shared::GameStatus::NotStarted {
+        api::characters::list_joinable_goblins(&db)
+            .await
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
     let mut ctx = tera_engine::base_context(&game.name, &auth);
     ctx.insert("body_class", "broadcast");
+    ctx.insert("error", &query.error);
+    ctx.insert("joinable_goblins", &joinable_goblins);
     ctx.insert("game", &game);
     ctx.insert("winning_team", &winning_team);
     ctx.insert("alive", &alive);
@@ -865,13 +917,33 @@ pub async fn game_character_detail_handler(
 }
 
 /// GET /games/new — create game form (requires auth).
-pub async fn create_game_handler(headers: axum::http::HeaderMap) -> Response {
+pub async fn create_game_handler(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> Response {
     let (auth, csrf) = extract_auth(&headers);
     if !auth.is_authenticated() {
         return Redirect::to("/auth?tab=login").into_response();
     }
 
-    let ctx = tera_engine::base_context("Create Game", &auth);
+    // Owned goblins that haven't entered a game — the roster picker.
+    let token = read_cookie(&headers, SESSION_COOKIE)
+        .map(|s| s.to_owned())
+        .unwrap_or_default();
+    let db = if !token.is_empty() {
+        match authenticate_db(&state, &token).await {
+            Ok(db) => db,
+            Err(_) => (*state.db).clone(),
+        }
+    } else {
+        (*state.db).clone()
+    };
+    let goblins = api::characters::list_joinable_goblins(&db)
+        .await
+        .unwrap_or_default();
+
+    let mut ctx = tera_engine::base_context("Create Game", &auth);
+    ctx.insert("goblins", &goblins);
     html_with_csrf(tera_engine::render("create_game.html", &ctx), &csrf)
 }
 
@@ -922,11 +994,27 @@ pub async fn create_game_post_handler(
         return Redirect::to("/games/new").into_response();
     }
 
-    let character_futures = (0..24)
-        .map(|idx| api::characters::create_character(None, &game_identifier, &user_db, idx % 8));
-    let character_results = futures::future::join_all(character_futures).await;
-    if character_results.into_iter().any(|r| r.is_err()) {
-        return Redirect::to("/games/new").into_response();
+    let mut chosen: Vec<String> = form.characters.clone();
+    chosen.retain(|c| !c.is_empty());
+    if chosen.is_empty() {
+        // Legacy fallback: no goblin chosen, spawn the full bot roster.
+        let character_futures = (0..24).map(|idx| {
+            api::characters::create_character(None, &game_identifier, &user_db, idx % 8)
+        });
+        let character_results = futures::future::join_all(character_futures).await;
+        if character_results.into_iter().any(|r| r.is_err()) {
+            return Redirect::to("/games/new").into_response();
+        }
+    } else {
+        for character_id in &chosen {
+            if api::characters::join_game(&user_db, &game_identifier, character_id)
+                .await
+                .is_err()
+            {
+                let _ = user_db.query("DELETE $rid").bind(("rid", game_rid)).await;
+                return Redirect::to("/games/new").into_response();
+            }
+        }
     }
 
     use game::areas::Area;

@@ -80,6 +80,7 @@ pub static GAMES_ROUTER: LazyLock<Router<AppState>> = LazyLock::new(|| {
             get(character_logs),
         )
         .route("/{game_identifier}/next", put(next_step))
+        .route("/{game_identifier}/join", post(join_game_handler))
         .route("/{game_identifier}/timeline-summary", get(timeline_summary))
         .route("/{game_identifier}/publish", put(publish_game))
         .route("/{game_identifier}/unpublish", put(unpublish_game))

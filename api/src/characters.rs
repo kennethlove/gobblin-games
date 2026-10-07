@@ -184,6 +184,161 @@ pub struct CharacterItemEdge {
     pub item: RecordId,
 }
 
+/// Team (1..=8) with the fewest members in the game right now; ties go to
+/// the lowest slot, so joins and bot-fill together divide a full roster
+/// into exactly 3 per team (the ready rule in `schemas/game.surql`).
+pub async fn fewest_team(db: &Surreal<Any>, game_identifier: &str) -> Result<u32, AppError> {
+    let mut response = db
+        .query("SELECT in.team AS team FROM playing_in WHERE out.identifier = $game")
+        .bind(("game", game_identifier.to_owned()))
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to read roster: {e}")))?;
+    let rows: Vec<serde_json::Value> = response
+        .take(0)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to read roster: {e}")))?;
+    let mut counts = [0u32; 9];
+    for row in rows {
+        if let Some(team) = row["team"].as_u64()
+            && (1..=8).contains(&team)
+        {
+            counts[team as usize] += 1;
+        }
+    }
+    Ok((1..=8u32).min_by_key(|&t| counts[t as usize]).unwrap())
+}
+
+/// Owned goblins that have not entered any game yet — the roster picker
+/// on create-game and the join form on a not-started game's page.
+pub async fn list_joinable_goblins(db: &Surreal<Any>) -> Result<Vec<Character>, AppError> {
+    let mut owned = db
+        .query("SELECT * FROM character WHERE created_by = $auth ORDER BY name")
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to list goblins: {e}")))?;
+    let owned_rows: Vec<serde_json::Value> = owned
+        .take(0)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to read goblins: {e}")))?;
+    let characters: Vec<Character> = owned_rows
+        .into_iter()
+        .filter_map(|row| serde_json::from_value(row).ok())
+        .collect();
+
+    let mut entered = db
+        .query("SELECT in.identifier AS identifier FROM playing_in")
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to read entries: {e}")))?;
+    let entered_rows: Vec<serde_json::Value> = entered
+        .take(0)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to read entries: {e}")))?;
+    let entered_ids: std::collections::HashSet<String> = entered_rows
+        .iter()
+        .filter_map(|row| row["identifier"].as_str().map(str::to_owned))
+        .collect();
+    Ok(characters
+        .into_iter()
+        .filter(|c| !entered_ids.contains(&c.identifier.to_string()))
+        .collect())
+}
+
+/// Enter an owned character into a game that hasn't started.
+///
+/// Gates, in order: game exists and is `NotStarted`; caller owns the
+/// character (404 missing / 403 foreign); the character isn't in another
+/// game; the caller has no goblin in this game yet (bot fillers have no
+/// `created_by` and are exempt); roster under 24. Assigns the team with
+/// the fewest members and records the `playing_in` edge.
+pub async fn join_game(
+    db: &Surreal<Any>,
+    game_identifier: &str,
+    character_identifier: &str,
+) -> Result<(), AppError> {
+    let mut status_response = db
+        .query("SELECT status FROM game WHERE identifier = $game")
+        .bind(("game", game_identifier.to_owned()))
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to load game: {e}")))?;
+    let status_rows: Vec<serde_json::Value> = status_response
+        .take(0)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to read game: {e}")))?;
+    let status = status_rows
+        .first()
+        .and_then(|row| row["status"].as_str())
+        .map(str::to_owned)
+        .ok_or_else(|| AppError::NotFound("Game not found".to_string()))?;
+    if status != "NotStarted" {
+        return Err(AppError::Conflict(
+            "The game has already started".to_string(),
+        ));
+    }
+
+    require_owned_character(db, character_identifier).await?;
+
+    let mut in_game_response = db
+        .query("RETURN count(SELECT id FROM playing_in WHERE in.identifier = $character)")
+        .bind(("character", character_identifier.to_owned()))
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to check goblin: {e}")))?;
+    let in_game: u32 = in_game_response
+        .take::<Option<u32>>(0)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to check goblin: {e}")))?
+        .unwrap_or(0);
+    if in_game > 0 {
+        return Err(AppError::Conflict(
+            "That goblin is already in a game".to_string(),
+        ));
+    }
+
+    let mut mine_response = db
+        .query(
+            "RETURN count(SELECT id FROM playing_in WHERE out.identifier = $game AND in.created_by = $auth)",
+        )
+        .bind(("game", game_identifier.to_owned()))
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to check roster: {e}")))?;
+    let mine: u32 = mine_response
+        .take::<Option<u32>>(0)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to check roster: {e}")))?
+        .unwrap_or(0);
+    if mine > 0 {
+        return Err(AppError::Conflict(
+            "You already have a goblin in this game".to_string(),
+        ));
+    }
+
+    let mut count_response = db
+        .query("RETURN count(SELECT id FROM playing_in WHERE out.identifier = $game)")
+        .bind(("game", game_identifier.to_owned()))
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to count roster: {e}")))?;
+    let roster: u32 = count_response
+        .take::<Option<u32>>(0)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to count roster: {e}")))?
+        .unwrap_or(0);
+    if roster >= 24 {
+        return Err(AppError::GameFull("Game is full".to_string()));
+    }
+
+    let team = fewest_team(db, game_identifier).await?;
+    db.query(
+        "UPDATE character SET team = $team, statistics.game = $game WHERE identifier = $character",
+    )
+    .bind(("team", team))
+    .bind(("game", game_identifier.to_owned()))
+    .bind(("character", character_identifier.to_owned()))
+    .await
+    .map_err(|e| AppError::InternalServerError(format!("Failed to enter game: {e}")))?;
+
+    db.query("RELATE $character->playing_in->$game")
+        .bind((
+            "character",
+            RecordId::new("character", character_identifier),
+        ))
+        .bind(("game", RecordId::new("game", game_identifier)))
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to enter game: {e}")))?;
+
+    Ok(())
+}
+
 pub async fn create_character(
     character: Option<Character>,
     game_identifier: &str,

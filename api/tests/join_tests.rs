@@ -1,0 +1,353 @@
+//! Roster selection and join-game flow: create a game with chosen owned
+//! goblins, join before start (owner-only, one per player, 24 cap,
+//! fewest-team balance), bot-fill to 24 at start.
+
+mod common;
+
+use axum_test::TestServer;
+use common::{TestDb, TestUser, create_test_router};
+use serde_json::json;
+
+async fn create_authenticated_user(
+    test_db: &TestDb,
+    server: &TestServer,
+    username: &str,
+) -> TestUser {
+    let test_user = TestUser::new(username);
+
+    server
+        .post("/api/users")
+        .json(&json!({
+            "display_name": test_user.username,
+            "email": test_user.email,
+            "password": test_user.password,
+        }))
+        .await
+        .assert_status(axum::http::StatusCode::CREATED);
+
+    test_db.verify_email(&test_user.email).await;
+
+    let auth_response = server
+        .post("/api/users/authenticate")
+        .json(&json!({
+            "email": test_user.email,
+            "password": test_user.password,
+        }))
+        .await;
+
+    let body = auth_response.json::<serde_json::Value>();
+    let access_token = body["access_token"].as_str().unwrap().to_string();
+    let refresh_token = body["refresh_token"].as_str().unwrap().to_string();
+
+    test_user.with_tokens(access_token, refresh_token)
+}
+
+/// Create an owned persistent goblin and return its identifier.
+async fn create_owned_goblin(server: &TestServer, user: &TestUser, name: &str) -> String {
+    let response = server
+        .post("/api/characters")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": name, "clan_name": "Test Clan" }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
+async fn fetch_characters(
+    server: &TestServer,
+    user: &TestUser,
+    game_id: &str,
+) -> Vec<serde_json::Value> {
+    let response = server
+        .get(&format!("/api/games/{}/characters?limit=24", game_id))
+        .add_header("Authorization", user.auth_header())
+        .await;
+    response.assert_status_ok();
+    let body = response.json::<serde_json::Value>();
+    body["characters"].as_array().cloned().unwrap_or_default()
+}
+
+fn team_counts(characters: &[serde_json::Value]) -> std::collections::BTreeMap<u64, usize> {
+    let mut counts = std::collections::BTreeMap::new();
+    for character in characters {
+        let team = character["team"].as_u64().expect("team is u64");
+        *counts.entry(team).or_insert(0) += 1;
+    }
+    counts
+}
+
+#[tokio::test]
+async fn test_create_with_chosen_roster_skips_bots() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "roster_picker").await;
+    let goblin = create_owned_goblin(&server, &user, "Stinky").await;
+
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Chosen Roster", "characters": [goblin] }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Only the chosen goblin — no bots at creation.
+    let characters = fetch_characters(&server, &user, &game_id).await;
+    assert_eq!(characters.len(), 1, "chosen roster must not auto-spawn");
+    // First entry takes the fewest team: slot 1.
+    let teams = team_counts(&characters);
+    assert_eq!(teams.keys().copied().collect::<Vec<_>>(), vec![1]);
+
+    // Two goblins from one player are rejected up front.
+    let spare = create_owned_goblin(&server, &user, "Spare").await;
+    server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Greedy", "characters": [goblin, spare] }))
+        .await
+        .assert_status(axum::http::StatusCode::BAD_REQUEST);
+
+    test_db.cleanup().await;
+}
+
+#[tokio::test]
+async fn test_start_bot_fills_to_24_with_three_per_team() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "bot_fill").await;
+    let goblin = create_owned_goblin(&server, &user, "Stinky").await;
+
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Fill Me", "characters": [goblin] }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    server
+        .put(&format!("/api/games/{}/next", game_id))
+        .add_header("Authorization", user.auth_header())
+        .await
+        .assert_status_ok();
+
+    let characters = fetch_characters(&server, &user, &game_id).await;
+    assert_eq!(characters.len(), 24, "start must bot-fill to 24");
+    let counts = team_counts(&characters);
+    assert_eq!(counts.len(), 8, "all eight teams must be represented");
+    for (team, count) in &counts {
+        assert_eq!(*count, 3, "team {team} should hold exactly 3 goblins");
+    }
+
+    // Ready rule (24 + 8 distinct teams) now holds.
+    let detail = server
+        .get(&format!("/api/games/{}", game_id))
+        .add_header("Authorization", user.auth_header())
+        .await;
+    detail.assert_status_ok();
+    assert_eq!(detail.json::<serde_json::Value>()["ready"], json!(true));
+
+    test_db.cleanup().await;
+}
+
+#[tokio::test]
+async fn test_join_before_start_and_gates() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let alice = create_authenticated_user(&test_db, &server, "join_alice").await;
+    let bob = create_authenticated_user(&test_db, &server, "join_bob").await;
+
+    let alice_goblin = create_owned_goblin(&server, &alice, "Stinky").await;
+    let alice_spare = create_owned_goblin(&server, &alice, "Spare").await;
+    let bob_goblin = create_owned_goblin(&server, &bob, "Billy Slick").await;
+    let bob_spare = create_owned_goblin(&server, &bob, "Bob Spare").await;
+
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({ "name": "Join Test", "characters": [alice_goblin.clone()] }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    // Private games are invisible to other players — publish so Bob can
+    // see and join it.
+    server
+        .put(&format!("/api/games/{}/publish", game_id))
+        .add_header("Authorization", alice.auth_header())
+        .await
+        .assert_status_ok();
+
+    // Bob joins with his own goblin → balanced onto team 2.
+    server
+        .post(&format!("/api/games/{}/join", game_id))
+        .add_header("Authorization", bob.auth_header())
+        .json(&json!({ "character_id": bob_goblin }))
+        .await
+        .assert_status_ok();
+
+    let characters = fetch_characters(&server, &alice, &game_id).await;
+    assert_eq!(characters.len(), 2);
+    let teams = team_counts(&characters);
+    assert_eq!(teams.keys().copied().collect::<Vec<_>>(), vec![1, 2]);
+
+    // One goblin per player per game.
+    server
+        .post(&format!("/api/games/{}/join", game_id))
+        .add_header("Authorization", bob.auth_header())
+        .json(&json!({ "character_id": bob_spare }))
+        .await
+        .assert_status(axum::http::StatusCode::CONFLICT);
+
+    // One active game per character: Alice's spare is fine here, but her
+    // in-game goblin cannot enter a second game.
+    server
+        .post(&format!("/api/games/{}/join", game_id))
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({ "character_id": alice_goblin.clone() }))
+        .await
+        .assert_status(axum::http::StatusCode::CONFLICT);
+
+    // Ownership gate: Bob cannot enter Alice's goblin.
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({ "name": "Second Game" }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_two = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    server
+        .put(&format!("/api/games/{}/publish", game_two))
+        .add_header("Authorization", alice.auth_header())
+        .await
+        .assert_status_ok();
+    server
+        .post(&format!("/api/games/{}/join", game_two))
+        .add_header("Authorization", bob.auth_header())
+        .json(&json!({ "character_id": alice_spare }))
+        .await
+        .assert_status(axum::http::StatusCode::FORBIDDEN);
+
+    test_db.cleanup().await;
+}
+
+#[tokio::test]
+async fn test_join_rejects_started_and_full_games() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let alice = create_authenticated_user(&test_db, &server, "gate_alice").await;
+    let bob = create_authenticated_user(&test_db, &server, "gate_bob").await;
+    let bob_goblin = create_owned_goblin(&server, &bob, "Billy Slick").await;
+
+    // Started game: fill via bot-fallback creation, then start.
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({ "name": "Already Running" }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    server
+        .put(&format!("/api/games/{}/publish", game_id))
+        .add_header("Authorization", alice.auth_header())
+        .await
+        .assert_status_ok();
+    server
+        .put(&format!("/api/games/{}/next", game_id))
+        .add_header("Authorization", alice.auth_header())
+        .await
+        .assert_status_ok();
+
+    // Full roster (24 bots) rejects a join even before start elsewhere…
+    server
+        .post(&format!("/api/games/{}/join", game_id))
+        .add_header("Authorization", bob.auth_header())
+        .json(&json!({ "character_id": bob_goblin }))
+        .await
+        .assert_status(axum::http::StatusCode::CONFLICT);
+
+    // …and a not-started but full game rejects on the cap.
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({ "name": "Full House" }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let full_game = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    server
+        .put(&format!("/api/games/{}/publish", full_game))
+        .add_header("Authorization", alice.auth_header())
+        .await
+        .assert_status_ok();
+    server
+        .post(&format!("/api/games/{}/join", full_game))
+        .add_header("Authorization", bob.auth_header())
+        .json(&json!({ "character_id": bob_goblin }))
+        .await
+        .assert_status(axum::http::StatusCode::CONFLICT);
+
+    test_db.cleanup().await;
+}
+
+#[tokio::test]
+async fn test_create_with_foreign_character_fails_cleanly() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let alice = create_authenticated_user(&test_db, &server, "clean_alice").await;
+    let bob = create_authenticated_user(&test_db, &server, "clean_bob").await;
+    let bob_goblin = create_owned_goblin(&server, &bob, "Billy Slick").await;
+
+    server
+        .post("/api/games")
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({ "name": "Ghost Game", "characters": [bob_goblin] }))
+        .await
+        .assert_status(axum::http::StatusCode::FORBIDDEN);
+
+    // The rejected create leaves no game row behind.
+    let listing = server
+        .get("/api/games")
+        .add_header("Authorization", alice.auth_header())
+        .await;
+    listing.assert_status_ok();
+    let games = listing.json::<serde_json::Value>()["games"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        !games.iter().any(|g| g["name"] == "Ghost Game"),
+        "failed create must not leak a game row"
+    );
+
+    test_db.cleanup().await;
+}
