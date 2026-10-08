@@ -10,6 +10,39 @@ use super::{GameLog, MAX_MESSAGES};
 use crate::AppError;
 use crate::websocket::{GameBroadcaster, broadcast_game_message};
 
+/// Persistence partition — the single seam over
+/// [`shared::messages::Importance`]. Returns (persist, server-log-only).
+pub(crate) fn partition_persist(logs: Vec<GameMessage>) -> (Vec<GameMessage>, Vec<GameMessage>) {
+    logs.into_iter()
+        .partition(|log| log.payload.importance() == shared::messages::Importance::Persist)
+}
+
+/// Full debug-feed line for one message (the server-log debugging channel
+/// carries every message, both tiers). `CharacterMoved` gets its previous
+/// position spelled out so `from -> to` is one grep away.
+pub(crate) fn format_debug_line(game_id: &str, game_day: u32, log: &GameMessage) -> String {
+    let mut line = format!(
+        "message game={game_id} day={game_day} phase={} tick={} emit={} kind={:?} content={:?}",
+        log.phase,
+        log.tick,
+        log.emit_index,
+        log.payload.kind(),
+        log.content
+    );
+    if let shared::messages::MessagePayload::CharacterMoved {
+        character,
+        from,
+        to,
+    } = &log.payload
+    {
+        line.push_str(&format!(
+            " character={} from={}({}) to={}({})",
+            character.name, from.name, from.identifier, to.name, to.identifier
+        ));
+    }
+    line
+}
+
 pub(crate) async fn save_game(
     game: &mut Game,
     db: &Surreal<Any>,
@@ -23,17 +56,35 @@ pub(crate) async fn save_game(
     })?;
 
     // Drain events accumulated during the most recent run_day_night_cycle.
-    // Persist them to the message table and broadcast to subscribed WS clients.
     let logs: Vec<GameMessage> = std::mem::take(&mut game.messages);
-    if !logs.is_empty() {
-        let game_day = game.day.unwrap_or_default();
+    let game_day = game.day.unwrap_or_default();
 
-        // Broadcast first so clients see updates even if persistence is slow.
+    // Full debug feed: every message, both tiers, lands in server logs so
+    // the dropped/derived stream stays debuggable (RUST_LOG=...=debug).
+    if tracing::enabled!(tracing::Level::DEBUG) {
         for log in &logs {
+            tracing::debug!("{}", format_debug_line(&game.identifier, game_day, log));
+        }
+    }
+
+    // Persist + broadcast only state-dramatic messages; everything else
+    // lives in the debug feed above. Tier source: shared importance().
+    let (persist_logs, dropped_logs) = partition_persist(logs);
+    if !dropped_logs.is_empty() {
+        tracing::debug!(
+            game_id = %game.identifier,
+            dropped = dropped_logs.len(),
+            "server-log-only messages not persisted this cycle"
+        );
+    }
+
+    if !persist_logs.is_empty() {
+        // Broadcast first so clients see updates even if persistence is slow.
+        for log in &persist_logs {
             broadcast_game_message(broadcaster, &game.identifier, log.clone());
         }
 
-        let game_logs: Vec<GameLog> = logs
+        let game_logs: Vec<GameLog> = persist_logs
             .into_iter()
             .map(|log| GameLog {
                 id: RecordId::new("message", log.identifier.as_str()),
@@ -212,4 +263,134 @@ pub(crate) async fn save_game(
         AppError::InternalServerError(format!("Failed to commit transaction: {}", e))
     })?;
     Ok(Json(game.clone()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use shared::messages::{AreaRef, CharacterRef, CharacterRef as C, MessageSource, Phase};
+
+    fn log(payload: shared::messages::MessagePayload) -> GameMessage {
+        GameMessage::new(
+            MessageSource::Game("g".into()),
+            1,
+            Phase::DAY_START,
+            3,
+            4,
+            "game:g".into(),
+            "content".into(),
+            payload,
+        )
+    }
+
+    #[test]
+    fn moved_log_line_carries_from_to() {
+        use shared::messages::MessagePayload;
+        let moved = log(MessagePayload::CharacterMoved {
+            character: C {
+                identifier: "c1".into(),
+                name: "Glimmer".into(),
+            },
+            from: AreaRef {
+                identifier: "a1".into(),
+                name: "Hub".into(),
+            },
+            to: AreaRef {
+                identifier: "a2".into(),
+                name: "East Mire".into(),
+            },
+        });
+        let line = format_debug_line("game-1", 2, &moved);
+        assert!(
+            line.contains("from=Hub") && line.contains("to=East Mire"),
+            "previous position must be explicit: {line}"
+        );
+        assert!(line.contains("kind=CharacterMoved"), "{line}");
+        assert!(
+            line.contains("day=2") && line.contains("phase=06"),
+            "{line}"
+        );
+        assert!(line.contains("character=Glimmer"), "{line}");
+        // Identifiers too, for precise greps.
+        assert!(line.contains("a1") && line.contains("a2"), "{line}");
+    }
+
+    #[test]
+    fn debug_line_covers_plain_messages() {
+        use shared::messages::MessagePayload;
+        let killed = log(MessagePayload::CharacterKilled {
+            victim: CharacterRef {
+                identifier: "v".into(),
+                name: "Victim".into(),
+            },
+            killer: None,
+            cause: shared::afflictions::DeathCause::Combat,
+        });
+        let line = format_debug_line("game-1", 1, &killed);
+        assert!(line.contains("kind=CharacterKilled"), "{line}");
+        assert!(line.contains("content="), "{line}");
+    }
+
+    #[test]
+    fn partition_drops_server_only_and_keeps_important() {
+        use shared::messages::MessagePayload;
+        let server_only = vec![
+            log(MessagePayload::CharacterMoved {
+                character: CharacterRef {
+                    identifier: "c".into(),
+                    name: "C".into(),
+                },
+                from: AreaRef {
+                    identifier: "a".into(),
+                    name: "A".into(),
+                },
+                to: AreaRef {
+                    identifier: "b".into(),
+                    name: "B".into(),
+                },
+            }),
+            log(MessagePayload::PhaseStarted {
+                day: 1,
+                phase: Phase::DAY,
+                weather_summary: None,
+            }),
+            log(MessagePayload::HungerBandChanged {
+                character: CharacterRef {
+                    identifier: "c".into(),
+                    name: "C".into(),
+                },
+                from: shared::messages::HungerBand::Sated,
+                to: shared::messages::HungerBand::Starving,
+            }),
+        ];
+        let important = vec![
+            log(MessagePayload::CycleStart {
+                day: 1,
+                phase: Phase::DAY_START,
+            }),
+            log(MessagePayload::CharacterKilled {
+                victim: CharacterRef {
+                    identifier: "v".into(),
+                    name: "V".into(),
+                },
+                killer: None,
+                cause: shared::afflictions::DeathCause::Combat,
+            }),
+        ];
+        let mut all = server_only.clone();
+        all.extend(important.clone());
+        let (persist, dropped) = partition_persist(all);
+        assert_eq!(persist.len(), 2);
+        assert_eq!(dropped.len(), 3);
+        assert!(
+            persist
+                .iter()
+                .all(|l| l.payload.importance() == shared::messages::Importance::Persist)
+        );
+        assert!(
+            dropped
+                .iter()
+                .all(|l| l.payload.importance() == shared::messages::Importance::ServerLogOnly)
+        );
+    }
 }
