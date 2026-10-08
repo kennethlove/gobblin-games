@@ -67,7 +67,7 @@ pub fn base_incident_chance(phase: crate::messages::Phase) -> u32 {
 
 /// Terrain-based multiplier derived from the biome's inherent shelter quality.
 /// Better shelter biomes have lower incident chances.
-pub fn biome_incident_multiplier(biome: crate::terrain::types::BaseTerrain) -> f64 {
+pub fn biome_incident_multiplier(biome: world::terrain::types::BaseTerrain) -> f64 {
     let quality = shelter::shelter_quality(biome, &weather::current_weather());
     match quality {
         3 => SHELTER_QUALITY_SCORE_3,
@@ -92,7 +92,7 @@ pub fn day_scaling_multiplier(_current_day: u32) -> f64 {
 /// shelter status, constructed shelter quality, and game-day progression.
 pub fn effective_incident_chance(
     phase: crate::messages::Phase,
-    biome: crate::terrain::types::BaseTerrain,
+    biome: world::terrain::types::BaseTerrain,
     is_sheltered: bool,
     sleep_shelter: &SleepShelter,
     current_day: u32,
@@ -113,8 +113,8 @@ pub fn effective_incident_chance(
 // ---------------------------------------------------------------------------
 
 /// Biome-specific animal pool (5 per biome).
-pub fn biome_animal_pool(biome: crate::terrain::types::BaseTerrain) -> &'static [&'static str] {
-    use crate::terrain::types::BaseTerrain::*;
+pub fn biome_animal_pool(biome: world::terrain::types::BaseTerrain) -> &'static [&'static str] {
+    use world::terrain::types::BaseTerrain::*;
     match biome {
         Forest => &["bear", "wolf", "owl", "deer", "fox"],
         Jungle => &["snake", "jaguar", "monkey", "parrot", "spider"],
@@ -138,8 +138,8 @@ pub fn biome_animal_pool(biome: crate::terrain::types::BaseTerrain) -> &'static 
 }
 
 /// Biome-specific flavor incident pool (2 per biome).
-pub fn biome_flavor_pool(biome: crate::terrain::types::BaseTerrain) -> &'static [&'static str] {
-    use crate::terrain::types::BaseTerrain::*;
+pub fn biome_flavor_pool(biome: world::terrain::types::BaseTerrain) -> &'static [&'static str] {
+    use world::terrain::types::BaseTerrain::*;
     match biome {
         Forest => &["an acorn drops on them", "a branch snaps nearby"],
         Jungle => &["a fruit falls from above", "vines rustle in the breeze"],
@@ -173,7 +173,7 @@ pub fn biome_flavor_pool(biome: crate::terrain::types::BaseTerrain) -> &'static 
 pub fn find_shelter(
     intelligence: u32,
     strength: u32,
-    terrain: crate::terrain::types::BaseTerrain,
+    terrain: world::terrain::types::BaseTerrain,
     rng: &mut impl Rng,
 ) -> SleepShelter {
     let quality = shelter::shelter_quality(terrain, &weather::current_weather());
@@ -229,7 +229,7 @@ pub enum AnnoyingFlavor {
 }
 
 impl AnnoyingFlavor {
-    fn random(rng: &mut impl Rng, biome: crate::terrain::types::BaseTerrain) -> Self {
+    fn random(rng: &mut impl Rng, biome: world::terrain::types::BaseTerrain) -> Self {
         // 50% chance of biome-specific flavor, 50% classic generic flavor
         if rng.random_bool(0.5) {
             let pool = biome_flavor_pool(biome);
@@ -293,7 +293,7 @@ impl SleepIncident {
     pub fn roll(
         rng: &mut impl Rng,
         phase: crate::messages::Phase,
-        biome: crate::terrain::types::BaseTerrain,
+        biome: world::terrain::types::BaseTerrain,
         is_sheltered: bool,
         sleep_shelter: &SleepShelter,
         current_day: u32,
@@ -308,7 +308,7 @@ impl SleepIncident {
 
     /// Pick a random sleep incident with weighted probabilities,
     /// using biome-specific pools for animal encounters.
-    pub fn random(rng: &mut impl Rng, biome: crate::terrain::types::BaseTerrain) -> Self {
+    pub fn random(rng: &mut impl Rng, biome: world::terrain::types::BaseTerrain) -> Self {
         let roll: u32 = rng.random_range(0..100);
         match roll {
             // 30% — Annoying (flavor only)
@@ -344,7 +344,7 @@ impl SleepIncident {
         }
     }
 
-    fn random_animal_name(rng: &mut impl Rng, biome: crate::terrain::types::BaseTerrain) -> String {
+    fn random_animal_name(rng: &mut impl Rng, biome: world::terrain::types::BaseTerrain) -> String {
         let pool = biome_animal_pool(biome);
         let idx = rng.random_range(0..pool.len());
         pool[idx].to_string()
@@ -385,7 +385,7 @@ pub fn apply_sleep_incident(
         SleepIncident::Theft { .. } => {
             if character.items.is_empty() {
                 let flavor =
-                    AnnoyingFlavor::random(rng, crate::terrain::types::BaseTerrain::Forest);
+                    AnnoyingFlavor::random(rng, world::terrain::types::BaseTerrain::Forest);
                 return format!(
                     "{} stirs as {} settles (no items to steal).",
                     character.name,
@@ -455,9 +455,9 @@ pub fn apply_sleep_incident(
 mod tests {
     use super::*;
     use crate::messages::Phase;
-    use crate::terrain::types::BaseTerrain;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
+    use world::terrain::types::BaseTerrain;
 
     #[test]
     fn roll_sleep_incident_sometimes_returns_none() {

@@ -17,7 +17,7 @@ use crate::characters::actions::Action;
 use crate::characters::afflictions::phobia::{
     FiringPhobia, Reaction, collect_firing_phobias, strongest_reaction, total_stat_penalty,
 };
-use crate::terrain::BaseTerrain;
+use world::terrain::BaseTerrain;
 
 /// Context available to the phobia override layer. Built from the brain
 /// pipeline's inputs — a subset of full `PhobiaContext` since the brain
@@ -174,10 +174,10 @@ mod tests {
     use crate::areas::events::AreaEvent;
     use crate::characters::AfflictionDraft;
     use crate::characters::traits::Trait;
-    use crate::terrain::TerrainType;
     use shared::afflictions::{
         AfflictionKind, AfflictionSource, PhobiaMetadata, PhobiaOrigin, PhobiaTrigger, Severity,
     };
+    use world::terrain::TerrainType;
 
     fn make_area(terrain: BaseTerrain, events: Vec<AreaEvent>) -> AreaDetails {
         let mut area = AreaDetails::new(None, Area::Hub);

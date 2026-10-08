@@ -1,4 +1,4 @@
-use game::terrain::{BaseTerrain, TerrainDescriptor, TerrainType};
+use world::terrain::{BaseTerrain, TerrainDescriptor, TerrainType};
 
 #[test]
 fn test_desert_cannot_be_wet() {

@@ -640,8 +640,8 @@ pub fn render_team_group(group: &TeamGroup, game_id: &str) -> String {
     )
 }
 
-fn terrain_color(terrain: &game::terrain::BaseTerrain) -> &'static str {
-    use game::terrain::BaseTerrain::*;
+fn terrain_color(terrain: &world::terrain::BaseTerrain) -> &'static str {
+    use world::terrain::BaseTerrain::*;
     match terrain {
         Forest => "#2d5a27",
         Desert => "#c4a35a",
@@ -719,7 +719,7 @@ pub fn render_hex_map(
         let terrain = area_map
             .get(area_type)
             .map(|a| a.terrain.base)
-            .unwrap_or(game::terrain::BaseTerrain::Clearing);
+            .unwrap_or(world::terrain::BaseTerrain::Clearing);
         let fill = terrain_color(&terrain);
 
         let terrain_label = format!("{:?}", terrain).to_uppercase();

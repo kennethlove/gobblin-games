@@ -2,9 +2,9 @@ use game::areas::events::AreaEvent;
 use game::areas::{Area, AreaDetails};
 use game::characters::Character;
 use game::games::Game;
-use game::terrain::{BaseTerrain, TerrainType};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
+use world::terrain::{BaseTerrain, TerrainType};
 
 /// Test that events triggered in game loop actually process character survival checks
 #[test]

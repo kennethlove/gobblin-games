@@ -6,7 +6,7 @@
 
 ## System Architecture
 
-**4-Crate Rust Workspace:**
+**5-Crate Rust Workspace:**
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -27,6 +27,8 @@
 │  │  • Stateless, deterministic, no I/O                   │  │
 │  │  • Turn-based AI characters with d20 combat             │  │
 │  │  • Event sourcing via global message queue            │  │
+│  │  • Built on world/ substrate (terrain, pathfinding,   │  │
+│  │    threats, naming, config — extracted, see dww.18)   │  │
 │  └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
                        │ emits event log
@@ -108,7 +110,8 @@ just api  # API server only (http://localhost:3000) - requires SurrealDB running
 | **`game/src/characters/`** | Autonomous AI characters with d20 combat, status effects, and context-aware decision-making | [game/src/characters/codemap.md](game/src/characters/codemap.md) |
 | **`game/src/areas/`** | 5-region arena topology (Hub + cardinals) with item inventory and dynamic closures | [game/src/areas/codemap.md](game/src/areas/codemap.md) |
 | **`game/src/items/`** | Procedurally-generated weapons, shields, and consumables with factory pattern creation | [game/src/items/codemap.md](game/src/items/codemap.md) |
-| **`game/src/threats/`** | Environmental hazards and animal attacks (bears, wolves, etc.) | [game/src/threats/codemap.md](game/src/threats/codemap.md) |
+| **`world/`** | Domain substrate below game: terrain, pathfinding, threats, naming, config (extracted from game/, dww.18) | — |
+| **`world/src/threats/`** | Environmental hazards and animal attacks (bears, wolves, etc.) | [world/src/threats/codemap.md](world/src/threats/codemap.md) |
 | **`game/src/witty_phrase_generator/`** | Procedural game name generation using backtracking constraint solver | [game/src/witty_phrase_generator/codemap.md](game/src/witty_phrase_generator/codemap.md) |
 | **`api/`** | Axum REST API server translating HTTP ↔ game engine ↔ SurrealDB | [api/codemap.md](api/codemap.md) |
 | **`api/src/`** | REST endpoints for game lifecycle, characters, users, and authentication | [api/src/codemap.md](api/src/codemap.md) |
@@ -147,7 +150,7 @@ just api  # API server only (http://localhost:3000) - requires SurrealDB running
 ### Build Tools
 
 - **Task Runner**: just (Makefile alternative)
-- **Package Manager**: Cargo (workspace with 4 crates)
+- **Package Manager**: Cargo (workspace with 5 crates)
 - **Docker**: Multi-stage builds for API
 - **Version Manager**: mise (for Rust toolchain)
 

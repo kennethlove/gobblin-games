@@ -259,7 +259,7 @@ pub struct Game {
     pub characters: Vec<Character>,
     pub private: bool,
     #[serde(default)]
-    pub config: crate::config::GameConfig,
+    pub config: world::config::GameConfig,
     /// Transient buffer of events emitted during the current cycle.
     /// Drained and persisted by the API layer after each `run_day_night_cycle`.
     /// Skipped during serialization since events live in their own table.

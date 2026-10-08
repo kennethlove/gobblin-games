@@ -10,13 +10,13 @@ use crate::areas::events::AreaEvent;
 use crate::areas::hex::{SUB_SLOTS, SubAxial};
 use crate::items::OwnsItems;
 use crate::items::{Item, ItemError};
-use crate::terrain::{BaseTerrain, TerrainType};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::str::FromStr;
 use strum_macros::EnumIter;
 use uuid::Uuid;
+use world::terrain::{BaseTerrain, TerrainType};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, EnumIter, Hash, Ord, PartialOrd, Default)]
 pub enum Area {

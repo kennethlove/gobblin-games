@@ -17,8 +17,8 @@
 
 use crate::characters::Character;
 use crate::characters::actions::Action;
-use crate::terrain::BaseTerrain;
 use shared::afflictions::{AfflictionKind, Severity};
+use world::terrain::BaseTerrain;
 
 /// Check if a character has any Trapped affliction (any severity).
 fn character_has_any_trapped(character: &Character) -> bool {

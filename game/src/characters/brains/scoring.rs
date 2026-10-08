@@ -22,7 +22,7 @@ use crate::characters::actions::Action;
 /// preempts decision-making upstream — this is a defensive guard).
 pub fn survival_override(
     character: &Character,
-    terrain: crate::terrain::BaseTerrain,
+    terrain: world::terrain::BaseTerrain,
     weather: &crate::areas::weather::Weather,
     in_combat: bool,
 ) -> Option<Action> {

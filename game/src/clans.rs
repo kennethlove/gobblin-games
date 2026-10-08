@@ -1,7 +1,7 @@
-use crate::terrain::BaseTerrain;
 use rand::Rng;
 use rand::RngExt;
 use strum::IntoEnumIterator;
+use world::terrain::BaseTerrain;
 
 /// Display epithets for the 8 team slots, indexed by team number minus one.
 /// Teams are labeled "color + epithet" (e.g. "Orange Mangletooths"); the

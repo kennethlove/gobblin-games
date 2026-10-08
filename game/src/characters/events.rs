@@ -1,10 +1,10 @@
-use crate::threats::animals::Animal;
 use rand::RngExt;
 use rand::prelude::SmallRng;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::str::FromStr;
+use world::threats::animals::Animal;
 
 #[derive(Clone, Debug, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub enum CharacterEvent {

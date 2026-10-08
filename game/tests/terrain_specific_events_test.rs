@@ -1,8 +1,8 @@
 use game::areas::events::AreaEvent;
 use game::areas::{Area, AreaDetails};
 use game::games::Game;
-use game::terrain::{BaseTerrain, TerrainType};
 use std::collections::HashMap;
+use world::terrain::{BaseTerrain, TerrainType};
 
 /// Test that game loop generates terrain-appropriate events
 /// Forest should get mostly wildfires, desert should get sandstorms, etc.

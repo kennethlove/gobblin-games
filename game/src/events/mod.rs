@@ -7,8 +7,8 @@ mod tests {
     use super::*;
     use crate::items::{Attribute, Item, ItemRarity, ItemType};
     use crate::output::GameOutput;
-    use crate::threats::animals::Animal;
     use uuid::Uuid;
+    use world::threats::animals::Animal;
 
     /// Stable UUIDs so test failures are easy to reason about.
     fn uid_a() -> Uuid {

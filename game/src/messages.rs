@@ -17,7 +17,7 @@ pub use shared::messages::{
     MessageKind, MessagePayload, MessageSource, ParsePhaseError, Phase, TeamRef,
 };
 
-use crate::terrain::{BaseTerrain, Harshness, Visibility};
+use world::terrain::{BaseTerrain, Harshness, Visibility};
 
 /// Per-action accumulator: a typed payload plus its already-formatted prose line.
 ///

@@ -9,8 +9,8 @@
 use crate::areas::AreaDetails;
 use crate::areas::events::AreaEvent;
 use crate::characters::Character;
-use crate::terrain::BaseTerrain;
 use shared::afflictions::PhobiaTrigger;
+use world::terrain::BaseTerrain;
 
 /// Minimal context needed for phobia trigger detection.
 ///
@@ -135,8 +135,8 @@ mod tests {
     use super::*;
     use crate::areas::Area;
     use crate::items::Item;
-    use crate::terrain::TerrainType;
     use shared::messages::{CharacterRef, GameMessage, MessagePayload, MessageSource, Phase};
+    use world::terrain::TerrainType;
 
     fn make_area_details(terrain: BaseTerrain, events: Vec<AreaEvent>) -> AreaDetails {
         let mut area = AreaDetails::new(None, Area::Hub);

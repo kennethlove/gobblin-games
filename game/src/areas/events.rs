@@ -1,10 +1,10 @@
-use crate::terrain::BaseTerrain;
 use rand::RngExt;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::str::FromStr;
 use strum::{EnumIter, IntoEnumIterator};
+use world::terrain::BaseTerrain;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, EnumIter)]
 pub enum AreaEvent {

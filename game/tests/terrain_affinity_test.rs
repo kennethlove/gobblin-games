@@ -5,10 +5,10 @@
 
 use game::characters::Character;
 use game::clans::roll_terrain_affinity;
-use game::terrain::BaseTerrain;
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use strum::IntoEnumIterator;
+use world::terrain::BaseTerrain;
 
 #[test]
 fn test_affinity_has_one_or_two_distinct_valid_terrains() {

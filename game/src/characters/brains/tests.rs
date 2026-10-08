@@ -810,7 +810,7 @@ pub(crate) mod survival_override_tests {
     use crate::characters::Character;
     use crate::characters::actions::Action;
     use crate::items::Item;
-    use crate::terrain::BaseTerrain;
+    use world::terrain::BaseTerrain;
 
     #[test]
     fn override_dehydrated_at_water_terrain_picks_drink() {

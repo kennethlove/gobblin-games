@@ -9,7 +9,7 @@ use game::areas::{Area, AreaDetails};
 use game::characters::Character;
 use game::games::Game;
 use game::messages::{GameMessage, MessageSource};
-use game::terrain::{BaseTerrain, TerrainType};
+use world::terrain::{BaseTerrain, TerrainType};
 
 /// Drop a single character alone in an arena (no possible combat) and run
 /// several day cycles. The character will rest, hide, move, etc. Each of

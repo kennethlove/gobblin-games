@@ -21,6 +21,7 @@ serde_json = "1.0.149"
 askama_escape = "0.13"
 tera = { version = "2", features = ["glob_fs"] }
 shared = { path = "../shared" }
+world = { path = "../world" }
 strum = { version = "0.28", features = ["derive"] }
 surrealdb = "3.1.2"
 surrealdb-types = "3.1.2"

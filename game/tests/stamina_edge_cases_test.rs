@@ -2,8 +2,8 @@
 
 use game::characters::actions::Action;
 use game::characters::{Character, calculate_stamina_cost};
-use game::terrain::{BaseTerrain, TerrainType};
 use rstest::rstest;
+use world::terrain::{BaseTerrain, TerrainType};
 
 /// Test base stamina costs for each action type
 #[rstest]

@@ -9,7 +9,7 @@ use game::areas::{Area, AreaDetails};
 use game::characters::Character;
 use game::games::Game;
 use game::messages::MessageSource;
-use game::terrain::{BaseTerrain, TerrainType};
+use world::terrain::{BaseTerrain, TerrainType};
 
 /// Pin two characters in the same area, force one to be obviously stronger,
 /// run a single day cycle, and assert combat narration reaches `game.messages`

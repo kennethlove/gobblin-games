@@ -1,10 +1,10 @@
 use crate::items::Item;
-use crate::threats::animals::Animal;
 use indefinite::indefinite;
 use indefinite::indefinite_capitalized;
 use shared::afflictions::TrapKind;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
+use world::threats::animals::Animal;
 
 // Collection on strings to be used as output for the game
 pub enum GameOutput<'a> {

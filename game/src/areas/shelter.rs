@@ -1,5 +1,5 @@
 use crate::areas::weather::Weather;
-use crate::terrain::types::BaseTerrain;
+use world::terrain::types::BaseTerrain;
 
 /// Pure derivation of an area's shelter quality from terrain and current weather.
 /// 0 = no shelter possible. 4 = excellent shelter. See spec table.

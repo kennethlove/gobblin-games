@@ -158,10 +158,10 @@ mod tests {
     use crate::areas::Area;
     use crate::areas::events::AreaEvent;
     use crate::characters::AfflictionDraft;
-    use crate::terrain::{BaseTerrain, TerrainType};
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
     use shared::afflictions::{AfflictionSource, PhobiaMetadata, PhobiaOrigin, PhobiaTrigger};
+    use world::terrain::{BaseTerrain, TerrainType};
 
     fn make_context_with_fire() -> PhobiaContext<'static> {
         use std::sync::LazyLock;

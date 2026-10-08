@@ -1,4 +1,4 @@
-use crate::terrain::types::BaseTerrain;
+use world::terrain::types::BaseTerrain;
 
 /// Pure derivation of an area's forage richness from terrain.
 /// 0 = barren. 4 = abundant. See spec table.

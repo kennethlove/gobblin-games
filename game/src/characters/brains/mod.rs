@@ -3,11 +3,11 @@ use crate::characters::Character;
 use crate::characters::actions::Action;
 use crate::characters::alliances::MAX_ALLIES;
 use crate::characters::traits::{REFUSERS, ThresholdDelta, Trait, geometric_mean_affinity};
-use crate::terrain::{BaseTerrain, Harshness, TerrainType, Visibility};
 use rand::Rng;
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use world::terrain::{BaseTerrain, Harshness, TerrainType, Visibility};
 
 pub mod addiction_override;
 pub mod affliction_override;
@@ -262,7 +262,7 @@ impl Brain {
             None,
             Some(phase),
             area,
-            &crate::config::GameConfig::default(),
+            &world::config::GameConfig::default(),
             rng,
         ) {
             return early;
@@ -462,7 +462,7 @@ impl Brain {
             Some(terrain.base),
             Some(phase),
             None,
-            &crate::config::GameConfig::default(),
+            &world::config::GameConfig::default(),
             rng,
         ) {
             return early;
@@ -595,7 +595,7 @@ impl Brain {
         terrain: Option<BaseTerrain>,
         phase: Option<shared::messages::Phase>,
         area: Option<&AreaDetails>,
-        config: &crate::config::GameConfig,
+        config: &world::config::GameConfig,
         rng: &mut impl Rng,
     ) -> Option<Action> {
         if !character.is_alive() {

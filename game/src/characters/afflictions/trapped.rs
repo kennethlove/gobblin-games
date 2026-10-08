@@ -177,12 +177,12 @@ pub fn get_escape_stat(character: &crate::characters::Character, kind: TrapKind)
     match tuning.escape_stat {
         EscapeStat::Strength => {
             let val = character.attributes.strength as f32;
-            let max = crate::config::GameConfig::default().max_strength as f32;
+            let max = world::config::GameConfig::default().max_strength as f32;
             (val / max).clamp(0.0, 1.0)
         }
         EscapeStat::Intelligence => {
             let val = character.attributes.intelligence as f32;
-            let max = crate::config::GameConfig::default().max_intelligence as f32;
+            let max = world::config::GameConfig::default().max_intelligence as f32;
             (val / max).clamp(0.0, 1.0)
         }
     }

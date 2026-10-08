@@ -98,8 +98,8 @@ Game cycle (in characters module):
 
 ### **mod.rs** (1 line)
 - **Purpose**: Module declaration
-- **Content**: `pub(crate) mod animals;`
-- **Visibility**: `pub(crate)` restricts animals to `game` crate only
+- **Content**: `pub mod animals;` (was `pub(crate)` — now cross-crate, `game` imports it)
+- **Visibility**: `pub` — consumed by `game` (characters, events, output)
 - **Design Note**: Could export `Animal` directly here instead of forcing `use threats::animals::Animal`
 
 ### **animals.rs** (192 lines)

@@ -4,11 +4,11 @@
 
 use crate::areas::AreaDetails;
 use crate::characters::Character;
-use crate::config::GameConfig;
 use crate::messages::{MessagePayload, TaggedEvent};
 use rand::Rng;
 use rand::RngExt;
 use shared::afflictions::{AfflictionKind, PARTIAL_RESCUE_THRESHOLD, RESCUE_BONUS_CAP, Severity};
+use world::config::GameConfig;
 
 /// Compute a single rescuer's bonus contribution.
 ///

@@ -2,10 +2,10 @@ use game::areas::{Area, AreaDetails};
 use game::characters::Character;
 use game::characters::brains::Brain;
 use game::items::Item;
-use game::terrain::{BaseTerrain, TerrainType};
 use rand::prelude::*;
 use rstest::{fixture, rstest};
 use serial_test::serial;
+use world::terrain::{BaseTerrain, TerrainType};
 
 #[fixture]
 fn small_rng() -> SmallRng {

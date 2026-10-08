@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::items::Item;
-use crate::threats::animals::Animal;
+use world::threats::animals::Animal;
 
 /// Structured, owned, serde-friendly counterpart to [`crate::output::GameOutput`].
 ///

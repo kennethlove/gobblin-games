@@ -1,5 +1,5 @@
 use crate::areas::weather::Weather;
-use crate::terrain::types::BaseTerrain;
+use world::terrain::types::BaseTerrain;
 
 /// Pure derivation of an area's water-source strength from terrain + weather.
 /// 0 = no water available. 3 = abundant. See spec table.

@@ -13,7 +13,6 @@ use game::characters::Character;
 use game::games::Game;
 use game::items::Item;
 use game::messages::{GameMessage, MessageSource};
-use game::terrain::BaseTerrain;
 use serde::{Deserialize, Serialize};
 use shared::messages::MessagePayload;
 use shared::{GameArea, GameStatus, PaginationMetadata};
@@ -26,6 +25,7 @@ use surrealdb_types::RecordId;
 use surrealdb_types::SerdeWrapper;
 use uuid::Uuid;
 use validator::Validate;
+use world::terrain::BaseTerrain;
 
 /// Maximum number of messages to retain per game to prevent OOM
 const MAX_MESSAGES: usize = 10000;

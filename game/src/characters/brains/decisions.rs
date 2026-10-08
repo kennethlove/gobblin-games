@@ -1,4 +1,4 @@
-use crate::terrain::{BaseTerrain, Visibility};
+use world::terrain::{BaseTerrain, Visibility};
 use crate::characters::Character;
 use crate::characters::actions::Action;
 use crate::characters::brains::scoring::action_score;
@@ -10,11 +10,11 @@ use rand::RngExt;
 impl Brain {
     pub fn decide_action_with_terrain(
         &self, character: &Character, nearby_characters: u32,
-        terrain: crate::terrain::TerrainType, phase: shared::messages::Phase, rng: &mut impl Rng,
+        terrain: world::terrain::TerrainType, phase: shared::messages::Phase, rng: &mut impl Rng,
     ) -> Action {
         if let Some(early) = self.run_pre_decision_overrides(
             character, nearby_characters, Some(terrain.base), Some(phase), None,
-            &crate::config::GameConfig::default(), rng,
+            &world::config::GameConfig::default(), rng,
         ) { return early; }
         let scarce = matches!(terrain.base, BaseTerrain::Desert | BaseTerrain::Tundra | BaseTerrain::Badlands);
         let concealed = matches!(terrain.base.visibility(), Visibility::Concealed);

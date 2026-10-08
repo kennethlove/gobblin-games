@@ -12,10 +12,10 @@
 use super::actions::Action;
 use super::{Character, calculate_stamina_cost};
 use crate::areas::{Area, AreaDetails};
-use crate::pathfinding::{Graph, astar};
-use crate::terrain::Harshness;
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
+use world::pathfinding::{Graph, astar};
+use world::terrain::Harshness;
 
 /// Penalty added to any edge entering a closed area. Picked so that even
 /// the cheapest detour through 2 open areas is preferred over a single
@@ -116,7 +116,7 @@ pub fn plan_path(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::terrain::{BaseTerrain, TerrainType};
+    use world::terrain::{BaseTerrain, TerrainType};
 
     fn area(name: &str, a: Area, base: BaseTerrain) -> AreaDetails {
         AreaDetails::new_with_terrain(

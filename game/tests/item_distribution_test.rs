@@ -1,5 +1,5 @@
 use game::items::Item;
-use game::terrain::BaseTerrain;
+use world::terrain::BaseTerrain;
 
 /// Test that Desert terrain creates consumables more frequently than other types.
 /// Desert has 0.6 consumable weight vs 0.2 weapons + 0.2 shields.

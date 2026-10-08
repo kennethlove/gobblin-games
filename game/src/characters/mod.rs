@@ -224,7 +224,7 @@ pub struct Character {
     pub editable: bool,
     /// Terrain types this character is familiar with
     #[serde(default)]
-    pub terrain_affinity: Vec<crate::terrain::BaseTerrain>,
+    pub terrain_affinity: Vec<world::terrain::BaseTerrain>,
     /// Current stamina for actions
     pub stamina: u32,
     /// Maximum stamina capacity
@@ -544,7 +544,7 @@ impl Character {
 
     pub fn random() -> Self {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
-        let name = crate::naming::goblin_name(&mut rng);
+        let name = world::naming::goblin_name(&mut rng);
         let team = rng.random_range(1..=8);
         Character::new(name, Some(team), None)
     }
@@ -1630,7 +1630,7 @@ impl Character {
     pub fn affliction_action_gate(
         &self,
         action: &Action,
-        destination_terrain: Option<crate::terrain::BaseTerrain>,
+        destination_terrain: Option<world::terrain::BaseTerrain>,
     ) -> Option<Action> {
         crate::characters::brains::affliction_override::hard_gates_with_terrain(
             self,
@@ -1657,7 +1657,7 @@ pub struct AfflictionDraft {
 /// - Desperation multiplier based on health (1.0 + 0.5 * (1.0 - health%))
 pub fn calculate_stamina_cost(
     action: &Action,
-    terrain: &crate::terrain::TerrainType,
+    terrain: &world::terrain::TerrainType,
     character: &Character,
 ) -> u32 {
     // Base costs for each action type
@@ -1775,7 +1775,7 @@ impl Attributes {
     /// Provides a randomized set of Attributes using default config values
     pub fn new() -> Self {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
-        let config = crate::config::GameConfig::default();
+        let config = world::config::GameConfig::default();
 
         Self {
             movement: config.max_movement,

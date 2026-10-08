@@ -306,7 +306,7 @@ Brain::act()
 - `GameOutput`: Enum of formatted game events (attack messages, travel, deaths, etc.)
 - **Flow**: All logged events use `GameOutput` variants for consistent formatting
 
-**Threats Module** (`crate::threats::animals`):
+**Threats Module** (`world::threats::animals`):
 - `Animal`: Enum of animals that can maul characters (Bear, Wolf, etc.)
 - **Flow**:
   - `CharacterEvent::AnimalAttack(Animal)` sets `CharacterStatus::Mauled(Animal)`

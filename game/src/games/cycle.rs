@@ -462,7 +462,7 @@ impl Game {
                     .get(&character.area)
                     .and_then(|&idx| self.areas.get(idx))
                     .map(|a| a.terrain.base)
-                    .unwrap_or(crate::terrain::types::BaseTerrain::Clearing);
+                    .unwrap_or(world::terrain::types::BaseTerrain::Clearing);
                 let phase_index: u32 = self.day.unwrap_or(1) * 4 + phase.ord() as u32;
                 let is_sheltered = character
                     .sheltered_until

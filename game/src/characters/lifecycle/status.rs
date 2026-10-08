@@ -131,14 +131,14 @@ impl Character {
             let cause = match &killer {
                 CharacterStatus::Mauled(animal) => {
                     let beast = match animal {
-                        crate::threats::animals::Animal::Wolf
-                        | crate::threats::animals::Animal::Hyena => {
+                        world::threats::animals::Animal::Wolf
+                        | world::threats::animals::Animal::Hyena => {
                             shared::afflictions::BeastKind::Wolf
                         }
-                        crate::threats::animals::Animal::Bear => {
+                        world::threats::animals::Animal::Bear => {
                             shared::afflictions::BeastKind::Bear
                         }
-                        crate::threats::animals::Animal::Snake => {
+                        world::threats::animals::Animal::Snake => {
                             shared::afflictions::BeastKind::Snake
                         }
                         _ => shared::afflictions::BeastKind::Other,
@@ -405,11 +405,11 @@ mod tests {
     use crate::characters::AfflictionDraft;
     use crate::characters::Character;
     use crate::characters::statuses::CharacterStatus;
-    use crate::threats::animals::Animal;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
     use rstest::*;
     use shared::afflictions::{AfflictionKind, AfflictionSource, Severity, TrapKind};
+    use world::threats::animals::Animal;
 
     #[fixture]
     fn character() -> Character {

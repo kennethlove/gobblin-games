@@ -110,15 +110,13 @@ run_day_night_cycle(day: bool)
   - `areas` — `Area` enum, `AreaDetails` struct, `AreaEvent` enum, hex topology, pathfinding graph
   - `characters` — `Character` struct, `CharacterStatus`/`CharacterEvent` enums, `Action` logic, combat, afflictions, alliances
   - `items` — `Item` struct, `OwnsItems` trait, procedural generation
-  - `threats` — Animal encounters (bears, wolves, etc.)
-  - `terrain` — `BaseTerrain` enum, `TerrainDescriptor`, `TerrainType`, biome config
   - `events` — Typed `GameEvent` enum (serde-friendly counterpart to `GameOutput`)
   - `phases` — Per-phase pipeline scaffolding (environmental conditions, light levels)
   - `patrons` — Patron archetypes, budget bands, affinity tracking
-  - `config` — `GameConfig` struct with runtime-tunable game constants
   - `clans` — team color palette, mascot epithets, per-goblin terrain affinity rolls
-  - `pathfinding` — Generic A* graph pathfinding
   - `witty_phrase_generator` — Random name generation for games
+- **`world` crate** (path dep, extracted from `game/src/` in dww.18):
+  `world::terrain`, `world::pathfinding`, `world::threats`, `world::naming`, `world::config`
 - **External Crates**:
   - `rand` — RNG for procedural generation
   - `serde` — Serialization for API exposure
@@ -130,7 +128,7 @@ run_day_night_cycle(day: bool)
 ## Key Files
 
 ### **lib.rs** (18 lines)
-Module aggregator. Exports all submodules and declares `witty_phrase_generator` as private. Re-exports key terrain types (`BaseTerrain`, `TerrainDescriptor`, `TerrainType`).
+Module aggregator. Declares `trauma_producers` and `witty_phrase_generator` as private.
 
 ### **games/mod.rs** (980 lines) — **Core Game State**
 - **Purpose**: `Game` struct definition, lifecycle methods, state queries
@@ -213,20 +211,10 @@ Module aggregator. Exports all submodules and declares `witty_phrase_generator` 
 ### **events/display.rs** (517 lines) — **GameEvent Display**
 - **Purpose**: `Display` implementation for `GameEvent` variants, rendering to the same strings as `GameOutput`
 
-### **config.rs** (171 lines) — **Game Configuration**
-- **Purpose**: `GameConfig` struct centralizing all game constants and tuning knobs
-- **Key Fields**: `low_character_threshold`, `feast_*_count`, `day/night_event_frequency`, `trauma_enabled`, `phobias_enabled`, `fixations_enabled`, `addiction_enabled`, `event_severity_multiplier`
-- **Design**: Runtime-configurable for difficulty modes and feature toggles
-
 ### **clans.rs** (201 lines) — **Team Colors & Terrain Affinity**
 - **Purpose**: 8-color team palette + mascot epithets; per-goblin terrain affinity rolls
 - **Key Struct**: `TeamColor` (name, hex)
 - **Usage**: `character.team` picks the display color/epithet; `roll_terrain_affinity()` rolls 1–2 terrains from the goblin's own RNG
-
-### **pathfinding.rs** (178 lines) — **Graph Pathfinding**
-- **Purpose**: Generic A* pathfinding over weighted directed graphs
-- **Key Trait**: `Graph` (nodes, neighbors, heuristic) — implementable for hex grid or sub-tile grid
-- **Design**: Reusable at multiple granularities; v1 operates on 7-area hex graph
 
 ### **witty_phrase_generator/mod.rs** (260 lines) — **Name Generator**
 - **Purpose**: Procedural game name generation using word combinations
@@ -363,25 +351,6 @@ Weapons, shields, and consumables with procedural generation.
 | `tests.rs` | 461 | Item unit tests |
 | `generation.rs` | 217 | Procedural item generation |
 | `name_generator.rs` | 56 | Item name generation |
-
-### **terrain/** (472 lines total) — **Terrain System**
-Biome types, descriptors, and terrain configuration.
-
-| File | Lines | Purpose |
-|------|-------|---------|
-| `config.rs` | 149 | `Visibility`, `Harshness`, `ItemWeights` per terrain |
-| `assignment.rs` | 192 | Terrain-to-area assignment, balance constraints |
-| `types.rs` | 121 | `BaseTerrain` enum (12 biomes), `TerrainDescriptor`, `TerrainType` |
-| `mod.rs` | 8 | Module aggregator, re-exports |
-| `descriptors.rs` | 2 | (Placeholder) |
-
-### **threats/** (193 lines total) — **Environmental Hazards**
-Animal encounters and environmental threats.
-
-| File | Lines | Purpose |
-|------|-------|---------|
-| `animals.rs` | 192 | `Animal` enum, attack mechanics |
-| `mod.rs` | 1 | Module aggregator |
 
 ### **patrons/** (601 lines total) — **Patron System**
 Patron archetypes, budgets, and affinity tracking.

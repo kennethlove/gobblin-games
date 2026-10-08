@@ -1,8 +1,8 @@
-use crate::threats::animals::Animal;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::str::FromStr;
 use strum::EnumIter;
+use world::threats::animals::Animal;
 
 #[derive(Clone, Debug, Default, Deserialize, EnumIter, Eq, PartialEq, Serialize)]
 pub enum CharacterStatus {
