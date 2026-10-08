@@ -298,7 +298,7 @@ Brain::act()
   - `take_nearby_item()` → transfers item from area to character
   - `try_use_consumable()` → applies item effect and removes from inventory
 
-**Messages Module** (`crate::messages`):
+**Messages** (schema in `shared::messages`, helpers in `world::messages`):
 - `add_character_message()`: Logs game events to persistent storage
 - **Flow**: `try_log_action()` helper wraps every significant action/outcome for game narrative
 

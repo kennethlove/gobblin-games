@@ -2,7 +2,6 @@ pub mod areas;
 pub mod characters;
 pub mod events;
 pub mod games;
-pub mod messages;
 pub mod patrons;
 pub mod phases;
 mod trauma_producers;

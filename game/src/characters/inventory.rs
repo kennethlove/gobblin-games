@@ -10,10 +10,11 @@
 use crate::areas::AreaDetails;
 use crate::characters::Character;
 use crate::characters::afflictions::{AddictionAcquisition, apply_cure};
-use crate::messages::{MessagePayload, TaggedEvent};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
+use shared::messages::MessagePayload;
 use world::items::{Attribute, Item, ItemError, OwnsItems};
+use world::messages::TaggedEvent;
 
 impl OwnsItems for Character {
     fn add_item(&mut self, item: Item) {

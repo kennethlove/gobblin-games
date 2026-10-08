@@ -1,7 +1,7 @@
 use crate::characters::Character;
 use crate::characters::wounds;
-use crate::messages::{CharacterRef, MessagePayload};
 use rand::RngExt;
+use shared::messages::{CharacterRef, MessagePayload};
 use shared::wounds::{BodyPart, Wound, WoundSeverity, WoundType};
 
 /// Attribute maximums
@@ -148,7 +148,7 @@ impl Character {
     pub(crate) fn heal_wounds(
         &mut self,
         rng: &mut impl rand::Rng,
-        events: &mut Vec<crate::messages::TaggedEvent>,
+        events: &mut Vec<world::messages::TaggedEvent>,
     ) {
         let character_name = self.name.clone();
         let character_id = self.identifier.clone();
@@ -161,7 +161,7 @@ impl Character {
 
             // Emit infection event
             if !was_infected && wound.infected {
-                events.push(crate::messages::TaggedEvent::new(
+                events.push(world::messages::TaggedEvent::new(
                     format!(
                         "{}'s {} wound became infected",
                         character_name, wound.body_part
@@ -178,7 +178,7 @@ impl Character {
 
             // Emit heal event (stopped bleeding, not infected)
             if was_bleeding && !wound.bleeding && !wound.infected {
-                events.push(crate::messages::TaggedEvent::new(
+                events.push(world::messages::TaggedEvent::new(
                     format!(
                         "{}'s {} wound stopped bleeding",
                         character_name, wound.body_part

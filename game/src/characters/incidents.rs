@@ -56,12 +56,12 @@ impl SleepShelter {
 // ---------------------------------------------------------------------------
 
 /// Base incident chance (0-100) for a given phase of day.
-pub fn base_incident_chance(phase: crate::messages::Phase) -> u32 {
+pub fn base_incident_chance(phase: shared::messages::Phase) -> u32 {
     match phase {
-        crate::messages::Phase::Day => SLEEP_INCIDENT_DAY_PCT,
-        crate::messages::Phase::Dawn => SLEEP_INCIDENT_DAWN_PCT,
-        crate::messages::Phase::Dusk => SLEEP_INCIDENT_DUSK_PCT,
-        crate::messages::Phase::Night => SLEEP_INCIDENT_NIGHT_PCT,
+        shared::messages::Phase::Day => SLEEP_INCIDENT_DAY_PCT,
+        shared::messages::Phase::Dawn => SLEEP_INCIDENT_DAWN_PCT,
+        shared::messages::Phase::Dusk => SLEEP_INCIDENT_DUSK_PCT,
+        shared::messages::Phase::Night => SLEEP_INCIDENT_NIGHT_PCT,
     }
 }
 
@@ -91,7 +91,7 @@ pub fn day_scaling_multiplier(_current_day: u32) -> f64 {
 /// Combined effective incident chance (0.0-1.0) factoring in phase, terrain,
 /// shelter status, constructed shelter quality, and game-day progression.
 pub fn effective_incident_chance(
-    phase: crate::messages::Phase,
+    phase: shared::messages::Phase,
     biome: world::terrain::types::BaseTerrain,
     is_sheltered: bool,
     sleep_shelter: &SleepShelter,
@@ -292,7 +292,7 @@ impl SleepIncident {
     /// shelter, and game-day progression.
     pub fn roll(
         rng: &mut impl Rng,
-        phase: crate::messages::Phase,
+        phase: shared::messages::Phase,
         biome: world::terrain::types::BaseTerrain,
         is_sheltered: bool,
         sleep_shelter: &SleepShelter,
@@ -454,9 +454,9 @@ pub fn apply_sleep_incident(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::messages::Phase;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
+    use shared::messages::Phase;
     use world::terrain::types::BaseTerrain;
 
     #[test]

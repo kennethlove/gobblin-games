@@ -20,9 +20,10 @@ pub(crate) use resolve::apply_combat_results;
 
 use crate::characters::Character;
 use crate::characters::actions::{AttackOutcome, AttackResult};
-use crate::messages::{CharacterRef, CombatEngagement, CombatOutcome, MessagePayload, TaggedEvent};
 use rand::prelude::*;
 use resolve::tref;
+use shared::messages::{CharacterRef, CombatEngagement, CombatOutcome, MessagePayload};
+use world::messages::TaggedEvent;
 use world::output::GameOutput;
 
 // ---------------------------------------------------------------------------

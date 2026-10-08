@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use world::items::Item;
 
 impl Game {
-    pub(super) fn run_trauma_producers(&mut self, _phase: crate::messages::Phase) {
+    pub(super) fn run_trauma_producers(&mut self, _phase: shared::messages::Phase) {
         crate::trauma_producers::run_trauma_producers(self);
     }
 
@@ -35,7 +35,7 @@ impl Game {
             let subject = format!("area:{}", area_name);
             for event_name in &event_names {
                 self.log_event(
-                    crate::messages::MessageSource::Area(area_name.clone()),
+                    shared::messages::MessageSource::Area(area_name.clone()),
                     subject.clone(),
                     crate::events::GameEvent::AreaEvent {
                         area_event: event_name.clone(),
@@ -44,7 +44,7 @@ impl Game {
                 );
             }
             self.log_event(
-                crate::messages::MessageSource::Area(area_name.clone()),
+                shared::messages::MessageSource::Area(area_name.clone()),
                 subject,
                 crate::events::GameEvent::AreaClose {
                     area_name: area_name.clone(),
@@ -66,10 +66,10 @@ impl Game {
     /// Triggers events for the current cycle.
     pub(super) fn trigger_cycle_events(
         &mut self,
-        phase: crate::messages::Phase,
+        phase: shared::messages::Phase,
         rng: &mut SmallRng,
     ) -> Result<(), GameError> {
-        use crate::messages::Phase;
+        use shared::messages::Phase;
         let frequency = match phase {
             Phase::Day => DAY_EVENT_FREQUENCY,
             Phase::Night => NIGHT_EVENT_FREQUENCY,

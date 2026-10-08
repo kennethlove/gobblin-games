@@ -6,7 +6,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use game::characters::Character;
 use game::games::Game;
-use game::messages::GameMessage;
+use shared::messages::GameMessage;
 use shared::{
     CreateGame, DisplayGame, EditGame, GameStatus, ListDisplayGame, PaginatedGames,
     PaginationMetadata,

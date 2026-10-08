@@ -10,9 +10,9 @@ use game::areas::events::AreaEvent;
 use game::areas::{Area, AreaDetails};
 use game::characters::Character;
 use game::games::Game;
-use game::messages::{GameMessage, MessageSource};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
+use shared::messages::{GameMessage, MessageSource};
 use world::terrain::{BaseTerrain, TerrainType};
 
 /// Drop two characters into a single area, fire an `AreaEvent` directly via

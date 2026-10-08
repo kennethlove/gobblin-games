@@ -6,13 +6,14 @@ use crate::characters::afflictions::trapped::{
     area_event_to_trap, escape_roll_target, get_escape_stat, severity_index, trap_tuning_for,
 };
 use crate::characters::statuses::CharacterStatus;
-use crate::messages::{CharacterRef, MessagePayload, TaggedEvent};
 use rand::RngExt;
 use rand::prelude::*;
 use shared::afflictions::{
     AfflictionKind, AfflictionSource, BodyPart, Severity, TrapKind, TrappedMetadata,
     escape_threshold,
 };
+use shared::messages::{CharacterRef, MessagePayload};
+use world::messages::TaggedEvent;
 use world::output::GameOutput;
 
 /// Status effect damage constants

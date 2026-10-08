@@ -177,12 +177,10 @@ Module aggregator. Declares `trauma_producers` and `witty_phrase_generator` as p
 ### **games/tests.rs** (1624 lines) — **Game Integration Tests**
 - **Purpose**: Comprehensive test suite covering lifecycle, state transitions, area management, alliances, patrons
 
-### **messages.rs** (351 lines) — **Event Log System**
-- **Purpose**: Global message accumulation and retrieval with typed `MessagePayload` variants
-- **Key Types**:
-  - `MessageSource` enum — Discriminates event origin (Game/Area/Character)
-  - `GameMessage` struct — Event record with ID, source, day, subject, timestamp, content
-  - `MessagePayload` enum — 55+ typed variants (e.g., `CharacterKilled`, `AreaClosed`, `CombatEngagement`)
+### **messages.rs** — moved out (dww.18)
+- Schema types (`MessageSource`, `GameMessage`, `MessagePayload`, `Phase`, refs): **`shared::messages`**
+- `TaggedEvent` accumulator + terrain narrative helpers (`movement_narrative`, etc.): **`world::messages`**
+- Log accumulation helpers (`get_all_messages()`, …) live on `Game` in `games/mod.rs`
 - **Global State**: `GLOBAL_MESSAGES` (thread-safe `VecDeque<GameMessage>`)
 - **API**:
   - Write: `add_message()`, `add_game_message()`, `add_area_message()`, `add_character_message()`

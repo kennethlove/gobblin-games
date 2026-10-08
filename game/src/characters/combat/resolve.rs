@@ -12,15 +12,16 @@ use crate::characters::combat::inflict_table::{
     HitSeverity, WeaponKind, lookup_break_mid_swing_inflict, lookup_inflicts,
 };
 use crate::characters::stamina_band::stamina_band;
-use crate::messages::{CharacterRef, MessagePayload, TaggedEvent};
 use rand::RngExt;
 use rand::prelude::*;
 use shared::combat_beat::{CombatBeat, StressReport, SwingOutcome, WearOutcomeReport, WearReport};
 use shared::conditions::{ConditionSeverity, MentalCondition};
+use shared::messages::{CharacterRef, MessagePayload};
 use shared::messages::{ItemRef, StaminaBand};
 use shared::wounds::{BodyPart, WoundSeverity, WoundType};
 use std::cmp::Ordering;
 use world::items::{Item, OwnsItems};
+use world::messages::TaggedEvent;
 use world::output::GameOutput;
 
 // ---------------------------------------------------------------------------

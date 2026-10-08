@@ -16,10 +16,10 @@ mod tests {
     };
     use crate::characters::combat::inflict_table::{HitSeverity, WeaponKind, lookup_inflicts};
     use crate::characters::combat_tuning::CombatTuning;
-    use crate::messages::MessagePayload;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
     use shared::afflictions::{Affliction, AfflictionKind, AfflictionSource, BodyPart, Severity};
+    use shared::messages::MessagePayload;
     use std::collections::BTreeMap;
 
     // ── Helpers ──────────────────────────────────────────────────────────

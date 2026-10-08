@@ -1,23 +1,19 @@
-//! Game-side message helpers.
+//! Message-building helpers for the world layer.
 //!
-//! The schema types (`GameMessage`, `MessageKind`, `MessageSource`, the new
-//! `MessagePayload` and friends) live in the `shared` crate so the `web`
-//! and `api` crates can use them without pulling in `game`. This module
-//! re-exports them and adds game-only conveniences:
+//! The schema types (`GameMessage`, `MessageKind`, `MessageSource`,
+//! `MessagePayload` and friends) live in [`shared::messages`] so the
+//! `api` and `announcers` crates can use them without pulling in
+//! `game` or `world`. This module adds:
 //!
 //! - [`TaggedEvent`]: a per-action accumulator pairing a typed
 //!   [`MessagePayload`] with its already-formatted prose line. The
-//!   `do_step` drain converts each `TaggedEvent` into a [`GameMessage`]
-//!   stamped with `(game_day, phase, tick, emit_index)`.
+//!   `do_step` drain converts each `TaggedEvent` into a `GameMessage`
+//!   stamped with `(game_day, phase, tick, emit_index)` causal-ordering
+//!   fields applied at the boundary.
 //! - Terrain-aware narrative helpers used by character / area logic.
 
-pub use shared::ids::{AreaId, CharacterId, ItemId};
-pub use shared::messages::{
-    AreaEventKind, AreaRef, CharacterRef, CombatEngagement, CombatOutcome, GameMessage, ItemRef,
-    MessageKind, MessagePayload, MessageSource, ParsePhaseError, Phase, TeamRef,
-};
-
-use world::terrain::{BaseTerrain, Harshness, Visibility};
+use crate::terrain::{BaseTerrain, Harshness, Visibility};
+use shared::messages::MessagePayload;
 
 /// Per-action accumulator: a typed payload plus its already-formatted prose line.
 ///
@@ -329,6 +325,8 @@ fn terrain_name(terrain: BaseTerrain) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::terrain::BaseTerrain;
+    use shared::messages::{CharacterRef, MessageKind, MessagePayload};
 
     #[test]
     fn tagged_event_constructor_sets_fields() {

@@ -11,11 +11,11 @@ use strum::IntoEnumIterator;
 
 use crate::areas::Area;
 use crate::characters::Character;
-use crate::messages::MessagePayload;
 use rand::RngExt;
 use rand::SeedableRng;
 use rand::prelude::IndexedRandom;
 use rand::rngs::SmallRng;
+use shared::messages::MessagePayload;
 use uuid::Uuid;
 use world::items::Item;
 

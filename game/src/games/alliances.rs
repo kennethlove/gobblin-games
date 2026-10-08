@@ -48,19 +48,19 @@ impl Game {
                             victim_id: victim,
                             victim_name: v_name.clone(),
                         };
-                        let payload = crate::messages::MessagePayload::BetrayalTriggered {
-                            betrayer: crate::messages::CharacterRef {
+                        let payload = shared::messages::MessagePayload::BetrayalTriggered {
+                            betrayer: shared::messages::CharacterRef {
                                 identifier: b_id.into(),
                                 name: b_name,
                             },
-                            victim: crate::messages::CharacterRef {
+                            victim: shared::messages::CharacterRef {
                                 identifier: v_id.clone().into(),
                                 name: v_name.clone(),
                             },
                         };
                         let tick = self.tick_counter.next();
                         self.push_message(
-                            crate::messages::MessageSource::Character(v_id.to_string()),
+                            shared::messages::MessageSource::Character(v_id.to_string()),
                             v_name,
                             event.to_string(),
                             payload,
@@ -82,7 +82,7 @@ impl Game {
                         .map(|d| {
                             (
                                 d.allies.clone(),
-                                crate::messages::CharacterRef {
+                                shared::messages::CharacterRef {
                                     identifier: d.identifier.clone().into(),
                                     name: d.name.clone(),
                                 },
@@ -91,7 +91,7 @@ impl Game {
                         .unwrap_or_else(|| {
                             (
                                 Vec::new(),
-                                crate::messages::CharacterRef {
+                                shared::messages::CharacterRef {
                                     identifier: deceased.to_string().into(),
                                     name: String::new(),
                                 },
@@ -111,8 +111,8 @@ impl Game {
                                     character_id: ally_uuid,
                                     character_name: aname.clone(),
                                 };
-                                let payload = crate::messages::MessagePayload::TrustShockBreak {
-                                    character: crate::messages::CharacterRef {
+                                let payload = shared::messages::MessagePayload::TrustShockBreak {
+                                    character: shared::messages::CharacterRef {
                                         identifier: aid.clone().into(),
                                         name: aname.clone(),
                                     },
@@ -120,7 +120,7 @@ impl Game {
                                 };
                                 let tick = self.tick_counter.next();
                                 self.push_message(
-                                    crate::messages::MessageSource::Character(aid.to_string()),
+                                    shared::messages::MessageSource::Character(aid.to_string()),
                                     aname,
                                     event.to_string(),
                                     payload,
@@ -187,13 +187,13 @@ impl Game {
                             character_b_name: t_name.clone(),
                             factor: factor.clone(),
                         };
-                        let payload = crate::messages::MessagePayload::AllianceFormed {
+                        let payload = shared::messages::MessagePayload::AllianceFormed {
                             members: vec![
-                                crate::messages::CharacterRef {
+                                shared::messages::CharacterRef {
                                     identifier: p_id.clone().into(),
                                     name: p_name.clone(),
                                 },
-                                crate::messages::CharacterRef {
+                                shared::messages::CharacterRef {
                                     identifier: t_id.into(),
                                     name: t_name,
                                 },
@@ -201,7 +201,7 @@ impl Game {
                         };
                         let tick = self.tick_counter.next();
                         self.push_message(
-                            crate::messages::MessageSource::Character(p_id.to_string()),
+                            shared::messages::MessageSource::Character(p_id.to_string()),
                             p_name,
                             event.to_string(),
                             payload,
@@ -216,14 +216,14 @@ impl Game {
                     // place so future PRs (or test scaffolding) can wake
                     // sleeping allies through the standard alliance pipeline.
                     let summoner_ref = self.characters.iter().find(|t| t.id == summoner).map(|t| {
-                        crate::messages::CharacterRef {
+                        shared::messages::CharacterRef {
                             identifier: t.identifier.clone().into(),
                             name: t.name.clone(),
                         }
                     });
                     let Some(s_ref) = summoner_ref else { continue };
                     let phase = self.current_phase;
-                    let mut wake_events: Vec<crate::messages::TaggedEvent> = Vec::new();
+                    let mut wake_events: Vec<world::messages::TaggedEvent> = Vec::new();
                     let woke_info =
                         if let Some(t) = self.characters.iter_mut().find(|t| t.id == target) {
                             if t.wake_interrupted(
@@ -242,7 +242,7 @@ impl Game {
                         for ev in wake_events.drain(..) {
                             let tick = self.tick_counter.next();
                             self.push_message(
-                                crate::messages::MessageSource::Character(t_id.to_string()),
+                                shared::messages::MessageSource::Character(t_id.to_string()),
                                 t_name.clone(),
                                 ev.content,
                                 ev.payload,

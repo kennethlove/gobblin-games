@@ -32,7 +32,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::areas::{Area, AreaDetails};
 use crate::characters::afflictions::{AcquireResolution, can_acquire};
 use crate::characters::events::CharacterEvent;
-use crate::messages::{AreaRef, CharacterRef, ItemRef, MessagePayload, TaggedEvent};
 use actions::{Action, AttackOutcome};
 use brains::Brain;
 use rand::RngExt;
@@ -44,10 +43,12 @@ use shared::afflictions::{
     Substance, TrappedMetadata, TraumaSource,
 };
 use shared::messages::SleepIncidentKind;
+use shared::messages::{AreaRef, CharacterRef, ItemRef, MessagePayload};
 use shared::wounds::Wound;
 use statuses::CharacterStatus;
 use uuid::Uuid;
 use world::items::Item;
+use world::messages::TaggedEvent;
 use world::output::GameOutput;
 
 /// Serialize `Vec<Uuid>` as `Vec<String>` for SurrealDB compatibility.
@@ -845,7 +846,7 @@ impl Character {
                 events.push(TaggedEvent::new(
                     line,
                     MessagePayload::TrapTriggered {
-                        victim: crate::messages::CharacterRef {
+                        victim: shared::messages::CharacterRef {
                             identifier: self.identifier.clone().into(),
                             name: self.name.clone(),
                         },
@@ -1081,7 +1082,7 @@ impl Character {
         _events.push(TaggedEvent::new(
             line,
             MessagePayload::TrapSet {
-                character: crate::messages::CharacterRef {
+                character: shared::messages::CharacterRef {
                     identifier: self.identifier.clone().into(),
                     name: self.name.clone(),
                 },
@@ -1796,10 +1797,10 @@ mod tests {
 
     use crate::characters::Character;
     use crate::characters::brains::Brain;
-    use crate::messages::TaggedEvent;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
     use rstest::*;
+    use world::messages::TaggedEvent;
 
     #[fixture]
     fn character() -> Character {
@@ -2347,7 +2348,7 @@ mod tests {
 
     #[test]
     fn wake_interrupted_returns_false_when_not_sleeping() {
-        use crate::messages::CharacterRef;
+        use shared::messages::CharacterRef;
         let mut t = Character::new("Snoutrot".to_string(), Some(1), None);
         let mut events: Vec<TaggedEvent> = Vec::new();
         let woke = t.wake_interrupted(
@@ -2384,7 +2385,7 @@ mod tests {
         assert_eq!(t.cycles_awake, 0);
         assert_eq!(events.len(), 1);
         match &events[0].payload {
-            crate::messages::MessagePayload::CharacterWoke { reason, phase, .. } => {
+            shared::messages::MessagePayload::CharacterWoke { reason, phase, .. } => {
                 assert_eq!(*phase, shared::messages::Phase::Night);
                 match reason {
                     shared::messages::WakeReason::Interrupted {

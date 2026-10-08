@@ -8,7 +8,7 @@
 use game::areas::{Area, AreaDetails};
 use game::characters::Character;
 use game::games::Game;
-use game::messages::MessageSource;
+use shared::messages::MessageSource;
 use world::terrain::{BaseTerrain, TerrainType};
 
 /// Pin two characters in the same area, force one to be obviously stronger,
@@ -95,6 +95,6 @@ fn combat_events_reach_game_messages_with_character_source() {
     }
 }
 
-fn is_character_sourced(m: &game::messages::GameMessage) -> bool {
+fn is_character_sourced(m: &shared::messages::GameMessage) -> bool {
     matches!(m.source, MessageSource::Character(_))
 }

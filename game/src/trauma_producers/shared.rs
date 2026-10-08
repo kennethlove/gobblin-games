@@ -6,8 +6,8 @@
 use crate::characters::Character;
 use crate::characters::afflictions::TraumaAcquisition;
 use crate::games::Game;
-use crate::messages::{CharacterRef, MessagePayload, MessageSource};
 use shared::afflictions::{DeathCause, Severity, TraumaSource};
+use shared::messages::{CharacterRef, MessagePayload, MessageSource};
 
 /// Collected trauma event before application (avoids borrow conflicts).
 pub(super) struct TraumaEvent {

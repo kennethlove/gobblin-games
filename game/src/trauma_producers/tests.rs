@@ -3,9 +3,9 @@ use super::shared::map_cause_to_death_cause;
 use crate::areas::Area;
 use crate::characters::Character;
 use crate::games::Game;
-use crate::messages::{CharacterRef, GameMessage, MessagePayload, MessageSource};
 use shared::afflictions::DeathCause;
 use shared::messages::Phase;
+use shared::messages::{CharacterRef, GameMessage, MessagePayload, MessageSource};
 use uuid::Uuid;
 
 fn make_character(name: &str) -> Character {

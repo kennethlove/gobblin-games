@@ -1,8 +1,8 @@
 //! Producer (c): Survive near-death — Moderate trauma.
 
 use crate::games::Game;
-use crate::messages::{MessagePayload, Phase};
 use shared::afflictions::{DeathCause, Severity, TraumaSource};
+use shared::messages::{MessagePayload, Phase};
 
 use super::shared::{TraumaEvent, apply_trauma_events};
 

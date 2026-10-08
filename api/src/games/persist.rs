@@ -1,6 +1,6 @@
 use axum::Json;
 use game::games::Game;
-use game::messages::GameMessage;
+use shared::messages::GameMessage;
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
 use surrealdb_types::{RecordId, SerdeWrapper};

@@ -49,10 +49,10 @@ fn area_event_to_kind(ev: &AreaEvent) -> shared::messages::AreaEventKind {
 
 /// Generate a human-readable line for trauma-related messages.
 fn format_trauma_message(
-    payload: &crate::messages::MessagePayload,
+    payload: &shared::messages::MessagePayload,
     character_name: &str,
 ) -> String {
-    use crate::messages::MessagePayload;
+    use shared::messages::MessagePayload;
     match payload {
         MessagePayload::TraumaFlashback { source, .. } => {
             format!("{character_name} is haunted by {source}.")
@@ -82,10 +82,10 @@ fn format_trauma_message(
 
 /// Generate a human-readable line for fixation-related messages.
 fn fixation_message_line(
-    payload: &crate::messages::MessagePayload,
+    payload: &shared::messages::MessagePayload,
     character_name: &str,
 ) -> String {
-    use crate::messages::MessagePayload;
+    use shared::messages::MessagePayload;
     match payload {
         MessagePayload::FixationConsummated { target, .. } => {
             format!("{character_name}'s fixation on {target} is consummated!")
@@ -101,8 +101,8 @@ fn fixation_message_line(
 }
 
 /// Generate a human-readable line for phobia-related messages.
-fn phobia_message_line(payload: &crate::messages::MessagePayload, character_name: &str) -> String {
-    use crate::messages::MessagePayload;
+fn phobia_message_line(payload: &shared::messages::MessagePayload, character_name: &str) -> String {
+    use shared::messages::MessagePayload;
     match payload {
         MessagePayload::PhobiaEscalated {
             trigger,
@@ -148,10 +148,10 @@ fn phobia_message_line(payload: &crate::messages::MessagePayload, character_name
 
 /// Generate a human-readable line for addiction-related messages.
 fn format_addiction_message(
-    payload: &crate::messages::MessagePayload,
+    payload: &shared::messages::MessagePayload,
     character_name: &str,
 ) -> String {
-    use crate::messages::MessagePayload;
+    use shared::messages::MessagePayload;
     match payload {
         MessagePayload::AddictionObserved {
             observer, subject, ..
@@ -264,7 +264,7 @@ pub struct Game {
     /// Drained and persisted by the API layer after each `run_day_night_cycle`.
     /// Skipped during serialization since events live in their own table.
     #[serde(default, skip_serializing)]
-    pub messages: Vec<crate::messages::GameMessage>,
+    pub messages: Vec<shared::messages::GameMessage>,
     /// Transient queue of alliance lifecycle events drained between character
     /// turns inside `run_day_night_cycle`. Lives only for the duration of a
     /// single cycle; never persisted. See spec §7.5.
@@ -277,7 +277,7 @@ pub struct Game {
     /// by helper logging methods to stamp `GameMessage.phase`. Defaults to
     /// `Day` outside of an active cycle.
     #[serde(skip, default = "default_phase")]
-    pub current_phase: crate::messages::Phase,
+    pub current_phase: shared::messages::Phase,
     /// Per-period emit index for the in-flight cycle. Transient. Reset at
     /// every phase boundary alongside `tick_counter`.
     #[serde(skip, default)]
@@ -294,8 +294,8 @@ pub struct Game {
     pub patrons: Vec<shared::patrons::Patron>,
 }
 
-fn default_phase() -> crate::messages::Phase {
-    crate::messages::Phase::Day
+fn default_phase() -> shared::messages::Phase {
+    shared::messages::Phase::Day
 }
 
 impl PartialEq for Game {
@@ -327,7 +327,7 @@ impl Default for Game {
             messages: vec![],
             alliance_events: vec![],
             tick_counter: TickCounter::default(),
-            current_phase: crate::messages::Phase::Day,
+            current_phase: shared::messages::Phase::Day,
             emit_index: 0,
             combat_tuning: crate::characters::combat_tuning::CombatTuning::default(),
             patrons: vec![],
@@ -351,7 +351,7 @@ type CollectedEvent = (
     String,
     String,
     String,
-    Option<crate::messages::MessagePayload>,
+    Option<shared::messages::MessagePayload>,
     Option<crate::events::GameEvent>,
 );
 
@@ -368,7 +368,7 @@ struct CycleContext {
     /// Threaded through to `EnvironmentContext` and the sleep tick handler
     /// so brain scoring and `CharacterSlept` / `CharacterWoke` payloads see the
     /// real phase rather than reconstructing it from `is_day`.
-    phase: crate::messages::Phase,
+    phase: shared::messages::Phase,
     /// Current game day (1-indexed). Mirrors `Game::day.unwrap_or(1)` and
     /// is forwarded into `EnvironmentContext::current_day`.
     current_day: u32,
@@ -520,16 +520,16 @@ impl Game {
         if let Some(team) = self.winning_team() {
             let game_id = self.identifier.clone();
             let label = world::clans::team_label(team);
-            let payload = crate::messages::MessagePayload::GameEnded {
+            let payload = shared::messages::MessagePayload::GameEnded {
                 winner: None,
-                winning_team: Some(crate::messages::TeamRef {
+                winning_team: Some(shared::messages::TeamRef {
                     team,
                     label: label.clone(),
                 }),
             };
             let tick = self.tick_counter.boundary();
             self.push_message(
-                crate::messages::MessageSource::Game(game_id.clone()),
+                shared::messages::MessageSource::Game(game_id.clone()),
                 format!("game:{}", game_id),
                 format!("{label} win the game!"),
                 payload,
@@ -538,13 +538,13 @@ impl Game {
             self.end();
         } else if self.living_characters_count() == 0 {
             let game_id = self.identifier.clone();
-            let payload = crate::messages::MessagePayload::GameEnded {
+            let payload = shared::messages::MessagePayload::GameEnded {
                 winner: None,
                 winning_team: None,
             };
             let tick = self.tick_counter.boundary();
             self.push_message(
-                crate::messages::MessageSource::Game(game_id.clone()),
+                shared::messages::MessageSource::Game(game_id.clone()),
                 format!("game:{}", game_id),
                 "The game has ended with no survivors.".to_string(),
                 payload,
@@ -559,7 +559,7 @@ impl Game {
     /// Clears old messages and area events.
     /// Increments day count by 1 if this is the first phase of a new day.
     /// (Day 1 starts at `Phase::Day`; Day 2+ starts at `Phase::Dawn`.)
-    fn prepare_cycle(&mut self, phase: crate::messages::Phase) -> Result<(), GameError> {
+    fn prepare_cycle(&mut self, phase: shared::messages::Phase) -> Result<(), GameError> {
         if self.is_new_day_boundary(phase) {
             self.day = Some(self.day.unwrap_or(0) + 1);
         }
@@ -573,24 +573,25 @@ impl Game {
 
     /// True when this phase begins a new game-day. Day 1 begins at
     /// `Phase::Day` (no Dawn1 per spec §3); Day 2+ begins at `Phase::Dawn`.
-    fn is_new_day_boundary(&self, phase: crate::messages::Phase) -> bool {
+    fn is_new_day_boundary(&self, phase: shared::messages::Phase) -> bool {
         matches!(
             (self.day, phase),
-            (None | Some(0), crate::messages::Phase::Day) | (Some(_), crate::messages::Phase::Dawn)
+            (None | Some(0), shared::messages::Phase::Day)
+                | (Some(_), shared::messages::Phase::Dawn)
         )
     }
 
     /// Announces the start of the cycle.
-    fn announce_cycle_start(&mut self, phase: crate::messages::Phase) -> Result<(), GameError> {
+    fn announce_cycle_start(&mut self, phase: shared::messages::Phase) -> Result<(), GameError> {
         let current_day = self.day.unwrap_or(1);
         let game_id = self.identifier.clone();
         let subject = format!("game:{}", game_id);
 
         let content = match phase {
-            crate::messages::Phase::Dawn => {
+            shared::messages::Phase::Dawn => {
                 format!("Dawn {} breaks pale over the arena.", current_day)
             }
-            crate::messages::Phase::Day => match current_day {
+            shared::messages::Phase::Day => match current_day {
                 1 => format!("Day {}: The games have begun!", current_day),
                 3 => format!(
                     "Day {}: Patrons take note of the remaining goblins.",
@@ -598,21 +599,21 @@ impl Game {
                 ),
                 _ => format!("Day {} dawns over the arena.", current_day),
             },
-            crate::messages::Phase::Dusk => {
+            shared::messages::Phase::Dusk => {
                 format!("Dusk {} settles in long shadows.", current_day)
             }
-            crate::messages::Phase::Night => {
+            shared::messages::Phase::Night => {
                 format!("Night {} falls. The arena grows dark.", current_day)
             }
         };
 
-        let payload = crate::messages::MessagePayload::CycleStart {
+        let payload = shared::messages::MessagePayload::CycleStart {
             day: current_day,
             phase,
         };
         let tick = self.tick_counter.boundary();
         self.push_message(
-            crate::messages::MessageSource::Game(game_id.clone()),
+            shared::messages::MessageSource::Game(game_id.clone()),
             subject.clone(),
             content.clone(),
             payload,
@@ -621,13 +622,13 @@ impl Game {
 
         // PhaseStarted: four-phase day substrate (spec §4 step 4).
         // Reuse the same message — no duplicate content string.
-        let phase_payload = crate::messages::MessagePayload::PhaseStarted {
+        let phase_payload = shared::messages::MessagePayload::PhaseStarted {
             day: current_day,
             phase,
             weather_summary: None,
         };
         self.push_message(
-            crate::messages::MessageSource::Game(game_id),
+            shared::messages::MessageSource::Game(game_id),
             subject,
             String::new(),
             phase_payload,
@@ -638,7 +639,7 @@ impl Game {
     }
 
     /// Announces the end of a cycle
-    fn announce_cycle_end(&mut self, phase: crate::messages::Phase) -> Result<(), GameError> {
+    fn announce_cycle_end(&mut self, phase: shared::messages::Phase) -> Result<(), GameError> {
         let game_id = self.identifier.clone();
         let current_day = self.day.unwrap_or(1);
 
@@ -648,13 +649,13 @@ impl Game {
         // duplicated those events with a `SanityBreak` fallback payload
         // which mis-classified them in the timeline.
 
-        let payload = crate::messages::MessagePayload::CycleEnd {
+        let payload = shared::messages::MessagePayload::CycleEnd {
             day: current_day,
             phase,
         };
         let tick = self.tick_counter.boundary();
         self.push_message(
-            crate::messages::MessageSource::Game(game_id.clone()),
+            shared::messages::MessageSource::Game(game_id.clone()),
             format!("game:{}", game_id),
             format!("End of {} {}.", phase, current_day),
             payload,
@@ -663,12 +664,12 @@ impl Game {
 
         // PhaseEnded: four-phase day substrate (spec §4 step 4).
         // Reuse the same message — no duplicate content string.
-        let phase_payload = crate::messages::MessagePayload::PhaseEnded {
+        let phase_payload = shared::messages::MessagePayload::PhaseEnded {
             day: current_day,
             phase,
         };
         self.push_message(
-            crate::messages::MessageSource::Game(game_id.clone()),
+            shared::messages::MessageSource::Game(game_id.clone()),
             format!("game:{}", game_id),
             String::new(),
             phase_payload,
@@ -726,7 +727,7 @@ impl Game {
         let area_name = area.to_string();
         let area_subject = format!("area:{}", area_name);
         self.log_event(
-            crate::messages::MessageSource::Area(area_name.clone()),
+            shared::messages::MessageSource::Area(area_name.clone()),
             area_subject.clone(),
             crate::events::GameEvent::AreaEvent {
                 area_event: most_severe_event.to_string(),
@@ -773,11 +774,11 @@ impl Game {
                 };
 
                 let content = format!("{} falls into a sinkhole and dies.", name);
-                let source = crate::messages::MessageSource::Character(id.to_string());
+                let source = shared::messages::MessageSource::Character(id.to_string());
                 let subject = format!("character:{}", id);
                 let tick = self.tick_counter.next();
-                let payload = crate::messages::MessagePayload::CharacterKilled {
-                    victim: crate::messages::CharacterRef {
+                let payload = shared::messages::MessagePayload::CharacterKilled {
+                    victim: shared::messages::CharacterRef {
                         identifier: id.clone().into(),
                         name: name.clone(),
                     },
@@ -786,7 +787,7 @@ impl Game {
                 };
                 // Also log to the area channel so the timeline shows the death
                 let area_source =
-                    crate::messages::MessageSource::Area(most_severe_event.to_string());
+                    shared::messages::MessageSource::Area(most_severe_event.to_string());
                 let area_subject = format!("area:{}", most_severe_event);
                 self.push_message(
                     area_source,
@@ -805,10 +806,10 @@ impl Game {
             // DeathCard / count toward timeline death tallies) instead of
             // falling through to the legacy `SanityBreak` fallback.
             type PendingMsg = (
-                crate::messages::MessageSource,
+                shared::messages::MessageSource,
                 String,
                 String,
-                Option<crate::messages::MessagePayload>,
+                Option<shared::messages::MessagePayload>,
             );
             let mut pending_messages: Vec<PendingMsg> = Vec::new();
 
@@ -842,7 +843,7 @@ impl Game {
                 );
 
                 let source =
-                    crate::messages::MessageSource::Character(character.identifier.to_string());
+                    shared::messages::MessageSource::Character(character.identifier.to_string());
                 let subject = format!("character:{}", character.identifier);
                 let roll_detail = format!(
                     "[{:?} severity, rolled {}{}]",
@@ -902,8 +903,8 @@ impl Game {
                             character.name, most_severe_event, roll_detail
                         )
                     };
-                    let payload = crate::messages::MessagePayload::CharacterKilled {
-                        victim: crate::messages::CharacterRef {
+                    let payload = shared::messages::MessagePayload::CharacterKilled {
+                        victim: shared::messages::CharacterRef {
                             identifier: character.identifier.clone().into(),
                             name: character.name.clone(),
                         },
@@ -987,7 +988,7 @@ impl Game {
     /// (spec `2026-05-03-four-phase-day-design.md`). Replaces the legacy
     /// `run_day_night_cycle(bool)` boundary; callers driving an entire day
     /// should use `run_full_day` instead.
-    pub fn run_phase(&mut self, phase: crate::messages::Phase) -> Result<(), GameError> {
+    pub fn run_phase(&mut self, phase: shared::messages::Phase) -> Result<(), GameError> {
         // Phase boundary: reset transient cycle state. `tick` and `emit_index`
         // are per-phase and must restart at every flip so causal
         // ordering inside a phase is contiguous from zero.
@@ -1012,7 +1013,7 @@ impl Game {
     /// Run every phase of the next game-day in canonical order. Day 1 has
     /// no Dawn (per spec §3); Day 2+ runs all four phases.
     pub fn run_full_day(&mut self) -> Result<(), GameError> {
-        use crate::messages::Phase;
+        use shared::messages::Phase;
         let next_day = self.day.unwrap_or(0) + 1;
         let phases: &[Phase] = if next_day <= 1 {
             &[Phase::Day, Phase::Dusk, Phase::Night]

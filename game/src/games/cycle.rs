@@ -6,11 +6,11 @@ use crate::characters::statuses::CharacterStatus;
 use crate::characters::{
     ActionSuggestion, Character, EncounterContext, EnvironmentContext, calculate_stamina_cost,
 };
-use crate::messages::{AreaRef, CharacterRef, ItemRef, MessagePayload};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
 use shared::messages::SleepIncidentKind;
+use shared::messages::{AreaRef, CharacterRef, ItemRef, MessagePayload};
 use std::collections::HashMap;
 use world::items::{Item, OwnsItems};
 
@@ -25,12 +25,12 @@ impl Game {
     /// phase.
     pub(super) fn build_cycle_context(
         &self,
-        phase: crate::messages::Phase,
+        phase: shared::messages::Phase,
         closed_areas: Vec<Area>,
         living_characters: Vec<Character>,
         living_characters_count: usize,
     ) -> CycleContext {
-        use crate::messages::Phase;
+        use shared::messages::Phase;
         let day = phase == Phase::Day;
         let action_suggestion = match (self.day, day) {
             (Some(1), true) => Some(ActionSuggestion {
@@ -155,8 +155,8 @@ impl Game {
                     apply_dehydration_drain, apply_starvation_drain, hunger_band, thirst_band,
                     tick_survival,
                 };
-                use crate::messages::{CharacterRef, MessagePayload};
                 use shared::afflictions::DeathCause;
+                use shared::messages::{CharacterRef, MessagePayload};
 
                 let weather = current_weather();
                 let phase_index: u32 = self.day.unwrap_or(1) * 2 + u32::from(!day);
@@ -417,8 +417,8 @@ impl Game {
             // Interruption handling lives in PR2c.2; this PR
             // ships the natural-wake path only.
             if character.sleeping {
-                use crate::messages::{CharacterRef, MessagePayload};
                 use shared::messages::WakeReason;
+                use shared::messages::{CharacterRef, MessagePayload};
 
                 // Spec §6.4 PR2c.2. Before regenerating, check
                 // whether an area event in the sleeper's current area is
@@ -431,7 +431,7 @@ impl Game {
                     .and_then(|a| a.events.first())
                     .map(area_event_to_kind);
                 if let Some(kind) = area_event_kind {
-                    let mut wake_events: Vec<crate::messages::TaggedEvent> = Vec::new();
+                    let mut wake_events: Vec<world::messages::TaggedEvent> = Vec::new();
                     let woke = character.wake_interrupted(
                         shared::messages::InterruptionKind::AreaEvent { kind },
                         phase,
@@ -893,7 +893,7 @@ impl Game {
                     probability: Some(1.0),
                 });
             }
-            let mut character_events: Vec<crate::messages::TaggedEvent> = Vec::new();
+            let mut character_events: Vec<world::messages::TaggedEvent> = Vec::new();
             character.process_turn_phase(
                 override_suggestion,
                 &mut environment_details,
@@ -1096,7 +1096,7 @@ impl Game {
     /// same area within a phase collapse into a single emission — only the
     /// first is kept, duplicates are silently dropped.
     pub(super) fn flush_character_events(&mut self, collected_events: Vec<CollectedEvent>) {
-        use crate::messages::MessagePayload;
+        use shared::messages::MessagePayload;
 
         let mut last_identifier: Option<String> = None;
         let mut current_tick: u32 = self.tick_counter.boundary();
@@ -1121,7 +1121,7 @@ impl Game {
                 current_tick = self.tick_counter.next();
                 last_identifier = Some(identifier.clone());
             }
-            let source = crate::messages::MessageSource::Character(identifier.clone());
+            let source = shared::messages::MessageSource::Character(identifier.clone());
             let payload = payload.unwrap_or_else(|| Self::fallback_payload(&source));
             self.push_message(source, identifier, content, payload, current_tick);
         }
@@ -1135,7 +1135,7 @@ impl Game {
     /// gamemaker overrides a typed seam to inject suggestions.
     pub(super) fn run_character_cycle(
         &mut self,
-        phase: crate::messages::Phase,
+        phase: shared::messages::Phase,
         rng: &mut SmallRng,
         closed_areas: Vec<Area>,
         living_characters: Vec<Character>,
@@ -1187,7 +1187,7 @@ impl Game {
                 };
                 let line = world::output::GameOutput::PatronGift(recipient_id.as_ref(), &gift.item)
                     .to_string();
-                let source = crate::messages::MessageSource::Game(self.identifier.clone());
+                let source = shared::messages::MessageSource::Game(self.identifier.clone());
                 let subject = format!("patron_gift:{recipient_id}");
                 let tick = self.tick_counter.next();
                 let payload = gift.payload;
@@ -1213,7 +1213,7 @@ impl Game {
     /// 5. Close more areas by spawning more events if the characters are getting low.
     /// 6. Run the character cycle.
     /// 7. Update the characters in the game.
-    pub(super) fn do_a_cycle(&mut self, phase: crate::messages::Phase) -> Result<(), GameError> {
+    pub(super) fn do_a_cycle(&mut self, phase: shared::messages::Phase) -> Result<(), GameError> {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
 
         // Announce area events

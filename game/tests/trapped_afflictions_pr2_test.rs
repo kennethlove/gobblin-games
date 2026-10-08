@@ -104,7 +104,7 @@ fn rescue_bonus_applied_to_trapped_target() {
     let has_event = events.iter().any(|e| {
         matches!(
             e.payload,
-            game::messages::MessagePayload::RescueAttempted { .. }
+            shared::messages::MessagePayload::RescueAttempted { .. }
         )
     });
     assert!(has_event, "expected RescueAttempted event");

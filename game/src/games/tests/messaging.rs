@@ -6,7 +6,7 @@ fn test_announce_cycle_start() {
     let character2 = create_character("Character2", true);
     let mut game = create_test_game_with_characters(vec![character1.clone(), character2.clone()]);
     game.day = Some(1);
-    let _ = game.announce_cycle_start(crate::messages::Phase::Day);
+    let _ = game.announce_cycle_start(shared::messages::Phase::Day);
     assert_eq!(game.messages.len(), 2);
 }
 
@@ -17,7 +17,7 @@ fn test_announce_cycle_end() {
     character2.set_status(CharacterStatus::RecentlyDead);
     let mut game = create_test_game_with_characters(vec![character1.clone(), character2.clone()]);
     game.day = Some(1);
-    let _ = game.announce_cycle_end(crate::messages::Phase::Day);
+    let _ = game.announce_cycle_end(shared::messages::Phase::Day);
     assert_eq!(game.messages.len(), 2);
 }
 
@@ -38,7 +38,7 @@ fn test_announce_area_events() {
     for msg in &game.messages {
         assert_eq!(
             msg.source,
-            crate::messages::MessageSource::Area(area_name.clone())
+            shared::messages::MessageSource::Area(area_name.clone())
         );
         assert_eq!(
             msg.subject,
@@ -51,17 +51,17 @@ fn test_announce_area_events() {
 fn message_subjects_are_prefixed_with_game_id() {
     let mut game = Game::new("Subject Prefix Test");
     game.log(
-        crate::messages::MessageSource::Game(game.identifier.clone()),
+        shared::messages::MessageSource::Game(game.identifier.clone()),
         format!("game:{}", game.identifier),
         "hello".to_string(),
     );
     game.log(
-        crate::messages::MessageSource::Area("Hub".to_string()),
+        shared::messages::MessageSource::Area("Hub".to_string()),
         "area:Hub".to_string(),
         "boom".to_string(),
     );
     game.log(
-        crate::messages::MessageSource::Character("trib-id".to_string()),
+        shared::messages::MessageSource::Character("trib-id".to_string()),
         "character:trib-id".to_string(),
         "ouch".to_string(),
     );
@@ -77,7 +77,7 @@ fn message_subjects_are_prefixed_with_game_id() {
     let count_before = game.messages.len();
     let already_prefixed = format!("{}:area:Other", game.identifier);
     game.log(
-        crate::messages::MessageSource::Area("Other".to_string()),
+        shared::messages::MessageSource::Area("Other".to_string()),
         already_prefixed.clone(),
         "ok".to_string(),
     );

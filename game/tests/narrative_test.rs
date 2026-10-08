@@ -1,4 +1,4 @@
-use game::messages::{hiding_spot_narrative, movement_narrative, stamina_narrative};
+use world::messages::{hiding_spot_narrative, movement_narrative, stamina_narrative};
 use world::terrain::BaseTerrain;
 
 /// Test movement narrative for Desert terrain.

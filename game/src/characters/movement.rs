@@ -7,9 +7,10 @@
 
 use crate::areas::Area;
 use crate::characters::Character;
-use crate::messages::{AreaRef, CharacterRef, MessagePayload, TaggedEvent};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
+use shared::messages::{AreaRef, CharacterRef, MessagePayload};
+use world::messages::TaggedEvent;
 use world::output::GameOutput;
 
 #[derive(Debug, PartialEq)]

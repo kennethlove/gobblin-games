@@ -1,8 +1,8 @@
 //! Producer (d): Survive betrayal — Moderate trauma + phobia co-acquire stub.
 
 use crate::games::Game;
-use crate::messages::{MessagePayload, Phase};
 use shared::afflictions::{Severity, TraumaSource};
+use shared::messages::{MessagePayload, Phase};
 
 use super::shared::{TraumaEvent, apply_trauma_events};
 

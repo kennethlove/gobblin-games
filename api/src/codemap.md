@@ -402,7 +402,7 @@ switch status:
 - `game::characters::Character` - Character entity
 - `world::items::Item` - Item entity
 - `game::areas::{Area, AreaDetails}` - Area types
-- `game::messages::{get_all_messages, GameMessage}` - Log retrieval
+- `shared::messages::{GameMessage, MessagePayload}` - Log types
 
 **Pattern**: API hydrates `Game` from DB → calls game engine methods → persists updated state.
 

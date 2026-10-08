@@ -2,8 +2,8 @@
 
 use crate::areas::Area;
 use crate::games::Game;
-use crate::messages::{CharacterRef, MessagePayload, Phase};
 use shared::afflictions::{Severity, TraumaSource};
+use shared::messages::{CharacterRef, MessagePayload, Phase};
 
 use super::shared::{TraumaEvent, apply_trauma_events, map_cause_to_death_cause};
 

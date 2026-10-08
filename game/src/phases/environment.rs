@@ -22,10 +22,10 @@
 //! affliction application.
 
 use crate::areas::weather::Weather;
-use crate::messages::Phase;
 use rand::{Rng, RngExt};
 use serde::{Deserialize, Serialize};
 use shared::afflictions::AfflictionKind;
+use shared::messages::Phase;
 use world::terrain::types::BaseTerrain;
 
 /// Three discrete light bands derived from `(phase, biome, weather)`. The
