@@ -235,8 +235,8 @@ fn html_escape(s: &str) -> String {
 }
 
 /// Rich card for the compiled end-of-day digest: rollup header plus a
-/// collapsible per-goblin table (kills, wounds, items, alliances, and
-/// the end-of-day state snapshot).
+/// collapsible per-goblin table. Markup lives in
+/// `templates/day_summary_card.html` (Tera autoescapes names/values).
 pub fn render_day_summary_card(msg: &shared::messages::GameMessage) -> String {
     let shared::messages::MessagePayload::DaySummary {
         day,
@@ -249,86 +249,48 @@ pub fn render_day_summary_card(msg: &shared::messages::GameMessage) -> String {
         return render_plain_event_card(msg);
     };
 
-    let leaders = rollup
-        .kill_leaders
-        .iter()
-        .map(|l| format!("{} ({})", html_escape(&l.character.name), l.kills))
-        .collect::<Vec<_>>()
-        .join(", ");
+    let mut ctx = tera::Context::new();
+    ctx.insert("day", day);
+    ctx.insert("fallen", &rollup.fallen);
+    ctx.insert("survivors", &rollup.survivors);
+    ctx.insert("deaths", &rollup.deaths);
+    ctx.insert("formed", &rollup.alliances_formed);
+    ctx.insert("dissolved", &rollup.alliances_dissolved);
+    ctx.insert("betrays", &rollup.betrayals);
+    ctx.insert("found", &rollup.items_found);
+    ctx.insert("used", &rollup.items_used);
+    ctx.insert(
+        "leaders",
+        &rollup
+            .kill_leaders
+            .iter()
+            .map(|l| serde_json::json!({ "name": l.character.name, "kills": l.kills }))
+            .collect::<Vec<_>>(),
+    );
+    ctx.insert(
+        "goblins",
+        &goblins
+            .iter()
+            .map(|g| {
+                serde_json::json!({
+                    "name": g.character.name,
+                    "team": g.team,
+                    "kills": g.kills,
+                    "wounds": g.wounds_taken,
+                    "found": g.items_found,
+                    "used": g.items_used,
+                    "alliances": g.alliance_changes,
+                    "state": if g.alive {
+                        format!("{} hp", g.blood)
+                    } else {
+                        "fallen".to_string()
+                    },
+                })
+            })
+            .collect::<Vec<_>>(),
+    );
 
-    let mut rows = String::new();
-    for g in goblins {
-        let state = if g.alive {
-            format!("{} hp", g.blood)
-        } else {
-            "fallen".to_string()
-        };
-        rows.push_str(&format!(
-            r#"<tr>
-              <td>{name}</td>
-              <td>{team}</td>
-              <td>{kills}</td>
-              <td>{wounds}</td>
-              <td>{found}/{used}</td>
-              <td>{alliances}</td>
-              <td>{state}</td>
-            </tr>"#,
-            name = html_escape(&g.character.name),
-            team = g.team,
-            kills = g.kills,
-            wounds = g.wounds_taken,
-            found = g.items_found,
-            used = g.items_used,
-            alliances = g.alliance_changes,
-            state = state,
-        ));
-    }
-
-    let leaders_line = if leaders.is_empty() {
-        String::new()
-    } else {
-        format!(r#"<div class="card-timestamp">Kills: {leaders}</div>"#)
-    };
-
-    format!(
-        r#"<div class="event-card summary" data-archetype="summary" style="border-left-color:var(--muted);">
-          <div class="card-head">
-            <span class="card-badge" style="background:var(--muted);">DAY SUMMARY</span>
-            <span class="card-timestamp">D{day}</span>
-          </div>
-          <div class="card-body">
-            <span style="font-weight:600;">Day {day}</span>
-            — {fallen} fallen, {survivors} standing. {deaths} deaths,
-            {formed} alliances formed, {dissolved} dissolved, {betrays} betrayals,
-            {found} items found, {used} items used.
-            {leaders_line}
-            <details style="margin-top:6px;">
-              <summary style="cursor:pointer; color:var(--muted);">{count} goblins</summary>
-              <table style="width:100%; margin-top:6px; font-size:var(--fs-xs);">
-                <thead>
-                  <tr style="text-align:left; color:var(--muted);">
-                    <th>Goblin</th><th>Team</th><th>Kills</th><th>Wounds</th>
-                    <th>Items F/U</th><th>Alliances</th><th>State</th>
-                  </tr>
-                </thead>
-                <tbody>{rows}</tbody>
-              </table>
-            </details>
-          </div>
-        </div>"#,
-        day = day,
-        fallen = rollup.fallen,
-        survivors = rollup.survivors,
-        deaths = rollup.deaths,
-        formed = rollup.alliances_formed,
-        dissolved = rollup.alliances_dissolved,
-        betrays = rollup.betrayals,
-        found = rollup.items_found,
-        used = rollup.items_used,
-        leaders_line = leaders_line,
-        count = goblins.len(),
-        rows = rows,
-    )
+    crate::templates::tera_engine::render("day_summary_card.html", &ctx)
 }
 
 pub fn render_event_card(msg: &shared::messages::GameMessage) -> String {

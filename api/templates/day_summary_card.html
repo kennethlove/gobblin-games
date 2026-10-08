@@ -1,0 +1,44 @@
+<div class="event-card summary" data-archetype="summary" style="border-left-color:var(--muted);">
+  <div class="card-head">
+    <span class="card-badge" style="background:var(--muted);">DAY SUMMARY</span>
+    <span class="card-timestamp">D{{ day }}</span>
+  </div>
+  <div class="card-body">
+    <span style="font-weight:600;">Day {{ day }}</span>
+    — {{ fallen }} fallen, {{ survivors }} standing. {{ deaths }} deaths,
+    {{ formed }} alliances formed, {{ dissolved }} dissolved, {{ betrays }} betrayals,
+    {{ found }} items found, {{ used }} items used.
+    {% if leaders %}
+    <div class="card-timestamp">Kills: {% for l in leaders %}{{ l.name }} ({{ l.kills }}){% if not loop.last %}, {% endif %}{% endfor %}</div>
+    {% endif %}
+    <details style="margin-top:6px;">
+      <summary style="cursor:pointer; color:var(--muted);">{{ goblins | length }} goblins</summary>
+      <table style="width:100%; margin-top:6px; font-size:var(--fs-xs);">
+        <thead>
+          <tr style="text-align:left; color:var(--muted);">
+            <th>Goblin</th>
+            <th>Team</th>
+            <th>Kills</th>
+            <th>Wounds</th>
+            <th>Items F/U</th>
+            <th>Alliances</th>
+            <th>State</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for g in goblins %}
+          <tr>
+            <td>{{ g.name }}</td>
+            <td>{{ g.team }}</td>
+            <td>{{ g.kills }}</td>
+            <td>{{ g.wounds }}</td>
+            <td>{{ g.found }}/{{ g.used }}</td>
+            <td>{{ g.alliances }}</td>
+            <td>{{ g.state }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
+  </div>
+</div>
