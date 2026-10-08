@@ -400,7 +400,7 @@ switch status:
 **Integration Points**:
 - `game::games::Game` - Main game state struct
 - `game::characters::Character` - Character entity
-- `game::items::Item` - Item entity
+- `world::items::Item` - Item entity
 - `game::areas::{Area, AreaDetails}` - Area types
 - `game::messages::{get_all_messages, GameMessage}` - Log retrieval
 

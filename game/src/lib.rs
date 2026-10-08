@@ -1,9 +1,7 @@
 pub mod areas;
 pub mod characters;
-pub mod clans;
 pub mod events;
 pub mod games;
-pub mod items;
 pub mod messages;
 pub mod output;
 pub mod patrons;

@@ -5,7 +5,9 @@
 //! living inside the simulation orchestrator (see gobblin-games-dww.16
 //! decision notes).
 
+pub mod clans;
 pub mod config;
+pub mod items;
 pub mod naming;
 pub mod pathfinding;
 pub mod terrain;

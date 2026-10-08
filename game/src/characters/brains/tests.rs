@@ -1,11 +1,11 @@
 use super::*;
 use crate::characters::Character;
 use crate::characters::actions::Action;
-use crate::items::Item;
 use rand::prelude::*;
 use rstest::{fixture, rstest};
 use shared::conditions::{ConditionSeverity, MentalCondition};
 use shared::messages::Phase;
+use world::items::Item;
 
 /// Helper: set a character's effective sanity to the target value by adding
 /// pain conditions. Sanity is derived from mental_conditions:
@@ -809,7 +809,7 @@ pub(crate) mod survival_override_tests {
     use crate::areas::weather::Weather;
     use crate::characters::Character;
     use crate::characters::actions::Action;
-    use crate::items::Item;
+    use world::items::Item;
     use world::terrain::BaseTerrain;
 
     #[test]

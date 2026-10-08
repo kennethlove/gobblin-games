@@ -12,7 +12,6 @@ use crate::characters::combat::inflict_table::{
     HitSeverity, WeaponKind, lookup_break_mid_swing_inflict, lookup_inflicts,
 };
 use crate::characters::stamina_band::stamina_band;
-use crate::items::{Item, OwnsItems};
 use crate::messages::{CharacterRef, MessagePayload, TaggedEvent};
 use crate::output::GameOutput;
 use rand::RngExt;
@@ -22,6 +21,7 @@ use shared::conditions::{ConditionSeverity, MentalCondition};
 use shared::messages::{ItemRef, StaminaBand};
 use shared::wounds::{BodyPart, WoundSeverity, WoundType};
 use std::cmp::Ordering;
+use world::items::{Item, OwnsItems};
 
 // ---------------------------------------------------------------------------
 // Helpers shared between resolve.rs and mod.rs (via pub(super))
@@ -138,7 +138,7 @@ pub fn attack_contest(
         let outcome = weapon.wear(1);
         // Defer clone: only Worn/Broken paths need the snapshot.
         match outcome {
-            crate::items::WearOutcome::Pristine => None,
+            world::items::WearOutcome::Pristine => None,
             _ => Some((weapon.clone(), outcome)),
         }
     } else {
@@ -152,8 +152,8 @@ pub fn attack_contest(
             name: weapon.name.clone(),
         };
         match outcome {
-            crate::items::WearOutcome::Pristine => {}
-            crate::items::WearOutcome::Worn => {
+            world::items::WearOutcome::Pristine => {}
+            world::items::WearOutcome::Worn => {
                 let content = GameOutput::WeaponWear(attacker.name.as_str(), weapon.name.as_str())
                     .to_string();
                 events.push(TaggedEvent::new(
@@ -171,7 +171,7 @@ pub fn attack_contest(
                     mid_action_penalty: None,
                 });
             }
-            crate::items::WearOutcome::Broken => {
+            world::items::WearOutcome::Broken => {
                 weapon_broken = true;
                 let content = GameOutput::WeaponBreak(attacker.name.as_str(), weapon.name.as_str())
                     .to_string();
@@ -251,7 +251,7 @@ pub fn attack_contest(
         defense_roll += shield.effect; // Add shield defense
         let outcome = shield.wear(1);
         match outcome {
-            crate::items::WearOutcome::Pristine => None,
+            world::items::WearOutcome::Pristine => None,
             _ => Some((shield.clone(), outcome)),
         }
     } else {
@@ -264,8 +264,8 @@ pub fn attack_contest(
             name: shield.name.clone(),
         };
         match outcome {
-            crate::items::WearOutcome::Pristine => {}
-            crate::items::WearOutcome::Worn => {
+            world::items::WearOutcome::Pristine => {}
+            world::items::WearOutcome::Worn => {
                 let content =
                     GameOutput::ShieldWear(target.name.as_str(), shield.name.as_str()).to_string();
                 events.push(TaggedEvent::new(
@@ -283,7 +283,7 @@ pub fn attack_contest(
                     mid_action_penalty: None,
                 });
             }
-            crate::items::WearOutcome::Broken => {
+            world::items::WearOutcome::Broken => {
                 let content =
                     GameOutput::ShieldBreak(target.name.as_str(), shield.name.as_str()).to_string();
                 events.push(TaggedEvent::new(

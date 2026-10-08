@@ -407,7 +407,7 @@ SELECT (
             .map(|c| c.team)
             .collect();
         match teams.len() {
-            1 => Some(game::clans::team_label(*teams.iter().next().unwrap())),
+            1 => Some(world::clans::team_label(*teams.iter().next().unwrap())),
             _ => None,
         }
     };

@@ -134,8 +134,8 @@ fn character_has_light_source(character: &Character) -> bool {
 mod tests {
     use super::*;
     use crate::areas::Area;
-    use crate::items::Item;
     use shared::messages::{CharacterRef, GameMessage, MessagePayload, MessageSource, Phase};
+    use world::items::Item;
     use world::terrain::TerrainType;
 
     fn make_area_details(terrain: BaseTerrain, events: Vec<AreaEvent>) -> AreaDetails {

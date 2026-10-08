@@ -290,7 +290,7 @@ Brain::act()
 - `AreaEvent`: Environmental hazards (Wildfire, Flood, Earthquake, Avalanche, Blizzard, Landslide, Heatwave)
 - **Flow**: `process_status()` → `apply_area_effects()` → sets character status based on area events
 
-**Items Module** (`crate::items`):
+**Items Module** (`world::items`):
 - `Item`: Weapons, shields, and consumables with effect values
 - `Attribute`: Enum of attributes items can affect (Health, Sanity, Movement, etc.)
 - `OwnsItems` trait: Shared inventory management

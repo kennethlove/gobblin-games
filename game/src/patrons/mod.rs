@@ -4,7 +4,7 @@ use shared::patrons::ArchetypeId;
 
 use crate::characters::Character;
 use crate::games::Game;
-use crate::items::Item;
+use world::items::Item;
 
 pub struct PatronContext<'a> {
     pub game: &'a Game,
@@ -351,20 +351,20 @@ fn pick_gift(patron: &shared::patrons::Patron, rng: &mut impl Rng) -> Option<Ite
 
 /// Map an `Item` to its `ItemKindTag` for gift-preference lookup.
 fn item_kind_tag(item: &Item) -> ItemKindTag {
-    use crate::items::ItemType;
+    use world::items::ItemType;
     match &item.item_type {
         ItemType::Food(_) => ItemKindTag::Food,
         ItemType::Water(_) => ItemKindTag::Water,
         ItemType::Consumable => match item.attribute {
-            crate::items::Attribute::Health | crate::items::Attribute::Sanity => {
+            world::items::Attribute::Health | world::items::Attribute::Sanity => {
                 ItemKindTag::Bandage
             }
-            crate::items::Attribute::Defense => ItemKindTag::Antidote,
+            world::items::Attribute::Defense => ItemKindTag::Antidote,
             _ => ItemKindTag::Bandage,
         },
         ItemType::Weapon => {
-            if item.rarity == crate::items::ItemRarity::Rare
-                || item.rarity == crate::items::ItemRarity::Legendary
+            if item.rarity == world::items::ItemRarity::Rare
+                || item.rarity == world::items::ItemRarity::Legendary
             {
                 ItemKindTag::WeaponRare
             } else {
@@ -386,7 +386,7 @@ fn item_cost(item: &Item) -> u32 {
 /// Full gift catalog: `(Item, cost)` pairs.
 #[allow(clippy::vec_init_then_push)]
 fn gift_catalog() -> Vec<(Item, u32)> {
-    use crate::items::{Attribute, ItemRarity};
+    use world::items::{Attribute, ItemRarity};
 
     let mut catalog = Vec::new();
 

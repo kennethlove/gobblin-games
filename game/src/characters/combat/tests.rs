@@ -1,12 +1,12 @@
 use super::*;
 use crate::characters::Character;
 use crate::characters::combat_tuning::CombatTuning;
-use crate::items::OwnsItems;
 use core::convert::Infallible;
 use rand::SeedableRng;
 use rand::TryRng;
 use rand::rngs::SmallRng;
 use rstest::*;
+use world::items::OwnsItems;
 
 #[fixture]
 fn small_rng() -> SmallRng {
@@ -491,7 +491,7 @@ fn test_fumble_self_damage(_small_rng: SmallRng) {
 /// reduced durability and remain in the attacker's inventory.
 #[rstest]
 fn weapon_survives_multiple_combats(mut small_rng: SmallRng) {
-    use crate::items::{Attribute, Item, ItemRarity, ItemType};
+    use world::items::{Attribute, Item, ItemRarity, ItemType};
 
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
     let mut target = Character::new("Grubworm".to_string(), None, None);
@@ -713,25 +713,25 @@ fn self_attack_emits_one_combat_swing(mut small_rng: SmallRng) {
 
 /// Construct a weapon with the given effect and durability=1 so a single
 /// `wear(1)` call breaks it.
-fn brittle_weapon(effect: i32) -> crate::items::Item {
-    crate::items::Item::new(
+fn brittle_weapon(effect: i32) -> world::items::Item {
+    world::items::Item::new(
         "Glass Sword",
-        crate::items::ItemType::Weapon,
-        crate::items::ItemRarity::Common,
+        world::items::ItemType::Weapon,
+        world::items::ItemRarity::Common,
         1,
-        crate::items::Attribute::Strength,
+        world::items::Attribute::Strength,
         effect,
     )
 }
 
 /// Construct a shield with the given effect and durability=1.
-fn brittle_shield(effect: i32) -> crate::items::Item {
-    crate::items::Item::new(
+fn brittle_shield(effect: i32) -> world::items::Item {
+    world::items::Item::new(
         "Glass Buckler",
-        crate::items::ItemType::Weapon,
-        crate::items::ItemRarity::Common,
+        world::items::ItemType::Weapon,
+        world::items::ItemRarity::Common,
         1,
-        crate::items::Attribute::Defense,
+        world::items::Attribute::Defense,
         effect,
     )
 }

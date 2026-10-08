@@ -6,7 +6,6 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use game::characters::Character;
 use game::games::Game;
-use game::items::Item;
 use game::messages::GameMessage;
 use shared::{
     CreateGame, DisplayGame, EditGame, GameStatus, ListDisplayGame, PaginatedGames,
@@ -17,6 +16,7 @@ use strum::IntoEnumIterator;
 use surrealdb_types::{RecordId, SerdeWrapper};
 use uuid::Uuid;
 use validator::Validate;
+use world::items::Item;
 
 /// Creates a new game with fully initialized characters, areas, and items.
 /// The request body is validated before any database writes begin.

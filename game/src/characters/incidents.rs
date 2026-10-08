@@ -501,7 +501,7 @@ mod tests {
     #[test]
     fn apply_theft_removes_item() {
         let mut character = Character::new("Test".to_string(), None, None);
-        let item = crate::items::Item {
+        let item = world::items::Item {
             identifier: "sword-1".into(),
             name: "sword".into(),
             ..Default::default()

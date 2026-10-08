@@ -1,9 +1,9 @@
 use super::*;
 use crate::areas::events::AreaEvent;
 use crate::areas::{Area, AreaDetails};
-use crate::items::Item;
 use rand::rngs::SmallRng;
 use std::collections::HashMap;
+use world::items::Item;
 
 impl Game {
     pub(super) fn run_trauma_producers(&mut self, _phase: crate::messages::Phase) {

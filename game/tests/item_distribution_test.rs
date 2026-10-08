@@ -1,4 +1,4 @@
-use game::items::Item;
+use world::items::Item;
 use world::terrain::BaseTerrain;
 
 /// Test that Desert terrain creates consumables more frequently than other types.

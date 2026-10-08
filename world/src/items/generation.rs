@@ -1,9 +1,9 @@
 use super::*;
 use crate::items::name_generator::{generate_shield_name, generate_weapon_name};
+use crate::terrain::BaseTerrain;
 use rand::RngExt;
 use rand::prelude::*;
 use strum::IntoEnumIterator;
-use world::terrain::BaseTerrain;
 
 impl ItemRarity {
     /// Roll for item rarity using weighted distribution.
@@ -78,7 +78,7 @@ impl Item {
     ///
     /// # Example
     /// ```
-    /// use game::items::Item;
+    /// use world::items::Item;
     /// use world::terrain::BaseTerrain;
     ///
     /// // Desert terrain favors consumables (0.6 weight)

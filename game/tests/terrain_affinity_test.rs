@@ -4,10 +4,10 @@
 //! distinct terrain.
 
 use game::characters::Character;
-use game::clans::roll_terrain_affinity;
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use strum::IntoEnumIterator;
+use world::clans::roll_terrain_affinity;
 use world::terrain::BaseTerrain;
 
 #[test]

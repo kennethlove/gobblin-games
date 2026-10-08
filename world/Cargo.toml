@@ -10,6 +10,8 @@ serde = { version = "1.0.228", features = ["derive"] }
 shared = { path = "../shared" }
 strum = { version = "0.28", features = ["derive"] }
 strum_macros = "0.28"
+thiserror = "2.0.18"
+uuid = { version = "1.23.1", features = ["v4", "js", "serde"] }
 
 [dev-dependencies]
 rstest = "0.26"

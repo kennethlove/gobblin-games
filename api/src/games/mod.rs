@@ -11,7 +11,6 @@ use chrono::{DateTime, Utc};
 use game::areas::{Area, AreaDetails};
 use game::characters::Character;
 use game::games::Game;
-use game::items::Item;
 use game::messages::{GameMessage, MessageSource};
 use serde::{Deserialize, Serialize};
 use shared::messages::MessagePayload;
@@ -25,6 +24,7 @@ use surrealdb_types::RecordId;
 use surrealdb_types::SerdeWrapper;
 use uuid::Uuid;
 use validator::Validate;
+use world::items::Item;
 use world::terrain::BaseTerrain;
 
 /// Maximum number of messages to retain per game to prevent OOM

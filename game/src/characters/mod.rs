@@ -32,7 +32,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::areas::{Area, AreaDetails};
 use crate::characters::afflictions::{AcquireResolution, can_acquire};
 use crate::characters::events::CharacterEvent;
-use crate::items::Item;
 use crate::messages::{AreaRef, CharacterRef, ItemRef, MessagePayload, TaggedEvent};
 use crate::output::GameOutput;
 use actions::{Action, AttackOutcome};
@@ -49,6 +48,7 @@ use shared::messages::SleepIncidentKind;
 use shared::wounds::Wound;
 use statuses::CharacterStatus;
 use uuid::Uuid;
+use world::items::Item;
 
 /// Serialize `Vec<Uuid>` as `Vec<String>` for SurrealDB compatibility.
 /// The Surreal Rust SDK's bespoke serializer wires `uuid::Uuid` as raw bytes,
@@ -375,7 +375,7 @@ impl Character {
         // Traits, brain, and terrain affinity roll from this goblin's own
         // RNG — team no longer seeds them.
         let mut rng = SmallRng::from_rng(&mut rand::rng());
-        let terrain_affinity = crate::clans::roll_terrain_affinity(&mut rng);
+        let terrain_affinity = world::clans::roll_terrain_affinity(&mut rng);
         let traits = traits::generate_traits(&mut rng);
         let brain = Brain::from_traits(&traits, &mut rng);
 
@@ -443,7 +443,7 @@ impl Character {
         self.area = Area::Hub;
         self.stamina = 100;
         self.max_stamina = 100;
-        self.terrain_affinity = crate::clans::roll_terrain_affinity(&mut rng);
+        self.terrain_affinity = world::clans::roll_terrain_affinity(&mut rng);
         self.items.clear();
         self.events.clear();
         self.allies.clear();
@@ -490,7 +490,7 @@ impl Character {
 
         // Traits, brain, and terrain affinity roll from the provided RNG —
         // team no longer seeds them.
-        let terrain_affinity = crate::clans::roll_terrain_affinity(rng);
+        let terrain_affinity = world::clans::roll_terrain_affinity(rng);
         let traits = traits::generate_traits(rng);
         let brain = Brain::from_traits(&traits, rng);
 

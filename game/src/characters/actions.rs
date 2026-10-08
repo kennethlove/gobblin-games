@@ -1,10 +1,10 @@
 use crate::areas::Area;
 use crate::characters::Character;
-use crate::items::Item;
 use serde::{Deserialize, Serialize};
 use shared::afflictions::TraumaSource;
 use std::fmt::Display;
 use std::str::FromStr;
+use world::items::Item;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct CharacterAction {

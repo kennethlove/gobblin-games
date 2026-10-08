@@ -6,7 +6,6 @@ use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use game::characters::Character;
-use game::items::Item;
 use game::messages::GameMessage;
 use serde::{Deserialize, Serialize};
 use shared::EditCharacter;
@@ -16,6 +15,7 @@ use surrealdb::engine::any::Any;
 use surrealdb_types::{RecordId, SerdeWrapper};
 use uuid::Uuid;
 use validator::Validate;
+use world::items::Item;
 use world::naming::{clan_name, goblin_name};
 
 pub static CHARACTERS_ROUTER: LazyLock<Router<AppState>> = LazyLock::new(|| {

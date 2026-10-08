@@ -1,10 +1,10 @@
 use game::areas::{Area, AreaDetails};
 use game::characters::Character;
 use game::characters::brains::Brain;
-use game::items::Item;
 use rand::prelude::*;
 use rstest::{fixture, rstest};
 use serial_test::serial;
+use world::items::Item;
 use world::terrain::{BaseTerrain, TerrainType};
 
 #[fixture]

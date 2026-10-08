@@ -23,7 +23,7 @@ pub enum ArchetypeId {
 }
 
 /// Tags used by the archetype gift-preference table.
-/// Resolved against `game::items::Item` discriminants in the gift-resolver (PR2).
+/// Resolved against `world::items::Item` discriminants in the gift-resolver (PR2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ItemKindTag {
     Food,

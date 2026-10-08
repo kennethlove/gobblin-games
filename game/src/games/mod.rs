@@ -3,8 +3,6 @@ use crate::areas::{Area, AreaDetails};
 use crate::characters::actions::Action;
 use crate::characters::statuses::CharacterStatus;
 use crate::characters::{ActionSuggestion, Character};
-use crate::items::Item;
-use crate::items::OwnsItems;
 use rand::Rng;
 use rand::RngExt;
 use rand::prelude::*;
@@ -14,6 +12,8 @@ use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::fmt::Display;
 use uuid::Uuid;
+use world::items::Item;
+use world::items::OwnsItems;
 
 pub mod alliances;
 pub mod cycle_helpers;
@@ -519,7 +519,7 @@ impl Game {
         }
         if let Some(team) = self.winning_team() {
             let game_id = self.identifier.clone();
-            let label = crate::clans::team_label(team);
+            let label = world::clans::team_label(team);
             let payload = crate::messages::MessagePayload::GameEnded {
                 winner: None,
                 winning_team: Some(crate::messages::TeamRef {

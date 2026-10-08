@@ -11,13 +11,13 @@ use strum::IntoEnumIterator;
 
 use crate::areas::Area;
 use crate::characters::Character;
-use crate::items::Item;
 use crate::messages::MessagePayload;
 use rand::RngExt;
 use rand::SeedableRng;
 use rand::prelude::IndexedRandom;
 use rand::rngs::SmallRng;
 use uuid::Uuid;
+use world::items::Item;
 
 pub const MAX_FIXATIONS: usize = 2;
 pub const MAX_FIXATIONS_PER_TARGET_KIND: usize = 1;
@@ -333,9 +333,9 @@ pub fn process_character_fixations(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::items::OwnsItems;
     use rand::SeedableRng;
     use uuid::Uuid;
+    use world::items::OwnsItems;
 
     fn make_character() -> Character {
         Character::new_with_rng(

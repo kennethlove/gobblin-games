@@ -6,13 +6,13 @@ use crate::characters::statuses::CharacterStatus;
 use crate::characters::{
     ActionSuggestion, Character, EncounterContext, EnvironmentContext, calculate_stamina_cost,
 };
-use crate::items::{Item, OwnsItems};
 use crate::messages::{AreaRef, CharacterRef, ItemRef, MessagePayload};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
 use shared::messages::SleepIncidentKind;
 use std::collections::HashMap;
+use world::items::{Item, OwnsItems};
 
 impl Game {
     /// Pre-computed, immutable view of game state used by `execute_cycle`.

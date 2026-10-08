@@ -296,7 +296,7 @@ pub fn render_character_row(character: &game::characters::Character, game_id: &s
     let status_text = if is_alive { "ALIVE" } else { "DEAD" };
     let dead_class = if !is_alive { " dead" } else { "" };
     let character_id = &character.identifier;
-    let team_color = game::clans::team_color(character.team);
+    let team_color = world::clans::team_color(character.team);
 
     format!(
         r#"<a href="/games/{game_id}/characters/{character_id}" class="roster-row{dead_class}" style="text-decoration:none;color:inherit;display:block;">
@@ -317,7 +317,7 @@ pub fn render_character_row(character: &game::characters::Character, game_id: &s
         name = html_escape(&character.name),
         team_hex = team_color.hex,
         team_name = team_color.name,
-        team_title = game::clans::team_label(character.team),
+        team_title = world::clans::team_label(character.team),
     )
 }
 
@@ -405,8 +405,8 @@ pub fn render_character_detail(character: &game::characters::Character, _game_id
     let thirst_c = thirst_color(character.thirst);
     let stamina = stamina_label(character.stamina, character.max_stamina);
     let stamina_c = stamina_color(character.stamina, character.max_stamina);
-    let team_color = game::clans::team_color(character.team);
-    let team_label = game::clans::team_label(character.team);
+    let team_color = world::clans::team_color(character.team);
+    let team_label = world::clans::team_label(character.team);
     let clan_name_line = if character.clan_name.is_empty() {
         String::new()
     } else {
@@ -624,7 +624,7 @@ pub fn render_team_group(group: &TeamGroup, game_id: &str) -> String {
     for character in &group.characters {
         rows.push_str(&render_character_row(character, game_id));
     }
-    let team_color = game::clans::team_color(group.team);
+    let team_color = world::clans::team_color(group.team);
     format!(
         r#"<div class="clan-group">
           <div class="alliance-header" style="border-left-color:var(--broad-accent);">
@@ -634,7 +634,7 @@ pub fn render_team_group(group: &TeamGroup, game_id: &str) -> String {
           {rows}
         </div>"#,
         hex = team_color.hex,
-        label = game::clans::team_label(group.team),
+        label = world::clans::team_label(group.team),
         alive = group.alive_count,
         total = group.total,
     )
