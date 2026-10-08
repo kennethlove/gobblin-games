@@ -655,10 +655,13 @@ pub async fn next_step(
             game.status = GameStatus::InProgress;
 
             // Broadcast game started
+            let start_phase = shared::messages::Phase::from_hour(game.config.day_start_hour)
+                .unwrap_or(shared::messages::Phase::DAY_START);
             crate::websocket::broadcast_game_started(
                 &state.broadcaster,
                 &game.identifier,
                 game.day.unwrap_or(1),
+                start_phase,
             );
 
             Ok(Json(Some(game)))

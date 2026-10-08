@@ -137,6 +137,9 @@ pub struct EnvironmentContext<'a> {
     /// Full four-phase value for the current cycle. Used by sleep scoring
     /// (Brain::should_sleep) and emitters (CharacterSlept/CharacterWoke).
     pub phase: shared::messages::Phase,
+    /// Configured day/night boundaries and survival cadence for this game
+    /// (phase redesign — one source of truth for day/night classification).
+    pub config: world::config::GameConfig,
     pub area_details: &'a mut AreaDetails,
     pub closed_areas: &'a [Area],
     pub available_destinations: Vec<areas::DestinationInfo>,
@@ -706,6 +709,7 @@ impl Character {
             self,
             number_of_nearby_characters,
             environment_details.phase,
+            &environment_details.config,
             rng,
         ) {
             sleep_action

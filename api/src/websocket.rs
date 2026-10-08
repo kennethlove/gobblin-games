@@ -148,15 +148,17 @@ pub fn broadcast_game_message(broadcaster: &GameBroadcaster, game_id: &str, mess
 /// game whose status just transitioned to `InProgress` but where the engine
 /// has not yet run a cycle (so it has not had a chance to emit a
 /// `CycleStart` itself).
-pub fn broadcast_game_started(broadcaster: &GameBroadcaster, game_id: &str, day: u32) {
-    let payload = MessagePayload::CycleStart {
-        day,
-        phase: Phase::DAY_START,
-    };
+pub fn broadcast_game_started(
+    broadcaster: &GameBroadcaster,
+    game_id: &str,
+    day: u32,
+    phase: Phase,
+) {
+    let payload = MessagePayload::CycleStart { day, phase };
     let msg = GameMessage::new(
         MessageSource::Game(game_id.to_string()),
         day,
-        Phase::DAY_START,
+        phase,
         0,
         0,
         format!("game:{}", game_id),

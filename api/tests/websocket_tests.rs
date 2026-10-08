@@ -129,7 +129,7 @@ async fn test_broadcast_helper_functions() {
     let broadcaster = GameBroadcaster::new(10);
     let mut rx = broadcaster.subscribe();
 
-    broadcast_game_started(&broadcaster, "game1", 1);
+    broadcast_game_started(&broadcaster, "game1", 1, Phase::DAY_START);
     let got = timeout(Duration::from_secs(1), rx.recv())
         .await
         .unwrap()

@@ -4,19 +4,21 @@ use shared::{DisplayGame, GameStatus};
 pub fn current_broadcast_phase(
     game: &DisplayGame,
     messages: &[shared::messages::GameMessage],
+    cfg: &world::config::GameConfig,
 ) -> (&'static str, &'static str) {
+    use world::config::DaySlot;
     match game.status {
         GameStatus::Finished => ("finished", "FINISHED"),
         GameStatus::NotStarted => ("day", "STAGING"),
         GameStatus::InProgress => {
             if let Some(last) = messages.last() {
-                // Hour-label badge (00–22) with the day/night band class
-                // used for styling.
-                let class = match last.phase.hour() {
-                    6 => "dawn",
-                    8..=16 => "day",
-                    18 => "dusk",
-                    _ => "night",
+                // Hour-label badge (00–22) with the configured day/night
+                // band class used for styling.
+                let class = match cfg.day_slot(last.phase) {
+                    DaySlot::Dawn => "dawn",
+                    DaySlot::Day => "day",
+                    DaySlot::Dusk => "dusk",
+                    DaySlot::Night => "night",
                 };
                 let label: &'static str = match last.phase.hour() {
                     0 => "00",

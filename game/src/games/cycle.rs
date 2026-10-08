@@ -30,8 +30,9 @@ impl Game {
         living_characters: Vec<Character>,
         living_characters_count: usize,
     ) -> CycleContext {
-        // Daytime = any hour from the day start (06) up to nightfall (20).
-        let day = !phase.is_night_default();
+        // Daytime = any hour from the day start up to nightfall
+        // (configured per game; defaults 06 / 20).
+        let day = !self.config.is_night_phase(phase);
         let action_suggestion = match (self.day, day) {
             (Some(1), true) => Some(ActionSuggestion {
                 action: Action::Move(None),
@@ -505,13 +506,14 @@ impl Game {
                 // Day/night-slot index (2 per day — shelter is a
                 // day/night mechanic, see the phase redesign notes).
                 let phase_index: u32 =
-                    self.day.unwrap_or(1) * 2 + u32::from(phase.is_night_default());
+                    self.day.unwrap_or(1) * 2 + u32::from(self.config.is_night_phase(phase));
                 let is_sheltered = character
                     .sheltered_until
                     .is_some_and(|until| until > phase_index);
                 if let Some(incident) = SleepIncident::roll(
                     rng,
                     phase,
+                    &self.config,
                     biome,
                     is_sheltered,
                     character
@@ -892,6 +894,7 @@ impl Game {
             let mut environment_details = EnvironmentContext {
                 is_day: day,
                 phase,
+                config: self.config.clone(),
                 area_details,
                 closed_areas: &closed_areas,
                 available_destinations,

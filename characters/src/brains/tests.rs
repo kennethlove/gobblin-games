@@ -749,7 +749,13 @@ fn should_sleep_dominant_threshold_overrides_safety(character: Character, mut sm
     use shared::messages::Phase;
     let mut t = character.clone();
     t.cycles_awake = SLEEP_DOMINANT_THRESHOLD;
-    let action = t.brain.should_sleep(&t, 5, Phase::DAY, &mut small_rng);
+    let action = t.brain.should_sleep(
+        &t,
+        5,
+        Phase::DAY,
+        &world::config::GameConfig::default(),
+        &mut small_rng,
+    );
     assert!(matches!(action, Some(Action::Sleep { duration_phases: 4 })));
 }
 
@@ -761,11 +767,29 @@ fn should_sleep_want_threshold_requires_safety_and_night(
     use shared::messages::Phase;
     let mut t = character.clone();
     t.cycles_awake = SLEEP_WANT_THRESHOLD;
-    let action = t.brain.should_sleep(&t, 0, Phase::NIGHT, &mut small_rng);
+    let action = t.brain.should_sleep(
+        &t,
+        0,
+        Phase::NIGHT,
+        &world::config::GameConfig::default(),
+        &mut small_rng,
+    );
     assert!(matches!(action, Some(Action::Sleep { duration_phases: 3 })));
-    let action = t.brain.should_sleep(&t, 1, Phase::NIGHT, &mut small_rng);
+    let action = t.brain.should_sleep(
+        &t,
+        1,
+        Phase::NIGHT,
+        &world::config::GameConfig::default(),
+        &mut small_rng,
+    );
     assert!(action.is_none());
-    let action = t.brain.should_sleep(&t, 0, Phase::DAY, &mut small_rng);
+    let action = t.brain.should_sleep(
+        &t,
+        0,
+        Phase::DAY,
+        &world::config::GameConfig::default(),
+        &mut small_rng,
+    );
     assert!(action.is_none());
 }
 
@@ -775,9 +799,21 @@ fn should_sleep_exhausted_naps_when_safe_off_day(character: Character, mut small
     let mut t = character.clone();
     t.cycles_awake = 1;
     t.stamina = 10;
-    let action = t.brain.should_sleep(&t, 0, Phase::DUSK, &mut small_rng);
+    let action = t.brain.should_sleep(
+        &t,
+        0,
+        Phase::DUSK,
+        &world::config::GameConfig::default(),
+        &mut small_rng,
+    );
     assert!(matches!(action, Some(Action::Sleep { duration_phases: 2 })));
-    let action = t.brain.should_sleep(&t, 0, Phase::DAY, &mut small_rng);
+    let action = t.brain.should_sleep(
+        &t,
+        0,
+        Phase::DAY,
+        &world::config::GameConfig::default(),
+        &mut small_rng,
+    );
     assert!(action.is_none());
 }
 
@@ -787,7 +823,13 @@ fn should_sleep_psychotic_break_blocks_sleep(character: Character, mut small_rng
     let mut t = character.clone();
     t.cycles_awake = SLEEP_DOMINANT_THRESHOLD + 4;
     t.brain.psychotic_break = Some(PsychoticBreakType::Berserk);
-    let action = t.brain.should_sleep(&t, 0, Phase::NIGHT, &mut small_rng);
+    let action = t.brain.should_sleep(
+        &t,
+        0,
+        Phase::NIGHT,
+        &world::config::GameConfig::default(),
+        &mut small_rng,
+    );
     assert!(action.is_none());
 }
 
@@ -798,7 +840,13 @@ fn should_sleep_already_sleeping_returns_none(character: Character, mut small_rn
     t.sleeping = true;
     t.sleep_remaining = 2;
     t.cycles_awake = SLEEP_DOMINANT_THRESHOLD + 10;
-    let action = t.brain.should_sleep(&t, 0, Phase::NIGHT, &mut small_rng);
+    let action = t.brain.should_sleep(
+        &t,
+        0,
+        Phase::NIGHT,
+        &world::config::GameConfig::default(),
+        &mut small_rng,
+    );
     assert!(action.is_none());
 }
 

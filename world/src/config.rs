@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use shared::messages::Phase;
 
 /// Configuration for game constants and tuning parameters.
 /// Centralizes magic numbers to enable runtime configuration and difficulty modes.
@@ -70,6 +71,13 @@ pub struct GameConfig {
     /// Daily growth of the dehydration drain (ceiling ×1.25 by default).
     pub dehydration_growth_pct: u32,
 
+    // Day/night boundaries (the phase redesign; both even hours 00–22)
+    /// First phase hour of every game day (default 06).
+    pub day_start_hour: u8,
+    /// Hour night falls (default 20). Night runs nightfall → day_start
+    /// (wrap-aware), so days start at 06 and nights last 20 → 06.
+    pub nightfall_hour: u8,
+
     // Attribute maximums (from characters/mod.rs)
     pub max_health: u32,
     pub max_sanity: u32,
@@ -121,6 +129,10 @@ impl Default for GameConfig {
             starvation_growth_pct: 125,
             dehydration_hp_base_per_day: 12,
             dehydration_growth_pct: 125,
+
+            // Day/night boundaries.
+            day_start_hour: 6,
+            nightfall_hour: 20,
 
             // Attribute maximums
             max_health: 100,
@@ -190,5 +202,120 @@ mod tests {
 
         assert_eq!(config.catastrophic_severity_multiplier, 2.0);
         assert_eq!(config.day_event_frequency, 0.5);
+    }
+}
+
+/// Narrative slot of a phase, derived from the configured day/night
+/// boundaries. One source of truth for lighting, incident chances,
+/// event frequencies, brain bias, and display copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DaySlot {
+    /// First phase of the game day (`day_start_hour`).
+    Dawn,
+    /// Bright day hours between the dawn and dusk anchors.
+    Day,
+    /// Two hours before nightfall (18 by default).
+    Dusk,
+    /// From nightfall to the day start (wrap-aware).
+    Night,
+}
+
+impl GameConfig {
+    /// Night check against the configured boundaries (wrap-aware).
+    pub fn is_night_phase(&self, phase: Phase) -> bool {
+        phase.is_night(self.day_start_hour, self.nightfall_hour)
+    }
+
+    /// Dusk anchor: two hours before nightfall (18 with the defaults).
+    pub fn dusk_hour(&self) -> u8 {
+        (self.nightfall_hour + 24 - 2) % 24
+    }
+
+    /// Configured narrative slot for a phase.
+    pub fn day_slot(&self, phase: Phase) -> DaySlot {
+        if phase.hour() == self.day_start_hour {
+            DaySlot::Dawn
+        } else if phase.hour() == self.dusk_hour() {
+            DaySlot::Dusk
+        } else if self.is_night_phase(phase) {
+            DaySlot::Night
+        } else {
+            DaySlot::Day
+        }
+    }
+
+    /// Bright-daylight band: day hours excluding the dawn/dusk anchors.
+    pub fn is_bright(&self, phase: Phase) -> bool {
+        matches!(self.day_slot(phase), DaySlot::Day)
+    }
+
+    /// Even hours in `00..=24`, distinct, nightfall after day start is
+    /// fine either way (wrap-aware) but the two hours must differ.
+    pub fn day_night_hours_valid(&self) -> bool {
+        self.day_start_hour < 24
+            && self.nightfall_hour < 24
+            && self.day_start_hour.is_multiple_of(2)
+            && self.nightfall_hour.is_multiple_of(2)
+            && self.day_start_hour != self.nightfall_hour
+    }
+}
+
+#[cfg(test)]
+mod day_night_tests {
+    use super::*;
+
+    #[test]
+    fn defaults_produce_expected_slots() {
+        let cfg = GameConfig::default();
+        assert_eq!(cfg.day_start_hour, 6);
+        assert_eq!(cfg.nightfall_hour, 20);
+        assert_eq!(cfg.dusk_hour(), 18);
+        for hour in [6u8, 8, 10, 12, 14, 16] {
+            let p = Phase::from_hour(hour).unwrap();
+            assert!(cfg.day_slot(p) != DaySlot::Night, "hour {hour} is day");
+        }
+        assert_eq!(cfg.day_slot(Phase::from_hour(6).unwrap()), DaySlot::Dawn);
+        assert_eq!(cfg.day_slot(Phase::from_hour(18).unwrap()), DaySlot::Dusk);
+        for hour in [20u8, 22, 0, 2, 4] {
+            let p = Phase::from_hour(hour).unwrap();
+            assert_eq!(cfg.day_slot(p), DaySlot::Night, "hour {hour} is night");
+        }
+        assert!(cfg.is_bright(Phase::from_hour(12).unwrap()));
+        assert!(!cfg.is_bright(Phase::from_hour(6).unwrap()));
+        assert!(cfg.day_night_hours_valid());
+    }
+
+    #[test]
+    fn shifted_boundaries_move_slots() {
+        let cfg = GameConfig {
+            day_start_hour: 8,
+            nightfall_hour: 18,
+            ..Default::default()
+        };
+        assert_eq!(cfg.dusk_hour(), 16);
+        assert_eq!(cfg.day_slot(Phase::from_hour(8).unwrap()), DaySlot::Dawn);
+        assert_eq!(cfg.day_slot(Phase::from_hour(6).unwrap()), DaySlot::Night);
+        assert_eq!(cfg.day_slot(Phase::from_hour(18).unwrap()), DaySlot::Night);
+        assert_eq!(cfg.day_slot(Phase::from_hour(16).unwrap()), DaySlot::Dusk);
+        assert!(cfg.day_night_hours_valid());
+    }
+
+    #[test]
+    fn invalid_hours_rejected() {
+        let odd = GameConfig {
+            day_start_hour: 7, // odd
+            ..Default::default()
+        };
+        assert!(!odd.day_night_hours_valid());
+        let equal = GameConfig {
+            nightfall_hour: 6, // same as the day start
+            ..Default::default()
+        };
+        assert!(!equal.day_night_hours_valid());
+        let out_of_range = GameConfig {
+            day_start_hour: 24,
+            ..Default::default()
+        };
+        assert!(!out_of_range.day_night_hours_valid());
     }
 }

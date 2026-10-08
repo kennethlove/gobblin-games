@@ -532,6 +532,7 @@ impl Brain {
         character: &Character,
         nearby_characters: u32,
         phase: shared::messages::Phase,
+        config: &world::config::GameConfig,
         _rng: &mut impl Rng,
     ) -> Option<Action> {
         if !character.is_alive() || character.sleeping {
@@ -542,8 +543,8 @@ impl Brain {
         }
 
         let safe = nearby_characters == 0;
-        let is_night_or_dusk = phase.hour() == 18 || phase.is_night_default();
-        let is_day = matches!(phase.hour(), 8..=16);
+        let is_night_or_dusk = phase.hour() == config.dusk_hour() || config.is_night_phase(phase);
+        let is_day = config.is_bright(phase);
 
         if character.cycles_awake >= SLEEP_DOMINANT_THRESHOLD {
             return Some(Action::Sleep { duration_phases: 4 });
@@ -666,7 +667,7 @@ impl Brain {
         // Phobia override (spec §5): freeze reactions and stat penalties.
         // Gated on config.phobias_enabled.
         if config.phobias_enabled {
-            let is_night = phase.is_some_and(|p| p.is_night_default());
+            let is_night = phase.is_some_and(|p| config.is_night_phase(p));
             let phobia_ctx = phobia_override::PhobiaBrainContext {
                 area,
                 terrain,

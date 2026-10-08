@@ -182,14 +182,24 @@ pub fn phase_label(value: &Value, _: Kwargs, _: &State) -> TeraResult<Value> {
     Ok(Value::from(label))
 }
 
-pub fn phase_class(value: &Value, _: Kwargs, _: &State) -> TeraResult<Value> {
+pub fn phase_class(value: &Value, kwargs: Kwargs, _: &State) -> TeraResult<Value> {
     let phase = value.as_str().unwrap_or("");
-    let class = match phase {
-        "06" => "phase-dawn",
-        "08" | "10" | "12" | "14" | "16" => "phase-day",
-        "18" => "phase-dusk",
-        "00" | "02" | "04" | "20" | "22" => "phase-night",
-        _ => "phase-day",
+    // Configurable boundaries: | phase_class(day_start=6, nightfall=20)
+    let day_start = kwargs.get::<u64>("day_start")?.unwrap_or(6) as u8;
+    let nightfall = kwargs.get::<u64>("nightfall")?.unwrap_or(20) as u8;
+    let cfg = world::config::GameConfig {
+        day_start_hour: day_start,
+        nightfall_hour: nightfall,
+        ..Default::default()
+    };
+    let class = match phase.parse::<shared::messages::Phase>() {
+        Ok(p) => match cfg.day_slot(p) {
+            world::config::DaySlot::Dawn => "phase-dawn",
+            world::config::DaySlot::Day => "phase-day",
+            world::config::DaySlot::Dusk => "phase-dusk",
+            world::config::DaySlot::Night => "phase-night",
+        },
+        Err(_) => "phase-day",
     };
     Ok(Value::from(class))
 }

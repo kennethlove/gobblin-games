@@ -588,10 +588,11 @@ impl Game {
         let game_id = self.identifier.clone();
         let subject = format!("game:{}", game_id);
 
-        let content = match phase.hour() {
-            6 => format!("Dawn {} breaks pale over the arena.", current_day),
-            18 => format!("Dusk {} settles in long shadows.", current_day),
-            8..=16 => match current_day {
+        use world::config::DaySlot;
+        let content = match self.config.day_slot(phase) {
+            DaySlot::Dawn => format!("Dawn {} breaks pale over the arena.", current_day),
+            DaySlot::Dusk => format!("Dusk {} settles in long shadows.", current_day),
+            DaySlot::Day => match current_day {
                 1 => format!("Day {}: The games have begun!", current_day),
                 3 => format!(
                     "Day {}: Patrons take note of the remaining goblins.",
@@ -599,8 +600,7 @@ impl Game {
                 ),
                 _ => format!("Day {} dawns over the arena.", current_day),
             },
-            // Night-band hours: 20, 22, 00, 02, 04.
-            _ => format!("Night {} falls. The arena grows dark.", current_day),
+            DaySlot::Night => format!("Night {} falls. The arena grows dark.", current_day),
         };
 
         let payload = shared::messages::MessagePayload::CycleStart {
