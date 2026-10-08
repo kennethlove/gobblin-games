@@ -30,7 +30,7 @@ pub enum Action {
     TakeItem,
     /// Spend the turn proposing an alliance to a non-allied character in the
     /// current area. The proposal succeeds or fails via the existing alliance
-    /// roll (`game::characters::alliances::try_form_alliance`); either way the
+    /// roll (`characters::alliances::try_form_alliance`); either way the
     /// turn is consumed. See spec §6.1.
     ProposeAlliance,
 

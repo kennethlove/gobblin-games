@@ -3,7 +3,7 @@ use areas::weather::Weather;
 
 // Wire-visible band enums live in the `shared` crate (they are serialised
 // in `MessagePayload::{Hunger,Thirst}BandChanged`). Re-export them here so
-// existing `game::characters::survival::{HungerBand, ThirstBand}` imports
+// existing `characters::survival::{HungerBand, ThirstBand}` imports
 // keep compiling.
 pub use shared::messages::{HungerBand, ThirstBand};
 

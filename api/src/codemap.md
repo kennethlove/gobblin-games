@@ -399,9 +399,9 @@ switch status:
 
 **Integration Points**:
 - `game::games::Game` - Main game state struct
-- `game::characters::Character` - Character entity
+- `characters::Character` - Character entity
 - `world::items::Item` - Item entity
-- `game::areas::{Area, AreaDetails}` - Area types
+- `areas::{Area, AreaDetails}` - Area types
 - `shared::messages::{GameMessage, MessagePayload}` - Log types
 
 **Pattern**: API hydrates `Game` from DB → calls game engine methods → persists updated state.
