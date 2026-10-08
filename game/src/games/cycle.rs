@@ -484,7 +484,7 @@ impl Game {
                     if incident.wakes_character() {
                         // Wake-causing incident: emit flavor event, then
                         // wake the character with the incident as the reason.
-                        let flavor_line = crate::output::GameOutput::CharacterSleepFlavor(
+                        let flavor_line = world::output::GameOutput::CharacterSleepFlavor(
                             character.name.as_str(),
                             &description,
                         )
@@ -504,7 +504,7 @@ impl Game {
                             None,
                         ));
 
-                        let incident_msg = crate::output::GameOutput::CharacterWakesFromIncident(
+                        let incident_msg = world::output::GameOutput::CharacterWakesFromIncident(
                             character.name.as_str(),
                             &description,
                         )
@@ -536,7 +536,7 @@ impl Game {
                     } else {
                         // Flavor-only incident: emit flavor, remember it,
                         // then continue with regen as normal.
-                        let flavor_line = crate::output::GameOutput::CharacterSleepFlavor(
+                        let flavor_line = world::output::GameOutput::CharacterSleepFlavor(
                             character.name.as_str(),
                             &description,
                         )
@@ -609,7 +609,7 @@ impl Game {
                         .unwrap_or_default();
                     let line = format!(
                         "{} {}",
-                        crate::output::GameOutput::CharacterWakesRested(character.name.as_str()),
+                        world::output::GameOutput::CharacterWakesRested(character.name.as_str()),
                         incident_suffix,
                     );
                     collected_events.push((
@@ -1185,7 +1185,7 @@ impl Game {
                     }
                     _ => unreachable!(),
                 };
-                let line = crate::output::GameOutput::PatronGift(recipient_id.as_ref(), &gift.item)
+                let line = world::output::GameOutput::PatronGift(recipient_id.as_ref(), &gift.item)
                     .to_string();
                 let source = crate::messages::MessageSource::Game(self.identifier.clone());
                 let subject = format!("patron_gift:{recipient_id}");

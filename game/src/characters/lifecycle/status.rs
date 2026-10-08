@@ -7,13 +7,13 @@ use crate::characters::afflictions::trapped::{
 };
 use crate::characters::statuses::CharacterStatus;
 use crate::messages::{CharacterRef, MessagePayload, TaggedEvent};
-use crate::output::GameOutput;
 use rand::RngExt;
 use rand::prelude::*;
 use shared::afflictions::{
     AfflictionKind, AfflictionSource, BodyPart, Severity, TrapKind, TrappedMetadata,
     escape_threshold,
 };
+use world::output::GameOutput;
 
 /// Status effect damage constants
 const WOUNDED_DAMAGE: u32 = 1;

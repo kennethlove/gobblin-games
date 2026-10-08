@@ -5,9 +5,9 @@ pub use types::GameEvent;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::output::GameOutput;
     use uuid::Uuid;
     use world::items::{Attribute, Item, ItemRarity, ItemType};
+    use world::output::GameOutput;
     use world::threats::animals::Animal;
 
     /// Stable UUIDs so test failures are easy to reason about.

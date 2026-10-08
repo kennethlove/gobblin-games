@@ -302,7 +302,7 @@ Brain::act()
 - `add_character_message()`: Logs game events to persistent storage
 - **Flow**: `try_log_action()` helper wraps every significant action/outcome for game narrative
 
-**Output Module** (`crate::output`):
+**Output Module** (`world::output`):
 - `GameOutput`: Enum of formatted game events (attack messages, travel, deaths, etc.)
 - **Flow**: All logged events use `GameOutput` variants for consistent formatting
 

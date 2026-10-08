@@ -8,9 +8,9 @@
 use crate::areas::Area;
 use crate::characters::Character;
 use crate::messages::{AreaRef, CharacterRef, MessagePayload, TaggedEvent};
-use crate::output::GameOutput;
 use rand::prelude::*;
 use rand::rngs::SmallRng;
+use world::output::GameOutput;
 
 #[derive(Debug, PartialEq)]
 pub enum TravelResult {

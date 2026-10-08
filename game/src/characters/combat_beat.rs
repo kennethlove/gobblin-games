@@ -1,14 +1,14 @@
 //! Game-side narration for `shared::combat_beat::CombatBeat`.
 //!
 //! The data types live in `shared` so they can ride `MessagePayload`. The
-//! narration depends on `crate::output::GameOutput`, so it lives here as an
+//! narration depends on `world::output::GameOutput`, so it lives here as an
 //! extension trait.
 
 pub use shared::combat_beat::{
     CombatBeat, StressReport, SwingOutcome, WearOutcomeReport, WearReport,
 };
 
-use crate::output::GameOutput;
+use world::output::GameOutput;
 
 /// Render a `CombatBeat` into the prose lines historically emitted by
 /// `Character::attacks()`.

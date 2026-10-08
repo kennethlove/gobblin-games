@@ -9,6 +9,7 @@ pub mod clans;
 pub mod config;
 pub mod items;
 pub mod naming;
+pub mod output;
 pub mod pathfinding;
 pub mod terrain;
 pub mod threats;

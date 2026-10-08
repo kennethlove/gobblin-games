@@ -13,7 +13,6 @@ use crate::characters::combat::inflict_table::{
 };
 use crate::characters::stamina_band::stamina_band;
 use crate::messages::{CharacterRef, MessagePayload, TaggedEvent};
-use crate::output::GameOutput;
 use rand::RngExt;
 use rand::prelude::*;
 use shared::combat_beat::{CombatBeat, StressReport, SwingOutcome, WearOutcomeReport, WearReport};
@@ -22,6 +21,7 @@ use shared::messages::{ItemRef, StaminaBand};
 use shared::wounds::{BodyPart, WoundSeverity, WoundType};
 use std::cmp::Ordering;
 use world::items::{Item, OwnsItems};
+use world::output::GameOutput;
 
 // ---------------------------------------------------------------------------
 // Helpers shared between resolve.rs and mod.rs (via pub(super))

@@ -7026,6 +7026,7 @@ dependencies = [
 name = "world"
 version = "0.1.0"
 dependencies = [
+ "indefinite",
  "rand 0.10.1",
  "rstest",
  "serde",

@@ -33,7 +33,6 @@ use crate::areas::{Area, AreaDetails};
 use crate::characters::afflictions::{AcquireResolution, can_acquire};
 use crate::characters::events::CharacterEvent;
 use crate::messages::{AreaRef, CharacterRef, ItemRef, MessagePayload, TaggedEvent};
-use crate::output::GameOutput;
 use actions::{Action, AttackOutcome};
 use brains::Brain;
 use rand::RngExt;
@@ -49,6 +48,7 @@ use shared::wounds::Wound;
 use statuses::CharacterStatus;
 use uuid::Uuid;
 use world::items::Item;
+use world::output::GameOutput;
 
 /// Serialize `Vec<Uuid>` as `Vec<String>` for SurrealDB compatibility.
 /// The Surreal Rust SDK's bespoke serializer wires `uuid::Uuid` as raw bytes,
@@ -1458,7 +1458,7 @@ impl Character {
         self.sleep_remaining = 0;
         self.cycles_awake = 0;
         events.push(TaggedEvent::new(
-            crate::output::GameOutput::CharacterWakesInterrupted(self.name.as_str()).to_string(),
+            world::output::GameOutput::CharacterWakesInterrupted(self.name.as_str()).to_string(),
             MessagePayload::CharacterWoke {
                 character: CharacterRef {
                     identifier: self.identifier.clone().into(),
