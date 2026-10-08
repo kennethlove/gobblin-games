@@ -23,12 +23,12 @@ use crate::characters::actions::Action;
 pub fn survival_override(
     character: &Character,
     terrain: world::terrain::BaseTerrain,
-    weather: &crate::areas::weather::Weather,
+    weather: &areas::weather::Weather,
     in_combat: bool,
 ) -> Option<Action> {
-    use crate::areas::forage::forage_richness;
-    use crate::areas::water::water_source;
     use crate::characters::survival::{HungerBand, ThirstBand, hunger_band, thirst_band};
+    use areas::forage::forage_richness;
+    use areas::water::water_source;
 
     if in_combat {
         return None;

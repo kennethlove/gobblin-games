@@ -1,7 +1,7 @@
 //! Producer (f): Witness mass casualty — Moderate/Severe based on death count.
 
-use crate::areas::Area;
 use crate::games::Game;
+use areas::Area;
 use shared::afflictions::{CauseClass, Severity, TraumaSource};
 use shared::messages::{MessagePayload, Phase};
 

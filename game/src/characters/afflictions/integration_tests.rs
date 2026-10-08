@@ -6,7 +6,6 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::areas::Area;
     use crate::characters::Character;
     use crate::characters::actions::Action;
     use crate::characters::actions::AttackOutcome;
@@ -16,6 +15,7 @@ mod tests {
     };
     use crate::characters::combat::inflict_table::{HitSeverity, WeaponKind, lookup_inflicts};
     use crate::characters::combat_tuning::CombatTuning;
+    use areas::Area;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
     use shared::afflictions::{Affliction, AfflictionKind, AfflictionSource, BodyPart, Severity};

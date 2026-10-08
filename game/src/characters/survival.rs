@@ -1,5 +1,5 @@
-use crate::areas::weather::Weather;
 use crate::characters::Character;
+use areas::weather::Weather;
 
 // Wire-visible band enums live in the `shared` crate (they are serialised
 // in `MessagePayload::{Hunger,Thirst}BandChanged`). Re-export them here so

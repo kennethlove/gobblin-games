@@ -1,6 +1,6 @@
 use super::*;
-use crate::areas::events::AreaEvent;
-use crate::areas::{Area, AreaDetails};
+use areas::events::AreaEvent;
+use areas::{Area, AreaDetails};
 use rand::rngs::SmallRng;
 use std::collections::HashMap;
 use world::items::Item;

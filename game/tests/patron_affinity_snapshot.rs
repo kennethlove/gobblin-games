@@ -2,7 +2,7 @@
 //! audience events. Regenerate with `cargo insta accept` after intentional
 //! rebalances.
 
-use game::areas::{Area, AreaDetails};
+use areas::{Area, AreaDetails};
 use game::characters::Character;
 use game::games::Game;
 use game::patrons::{PatronContext, translate, update_affinities};

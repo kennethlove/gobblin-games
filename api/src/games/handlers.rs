@@ -130,7 +130,7 @@ pub async fn create_game(
     let base_item_count = payload.item_quantity.base_item_count();
 
     // Create areas concurrently with customized item count
-    let area_names = game::areas::generate_area_names();
+    let area_names = areas::generate_area_names();
     let area_futures = Area::iter().zip(area_names).map(|(area, name)| {
         super::create_area(game_identifier.as_str(), area, name, base_item_count, &db)
     });
@@ -219,7 +219,7 @@ pub async fn quickstart(
 
     // Create 7 areas
     let base_item_count = shared::ItemQuantity::default().base_item_count();
-    let area_names = game::areas::generate_area_names();
+    let area_names = areas::generate_area_names();
     let area_futures = Area::iter().zip(area_names).map(|(area, name)| {
         super::create_area(game_identifier.as_str(), area, name, base_item_count, &db)
     });

@@ -5,10 +5,10 @@ pub(crate) mod persist;
 
 use crate::characters::CHARACTERS_ROUTER;
 use crate::{AppError, AppState};
+use areas::{Area, AreaDetails};
 use axum::Router;
 use axum::routing::{get, post, put};
 use chrono::{DateTime, Utc};
-use game::areas::{Area, AreaDetails};
 use game::characters::Character;
 use game::games::Game;
 use serde::{Deserialize, Serialize};

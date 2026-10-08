@@ -1,4 +1,3 @@
-pub mod areas;
 pub mod characters;
 pub mod events;
 pub mod games;

@@ -1,8 +1,8 @@
-use crate::areas::events::AreaEvent;
-use crate::areas::{Area, AreaDetails};
 use crate::characters::actions::Action;
 use crate::characters::statuses::CharacterStatus;
 use crate::characters::{ActionSuggestion, Character};
+use areas::events::AreaEvent;
+use areas::{Area, AreaDetails};
 use rand::Rng;
 use rand::RngExt;
 use rand::prelude::*;
@@ -745,21 +745,18 @@ impl Game {
                     let id = character.identifier.clone();
                     character.blood = 0;
                     let cause = match most_severe_event {
-                        crate::areas::events::AreaEvent::Wildfire => {
-                            shared::afflictions::DeathCause::Fire
-                        }
-                        crate::areas::events::AreaEvent::Flood
-                        | crate::areas::events::AreaEvent::Sinkhole => {
+                        areas::events::AreaEvent::Wildfire => shared::afflictions::DeathCause::Fire,
+                        areas::events::AreaEvent::Flood | areas::events::AreaEvent::Sinkhole => {
                             shared::afflictions::DeathCause::Drowning
                         }
-                        crate::areas::events::AreaEvent::Avalanche
-                        | crate::areas::events::AreaEvent::Rockslide => {
+                        areas::events::AreaEvent::Avalanche
+                        | areas::events::AreaEvent::Rockslide => {
                             shared::afflictions::DeathCause::Hazard(
                                 shared::afflictions::HazardKind::FallingDebris,
                             )
                         }
-                        crate::areas::events::AreaEvent::Earthquake
-                        | crate::areas::events::AreaEvent::Landslide => {
+                        areas::events::AreaEvent::Earthquake
+                        | areas::events::AreaEvent::Landslide => {
                             shared::afflictions::DeathCause::Hazard(
                                 shared::afflictions::HazardKind::Other,
                             )
@@ -862,20 +859,18 @@ impl Game {
                 if !result.survived {
                     character.blood = 0;
                     let cause = match most_severe_event {
-                        crate::areas::events::AreaEvent::Wildfire => {
-                            shared::afflictions::DeathCause::Fire
-                        }
-                        crate::areas::events::AreaEvent::Flood => {
+                        areas::events::AreaEvent::Wildfire => shared::afflictions::DeathCause::Fire,
+                        areas::events::AreaEvent::Flood => {
                             shared::afflictions::DeathCause::Drowning
                         }
-                        crate::areas::events::AreaEvent::Avalanche
-                        | crate::areas::events::AreaEvent::Rockslide => {
+                        areas::events::AreaEvent::Avalanche
+                        | areas::events::AreaEvent::Rockslide => {
                             shared::afflictions::DeathCause::Hazard(
                                 shared::afflictions::HazardKind::FallingDebris,
                             )
                         }
-                        crate::areas::events::AreaEvent::Earthquake
-                        | crate::areas::events::AreaEvent::Landslide => {
+                        areas::events::AreaEvent::Earthquake
+                        | areas::events::AreaEvent::Landslide => {
                             shared::afflictions::DeathCause::Hazard(
                                 shared::afflictions::HazardKind::Other,
                             )

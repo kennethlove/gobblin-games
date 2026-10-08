@@ -152,8 +152,8 @@ pub fn affliction_override(character: &Character, _action: &Action) -> Option<Ac
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::areas::Area;
     use crate::characters::Character;
+    use areas::Area;
     use shared::afflictions::{Affliction, AfflictionSource, BodyPart, TrapKind};
 
     fn make_affliction(kind: AfflictionKind, severity: Severity) -> Affliction {

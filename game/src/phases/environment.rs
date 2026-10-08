@@ -21,7 +21,7 @@
 //! these into [`crate::games::Game::execute_cycle`] and into per-character
 //! affliction application.
 
-use crate::areas::weather::Weather;
+use areas::weather::Weather;
 use rand::{Rng, RngExt};
 use serde::{Deserialize, Serialize};
 use shared::afflictions::AfflictionKind;

@@ -77,8 +77,8 @@ mod trauma_snapshot_tests;
 #[cfg(test)]
 mod visibility_tests {
     use super::*;
-    use crate::areas::Area;
     use crate::characters::Character;
+    use areas::Area;
     use shared::afflictions::{Affliction, AfflictionKind, AfflictionSource, BodyPart};
 
     fn make_affliction(kind: AfflictionKind, severity: Severity) -> Affliction {

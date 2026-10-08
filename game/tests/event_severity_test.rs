@@ -1,4 +1,4 @@
-use game::areas::events::{AreaEvent, EventSeverity};
+use areas::events::{AreaEvent, EventSeverity};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use rstest::rstest;

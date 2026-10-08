@@ -1,5 +1,5 @@
 [workspace]
-members = [ "game", "shared", "api", "announcers", "world"]
+members = [ "game", "shared", "api", "announcers", "world", "areas"]
 resolver = "2"
 
 [profile.dev]

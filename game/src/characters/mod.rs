@@ -29,10 +29,10 @@ pub use movement::TravelResult;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::areas::{Area, AreaDetails};
 use crate::characters::afflictions::{AcquireResolution, can_acquire};
 use crate::characters::events::CharacterEvent;
 use actions::{Action, AttackOutcome};
+use areas::{Area, AreaDetails};
 use brains::Brain;
 use rand::RngExt;
 use rand::prelude::*;
@@ -139,7 +139,7 @@ pub struct EnvironmentContext<'a> {
     pub phase: shared::messages::Phase,
     pub area_details: &'a mut AreaDetails,
     pub closed_areas: &'a [Area],
-    pub available_destinations: Vec<crate::areas::DestinationInfo>,
+    pub available_destinations: Vec<areas::DestinationInfo>,
     /// All known areas (read-only snapshot). Used by multi-hop
     /// pathfinding so the planner can reason about non-neighbor goals.
     pub all_areas: &'a [AreaDetails],
@@ -944,7 +944,7 @@ impl Character {
         &mut self,
         area: &Option<Area>,
         closed_areas: &[Area],
-        available_destinations: &[crate::areas::DestinationInfo],
+        available_destinations: &[areas::DestinationInfo],
         events: &mut Vec<TaggedEvent>,
     ) {
         let character_ref = CharacterRef {
@@ -1067,7 +1067,7 @@ impl Character {
         let roll: u32 = _rng.random_range(1..=20);
         let concealment = 10 + int_mod + roll / 2; // Base 10 + int bonus + luck
 
-        let trap = crate::areas::traps::PlacedTrap {
+        let trap = areas::traps::PlacedTrap {
             id: uuid::Uuid::new_v4().to_string(),
             kind,
             severity,
@@ -2151,8 +2151,8 @@ mod tests {
 
     #[rstest]
     fn reset_for_new_game_clears_per_game_state_keeps_identity() {
-        use crate::areas::Area;
         use crate::characters::statuses::CharacterStatus;
+        use areas::Area;
         let mut me = Character::new(
             "Stinky".to_string(),
             Some(3),

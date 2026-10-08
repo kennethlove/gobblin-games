@@ -1,7 +1,7 @@
 //! Producer (a)/(b): Witness ally death — Mild trauma + phobia co-acquire stub.
 
-use crate::areas::Area;
 use crate::games::Game;
+use areas::Area;
 use shared::afflictions::{Severity, TraumaSource};
 use shared::messages::{CharacterRef, MessagePayload, Phase};
 

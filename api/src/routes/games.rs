@@ -268,9 +268,9 @@ SELECT (
         .bind(("identifier", identifier.clone()))
         .await;
 
-    let areas: Vec<game::areas::AreaDetails> = match areas_result {
+    let areas: Vec<areas::AreaDetails> = match areas_result {
         Ok(mut result) => {
-            let rows: Vec<Vec<SerdeWrapper<game::areas::AreaDetails>>> =
+            let rows: Vec<Vec<SerdeWrapper<areas::AreaDetails>>> =
                 result.take("areas").unwrap_or_default();
             rows.into_iter()
                 .next()
@@ -508,7 +508,7 @@ SELECT (
 
     let areas = match result {
         Ok(mut result) => {
-            let areas: Vec<Vec<SerdeWrapper<game::areas::AreaDetails>>> =
+            let areas: Vec<Vec<SerdeWrapper<areas::AreaDetails>>> =
                 result.take("areas").unwrap_or_default();
             areas
                 .into_iter()
@@ -1043,10 +1043,10 @@ pub async fn create_game_post_handler(
         }
     }
 
-    use game::areas::Area;
+    use areas::Area;
     use strum::IntoEnumIterator;
     let base_item_count = shared::ItemQuantity::default().base_item_count();
-    let area_names = game::areas::generate_area_names();
+    let area_names = areas::generate_area_names();
     let area_futures = Area::iter().zip(area_names).map(|(area, name)| {
         api::games::create_area(&game_identifier, area, name, base_item_count, &user_db)
     });

@@ -2,8 +2,8 @@
 //!
 //! See `docs/superpowers/specs/2026-05-04-trapped-afflictions-design.md` §10.
 
-use crate::areas::AreaDetails;
 use crate::characters::Character;
+use areas::AreaDetails;
 use rand::Rng;
 use rand::RngExt;
 use shared::afflictions::{AfflictionKind, PARTIAL_RESCUE_THRESHOLD, RESCUE_BONUS_CAP, Severity};
@@ -188,8 +188,8 @@ pub fn evaluate_rescue_opportunity(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::areas::Area;
     use crate::characters::Character;
+    use areas::Area;
     use rand::SeedableRng;
     use rstest::rstest;
     use shared::afflictions::{

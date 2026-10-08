@@ -9,8 +9,8 @@ use shared::afflictions::{
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use strum::IntoEnumIterator;
 
-use crate::areas::Area;
 use crate::characters::Character;
+use areas::Area;
 use rand::RngExt;
 use rand::SeedableRng;
 use rand::prelude::IndexedRandom;

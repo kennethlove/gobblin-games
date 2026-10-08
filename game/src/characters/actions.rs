@@ -1,5 +1,5 @@
-use crate::areas::Area;
 use crate::characters::Character;
+use areas::Area;
 use serde::{Deserialize, Serialize};
 use shared::afflictions::TraumaSource;
 use std::fmt::Display;

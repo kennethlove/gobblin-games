@@ -622,7 +622,7 @@ fn brain_act_routes_first_hop_to_non_neighbor_goal(
     mut character: Character,
     mut small_rng: SmallRng,
 ) {
-    use crate::areas::Area;
+    use areas::Area;
 
     // Place the character in Sector1.
     character.area = Area::Sector1;
@@ -684,7 +684,7 @@ fn brain_act_routes_first_hop_to_non_neighbor_goal(
 /// empty one. Excludes the character itself from its own area's count.
 #[rstest]
 fn choose_destination_avoids_crowded_areas(character: Character) {
-    use crate::areas::Area;
+    use areas::Area;
 
     let mk = |a: Area| {
         AreaDetails::new_with_terrain(
@@ -716,7 +716,7 @@ fn choose_destination_avoids_crowded_areas(character: Character) {
 /// score *worse* than an equally-empty foreign one.
 #[rstest]
 fn choose_destination_excludes_self_from_own_area_density(character: Character) {
-    use crate::areas::Area;
+    use areas::Area;
 
     let mut t = character;
     t.area = Area::Sector1;
@@ -806,9 +806,9 @@ fn should_sleep_already_sleeping_returns_none(character: Character, mut small_rn
 
 pub(crate) mod survival_override_tests {
     use super::*;
-    use crate::areas::weather::Weather;
     use crate::characters::Character;
     use crate::characters::actions::Action;
+    use areas::weather::Weather;
     use world::items::Item;
     use world::terrain::BaseTerrain;
 

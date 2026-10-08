@@ -7,9 +7,9 @@
 //! - Patron gifts
 //! - Taking items from areas
 
-use crate::areas::AreaDetails;
 use crate::characters::Character;
 use crate::characters::afflictions::{AddictionAcquisition, apply_cure};
+use areas::AreaDetails;
 use rand::prelude::*;
 use rand::rngs::SmallRng;
 use shared::messages::MessagePayload;

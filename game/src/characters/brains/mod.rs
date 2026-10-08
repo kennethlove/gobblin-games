@@ -1,8 +1,8 @@
-use crate::areas::{Area, AreaDetails};
 use crate::characters::Character;
 use crate::characters::actions::Action;
 use crate::characters::alliances::MAX_ALLIES;
 use crate::characters::traits::{REFUSERS, ThresholdDelta, Trait, geometric_mean_affinity};
+use areas::{Area, AreaDetails};
 use rand::Rng;
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
@@ -248,7 +248,7 @@ impl Brain {
         &self,
         character: &Character,
         nearby_characters: u32,
-        available_destinations: &[crate::areas::DestinationInfo],
+        available_destinations: &[areas::DestinationInfo],
         all_areas: &[AreaDetails],
         closed_areas: &[Area],
         enemy_density: &HashMap<Area, u32>,
@@ -633,7 +633,7 @@ impl Brain {
         // (nearby_characters > 0) suppresses survival; stamina has its own
         // visible-band flee path that handles the in-combat case.
         if let Some(base) = terrain {
-            let weather = crate::areas::weather::current_weather();
+            let weather = areas::weather::current_weather();
             if let Some(action) =
                 survival_override(character, base, &weather, nearby_characters > 0)
             {

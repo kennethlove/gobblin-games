@@ -367,7 +367,7 @@ pub fn render_character_card(character: &game::characters::Character) -> String 
     )
 }
 
-pub fn render_area_card(area: &game::areas::AreaDetails) -> String {
+pub fn render_area_card(area: &areas::AreaDetails) -> String {
     let item_count = area.items.len();
     let event_count = area.events.len();
 
@@ -687,20 +687,20 @@ fn hex_center(area_idx: usize) -> (f64, f64) {
 }
 
 pub fn render_hex_map(
-    areas: &[game::areas::AreaDetails],
+    areas: &[areas::AreaDetails],
     characters: &[&game::characters::Character],
 ) -> String {
     let area_order = [
-        game::areas::Area::Hub,
-        game::areas::Area::Sector1,
-        game::areas::Area::Sector2,
-        game::areas::Area::Sector3,
-        game::areas::Area::Sector4,
-        game::areas::Area::Sector5,
-        game::areas::Area::Sector6,
+        areas::Area::Hub,
+        areas::Area::Sector1,
+        areas::Area::Sector2,
+        areas::Area::Sector3,
+        areas::Area::Sector4,
+        areas::Area::Sector5,
+        areas::Area::Sector6,
     ];
 
-    let area_map: std::collections::HashMap<game::areas::Area, &game::areas::AreaDetails> = areas
+    let area_map: std::collections::HashMap<areas::Area, &areas::AreaDetails> = areas
         .iter()
         .filter_map(|a| a.area.map(|area| (area, a)))
         .collect();

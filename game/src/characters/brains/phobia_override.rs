@@ -11,12 +11,12 @@
 use rand::Rng;
 use rand::SeedableRng;
 
-use crate::areas::AreaDetails;
 use crate::characters::Character;
 use crate::characters::actions::Action;
 use crate::characters::afflictions::phobia::{
     FiringPhobia, Reaction, collect_firing_phobias, strongest_reaction, total_stat_penalty,
 };
+use areas::AreaDetails;
 use world::terrain::BaseTerrain;
 
 /// Context available to the phobia override layer. Built from the brain
@@ -131,7 +131,7 @@ fn is_fire_present(ctx: &PhobiaBrainContext<'_>) -> bool {
         .map(|a| {
             a.events
                 .iter()
-                .any(|e| matches!(e, crate::areas::events::AreaEvent::Wildfire))
+                .any(|e| matches!(e, areas::events::AreaEvent::Wildfire))
         })
         .unwrap_or(false)
 }
@@ -142,7 +142,7 @@ fn is_water_present(ctx: &PhobiaBrainContext<'_>) -> bool {
         .map(|a| {
             a.events
                 .iter()
-                .any(|e| matches!(e, crate::areas::events::AreaEvent::Flood))
+                .any(|e| matches!(e, areas::events::AreaEvent::Flood))
         })
         .unwrap_or(false);
     let terrain_is_wetlands = matches!(terrain(ctx), Some(BaseTerrain::Wetlands));
@@ -170,10 +170,10 @@ fn is_open_present(ctx: &PhobiaBrainContext<'_>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::areas::Area;
-    use crate::areas::events::AreaEvent;
     use crate::characters::AfflictionDraft;
     use crate::characters::traits::Trait;
+    use areas::Area;
+    use areas::events::AreaEvent;
     use shared::afflictions::{
         AfflictionKind, AfflictionSource, PhobiaMetadata, PhobiaOrigin, PhobiaTrigger, Severity,
     };

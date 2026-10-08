@@ -2,7 +2,7 @@
 //! survival system (PR1 backend). See
 //! docs/superpowers/specs/2026-05-03-shelter-hunger-thirst-design.md.
 
-use game::areas::weather::Weather;
+use areas::weather::Weather;
 use game::characters::Character;
 use game::characters::survival::{
     ThirstBand, apply_dehydration_drain, apply_starvation_drain, drink_water, thirst_band,

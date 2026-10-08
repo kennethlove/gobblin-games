@@ -5,7 +5,7 @@
 //! `Game.messages` (rather than silently dropped by the old
 //! `try_log_action` no-op), with `MessageSource::Character(identifier)`.
 
-use game::areas::{Area, AreaDetails};
+use areas::{Area, AreaDetails};
 use game::characters::Character;
 use game::games::Game;
 use shared::messages::MessageSource;

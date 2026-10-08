@@ -11,7 +11,7 @@
 //! adjacency and area identity. The pixel-layout half (`to_pixel`) is here
 //! so the frontend can render without re-deriving the math.
 
-use crate::areas::Area;
+use crate::Area;
 
 /// Axial hex coordinate (`q`, `r`). Pointy-top orientation.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

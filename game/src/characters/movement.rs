@@ -5,8 +5,8 @@
 //! - Movement restrictions based on attributes
 //! - Area selection logic
 
-use crate::areas::Area;
 use crate::characters::Character;
+use areas::Area;
 use rand::prelude::*;
 use rand::rngs::SmallRng;
 use shared::messages::{AreaRef, CharacterRef, MessagePayload};
@@ -199,9 +199,9 @@ impl Character {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::areas::Area::*;
-    use crate::areas::AreaDetails;
     use crate::characters::Character;
+    use areas::Area::*;
+    use areas::AreaDetails;
     use rstest::*;
 
     #[fixture]

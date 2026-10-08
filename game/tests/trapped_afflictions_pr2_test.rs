@@ -2,7 +2,7 @@
 //!
 //! See `docs/superpowers/specs/2026-05-04-trapped-afflictions-design.md` §18.
 
-use game::areas::AreaDetails;
+use areas::AreaDetails;
 use game::characters::AfflictionDraft;
 use game::characters::Character;
 use game::characters::actions::Action;
@@ -12,7 +12,7 @@ use shared::afflictions::{AfflictionKind, AfflictionSource, Severity, TrapKind, 
 
 fn make_character(name: &str) -> Character {
     let mut t = Character::new(name.into(), None, None);
-    t.area = game::areas::Area::Hub;
+    t.area = areas::Area::Hub;
     t.attributes.strength = 30;
     t.attributes.defense = 15;
     t
@@ -69,14 +69,14 @@ fn rescue_bonus_applied_to_trapped_target() {
 
     let mut rescuer = make_character("Rescuer");
     rescuer.attributes.strength = 40;
-    rescuer.area = game::areas::Area::Hub;
+    rescuer.area = areas::Area::Hub;
 
     let mut target = make_character("Target");
-    target.area = game::areas::Area::Hub;
+    target.area = areas::Area::Hub;
     add_buried(&mut target, Severity::Mild);
 
     let area = AreaDetails {
-        area: Some(game::areas::Area::Hub),
+        area: Some(areas::Area::Hub),
         ..Default::default()
     };
 
@@ -113,7 +113,7 @@ fn rescue_bonus_applied_to_trapped_target() {
 /// Test: trapped character cannot move via hard gate.
 #[test]
 fn trapped_blocked_from_moving() {
-    use game::areas::Area;
+    use areas::Area;
     use game::characters::brains::affliction_override::hard_gates_with_terrain;
 
     let mut character = make_character("Trapped");
@@ -146,7 +146,7 @@ fn trapped_override_blocks_move() {
     let mut character = make_character("Trapped");
     add_buried(&mut character, Severity::Moderate);
 
-    let result = affliction_override(&character, &Action::Move(Some(game::areas::Area::Hub)));
+    let result = affliction_override(&character, &Action::Move(Some(areas::Area::Hub)));
     assert_eq!(result, Some(Action::None));
 }
 

@@ -1,4 +1,4 @@
-use game::areas::{Area, AreaDetails};
+use areas::{Area, AreaDetails};
 use game::characters::Character;
 use game::characters::brains::Brain;
 use rand::prelude::*;

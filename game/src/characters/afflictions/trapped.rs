@@ -2,7 +2,7 @@
 //!
 //! See `docs/superpowers/specs/2026-05-04-trapped-afflictions-design.md`.
 
-use crate::areas::events::AreaEvent;
+use areas::events::AreaEvent;
 use shared::afflictions::{Severity, TrapKind};
 
 /// Which character attribute to use for escape roll computation.
@@ -191,7 +191,7 @@ pub fn get_escape_stat(character: &crate::characters::Character, kind: TrapKind)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::areas::events::AreaEvent;
+    use areas::events::AreaEvent;
     use rstest::rstest;
     use shared::afflictions::{Severity, TrappedMetadata, escape_threshold};
 

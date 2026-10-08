@@ -525,7 +525,7 @@ fn cycles_awake_does_not_increment_while_sleeping() {
 
 #[test]
 fn area_event_interrupts_sleeping_character() {
-    use crate::areas::events::AreaEvent;
+    use areas::events::AreaEvent;
     use shared::messages::{MessagePayload, Phase};
     let mut t = create_character("Sleeper", true);
     t.sleeping = true;

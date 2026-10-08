@@ -1,4 +1,4 @@
-use crate::areas::weather::Weather;
+use crate::weather::Weather;
 use world::terrain::types::BaseTerrain;
 
 /// Pure derivation of an area's water-source strength from terrain + weather.

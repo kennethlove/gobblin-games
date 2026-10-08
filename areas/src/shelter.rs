@@ -1,4 +1,4 @@
-use crate::areas::weather::Weather;
+use crate::weather::Weather;
 use world::terrain::types::BaseTerrain;
 
 /// Pure derivation of an area's shelter quality from terrain and current weather.

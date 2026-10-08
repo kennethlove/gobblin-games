@@ -171,6 +171,7 @@ name = "api"
 version = "0.1.15"
 dependencies = [
  "announcers",
+ "areas",
  "askama_escape",
  "async-trait",
  "axum",
@@ -224,6 +225,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a3a1fd6f75306b68087b831f025c712524bcb19aad54e557b1129cfa0a2b207"
 dependencies = [
  "rustversion",
+]
+
+[[package]]
+name = "areas"
+version = "0.1.0"
+dependencies = [
+ "rand 0.10.1",
+ "rstest",
+ "serde",
+ "serde_json",
+ "shared",
+ "strum 0.28.0",
+ "strum_macros 0.28.0",
+ "tracing",
+ "uuid",
+ "world",
 ]
 
 [[package]]
@@ -1855,6 +1872,7 @@ dependencies = [
 name = "game"
 version = "0.1.0"
 dependencies = [
+ "areas",
  "chrono",
  "criterion",
  "indefinite",

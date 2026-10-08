@@ -11,7 +11,7 @@
 
 use super::actions::Action;
 use super::{Character, calculate_stamina_cost};
-use crate::areas::{Area, AreaDetails};
+use areas::{Area, AreaDetails};
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
 use world::pathfinding::{Graph, astar};

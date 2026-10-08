@@ -6,9 +6,9 @@
 //!
 //! See spec §4.
 
-use crate::areas::AreaDetails;
-use crate::areas::events::AreaEvent;
 use crate::characters::Character;
+use areas::AreaDetails;
+use areas::events::AreaEvent;
 use shared::afflictions::PhobiaTrigger;
 use world::terrain::BaseTerrain;
 
@@ -133,7 +133,7 @@ fn character_has_light_source(character: &Character) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::areas::Area;
+    use areas::Area;
     use shared::messages::{CharacterRef, GameMessage, MessagePayload, MessageSource, Phase};
     use world::items::Item;
     use world::terrain::TerrainType;

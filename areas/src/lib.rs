@@ -6,8 +6,8 @@ pub mod traps;
 pub mod water;
 pub mod weather;
 
-use crate::areas::events::AreaEvent;
-use crate::areas::hex::{SUB_SLOTS, SubAxial};
+use crate::events::AreaEvent;
+use crate::hex::{SUB_SLOTS, SubAxial};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;

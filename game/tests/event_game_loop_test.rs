@@ -1,5 +1,5 @@
-use game::areas::events::AreaEvent;
-use game::areas::{Area, AreaDetails};
+use areas::events::AreaEvent;
+use areas::{Area, AreaDetails};
 use game::characters::Character;
 use game::games::Game;
 use rand::SeedableRng;

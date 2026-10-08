@@ -1,11 +1,11 @@
 use super::*;
-use crate::areas::{Area, AreaDetails};
 use crate::characters::events::CharacterEvent;
 use crate::characters::incidents::{SleepIncident, SleepShelter, apply_sleep_incident};
 use crate::characters::statuses::CharacterStatus;
 use crate::characters::{
     ActionSuggestion, Character, EncounterContext, EnvironmentContext, calculate_stamina_cost,
 };
+use areas::{Area, AreaDetails};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
@@ -150,11 +150,11 @@ impl Game {
             // Loot drop is handled centrally by clean_up_recent_deaths
             // after the cycle ends.
             {
-                use crate::areas::weather::current_weather;
                 use crate::characters::survival::{
                     apply_dehydration_drain, apply_starvation_drain, hunger_band, thirst_band,
                     tick_survival,
                 };
+                use areas::weather::current_weather;
                 use shared::afflictions::DeathCause;
                 use shared::messages::{CharacterRef, MessagePayload};
 
@@ -829,7 +829,7 @@ impl Game {
                             let stamina_cost =
                                 calculate_stamina_cost(&move_action, &ad.terrain, character);
 
-                            crate::areas::DestinationInfo {
+                            areas::DestinationInfo {
                                 area: neighbor_area,
                                 terrain: ad.terrain.clone(),
                                 active_events: ad.events.clone(),
