@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 impl Game {
     pub(super) fn run_trauma_producers(&mut self, _phase: crate::messages::Phase) {
-        crate::characters::afflictions::producers::run_trauma_producers(self);
+        crate::trauma_producers::run_trauma_producers(self);
     }
 
     /// Announce events in closed areas.

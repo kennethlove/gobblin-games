@@ -109,10 +109,4 @@ mod tests {
         let back: CombatTuning = serde_json::from_str(&s).unwrap();
         assert_eq!(t, back);
     }
-
-    #[test]
-    fn game_default_carries_default_combat_tuning() {
-        let g = crate::games::Game::default();
-        assert_eq!(g.combat_tuning, CombatTuning::default());
-    }
 }

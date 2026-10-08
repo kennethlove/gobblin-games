@@ -154,6 +154,20 @@ Module aggregator. Exports all submodules and declares `witty_phrase_generator` 
 - **Purpose**: Trauma producer invocation, area event announcements, event triggering
 - **Key Functions**: `run_trauma_producers()`, `announce_area_events()`, `trigger_cycle_events()`
 
+### **trauma_producers/** (835 lines) — **Trauma Producer Pipeline**
+- **Purpose**: Scan the current phase's message log; acquire/reinforce trauma afflictions on witnesses/survivors (moved up from `characters/afflictions/producers/` — orchestration, not character logic)
+- **Key Function**: `run_trauma_producers()` — gated on `game.config.trauma_enabled`
+
+| File | Lines | Role |
+|------|-------|------|
+| `mod.rs` | 37 | Module aggregator |
+| `shared.rs` | 145 | Shared producer utilities |
+| `survive_betrayal.rs` | 44 | Betrayal survival trauma producer |
+| `survive_near_death.rs` | 54 | Near-death survival trauma producer |
+| `witness_ally_death.rs` | 66 | Ally death witness trauma producer |
+| `witness_mass_casualty.rs` | 64 | Mass casualty witness trauma producer |
+| `tests.rs` | 425 | Producer tests |
+
 ### **games/messages.rs** (142 lines) — **Message Helpers**
 - **Purpose**: Fallback `MessagePayload` construction for legacy emission sites
 - **Key Function**: `fallback_payload()` — transitional helper pending full typed payload migration
@@ -313,13 +327,6 @@ Comprehensive health condition system: anatomy, trauma, phobias, fixations, addi
 | `effects/trauma_effects.rs` | 57 | Trauma-specific effect application |
 | `trapped.rs` | 367 | Trapped affliction mechanics |
 | `tuning.rs` | 45 | `AfflictionTuning` constants |
-| `producers/mod.rs` | 37 | Trauma producer module aggregator |
-| `producers/shared.rs` | 143 | Shared producer utilities |
-| `producers/survive_betrayal.rs` | 44 | Betrayal survival trauma producer |
-| `producers/survive_near_death.rs` | 54 | Near-death survival trauma producer |
-| `producers/witness_ally_death.rs` | 66 | Ally death witness trauma producer |
-| `producers/witness_mass_casualty.rs` | 64 | Mass casualty witness trauma producer |
-| `producers/tests.rs` | 405 | Producer tests |
 | `integration_tests.rs` | 1527 | Cross-module integration tests |
 | `snapshot_tests.rs` | 93 | Snapshot regression tests |
 | `trauma_snapshot_tests.rs` | 55 | Trauma snapshot tests |

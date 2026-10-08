@@ -13,6 +13,7 @@ pub mod patrons;
 pub mod phases;
 pub mod terrain;
 pub mod threats;
+mod trauma_producers;
 mod witty_phrase_generator;
 
 // Re-export key terrain types

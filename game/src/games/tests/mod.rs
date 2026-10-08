@@ -36,3 +36,10 @@ pub(crate) fn create_character(name: &str, is_alive: bool) -> Character {
 mod alliances;
 mod messaging;
 mod survival;
+
+#[test]
+fn game_default_carries_default_combat_tuning() {
+    use crate::characters::combat_tuning::CombatTuning;
+    let g = Game::default();
+    assert_eq!(g.combat_tuning, CombatTuning::default());
+}

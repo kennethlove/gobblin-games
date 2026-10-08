@@ -13,7 +13,6 @@ pub mod cure;
 pub mod effects;
 pub mod fixation;
 pub mod phobia;
-pub mod producers;
 pub mod trapped;
 pub mod trauma;
 pub mod tuning;
