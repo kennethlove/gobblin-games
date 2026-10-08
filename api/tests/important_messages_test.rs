@@ -183,3 +183,54 @@ async fn day_summary_in_log() {
 
     test_db.cleanup().await;
 }
+
+/// Every stored row must be Persist-tier — the gate's read-side contract.
+#[tokio::test]
+async fn log_returns_important_only() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "important_only").await;
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Important Only" }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    for _ in 0..2 {
+        server
+            .put(&format!("/api/games/{}/next", game_id))
+            .add_header("Authorization", user.auth_header())
+            .await
+            .assert_status_ok();
+    }
+
+    let logs = server
+        .get(&format!("/api/games/{}/log", game_id))
+        .add_header("Authorization", user.auth_header())
+        .await;
+    logs.assert_status_ok();
+    let entries = logs.json::<serde_json::Value>();
+    let entries = entries.as_array().expect("log is a JSON array");
+    assert!(!entries.is_empty());
+
+    for entry in entries {
+        let payload: shared::messages::MessagePayload =
+            serde_json::from_value(entry["payload"].clone())
+                .expect("stored payload must deserialize");
+        assert_eq!(
+            payload.importance(),
+            shared::messages::Importance::Persist,
+            "server-log-only payload reached storage: {:?}",
+            payload.kind()
+        );
+    }
+
+    test_db.cleanup().await;
+}

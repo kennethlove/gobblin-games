@@ -234,7 +234,111 @@ fn html_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
+/// Rich card for the compiled end-of-day digest: rollup header plus a
+/// collapsible per-goblin table (kills, wounds, items, alliances, and
+/// the end-of-day state snapshot).
+pub fn render_day_summary_card(msg: &shared::messages::GameMessage) -> String {
+    let shared::messages::MessagePayload::DaySummary {
+        day,
+        rollup,
+        goblins,
+    } = &msg.payload
+    else {
+        // Dispatch only happens on the DaySummary variant; fall back to the
+        // plain card if that ever changes.
+        return render_plain_event_card(msg);
+    };
+
+    let leaders = rollup
+        .kill_leaders
+        .iter()
+        .map(|l| format!("{} ({})", html_escape(&l.character.name), l.kills))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let mut rows = String::new();
+    for g in goblins {
+        let state = if g.alive {
+            format!("{} hp", g.blood)
+        } else {
+            "fallen".to_string()
+        };
+        rows.push_str(&format!(
+            r#"<tr>
+              <td>{name}</td>
+              <td>{team}</td>
+              <td>{kills}</td>
+              <td>{wounds}</td>
+              <td>{found}/{used}</td>
+              <td>{alliances}</td>
+              <td>{state}</td>
+            </tr>"#,
+            name = html_escape(&g.character.name),
+            team = g.team,
+            kills = g.kills,
+            wounds = g.wounds_taken,
+            found = g.items_found,
+            used = g.items_used,
+            alliances = g.alliance_changes,
+            state = state,
+        ));
+    }
+
+    let leaders_line = if leaders.is_empty() {
+        String::new()
+    } else {
+        format!(r#"<div class="card-timestamp">Kills: {leaders}</div>"#)
+    };
+
+    format!(
+        r#"<div class="event-card summary" data-archetype="summary" style="border-left-color:var(--muted);">
+          <div class="card-head">
+            <span class="card-badge" style="background:var(--muted);">DAY SUMMARY</span>
+            <span class="card-timestamp">D{day}</span>
+          </div>
+          <div class="card-body">
+            <span style="font-weight:600;">Day {day}</span>
+            — {fallen} fallen, {survivors} standing. {deaths} deaths,
+            {formed} alliances formed, {dissolved} dissolved, {betrays} betrayals,
+            {found} items found, {used} items used.
+            {leaders_line}
+            <details style="margin-top:6px;">
+              <summary style="cursor:pointer; color:var(--muted);">{count} goblins</summary>
+              <table style="width:100%; margin-top:6px; font-size:var(--fs-xs);">
+                <thead>
+                  <tr style="text-align:left; color:var(--muted);">
+                    <th>Goblin</th><th>Team</th><th>Kills</th><th>Wounds</th>
+                    <th>Items F/U</th><th>Alliances</th><th>State</th>
+                  </tr>
+                </thead>
+                <tbody>{rows}</tbody>
+              </table>
+            </details>
+          </div>
+        </div>"#,
+        day = day,
+        fallen = rollup.fallen,
+        survivors = rollup.survivors,
+        deaths = rollup.deaths,
+        formed = rollup.alliances_formed,
+        dissolved = rollup.alliances_dissolved,
+        betrays = rollup.betrayals,
+        found = rollup.items_found,
+        used = rollup.items_used,
+        leaders_line = leaders_line,
+        count = goblins.len(),
+        rows = rows,
+    )
+}
+
 pub fn render_event_card(msg: &shared::messages::GameMessage) -> String {
+    if let shared::messages::MessagePayload::DaySummary { .. } = &msg.payload {
+        return render_day_summary_card(msg);
+    }
+    render_plain_event_card(msg)
+}
+
+fn render_plain_event_card(msg: &shared::messages::GameMessage) -> String {
     let archetype = message_archetype(&msg.payload);
     let badge = archetype_label(archetype);
     let kind = message_kind_label(&msg.payload);
@@ -795,4 +899,136 @@ pub fn render_hex_map(
           {hexes}
         </svg>"#,
     )
+}
+
+#[cfg(test)]
+mod day_summary_card_tests {
+    use super::*;
+    use shared::messages::{
+        CharacterRef, DayKillLeader, DayRollup, GameMessage, GoblinDaySummary, MessagePayload,
+        MessageSource, Phase,
+    };
+
+    fn summary_message() -> GameMessage {
+        GameMessage::new(
+            MessageSource::Game("g".into()),
+            1,
+            Phase::DAY_START,
+            11,
+            0,
+            "game:g".into(),
+            "Day 1: 1 fallen, 23 standing.".into(),
+            MessagePayload::DaySummary {
+                day: 1,
+                rollup: DayRollup {
+                    deaths: 1,
+                    kill_leaders: vec![DayKillLeader {
+                        character: CharacterRef {
+                            identifier: "k".into(),
+                            name: "Ash <Bane>".into(),
+                        },
+                        kills: 2,
+                    }],
+                    alliances_formed: 1,
+                    alliances_dissolved: 0,
+                    betrayals: 0,
+                    items_found: 3,
+                    items_used: 2,
+                    survivors: 23,
+                    fallen: 1,
+                },
+                goblins: vec![GoblinDaySummary {
+                    character: CharacterRef {
+                        identifier: "c".into(),
+                        name: "Ash <Bane>".into(),
+                    },
+                    team: 1,
+                    kills: 2,
+                    wounds_taken: 1,
+                    items_found: 3,
+                    items_used: 2,
+                    alliance_changes: 1,
+                    alive: true,
+                    blood: 820,
+                    sanity: 100,
+                }],
+            },
+        )
+    }
+
+    #[test]
+    fn day_summary_card_shows_rollup_and_goblins() {
+        let html = render_event_card(&summary_message());
+        assert!(html.contains("DAY SUMMARY"), "badge: {html}");
+        assert!(html.contains("1 fallen, 23 standing"), "rollup: {html}");
+        assert!(
+            html.contains("Kills: Ash &lt;Bane&gt; (2)"),
+            "leaders: {html}"
+        );
+        assert!(html.contains("1 goblins"), "goblin count: {html}");
+        assert!(html.contains("Ash &lt;Bane&gt;"), "escaped name: {html}");
+        assert!(html.contains("820 hp"), "state snapshot: {html}");
+        assert!(html.contains("<details"), "collapsible rows: {html}");
+        // Plain messages still render through the plain card.
+        let plain = GameMessage::new(
+            MessageSource::Game("g".into()),
+            1,
+            Phase::DAY_START,
+            1,
+            0,
+            "game:g".into(),
+            "someone fell".into(),
+            MessagePayload::CharacterBledOut {
+                character: CharacterRef {
+                    identifier: "c".into(),
+                    name: "C".into(),
+                },
+            },
+        );
+        let html = render_event_card(&plain);
+        assert!(!html.contains("DAY SUMMARY"), "plain path: {html}");
+        assert!(html.contains("event-card"), "{html}");
+    }
+
+    /// The timeline template passes pre-rendered cards straight through —
+    /// prove a DaySummary card survives the full page render.
+    #[test]
+    fn timeline_template_renders_day_summary_card() {
+        let auth = crate::templates::AuthState::Guest {
+            csrf_token: "csrf".into(),
+        };
+        let mut ctx = crate::templates::tera_engine::base_context("Timeline", &auth);
+        let card = render_event_card(&summary_message());
+        ctx.insert("game_id", "g");
+        ctx.insert("game_name", "Game");
+        ctx.insert("current_day", &1u32);
+        ctx.insert("current_phase", "06");
+        ctx.insert(
+            "periods",
+            &[shared::messages::PeriodSummary {
+                day: 1,
+                phase: shared::messages::Phase::DAY_START,
+                deaths: 1,
+                event_count: 5,
+                is_current: true,
+            }],
+        );
+        ctx.insert("filter", "");
+        ctx.insert("character_filter", "");
+        ctx.insert("characters", &Vec::<shared::messages::CharacterRef>::new());
+        ctx.insert("rendered_events", &[card]);
+        // Cards render only once a period is selected (grid view otherwise).
+        ctx.insert("selected_day", &Some(1u32));
+        ctx.insert("selected_phase", &Some("04".to_string()));
+        ctx.insert(
+            "filter_options",
+            &vec![serde_json::json!({"value": "", "label": "All", "icon_name": "list"})],
+        );
+
+        let html = crate::templates::tera_engine::render("timeline.html", &ctx);
+        assert!(html.contains("DAY SUMMARY"), "badge missing: {html}");
+        assert!(html.contains("1 fallen, 23 standing"), "rollup missing");
+        assert!(html.contains("<tbody>"), "goblin rows missing");
+        assert!(html.contains("Ash &lt;Bane&gt;"), "goblin row missing");
+    }
 }
