@@ -103,7 +103,7 @@ fn test_concealed_terrain_boosts_hiding(mut small_rng: SmallRng) {
         &character,
         3,
         forest_terrain,
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &mut small_rng,
     );
 
@@ -132,7 +132,7 @@ fn test_resource_scarce_terrain_boosts_search(mut small_rng: SmallRng) {
         &character,
         0,
         desert_terrain,
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &mut small_rng,
     );
 

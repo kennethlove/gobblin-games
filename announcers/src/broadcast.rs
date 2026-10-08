@@ -583,7 +583,7 @@ mod tests {
             identifier: format!("msg-{id}"),
             source: MessageSource::Game("game-1".into()),
             game_day: 1,
-            phase: Phase::Day,
+            phase: Phase::DAY,
             tick: 0,
             emit_index: id,
             subject: String::new(),

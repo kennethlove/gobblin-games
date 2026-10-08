@@ -362,7 +362,11 @@ SELECT (
     let fallen = characters.len() as u32 - alive;
     let total = characters.len() as u32;
 
-    let (phase_class, phase_label) = game_detail::current_broadcast_phase(&game, &messages);
+    // Day/night boundaries come from the game config once per-game config
+    // persists (game table is SCHEMAFULL without a `config` column yet —
+    // follow-up on the phase-redesign config bead); defaults 06/20 now.
+    let cfg = world::config::GameConfig::default();
+    let (phase_class, phase_label) = game_detail::current_broadcast_phase(&game, &messages, &cfg);
 
     // Sort characters: alive first, then alphabetically
     let mut sorted_characters: Vec<_> = characters.iter().collect();
@@ -692,7 +696,7 @@ pub async fn timeline_handler(
         .filter(|m| m.game_day == current_day)
         .max_by_key(|m| (m.phase, m.tick, m.emit_index))
         .map(|m| m.phase)
-        .unwrap_or(shared::messages::Phase::Day);
+        .unwrap_or(shared::messages::Phase::DAY_START);
 
     let periods = shared::messages::summarize_periods(&messages, (current_day, current_phase));
 

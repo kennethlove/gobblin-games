@@ -24,8 +24,8 @@ DEFINE FIELD OVERWRITE turns_since_last_betrayal ON character TYPE int DEFAULT 0
 DEFINE FIELD OVERWRITE hunger ON character TYPE int DEFAULT 0;
 DEFINE FIELD OVERWRITE thirst ON character TYPE int DEFAULT 0;
 DEFINE FIELD OVERWRITE sheltered_until ON character TYPE option<int>;
-DEFINE FIELD OVERWRITE starvation_drain_step ON character TYPE int DEFAULT 0;
-DEFINE FIELD OVERWRITE dehydration_drain_step ON character TYPE int DEFAULT 0;
+DEFINE FIELD OVERWRITE starving_since_day ON character TYPE option<int>;
+DEFINE FIELD OVERWRITE dehydrated_since_day ON character TYPE option<int>;
 DEFINE FIELD OVERWRITE afflictions ON character TYPE option<array<object>>;
 DEFINE FIELD OVERWRITE created_by ON character VALUE $auth READONLY;
 

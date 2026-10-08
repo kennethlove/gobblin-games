@@ -150,7 +150,7 @@ mod tests {
             identifier: "evt-1".into(),
             source: MessageSource::Character("id-Snaggletooth".into()),
             game_day: 1,
-            phase: Phase::Day,
+            phase: Phase::DAY,
             tick: 1,
             emit_index: 1,
             subject: "character:Snaggletooth".into(),

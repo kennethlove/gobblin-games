@@ -469,8 +469,8 @@ async fn timeline_summary_includes_current_period_even_when_empty() {
     let current = &summaries[0];
     assert_eq!(current["day"], 0, "current period day should be 0");
     assert_eq!(
-        current["phase"], "day",
-        "current period phase should be Day"
+        current["phase"], "06",
+        "current period phase should be the day-start hour"
     );
     assert_eq!(
         current["event_count"], 0,

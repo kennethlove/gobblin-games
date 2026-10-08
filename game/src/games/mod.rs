@@ -295,7 +295,8 @@ pub struct Game {
 }
 
 fn default_phase() -> shared::messages::Phase {
-    shared::messages::Phase::Day
+    // Game days start at the day-start hour (06).
+    shared::messages::Phase::DAY_START
 }
 
 impl PartialEq for Game {
@@ -327,7 +328,7 @@ impl Default for Game {
             messages: vec![],
             alliance_events: vec![],
             tick_counter: TickCounter::default(),
-            current_phase: shared::messages::Phase::Day,
+            current_phase: shared::messages::Phase::DAY_START,
             emit_index: 0,
             combat_tuning: characters::combat_tuning::CombatTuning::default(),
             patrons: vec![],
@@ -558,7 +559,7 @@ impl Game {
     /// Prepares the game state for a new cycle.
     /// Clears old messages and area events.
     /// Increments day count by 1 if this is the first phase of a new day.
-    /// (Day 1 starts at `Phase::Day`; Day 2+ starts at `Phase::Dawn`.)
+    /// (Day 1 starts at `Phase::DAY`; Day 2+ starts at `Phase::DAWN`.)
     fn prepare_cycle(&mut self, phase: shared::messages::Phase) -> Result<(), GameError> {
         if self.is_new_day_boundary(phase) {
             self.day = Some(self.day.unwrap_or(0) + 1);
@@ -572,12 +573,12 @@ impl Game {
     }
 
     /// True when this phase begins a new game-day. Day 1 begins at
-    /// `Phase::Day` (no Dawn1 per spec §3); Day 2+ begins at `Phase::Dawn`.
+    /// `Phase::DAY` (no Dawn1 per spec §3); Day 2+ begins at `Phase::DAWN`.
     fn is_new_day_boundary(&self, phase: shared::messages::Phase) -> bool {
         matches!(
             (self.day, phase),
-            (None | Some(0), shared::messages::Phase::Day)
-                | (Some(_), shared::messages::Phase::Dawn)
+            (None | Some(0), shared::messages::Phase::DAY)
+                | (Some(_), shared::messages::Phase::DAWN)
         )
     }
 
@@ -587,11 +588,11 @@ impl Game {
         let game_id = self.identifier.clone();
         let subject = format!("game:{}", game_id);
 
-        let content = match phase {
-            shared::messages::Phase::Dawn => {
-                format!("Dawn {} breaks pale over the arena.", current_day)
-            }
-            shared::messages::Phase::Day => match current_day {
+        use world::config::DaySlot;
+        let content = match self.config.day_slot(phase) {
+            DaySlot::Dawn => format!("Dawn {} breaks pale over the arena.", current_day),
+            DaySlot::Dusk => format!("Dusk {} settles in long shadows.", current_day),
+            DaySlot::Day => match current_day {
                 1 => format!("Day {}: The games have begun!", current_day),
                 3 => format!(
                     "Day {}: Patrons take note of the remaining goblins.",
@@ -599,12 +600,7 @@ impl Game {
                 ),
                 _ => format!("Day {} dawns over the arena.", current_day),
             },
-            shared::messages::Phase::Dusk => {
-                format!("Dusk {} settles in long shadows.", current_day)
-            }
-            shared::messages::Phase::Night => {
-                format!("Night {} falls. The arena grows dark.", current_day)
-            }
+            DaySlot::Night => format!("Night {} falls. The arena grows dark.", current_day),
         };
 
         let payload = shared::messages::MessagePayload::CycleStart {
@@ -1008,14 +1004,10 @@ impl Game {
     /// Run every phase of the next game-day in canonical order. Day 1 has
     /// no Dawn (per spec §3); Day 2+ runs all four phases.
     pub fn run_full_day(&mut self) -> Result<(), GameError> {
-        use shared::messages::Phase;
         let next_day = self.day.unwrap_or(0) + 1;
-        let phases: &[Phase] = if next_day <= 1 {
-            &[Phase::Day, Phase::Dusk, Phase::Night]
-        } else {
-            &[Phase::Dawn, Phase::Day, Phase::Dusk, Phase::Night]
-        };
-        for &p in phases {
+        // Every game day runs the full 12-phase cycle from the day start
+        // (06 → 08 → … → 04); the day counter advances after 04.
+        for &p in &shared::messages::Phase::all() {
             self.run_phase(p)?;
         }
         self.day = Some(next_day);

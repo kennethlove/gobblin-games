@@ -47,7 +47,7 @@ fn movement_and_turn_phase_events_reach_game_messages() {
     // Run several cycles to give the brain plenty of opportunities to
     // pick non-attack actions.
     for _ in 0..8 {
-        game.run_phase(shared::messages::Phase::Day)
+        game.run_phase(shared::messages::Phase::DAY)
             .expect("day cycle ran");
     }
 

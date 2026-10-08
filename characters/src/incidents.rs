@@ -56,12 +56,19 @@ impl SleepShelter {
 // ---------------------------------------------------------------------------
 
 /// Base incident chance (0-100) for a given phase of day.
-pub fn base_incident_chance(phase: shared::messages::Phase) -> u32 {
-    match phase {
-        shared::messages::Phase::Day => SLEEP_INCIDENT_DAY_PCT,
-        shared::messages::Phase::Dawn => SLEEP_INCIDENT_DAWN_PCT,
-        shared::messages::Phase::Dusk => SLEEP_INCIDENT_DUSK_PCT,
-        shared::messages::Phase::Night => SLEEP_INCIDENT_NIGHT_PCT,
+///
+/// Hour bands on the 12-phase day (night falls at 20, day starts at 06):
+/// dawn anchor 06, day 08–16, dusk anchor 18, night 20–04.
+pub fn base_incident_chance(
+    phase: shared::messages::Phase,
+    cfg: &world::config::GameConfig,
+) -> u32 {
+    use world::config::DaySlot;
+    match cfg.day_slot(phase) {
+        DaySlot::Dawn => SLEEP_INCIDENT_DAWN_PCT,
+        DaySlot::Dusk => SLEEP_INCIDENT_DUSK_PCT,
+        DaySlot::Day => SLEEP_INCIDENT_DAY_PCT,
+        DaySlot::Night => SLEEP_INCIDENT_NIGHT_PCT,
     }
 }
 
@@ -92,12 +99,13 @@ pub fn day_scaling_multiplier(_current_day: u32) -> f64 {
 /// shelter status, constructed shelter quality, and game-day progression.
 pub fn effective_incident_chance(
     phase: shared::messages::Phase,
+    cfg: &world::config::GameConfig,
     biome: world::terrain::types::BaseTerrain,
     is_sheltered: bool,
     sleep_shelter: &SleepShelter,
     current_day: u32,
 ) -> f64 {
-    base_incident_chance(phase) as f64
+    base_incident_chance(phase, cfg) as f64
         * biome_incident_multiplier(biome)
         * if is_sheltered {
             SLEEP_INCIDENT_SHELTER_MULTIPLIER
@@ -293,13 +301,14 @@ impl SleepIncident {
     pub fn roll(
         rng: &mut impl Rng,
         phase: shared::messages::Phase,
+        cfg: &world::config::GameConfig,
         biome: world::terrain::types::BaseTerrain,
         is_sheltered: bool,
         sleep_shelter: &SleepShelter,
         current_day: u32,
     ) -> Option<Self> {
         let chance =
-            effective_incident_chance(phase, biome, is_sheltered, sleep_shelter, current_day);
+            effective_incident_chance(phase, cfg, biome, is_sheltered, sleep_shelter, current_day);
         if !rng.random_bool(chance / 100.0) {
             return None;
         }
@@ -457,6 +466,7 @@ mod tests {
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
     use shared::messages::Phase;
+    use world::config::GameConfig;
     use world::terrain::types::BaseTerrain;
 
     #[test]
@@ -467,7 +477,8 @@ mod tests {
         for _ in 0..100 {
             if SleepIncident::roll(
                 &mut rng,
-                Phase::Night,
+                Phase::NIGHT,
+                &GameConfig::default(),
                 BaseTerrain::Forest,
                 false,
                 &shelter,
@@ -642,9 +653,18 @@ mod tests {
 
     #[test]
     fn base_incident_chance_by_phase() {
-        assert_eq!(base_incident_chance(Phase::Day), 8);
-        assert_eq!(base_incident_chance(Phase::Dawn), 12);
-        assert_eq!(base_incident_chance(Phase::Dusk), 12);
-        assert_eq!(base_incident_chance(Phase::Night), 22);
+        assert_eq!(base_incident_chance(Phase::DAY, &GameConfig::default()), 8);
+        assert_eq!(
+            base_incident_chance(Phase::DAWN, &GameConfig::default()),
+            12
+        );
+        assert_eq!(
+            base_incident_chance(Phase::DUSK, &GameConfig::default()),
+            12
+        );
+        assert_eq!(
+            base_incident_chance(Phase::NIGHT, &GameConfig::default()),
+            22
+        );
     }
 }

@@ -61,7 +61,7 @@ fn make_msg(payload: MessagePayload) -> GameMessage {
         identifier: format!("msg-{n}"),
         source: MessageSource::Game("test-game".into()),
         game_day: 1,
-        phase: Phase::Day,
+        phase: Phase::DAY,
         tick: 0,
         emit_index: n,
         subject: String::new(),

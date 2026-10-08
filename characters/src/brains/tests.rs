@@ -67,7 +67,7 @@ fn decide_on_action_default(character: Character, mut small_rng: SmallRng) {
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Move(None));
@@ -84,7 +84,7 @@ fn decide_on_action_low_health(mut character: Character, mut small_rng: SmallRng
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Move(None));
@@ -101,7 +101,7 @@ fn decide_on_action_no_health(mut character: Character, mut small_rng: SmallRng)
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::None);
@@ -118,7 +118,7 @@ fn decide_on_action_no_movement_alone(mut character: Character, mut small_rng: S
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Rest);
@@ -139,7 +139,7 @@ fn decide_on_action_no_movement_surrounded_low_health(
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Hide);
@@ -155,7 +155,7 @@ fn decide_on_action_enemies(character: Character, mut small_rng: SmallRng) {
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Attack);
@@ -173,7 +173,7 @@ fn decide_on_action_enemies_medium_health(mut character: Character, mut small_rn
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Move(None));
@@ -189,7 +189,7 @@ fn decide_on_action_preferred_action(mut character: Character, mut small_rng: Sm
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Rest);
@@ -217,7 +217,7 @@ fn prefer_to_use_item_if_available(mut character: Character, mut small_rng: Smal
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::UseItem(None));
@@ -233,7 +233,7 @@ fn prefer_to_hide_at_mid_health_and_visible(mut character: Character, mut small_
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Hide);
@@ -250,7 +250,7 @@ fn prefer_to_move_at_mid_health_and_low_sanity(mut character: Character, mut sma
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Move(None));
@@ -266,7 +266,7 @@ fn decide_on_action_alone_healthy_no_movement(mut character: Character, mut smal
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Rest);
@@ -287,7 +287,7 @@ fn decide_on_action_surrounded_low_health_low_movement_low_sanity(
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Attack);
@@ -307,7 +307,7 @@ fn decide_on_action_surrounded_low_health_low_sanity(
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Attack);
@@ -327,7 +327,7 @@ fn decide_on_action_surrounded_hidden_low_health(
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::None);
@@ -347,7 +347,7 @@ fn decide_on_action_surrounded_ok_health_low_sanity(
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Attack);
@@ -367,7 +367,7 @@ fn decide_on_action_heavily_surrounded_normal_sanity_and_intelligence(
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Move(None));
@@ -387,7 +387,7 @@ fn decide_on_action_heavily_surrounded_low_sanity_and_intelligence(
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Hide);
@@ -409,7 +409,7 @@ fn decide_on_action_heavily_surrounded_no_sanity_and_intelligence(
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Attack);
@@ -500,7 +500,7 @@ fn test_berserk_break_attacks(mut small_rng: SmallRng) {
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Attack);
@@ -518,7 +518,7 @@ fn test_paranoid_break_hides(mut small_rng: SmallRng) {
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::Hide);
@@ -536,7 +536,7 @@ fn test_catatonic_break_does_nothing(mut small_rng: SmallRng) {
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     assert_eq!(action, Action::None);
@@ -555,7 +555,7 @@ fn test_self_destructive_break_attacks(mut small_rng: SmallRng) {
         &[],
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
     // Self-destructive ignores health and attacks
@@ -659,7 +659,7 @@ fn brain_act_routes_first_hop_to_non_neighbor_goal(
         &all_areas,
         &[],
         &HashMap::new(),
-        Phase::Day,
+        Phase::DAY,
         &mut small_rng,
     );
 
@@ -749,7 +749,13 @@ fn should_sleep_dominant_threshold_overrides_safety(character: Character, mut sm
     use shared::messages::Phase;
     let mut t = character.clone();
     t.cycles_awake = SLEEP_DOMINANT_THRESHOLD;
-    let action = t.brain.should_sleep(&t, 5, Phase::Day, &mut small_rng);
+    let action = t.brain.should_sleep(
+        &t,
+        5,
+        Phase::DAY,
+        &world::config::GameConfig::default(),
+        &mut small_rng,
+    );
     assert!(matches!(action, Some(Action::Sleep { duration_phases: 4 })));
 }
 
@@ -761,11 +767,29 @@ fn should_sleep_want_threshold_requires_safety_and_night(
     use shared::messages::Phase;
     let mut t = character.clone();
     t.cycles_awake = SLEEP_WANT_THRESHOLD;
-    let action = t.brain.should_sleep(&t, 0, Phase::Night, &mut small_rng);
+    let action = t.brain.should_sleep(
+        &t,
+        0,
+        Phase::NIGHT,
+        &world::config::GameConfig::default(),
+        &mut small_rng,
+    );
     assert!(matches!(action, Some(Action::Sleep { duration_phases: 3 })));
-    let action = t.brain.should_sleep(&t, 1, Phase::Night, &mut small_rng);
+    let action = t.brain.should_sleep(
+        &t,
+        1,
+        Phase::NIGHT,
+        &world::config::GameConfig::default(),
+        &mut small_rng,
+    );
     assert!(action.is_none());
-    let action = t.brain.should_sleep(&t, 0, Phase::Day, &mut small_rng);
+    let action = t.brain.should_sleep(
+        &t,
+        0,
+        Phase::DAY,
+        &world::config::GameConfig::default(),
+        &mut small_rng,
+    );
     assert!(action.is_none());
 }
 
@@ -775,9 +799,21 @@ fn should_sleep_exhausted_naps_when_safe_off_day(character: Character, mut small
     let mut t = character.clone();
     t.cycles_awake = 1;
     t.stamina = 10;
-    let action = t.brain.should_sleep(&t, 0, Phase::Dusk, &mut small_rng);
+    let action = t.brain.should_sleep(
+        &t,
+        0,
+        Phase::DUSK,
+        &world::config::GameConfig::default(),
+        &mut small_rng,
+    );
     assert!(matches!(action, Some(Action::Sleep { duration_phases: 2 })));
-    let action = t.brain.should_sleep(&t, 0, Phase::Day, &mut small_rng);
+    let action = t.brain.should_sleep(
+        &t,
+        0,
+        Phase::DAY,
+        &world::config::GameConfig::default(),
+        &mut small_rng,
+    );
     assert!(action.is_none());
 }
 
@@ -787,7 +823,13 @@ fn should_sleep_psychotic_break_blocks_sleep(character: Character, mut small_rng
     let mut t = character.clone();
     t.cycles_awake = SLEEP_DOMINANT_THRESHOLD + 4;
     t.brain.psychotic_break = Some(PsychoticBreakType::Berserk);
-    let action = t.brain.should_sleep(&t, 0, Phase::Night, &mut small_rng);
+    let action = t.brain.should_sleep(
+        &t,
+        0,
+        Phase::NIGHT,
+        &world::config::GameConfig::default(),
+        &mut small_rng,
+    );
     assert!(action.is_none());
 }
 
@@ -798,7 +840,13 @@ fn should_sleep_already_sleeping_returns_none(character: Character, mut small_rn
     t.sleeping = true;
     t.sleep_remaining = 2;
     t.cycles_awake = SLEEP_DOMINANT_THRESHOLD + 10;
-    let action = t.brain.should_sleep(&t, 0, Phase::Night, &mut small_rng);
+    let action = t.brain.should_sleep(
+        &t,
+        0,
+        Phase::NIGHT,
+        &world::config::GameConfig::default(),
+        &mut small_rng,
+    );
     assert!(action.is_none());
 }
 

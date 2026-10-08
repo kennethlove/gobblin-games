@@ -106,7 +106,7 @@ pub struct AreaActivity {
 pub struct GameStateSnapshot {
     /// Current game day (1-indexed).
     pub day: u32,
-    /// Current phase name (e.g. "dawn", "day", "dusk", "night").
+    /// Current phase hour label (e.g. "00", "06", "12", "18").
     pub phase: String,
     /// How many characters are still alive.
     pub alive_count: u32,

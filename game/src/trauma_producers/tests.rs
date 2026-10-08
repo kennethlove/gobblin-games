@@ -38,13 +38,13 @@ fn make_killed_msg(victim_id: &str, victim_name: &str, phase: Phase) -> GameMess
 fn trauma_disabled_skips_all_producers() {
     let mut game = Game::default();
     game.config.trauma_enabled = false;
-    game.current_phase = Phase::Day;
+    game.current_phase = Phase::DAY;
 
     let mut t = make_character("Test");
     let ally_id = Uuid::new_v4();
     t.allies.push(ally_id);
     game.characters.push(t);
-    game.messages.push(make_killed_msg("x", "X", Phase::Day));
+    game.messages.push(make_killed_msg("x", "X", Phase::DAY));
 
     run_trauma_producers(&mut game);
     assert!(game.messages.iter().all(|m| !matches!(
@@ -57,7 +57,7 @@ fn trauma_disabled_skips_all_producers() {
 fn witness_ally_death_acquires_mild_trauma() {
     let mut game = Game::default();
     game.config.trauma_enabled = true;
-    game.current_phase = Phase::Day;
+    game.current_phase = Phase::DAY;
 
     let mut victim = make_character("Victim");
     let victim_id = victim.id;
@@ -73,7 +73,7 @@ fn witness_ally_death_acquires_mild_trauma() {
     game.messages.push(make_killed_msg(
         game.characters[0].identifier.as_str(),
         "Victim",
-        Phase::Day,
+        Phase::DAY,
     ));
 
     run_trauma_producers(&mut game);
@@ -101,7 +101,7 @@ fn witness_ally_death_acquires_mild_trauma() {
 fn witness_different_area_no_trauma() {
     let mut game = Game::default();
     game.config.trauma_enabled = true;
-    game.current_phase = Phase::Day;
+    game.current_phase = Phase::DAY;
 
     let mut victim = make_character("Victim");
     let victim_id = victim.id;
@@ -116,7 +116,7 @@ fn witness_different_area_no_trauma() {
     game.messages.push(make_killed_msg(
         game.characters[0].identifier.as_str(),
         "Victim",
-        Phase::Day,
+        Phase::DAY,
     ));
 
     run_trauma_producers(&mut game);
@@ -138,7 +138,7 @@ fn witness_different_area_no_trauma() {
 fn survive_near_death_acquires_moderate_trauma() {
     let mut game = Game::default();
     game.config.trauma_enabled = true;
-    game.current_phase = Phase::Day;
+    game.current_phase = Phase::DAY;
 
     let mut t = make_character("Survivor");
     t.blood = 80; // 8% HP, below 10% threshold
@@ -147,7 +147,7 @@ fn survive_near_death_acquires_moderate_trauma() {
     game.messages.push(GameMessage::new(
         MessageSource::Game("g".into()),
         1,
-        Phase::Day,
+        Phase::DAY,
         1,
         0,
         "subject".into(),
@@ -189,7 +189,7 @@ fn survive_near_death_acquires_moderate_trauma() {
 fn survive_near_death_above_threshold_no_trauma() {
     let mut game = Game::default();
     game.config.trauma_enabled = true;
-    game.current_phase = Phase::Day;
+    game.current_phase = Phase::DAY;
 
     let mut t = make_character("Lucky");
     t.blood = 150; // 15% HP, above 10% threshold
@@ -198,7 +198,7 @@ fn survive_near_death_above_threshold_no_trauma() {
     game.messages.push(GameMessage::new(
         MessageSource::Game("g".into()),
         1,
-        Phase::Day,
+        Phase::DAY,
         1,
         0,
         "subject".into(),
@@ -227,7 +227,7 @@ fn survive_near_death_above_threshold_no_trauma() {
 fn survive_betrayal_acquires_moderate_trauma() {
     let mut game = Game::default();
     game.config.trauma_enabled = true;
-    game.current_phase = Phase::Day;
+    game.current_phase = Phase::DAY;
 
     let victim = make_character("Betrayed");
     game.characters.push(victim);
@@ -238,7 +238,7 @@ fn survive_betrayal_acquires_moderate_trauma() {
     game.messages.push(GameMessage::new(
         MessageSource::Game("g".into()),
         1,
-        Phase::Day,
+        Phase::DAY,
         1,
         0,
         "subject".into(),
@@ -283,7 +283,7 @@ fn survive_betrayal_acquires_moderate_trauma() {
 fn mass_casualty_three_deaths_moderate() {
     let mut game = Game::default();
     game.config.trauma_enabled = true;
-    game.current_phase = Phase::Day;
+    game.current_phase = Phase::DAY;
 
     // Three victims in Sector1
     for name in ["V1", "V2", "V3"] {
@@ -300,7 +300,7 @@ fn mass_casualty_three_deaths_moderate() {
 
     for v in &game.characters[..3] {
         game.messages
-            .push(make_killed_msg(v.identifier.as_str(), &v.name, Phase::Day));
+            .push(make_killed_msg(v.identifier.as_str(), &v.name, Phase::DAY));
     }
 
     run_trauma_producers(&mut game);
@@ -321,7 +321,7 @@ fn mass_casualty_three_deaths_moderate() {
 fn mass_casualty_five_deaths_severe() {
     let mut game = Game::default();
     game.config.trauma_enabled = true;
-    game.current_phase = Phase::Day;
+    game.current_phase = Phase::DAY;
 
     for name in ["V1", "V2", "V3", "V4", "V5"] {
         let mut v = make_character(name);
@@ -336,7 +336,7 @@ fn mass_casualty_five_deaths_severe() {
 
     for v in &game.characters[..5] {
         game.messages
-            .push(make_killed_msg(v.identifier.as_str(), &v.name, Phase::Day));
+            .push(make_killed_msg(v.identifier.as_str(), &v.name, Phase::DAY));
     }
 
     run_trauma_producers(&mut game);
@@ -360,7 +360,7 @@ fn mass_casualty_five_deaths_severe() {
 fn different_phase_messages_ignored() {
     let mut game = Game::default();
     game.config.trauma_enabled = true;
-    game.current_phase = Phase::Day;
+    game.current_phase = Phase::DAY;
 
     let mut victim = make_character("Victim");
     let victim_id = victim.id;
@@ -376,7 +376,7 @@ fn different_phase_messages_ignored() {
     game.messages.push(make_killed_msg(
         game.characters[0].identifier.as_str(),
         "Victim",
-        Phase::Night,
+        Phase::NIGHT,
     ));
 
     run_trauma_producers(&mut game);

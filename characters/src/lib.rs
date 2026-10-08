@@ -137,6 +137,9 @@ pub struct EnvironmentContext<'a> {
     /// Full four-phase value for the current cycle. Used by sleep scoring
     /// (Brain::should_sleep) and emitters (CharacterSlept/CharacterWoke).
     pub phase: shared::messages::Phase,
+    /// Configured day/night boundaries and survival cadence for this game
+    /// (phase redesign — one source of truth for day/night classification).
+    pub config: world::config::GameConfig,
     pub area_details: &'a mut AreaDetails,
     pub closed_areas: &'a [Area],
     pub available_destinations: Vec<areas::DestinationInfo>,
@@ -282,12 +285,15 @@ pub struct Character {
     /// for `TYPE option<int>` (which expects `NONE`, not `NULL`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sheltered_until: Option<u32>,
-    /// Escalating step counter for HP drain while Starving.
-    #[serde(default)]
-    pub starvation_drain_step: u8,
-    /// Escalating step counter for HP drain while Dehydrated.
-    #[serde(default)]
-    pub dehydration_drain_step: u8,
+    /// Game day on which the character first entered the Starving band
+    /// this stretch (drain day = `game_day - since + 1`). Cleared on eat.
+    /// Skipped when None: Surreal `option<int>` rejects explicit null.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub starving_since_day: Option<u16>,
+    /// Game day on which the character first entered the Dehydrated band
+    /// this stretch. Cleared on drink.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dehydrated_since_day: Option<u16>,
     /// Phases since the character last completed a full sleep. Increments by 1
     /// each phase the character is *not* sleeping. Resets on
     /// `WakeReason::Rested`. See spec
@@ -410,8 +416,8 @@ impl Character {
             hunger: 0,
             thirst: 0,
             sheltered_until: None,
-            starvation_drain_step: 0,
-            dehydration_drain_step: 0,
+            starving_since_day: None,
+            dehydrated_since_day: None,
             cycles_awake: 0,
             sleeping: false,
             sleep_remaining: 0,
@@ -455,8 +461,8 @@ impl Character {
         self.hunger = 0;
         self.thirst = 0;
         self.sheltered_until = None;
-        self.starvation_drain_step = 0;
-        self.dehydration_drain_step = 0;
+        self.starving_since_day = None;
+        self.dehydrated_since_day = None;
         self.cycles_awake = 0;
         self.sleeping = false;
         self.sleep_remaining = 0;
@@ -525,8 +531,8 @@ impl Character {
             hunger: 0,
             thirst: 0,
             sheltered_until: None,
-            starvation_drain_step: 0,
-            dehydration_drain_step: 0,
+            starving_since_day: None,
+            dehydrated_since_day: None,
             cycles_awake: 0,
             sleeping: false,
             sleep_remaining: 0,
@@ -703,6 +709,7 @@ impl Character {
             self,
             number_of_nearby_characters,
             environment_details.phase,
+            &environment_details.config,
             rng,
         ) {
             sleep_action
@@ -1978,8 +1985,8 @@ mod tests {
         assert_eq!(t.hunger, 0, "hunger starts at 0 (Sated)");
         assert_eq!(t.thirst, 0, "thirst starts at 0 (Sated)");
         assert_eq!(t.sheltered_until, None, "starts exposed");
-        assert_eq!(t.starvation_drain_step, 0);
-        assert_eq!(t.dehydration_drain_step, 0);
+        assert!(t.starving_since_day.is_none());
+        assert!(t.dehydrated_since_day.is_none());
     }
 
     #[test]
@@ -1991,22 +1998,22 @@ mod tests {
         t.hunger = 0;
         t.thirst = 0;
         t.sheltered_until = None;
-        t.starvation_drain_step = 0;
-        t.dehydration_drain_step = 0;
+        t.starving_since_day = None;
+        t.dehydrated_since_day = None;
         let mut json: serde_json::Value = serde_json::to_value(&t).unwrap();
-        // strip the survival fields to mimic a pre-feature save
+        // strip the survival fields to mimic a save missing them
         let obj = json.as_object_mut().unwrap();
         obj.remove("hunger");
         obj.remove("thirst");
         obj.remove("sheltered_until");
-        obj.remove("starvation_drain_step");
-        obj.remove("dehydration_drain_step");
-        let loaded: Character = serde_json::from_value(json).expect("legacy load must succeed");
+        obj.remove("starving_since_day");
+        obj.remove("dehydrated_since_day");
+        let loaded: Character = serde_json::from_value(json).expect("load must succeed");
         assert_eq!(loaded.hunger, 0);
         assert_eq!(loaded.thirst, 0);
         assert_eq!(loaded.sheltered_until, None);
-        assert_eq!(loaded.starvation_drain_step, 0);
-        assert_eq!(loaded.dehydration_drain_step, 0);
+        assert!(loaded.starving_since_day.is_none());
+        assert!(loaded.dehydrated_since_day.is_none());
     }
 
     #[test]
@@ -2356,7 +2363,7 @@ mod tests {
                     name: "X".to_string(),
                 },
             },
-            shared::messages::Phase::Day,
+            shared::messages::Phase::DAY,
             &mut events,
         );
         assert!(!woke);
@@ -2374,7 +2381,7 @@ mod tests {
             shared::messages::InterruptionKind::AreaEvent {
                 kind: shared::messages::AreaEventKind::Fire,
             },
-            shared::messages::Phase::Night,
+            shared::messages::Phase::NIGHT,
             &mut events,
         );
         assert!(woke);
@@ -2384,7 +2391,7 @@ mod tests {
         assert_eq!(events.len(), 1);
         match &events[0].payload {
             shared::messages::MessagePayload::CharacterWoke { reason, phase, .. } => {
-                assert_eq!(*phase, shared::messages::Phase::Night);
+                assert_eq!(*phase, shared::messages::Phase::NIGHT);
                 match reason {
                     shared::messages::WakeReason::Interrupted {
                         event:

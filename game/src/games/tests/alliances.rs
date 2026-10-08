@@ -104,7 +104,7 @@ fn run_character_cycle_drains_character_alliance_events_into_game_queue() {
 
     let mut rng = SmallRng::seed_from_u64(211);
     let _ = game.run_character_cycle(
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &mut rng,
         closed_areas,
         vec![character1.clone(), character2.clone()],
@@ -154,7 +154,7 @@ fn run_character_cycle_forms_alliance_between_compatible_same_area_characters() 
         let mut g = game.clone();
         let mut rng = SmallRng::seed_from_u64(seed);
         let _ = g.run_character_cycle(
-            shared::messages::Phase::Day,
+            shared::messages::Phase::DAY,
             &mut rng,
             closed_areas.clone(),
             vec![t1.clone(), t2.clone()],
@@ -205,7 +205,7 @@ fn run_character_cycle_treacherous_character_betrays_same_area_ally_when_timer_e
 
     let mut rng = SmallRng::seed_from_u64(313);
     let _ = game.run_character_cycle(
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &mut rng,
         closed_areas,
         vec![betrayer.clone(), victim.clone()],
@@ -253,7 +253,7 @@ fn run_character_cycle_treacherous_no_betrayal_without_same_area_ally_resets_tim
 
     let mut rng = SmallRng::seed_from_u64(419);
     let _ = game.run_character_cycle(
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &mut rng,
         closed_areas,
         vec![loner.clone(), other.clone()],
@@ -296,7 +296,7 @@ fn run_character_cycle_enqueues_death_recorded_for_recently_dead_ally() {
 
     let mut rng = SmallRng::seed_from_u64(547);
     let _ = game.run_character_cycle(
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &mut rng,
         closed_areas,
         living,
@@ -347,7 +347,7 @@ fn run_character_cycle_three_way_preserves_existing_alliance() {
 
     let mut rng = SmallRng::seed_from_u64(547);
     let _ = game.run_character_cycle(
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &mut rng,
         closed_areas,
         living,
@@ -397,7 +397,7 @@ fn run_character_cycle_consumes_recently_killed_by_for_combat_death() {
 
     let mut rng = SmallRng::seed_from_u64(547);
     let _ = game.run_character_cycle(
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &mut rng,
         closed_areas,
         living,
@@ -449,7 +449,7 @@ fn run_character_cycle_environmental_death_emits_killer_none() {
 
     let mut rng = SmallRng::seed_from_u64(547);
     let _ = game.run_character_cycle(
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &mut rng,
         closed_areas,
         living,
@@ -491,7 +491,7 @@ fn alliance_formation_emits_message_with_alliance_formed_kind() {
         let mut g = game_with_area.clone();
         let mut rng = SmallRng::seed_from_u64(seed);
         let _ = g.run_character_cycle(
-            shared::messages::Phase::Day,
+            shared::messages::Phase::DAY,
             &mut rng,
             closed_areas.clone(),
             vec![t1.clone(), t2.clone()],
@@ -547,7 +547,7 @@ fn betrayal_emits_message_with_betrayal_triggered_kind() {
 
     let mut rng = SmallRng::seed_from_u64(313);
     let _ = game.run_character_cycle(
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &mut rng,
         closed_areas,
         vec![betrayer.clone(), victim.clone()],
@@ -595,7 +595,7 @@ fn alliance_formed_message_content_matches_game_event_display() {
         let mut g = game_with_area.clone();
         let mut rng = SmallRng::seed_from_u64(seed);
         let _ = g.run_character_cycle(
-            shared::messages::Phase::Day,
+            shared::messages::Phase::DAY,
             &mut rng,
             closed_areas.clone(),
             vec![t1.clone(), t2.clone()],
@@ -674,7 +674,7 @@ fn betrayal_triggered_message_content_matches_game_event_display() {
 
     let mut rng = SmallRng::seed_from_u64(313);
     let _ = game.run_character_cycle(
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &mut rng,
         closed_areas,
         vec![betrayer.clone(), victim.clone()],
@@ -716,7 +716,7 @@ fn dead_character_has_no_movement_event_after_death_in_same_period() {
     let character_a = create_character("A", true);
     let character_b = create_character("B", true);
     let mut game = create_test_game_with_characters(vec![character_a, character_b]);
-    let _ = game.run_phase(shared::messages::Phase::Day);
+    let _ = game.run_phase(shared::messages::Phase::DAY);
 
     let b_killed = game.messages.iter().find(|m| {
         matches!(&m.payload,

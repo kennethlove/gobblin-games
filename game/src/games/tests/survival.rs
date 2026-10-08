@@ -276,12 +276,12 @@ fn test_prepare_cycle() {
     game.day = Some(1);
     game.areas.push(area);
     game.areas[0].events.push(event.clone());
-    let _ = game.prepare_cycle(Phase::Dawn);
+    let _ = game.prepare_cycle(Phase::DAWN);
     assert_eq!(game.day, Some(2));
     assert_eq!(game.areas[0].events.len(), 0);
 
     game.areas[0].events.push(event.clone());
-    let _ = game.prepare_cycle(Phase::Night);
+    let _ = game.prepare_cycle(Phase::NIGHT);
     assert_eq!(game.day, Some(2));
     assert_eq!(game.areas[0].events.len(), 0);
 }
@@ -327,7 +327,7 @@ fn test_run_character_cycle() {
 
     let mut rng = SmallRng::seed_from_u64(42);
     let _ = game.run_character_cycle(
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &mut rng,
         closed_areas,
         vec![character1.clone(), character2.clone()],
@@ -388,7 +388,7 @@ fn survival_tick_increments_hunger_and_thirst_per_phase() {
     }
     let mut game = create_test_game_with_characters(vec![a, b]);
     game.day = Some(1);
-    let _ = game.run_phase(shared::messages::Phase::Day);
+    let _ = game.run_phase(shared::messages::Phase::DAY);
     for t in &game.characters {
         assert_eq!(t.hunger, 1, "{} hunger should be 1 after one tick", t.name);
         assert_eq!(t.thirst, 1, "{} thirst should be 1 after one tick", t.name);
@@ -401,11 +401,10 @@ fn survival_tick_routes_dehydration_death_through_character_killed() {
     use shared::messages::MessagePayload;
     let mut a = Character::new("Doomed".to_string(), Some(1), None);
     a.thirst = 4;
-    a.dehydration_drain_step = 5;
     a.blood = 10;
     let mut game = create_test_game_with_characters(vec![a]);
     game.day = Some(1);
-    let _ = game.run_phase(shared::messages::Phase::Day);
+    let _ = game.run_phase(shared::messages::Phase::DAY);
     let killed = game.messages.iter().any(|m| {
         matches!(&m.payload,
             MessagePayload::CharacterKilled { cause, .. } if *cause == DeathCause::Dehydration)
@@ -426,7 +425,7 @@ fn sleeping_character_naturally_wakes_after_duration_emits_character_woke() {
     let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
     game.areas.push(area);
     let mut rng = SmallRng::seed_from_u64(42);
-    let _ = game.run_character_cycle(Phase::Night, &mut rng, vec![], vec![t], 1);
+    let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![], vec![t], 1);
 
     let woken = &game.characters[0];
     assert!(!woken.sleeping, "character should be awake");
@@ -459,7 +458,7 @@ fn sleeping_character_regenerates_stamina_each_phase() {
     let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
     game.areas.push(area);
     let mut rng = SmallRng::seed_from_u64(42);
-    let _ = game.run_character_cycle(Phase::Night, &mut rng, vec![], vec![t], 1);
+    let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![], vec![t], 1);
 
     let after = &game.characters[0];
     assert!(after.sleeping, "still mid-sleep");
@@ -499,7 +498,7 @@ fn sleeping_wounded_character_does_not_regen_hp() {
     let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
     game.areas.push(area);
     let mut rng = SmallRng::seed_from_u64(42);
-    let _ = game.run_character_cycle(Phase::Night, &mut rng, vec![], vec![t], 1);
+    let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![], vec![t], 1);
     assert_eq!(
         game.characters[0].effective_health(),
         prior_hp,
@@ -519,7 +518,7 @@ fn cycles_awake_does_not_increment_while_sleeping() {
     let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
     game.areas.push(area);
     let mut rng = SmallRng::seed_from_u64(42);
-    let _ = game.run_character_cycle(Phase::Night, &mut rng, vec![], vec![t], 1);
+    let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![], vec![t], 1);
     assert_eq!(game.characters[0].cycles_awake, 4);
 }
 
@@ -538,7 +537,7 @@ fn area_event_interrupts_sleeping_character() {
     area.events.push(AreaEvent::Wildfire);
     game.areas.push(area);
     let mut rng = SmallRng::seed_from_u64(42);
-    let _ = game.run_character_cycle(Phase::Night, &mut rng, vec![], vec![t], 1);
+    let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![], vec![t], 1);
 
     let woken = &game.characters[0];
     assert!(!woken.sleeping, "area-event should wake sleeper");

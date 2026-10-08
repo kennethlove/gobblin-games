@@ -190,7 +190,7 @@ fn make_msg(payload: MessagePayload) -> shared::messages::GameMessage {
         identifier: format!("msg-{}", uuid::Uuid::new_v4()),
         source: MessageSource::Game("test-game".into()),
         game_day: 1,
-        phase: Phase::Day,
+        phase: Phase::DAY,
         tick: 0,
         emit_index: 1,
         subject: String::new(),

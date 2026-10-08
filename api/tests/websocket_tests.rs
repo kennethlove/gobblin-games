@@ -9,7 +9,7 @@ fn sample_message(
     shared::messages::GameMessage::new(
         shared::messages::MessageSource::Game("g".into()),
         1,
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         0,
         0,
         "subj".into(),
@@ -32,7 +32,7 @@ async fn test_game_broadcaster_basic() {
     let msg = sample_message(
         MessagePayload::CycleStart {
             day: 1,
-            phase: Phase::Day,
+            phase: Phase::DAY_START,
         },
         "started",
     );
@@ -53,7 +53,7 @@ async fn test_game_broadcaster_basic() {
                 message.payload,
                 MessagePayload::CycleStart {
                     day: 1,
-                    phase: Phase::Day
+                    phase: Phase::DAY_START
                 }
             ));
         }
@@ -78,7 +78,7 @@ async fn test_game_broadcaster_multi_subscriber() {
     let msg = sample_message(
         MessagePayload::CycleStart {
             day: 2,
-            phase: Phase::Day,
+            phase: Phase::DAY,
         },
         "day 2",
     );
@@ -109,7 +109,7 @@ async fn test_game_broadcaster_multi_subscriber() {
                     message.payload,
                     MessagePayload::CycleStart {
                         day: 2,
-                        phase: Phase::Day
+                        phase: Phase::DAY
                     }
                 ));
             }
@@ -129,7 +129,7 @@ async fn test_broadcast_helper_functions() {
     let broadcaster = GameBroadcaster::new(10);
     let mut rx = broadcaster.subscribe();
 
-    broadcast_game_started(&broadcaster, "game1", 1);
+    broadcast_game_started(&broadcaster, "game1", 1, Phase::DAY_START);
     let got = timeout(Duration::from_secs(1), rx.recv())
         .await
         .unwrap()
@@ -141,7 +141,7 @@ async fn test_broadcast_helper_functions() {
                 message.payload,
                 MessagePayload::CycleStart {
                     day: 1,
-                    phase: Phase::Day
+                    phase: Phase::DAY_START
                 }
             ));
         }

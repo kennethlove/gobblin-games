@@ -655,10 +655,13 @@ pub async fn next_step(
             game.status = GameStatus::InProgress;
 
             // Broadcast game started
+            let start_phase = shared::messages::Phase::from_hour(game.config.day_start_hour)
+                .unwrap_or(shared::messages::Phase::DAY_START);
             crate::websocket::broadcast_game_started(
                 &state.broadcaster,
                 &game.identifier,
                 game.day.unwrap_or(1),
+                start_phase,
             );
 
             Ok(Json(Some(game)))
@@ -830,7 +833,7 @@ pub(crate) async fn timeline_summary(
         .filter(|m| m.game_day == current_day)
         .max_by_key(|m| (m.phase, m.tick, m.emit_index))
         .map(|m| m.phase)
-        .unwrap_or(shared::messages::Phase::Day);
+        .unwrap_or(shared::messages::Phase::DAY_START);
 
     let summaries = shared::messages::summarize_periods(&messages, (current_day, current_phase));
     Ok(Json(shared::messages::TimelineSummary {
