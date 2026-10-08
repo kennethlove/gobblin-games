@@ -2,13 +2,13 @@
 //! audience events. Regenerate with `cargo insta accept` after intentional
 //! rebalances.
 
-use game::areas::{Area, AreaDetails};
-use game::characters::Character;
+use areas::{Area, AreaDetails};
+use characters::Character;
 use game::games::Game;
 use game::patrons::{PatronContext, translate, update_affinities};
-use game::terrain::{BaseTerrain, TerrainType};
 use rand::SeedableRng;
 use shared::messages::{CharacterRef, MessagePayload};
+use world::terrain::{BaseTerrain, TerrainType};
 
 fn build_test_game() -> Game {
     let mut game = Game::new("snapshot-test");

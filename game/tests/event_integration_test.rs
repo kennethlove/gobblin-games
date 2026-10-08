@@ -1,10 +1,10 @@
-use game::areas::events::AreaEvent;
-use game::areas::{Area, AreaDetails};
-use game::characters::Character;
+use areas::events::AreaEvent;
+use areas::{Area, AreaDetails};
+use characters::Character;
 use game::games::Game;
-use game::terrain::{BaseTerrain, TerrainType};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
+use world::terrain::{BaseTerrain, TerrainType};
 
 #[test]
 fn test_wildfire_in_forest_kills_characters() {

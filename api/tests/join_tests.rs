@@ -393,7 +393,7 @@ async fn test_entry_resets_per_game_state_and_items() {
     let goblin = create_owned_goblin(&server, &user, "Stinky").await;
 
     // Dirty the per-game state and leave a stale item behind.
-    let stale_item = game::items::Item::new_random(None);
+    let stale_item = world::items::Item::new_random(None);
     let stale_id = stale_item.identifier.to_string();
     let item_body = serde_json::to_value(&stale_item).unwrap();
     test_db

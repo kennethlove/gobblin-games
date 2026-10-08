@@ -5,17 +5,15 @@ pub(crate) mod persist;
 
 use crate::characters::CHARACTERS_ROUTER;
 use crate::{AppError, AppState};
+use areas::{Area, AreaDetails};
 use axum::Router;
 use axum::routing::{get, post, put};
+use characters::Character;
 use chrono::{DateTime, Utc};
-use game::areas::{Area, AreaDetails};
-use game::characters::Character;
 use game::games::Game;
-use game::items::Item;
-use game::messages::{GameMessage, MessageSource};
-use game::terrain::BaseTerrain;
 use serde::{Deserialize, Serialize};
 use shared::messages::MessagePayload;
+use shared::messages::{GameMessage, MessageSource};
 use shared::{GameArea, GameStatus, PaginationMetadata};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -26,6 +24,8 @@ use surrealdb_types::RecordId;
 use surrealdb_types::SerdeWrapper;
 use uuid::Uuid;
 use validator::Validate;
+use world::items::Item;
+use world::terrain::BaseTerrain;
 
 /// Maximum number of messages to retain per game to prevent OOM
 const MAX_MESSAGES: usize = 10000;
@@ -692,7 +692,7 @@ impl From<GameLog> for GameMessage {
 }
 
 /// Build a fresh [`announcers::CharacterDigest`] from a game Character.
-fn build_character_digest(t: &game::characters::Character) -> announcers::CharacterDigest {
+fn build_character_digest(t: &characters::Character) -> announcers::CharacterDigest {
     announcers::CharacterDigest {
         identifier: t.identifier.to_string(),
         name: t.name.clone(),

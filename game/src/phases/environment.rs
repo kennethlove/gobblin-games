@@ -21,12 +21,12 @@
 //! these into [`crate::games::Game::execute_cycle`] and into per-character
 //! affliction application.
 
-use crate::areas::weather::Weather;
-use crate::messages::Phase;
-use crate::terrain::types::BaseTerrain;
+use areas::weather::Weather;
 use rand::{Rng, RngExt};
 use serde::{Deserialize, Serialize};
 use shared::afflictions::AfflictionKind;
+use shared::messages::Phase;
+use world::terrain::types::BaseTerrain;
 
 /// Three discrete light bands derived from `(phase, biome, weather)`. The
 /// brain reads this value to bias detection / ambush / movement weights;

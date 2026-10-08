@@ -1,5 +1,5 @@
-use game::terrain::{BaseTerrain, Harshness, Visibility};
 use strum::IntoEnumIterator;
+use world::terrain::{BaseTerrain, Harshness, Visibility};
 
 #[test]
 fn test_movement_costs_within_range() {

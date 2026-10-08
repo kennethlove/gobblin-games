@@ -18,7 +18,7 @@ use crate::{AppState, AuthDb};
 use axum::Json;
 use axum::extract::{Extension, Form, Path, Query, State};
 use axum::response::{IntoResponse, Redirect, Response};
-use game::characters::Character;
+use characters::Character;
 use serde::Deserialize;
 use serde_json::Value;
 use surrealdb::Surreal;

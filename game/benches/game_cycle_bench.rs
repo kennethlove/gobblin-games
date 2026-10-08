@@ -1,6 +1,6 @@
+use characters::Character;
+use characters::statuses::CharacterStatus;
 use criterion::{Criterion, criterion_group, criterion_main};
-use game::characters::Character;
-use game::characters::statuses::CharacterStatus;
 use game::games::Game;
 use std::hint::black_box;
 

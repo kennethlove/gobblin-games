@@ -1,8 +1,8 @@
-use game::areas::events::{AreaEvent, EventSeverity};
-use game::terrain::BaseTerrain;
+use areas::events::{AreaEvent, EventSeverity};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use rstest::rstest;
+use world::terrain::BaseTerrain;
 
 // Test EventSeverity ordering
 #[test]

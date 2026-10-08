@@ -1,4 +1,4 @@
-//! Structured `GameEvent` enum — the typed counterpart to [`crate::output::GameOutput`].
+//! Structured `GameEvent` enum — the typed counterpart to [`world::output::GameOutput`].
 //!
 //! `GameOutput` is a borrowed, stringly-typed enum used purely to render
 //! player-facing log lines. `GameEvent` is owned, serde-friendly, and carries
@@ -19,10 +19,10 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::items::Item;
-use crate::threats::animals::Animal;
+use world::items::Item;
+use world::threats::animals::Animal;
 
-/// Structured, owned, serde-friendly counterpart to [`crate::output::GameOutput`].
+/// Structured, owned, serde-friendly counterpart to [`world::output::GameOutput`].
 ///
 /// Every variant of `GameOutput` has a matching variant here. Fields use
 /// owned types so the event can outlive the borrowed sources that produced
@@ -390,6 +390,6 @@ pub enum GameEvent {
     },
     /// One combat swing carrying the full typed beat.
     CombatSwing {
-        beat: crate::characters::combat_beat::CombatBeat,
+        beat: characters::combat_beat::CombatBeat,
     },
 }

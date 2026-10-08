@@ -11,12 +11,11 @@ fn process_alliance_events_betrayal_removes_pair_on_victim_side() {
     let vid = victim.id;
 
     let mut game = create_test_game_with_characters(vec![betrayer, victim]);
-    game.alliance_events.push(
-        crate::characters::alliances::AllianceEvent::BetrayalRecorded {
+    game.alliance_events
+        .push(characters::alliances::AllianceEvent::BetrayalRecorded {
             betrayer: bid,
             victim: vid,
-        },
-    );
+        });
 
     let mut rng = SmallRng::seed_from_u64(53);
     game.process_alliance_events(&mut rng);
@@ -35,12 +34,11 @@ fn process_alliance_events_betrayer_not_marked_for_trust_shock() {
     let vid = victim.id;
 
     let mut game = create_test_game_with_characters(vec![betrayer, victim]);
-    game.alliance_events.push(
-        crate::characters::alliances::AllianceEvent::BetrayalRecorded {
+    game.alliance_events
+        .push(characters::alliances::AllianceEvent::BetrayalRecorded {
             betrayer: bid,
             victim: vid,
-        },
-    );
+        });
 
     let mut rng = SmallRng::seed_from_u64(53);
     game.process_alliance_events(&mut rng);
@@ -62,7 +60,7 @@ fn process_alliance_events_death_removes_deceased_from_all_ally_lists() {
     let did = deceased.id;
     let mut game = create_test_game_with_characters(vec![deceased, a, b]);
     game.alliance_events
-        .push(crate::characters::alliances::AllianceEvent::DeathRecorded {
+        .push(characters::alliances::AllianceEvent::DeathRecorded {
             deceased: did,
             killer: None,
         });
@@ -87,12 +85,12 @@ fn run_character_cycle_drains_character_alliance_events_into_game_queue() {
     character2.allies.push(character1.id);
     let bid = character1.id;
     let vid = character2.id;
-    character1.alliance_events.push(
-        crate::characters::alliances::AllianceEvent::BetrayalRecorded {
+    character1
+        .alliance_events
+        .push(characters::alliances::AllianceEvent::BetrayalRecorded {
             betrayer: bid,
             victim: vid,
-        },
-    );
+        });
 
     let mut game = create_test_game_with_characters(vec![character1.clone(), character2.clone()]);
     let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
@@ -106,7 +104,7 @@ fn run_character_cycle_drains_character_alliance_events_into_game_queue() {
 
     let mut rng = SmallRng::seed_from_u64(211);
     let _ = game.run_character_cycle(
-        crate::messages::Phase::Day,
+        shared::messages::Phase::Day,
         &mut rng,
         closed_areas,
         vec![character1.clone(), character2.clone()],
@@ -128,7 +126,7 @@ fn run_character_cycle_drains_character_alliance_events_into_game_queue() {
 
 #[test]
 fn run_character_cycle_forms_alliance_between_compatible_same_area_characters() {
-    use crate::characters::traits::Trait;
+    use characters::traits::Trait;
     let mut t1 = create_character("Snipsnout", true);
     let mut t2 = create_character("Pricklepaw", true);
     t1.team = 1;
@@ -156,7 +154,7 @@ fn run_character_cycle_forms_alliance_between_compatible_same_area_characters() 
         let mut g = game.clone();
         let mut rng = SmallRng::seed_from_u64(seed);
         let _ = g.run_character_cycle(
-            crate::messages::Phase::Day,
+            shared::messages::Phase::Day,
             &mut rng,
             closed_areas.clone(),
             vec![t1.clone(), t2.clone()],
@@ -177,8 +175,8 @@ fn run_character_cycle_forms_alliance_between_compatible_same_area_characters() 
 
 #[test]
 fn run_character_cycle_treacherous_character_betrays_same_area_ally_when_timer_elapses() {
-    use crate::characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
-    use crate::characters::traits::Trait;
+    use characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
+    use characters::traits::Trait;
 
     let mut betrayer = create_character("Rendmaw", true);
     let mut victim = create_character("Gnawpaw", true);
@@ -207,7 +205,7 @@ fn run_character_cycle_treacherous_character_betrays_same_area_ally_when_timer_e
 
     let mut rng = SmallRng::seed_from_u64(313);
     let _ = game.run_character_cycle(
-        crate::messages::Phase::Day,
+        shared::messages::Phase::Day,
         &mut rng,
         closed_areas,
         vec![betrayer.clone(), victim.clone()],
@@ -227,8 +225,8 @@ fn run_character_cycle_treacherous_character_betrays_same_area_ally_when_timer_e
 
 #[test]
 fn run_character_cycle_treacherous_no_betrayal_without_same_area_ally_resets_timer() {
-    use crate::characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
-    use crate::characters::traits::Trait;
+    use characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
+    use characters::traits::Trait;
 
     let mut loner = create_character("Snoutrot", true);
     let mut other = create_character("Scabface", true);
@@ -255,7 +253,7 @@ fn run_character_cycle_treacherous_no_betrayal_without_same_area_ally_resets_tim
 
     let mut rng = SmallRng::seed_from_u64(419);
     let _ = game.run_character_cycle(
-        crate::messages::Phase::Day,
+        shared::messages::Phase::Day,
         &mut rng,
         closed_areas,
         vec![loner.clone(), other.clone()],
@@ -271,7 +269,7 @@ fn run_character_cycle_treacherous_no_betrayal_without_same_area_ally_resets_tim
 
 #[test]
 fn run_character_cycle_enqueues_death_recorded_for_recently_dead_ally() {
-    use crate::characters::traits::Trait;
+    use characters::traits::Trait;
 
     let mut deceased = create_character("Nib", true);
     let mut survivor = create_character("Snaggletooth", true);
@@ -298,7 +296,7 @@ fn run_character_cycle_enqueues_death_recorded_for_recently_dead_ally() {
 
     let mut rng = SmallRng::seed_from_u64(547);
     let _ = game.run_character_cycle(
-        crate::messages::Phase::Day,
+        shared::messages::Phase::Day,
         &mut rng,
         closed_areas,
         living,
@@ -320,7 +318,7 @@ fn run_character_cycle_enqueues_death_recorded_for_recently_dead_ally() {
 
 #[test]
 fn run_character_cycle_three_way_preserves_existing_alliance() {
-    use crate::characters::traits::Trait;
+    use characters::traits::Trait;
 
     let mut a = create_character("Snaggletooth", true);
     let mut b = create_character("Grubworm", true);
@@ -349,7 +347,7 @@ fn run_character_cycle_three_way_preserves_existing_alliance() {
 
     let mut rng = SmallRng::seed_from_u64(547);
     let _ = game.run_character_cycle(
-        crate::messages::Phase::Day,
+        shared::messages::Phase::Day,
         &mut rng,
         closed_areas,
         living,
@@ -399,7 +397,7 @@ fn run_character_cycle_consumes_recently_killed_by_for_combat_death() {
 
     let mut rng = SmallRng::seed_from_u64(547);
     let _ = game.run_character_cycle(
-        crate::messages::Phase::Day,
+        shared::messages::Phase::Day,
         &mut rng,
         closed_areas,
         living,
@@ -451,7 +449,7 @@ fn run_character_cycle_environmental_death_emits_killer_none() {
 
     let mut rng = SmallRng::seed_from_u64(547);
     let _ = game.run_character_cycle(
-        crate::messages::Phase::Day,
+        shared::messages::Phase::Day,
         &mut rng,
         closed_areas,
         living,
@@ -470,7 +468,7 @@ fn run_character_cycle_environmental_death_emits_killer_none() {
 
 #[test]
 fn alliance_formation_emits_message_with_alliance_formed_kind() {
-    use crate::characters::traits::Trait;
+    use characters::traits::Trait;
 
     let mut t1 = create_character("Snipsnout", true);
     let mut t2 = create_character("Pricklepaw", true);
@@ -488,12 +486,12 @@ fn alliance_formation_emits_message_with_alliance_formed_kind() {
         .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
     let closed_areas: Vec<Area> = vec![];
 
-    let mut hit: Option<crate::messages::GameMessage> = None;
+    let mut hit: Option<shared::messages::GameMessage> = None;
     for seed in 0u64..400 {
         let mut g = game_with_area.clone();
         let mut rng = SmallRng::seed_from_u64(seed);
         let _ = g.run_character_cycle(
-            crate::messages::Phase::Day,
+            shared::messages::Phase::Day,
             &mut rng,
             closed_areas.clone(),
             vec![t1.clone(), t2.clone()],
@@ -502,7 +500,7 @@ fn alliance_formation_emits_message_with_alliance_formed_kind() {
         if let Some(m) = g.messages.iter().find(|m| {
             matches!(
                 m.payload,
-                crate::messages::MessagePayload::AllianceFormed { .. }
+                shared::messages::MessagePayload::AllianceFormed { .. }
             )
         }) {
             hit = Some(m.clone());
@@ -513,7 +511,7 @@ fn alliance_formation_emits_message_with_alliance_formed_kind() {
     assert!(
         matches!(
             m.payload,
-            crate::messages::MessagePayload::AllianceFormed { .. }
+            shared::messages::MessagePayload::AllianceFormed { .. }
         ),
         "expected AllianceFormed payload, got {:?}",
         m.payload
@@ -527,8 +525,8 @@ fn alliance_formation_emits_message_with_alliance_formed_kind() {
 
 #[test]
 fn betrayal_emits_message_with_betrayal_triggered_kind() {
-    use crate::characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
-    use crate::characters::traits::Trait;
+    use characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
+    use characters::traits::Trait;
 
     let mut betrayer = create_character("Rendmaw", true);
     let mut victim = create_character("Gnawpaw", true);
@@ -549,7 +547,7 @@ fn betrayal_emits_message_with_betrayal_triggered_kind() {
 
     let mut rng = SmallRng::seed_from_u64(313);
     let _ = game.run_character_cycle(
-        crate::messages::Phase::Day,
+        shared::messages::Phase::Day,
         &mut rng,
         closed_areas,
         vec![betrayer.clone(), victim.clone()],
@@ -562,7 +560,7 @@ fn betrayal_emits_message_with_betrayal_triggered_kind() {
         .find(|m| {
             matches!(
                 m.payload,
-                crate::messages::MessagePayload::BetrayalTriggered { .. }
+                shared::messages::MessagePayload::BetrayalTriggered { .. }
             )
         })
         .expect("betrayal cycle must emit BetrayalTriggered message");
@@ -574,7 +572,7 @@ fn betrayal_emits_message_with_betrayal_triggered_kind() {
 
 #[test]
 fn alliance_formed_message_content_matches_game_event_display() {
-    use crate::characters::traits::Trait;
+    use characters::traits::Trait;
 
     let mut t1 = create_character("Snipsnout", true);
     let mut t2 = create_character("Pricklepaw", true);
@@ -592,12 +590,12 @@ fn alliance_formed_message_content_matches_game_event_display() {
         .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
     let closed_areas: Vec<Area> = vec![];
 
-    let mut hit: Option<crate::messages::GameMessage> = None;
+    let mut hit: Option<shared::messages::GameMessage> = None;
     for seed in 0u64..400 {
         let mut g = game_with_area.clone();
         let mut rng = SmallRng::seed_from_u64(seed);
         let _ = g.run_character_cycle(
-            crate::messages::Phase::Day,
+            shared::messages::Phase::Day,
             &mut rng,
             closed_areas.clone(),
             vec![t1.clone(), t2.clone()],
@@ -606,7 +604,7 @@ fn alliance_formed_message_content_matches_game_event_display() {
         if let Some(m) = g.messages.iter().find(|m| {
             matches!(
                 m.payload,
-                crate::messages::MessagePayload::AllianceFormed { .. }
+                shared::messages::MessagePayload::AllianceFormed { .. }
             )
         }) {
             hit = Some(m.clone());
@@ -649,8 +647,8 @@ fn alliance_formed_message_content_matches_game_event_display() {
 fn betrayal_triggered_message_content_matches_game_event_display() {
     use crate::events::GameEvent;
 
-    use crate::characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
-    use crate::characters::traits::Trait;
+    use characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
+    use characters::traits::Trait;
 
     let mut betrayer = create_character("Rendmaw", true);
     let mut victim = create_character("Gnawpaw", true);
@@ -676,7 +674,7 @@ fn betrayal_triggered_message_content_matches_game_event_display() {
 
     let mut rng = SmallRng::seed_from_u64(313);
     let _ = game.run_character_cycle(
-        crate::messages::Phase::Day,
+        shared::messages::Phase::Day,
         &mut rng,
         closed_areas,
         vec![betrayer.clone(), victim.clone()],
@@ -689,7 +687,7 @@ fn betrayal_triggered_message_content_matches_game_event_display() {
         .find(|m| {
             matches!(
                 m.payload,
-                crate::messages::MessagePayload::BetrayalTriggered { .. }
+                shared::messages::MessagePayload::BetrayalTriggered { .. }
             )
         })
         .expect("betrayal cycle must emit BetrayalTriggered message");
@@ -713,12 +711,12 @@ fn betrayal_triggered_message_content_matches_game_event_display() {
             CharacterMoved for character B at a later (tick, emit_index) than B's \
             CharacterKilled within the same (game_day, phase)."]
 fn dead_character_has_no_movement_event_after_death_in_same_period() {
-    use crate::messages::MessagePayload;
+    use shared::messages::MessagePayload;
 
     let character_a = create_character("A", true);
     let character_b = create_character("B", true);
     let mut game = create_test_game_with_characters(vec![character_a, character_b]);
-    let _ = game.run_phase(crate::messages::Phase::Day);
+    let _ = game.run_phase(shared::messages::Phase::Day);
 
     let b_killed = game.messages.iter().find(|m| {
         matches!(&m.payload,

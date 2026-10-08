@@ -61,7 +61,7 @@ pub struct TrappedMetadata {
     pub disorientation_remaining: u8,
     /// Rescue bonus accumulated from co-located characters this cycle.
     /// Reset to 0.0 after each escape roll. Cumulated via
-    /// `crate::characters::rescue::resolve_rescue` and consumed by
+    /// `characters::rescue::resolve_rescue` and consumed by
     /// escape rolls. Capped at `RESCUE_BONUS_CAP` (0.80).
     #[serde(default)]
     pub rescue_bonus_accumulated: f32,

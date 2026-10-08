@@ -1,18 +1,18 @@
 use super::*;
-use crate::areas::{Area, AreaDetails};
-use crate::characters::events::CharacterEvent;
-use crate::characters::incidents::{SleepIncident, SleepShelter, apply_sleep_incident};
-use crate::characters::statuses::CharacterStatus;
-use crate::characters::{
+use areas::{Area, AreaDetails};
+use characters::events::CharacterEvent;
+use characters::incidents::{SleepIncident, SleepShelter, apply_sleep_incident};
+use characters::statuses::CharacterStatus;
+use characters::{
     ActionSuggestion, Character, EncounterContext, EnvironmentContext, calculate_stamina_cost,
 };
-use crate::items::{Item, OwnsItems};
-use crate::messages::{AreaRef, CharacterRef, ItemRef, MessagePayload};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
 use shared::messages::SleepIncidentKind;
+use shared::messages::{AreaRef, CharacterRef, ItemRef, MessagePayload};
 use std::collections::HashMap;
+use world::items::{Item, OwnsItems};
 
 impl Game {
     /// Pre-computed, immutable view of game state used by `execute_cycle`.
@@ -25,12 +25,12 @@ impl Game {
     /// phase.
     pub(super) fn build_cycle_context(
         &self,
-        phase: crate::messages::Phase,
+        phase: shared::messages::Phase,
         closed_areas: Vec<Area>,
         living_characters: Vec<Character>,
         living_characters_count: usize,
     ) -> CycleContext {
-        use crate::messages::Phase;
+        use shared::messages::Phase;
         let day = phase == Phase::Day;
         let action_suggestion = match (self.day, day) {
             (Some(1), true) => Some(ActionSuggestion {
@@ -107,8 +107,7 @@ impl Game {
         } = ctx;
 
         let mut collected_events: Vec<CollectedEvent> = Vec::new();
-        let mut drained_alliance_events: Vec<crate::characters::alliances::AllianceEvent> =
-            Vec::new();
+        let mut drained_alliance_events: Vec<characters::alliances::AllianceEvent> = Vec::new();
 
         // Two-phase resolution (tm6a): collect indices of characters that
         // survive survival/sleep ticks first, then execute actions in a
@@ -129,7 +128,7 @@ impl Game {
                 if character.status == CharacterStatus::RecentlyDead {
                     let killer = character.recently_killed_by.take();
                     drained_alliance_events.push(
-                        crate::characters::alliances::AllianceEvent::DeathRecorded {
+                        characters::alliances::AllianceEvent::DeathRecorded {
                             deceased: character.id,
                             killer,
                         },
@@ -150,13 +149,13 @@ impl Game {
             // Loot drop is handled centrally by clean_up_recent_deaths
             // after the cycle ends.
             {
-                use crate::areas::weather::current_weather;
-                use crate::characters::survival::{
+                use areas::weather::current_weather;
+                use characters::survival::{
                     apply_dehydration_drain, apply_starvation_drain, hunger_band, thirst_band,
                     tick_survival,
                 };
-                use crate::messages::{CharacterRef, MessagePayload};
                 use shared::afflictions::DeathCause;
+                use shared::messages::{CharacterRef, MessagePayload};
 
                 let weather = current_weather();
                 let phase_index: u32 = self.day.unwrap_or(1) * 2 + u32::from(!day);
@@ -168,10 +167,8 @@ impl Game {
                 // living character. Sheltered characters may recover; exposed may
                 // worsen. Severe + exposed can spawn successors or kill.
                 {
-                    use crate::characters::afflictions::tuning::AfflictionTuning;
-                    use crate::characters::afflictions::{
-                        CascadeOutcome, apply_cascade, tick_cascade,
-                    };
+                    use characters::afflictions::tuning::AfflictionTuning;
+                    use characters::afflictions::{CascadeOutcome, apply_cascade, tick_cascade};
                     use shared::afflictions::Severity;
 
                     let affliction_list: Vec<_> = character.afflictions.values().cloned().collect();
@@ -344,7 +341,7 @@ impl Game {
                 // here. `sheltered` reuses the value computed above for the
                 // hunger/thirst tick.
                 if character.blood > 0 {
-                    use crate::characters::stamina_band::stamina_band;
+                    use characters::stamina_band::stamina_band;
 
                     let prior_band = stamina_band(
                         character.stamina,
@@ -352,7 +349,7 @@ impl Game {
                         &combat_tuning_snapshot,
                     );
                     character.recover_stamina(
-                        &crate::characters::actions::Action::None,
+                        &characters::actions::Action::None,
                         sheltered,
                         new_hunger,
                         new_thirst,
@@ -417,8 +414,8 @@ impl Game {
             // Interruption handling lives in PR2c.2; this PR
             // ships the natural-wake path only.
             if character.sleeping {
-                use crate::messages::{CharacterRef, MessagePayload};
                 use shared::messages::WakeReason;
+                use shared::messages::{CharacterRef, MessagePayload};
 
                 // Spec §6.4 PR2c.2. Before regenerating, check
                 // whether an area event in the sleeper's current area is
@@ -431,7 +428,7 @@ impl Game {
                     .and_then(|a| a.events.first())
                     .map(area_event_to_kind);
                 if let Some(kind) = area_event_kind {
-                    let mut wake_events: Vec<crate::messages::TaggedEvent> = Vec::new();
+                    let mut wake_events: Vec<world::messages::TaggedEvent> = Vec::new();
                     let woke = character.wake_interrupted(
                         shared::messages::InterruptionKind::AreaEvent { kind },
                         phase,
@@ -462,7 +459,7 @@ impl Game {
                     .get(&character.area)
                     .and_then(|&idx| self.areas.get(idx))
                     .map(|a| a.terrain.base)
-                    .unwrap_or(crate::terrain::types::BaseTerrain::Clearing);
+                    .unwrap_or(world::terrain::types::BaseTerrain::Clearing);
                 let phase_index: u32 = self.day.unwrap_or(1) * 4 + phase.ord() as u32;
                 let is_sheltered = character
                     .sheltered_until
@@ -484,7 +481,7 @@ impl Game {
                     if incident.wakes_character() {
                         // Wake-causing incident: emit flavor event, then
                         // wake the character with the incident as the reason.
-                        let flavor_line = crate::output::GameOutput::CharacterSleepFlavor(
+                        let flavor_line = world::output::GameOutput::CharacterSleepFlavor(
                             character.name.as_str(),
                             &description,
                         )
@@ -504,7 +501,7 @@ impl Game {
                             None,
                         ));
 
-                        let incident_msg = crate::output::GameOutput::CharacterWakesFromIncident(
+                        let incident_msg = world::output::GameOutput::CharacterWakesFromIncident(
                             character.name.as_str(),
                             &description,
                         )
@@ -536,7 +533,7 @@ impl Game {
                     } else {
                         // Flavor-only incident: emit flavor, remember it,
                         // then continue with regen as normal.
-                        let flavor_line = crate::output::GameOutput::CharacterSleepFlavor(
+                        let flavor_line = world::output::GameOutput::CharacterSleepFlavor(
                             character.name.as_str(),
                             &description,
                         )
@@ -577,7 +574,7 @@ impl Game {
                     character.blood = character
                         .blood
                         .saturating_add(SLEEP_HP_PER_PHASE)
-                        .min(crate::characters::wounds::MAX_BLOOD);
+                        .min(characters::wounds::MAX_BLOOD);
                 }
                 let restored_stamina = character.stamina.saturating_sub(prior_stamina);
                 let restored_hp = character.blood.saturating_sub(prior_hp);
@@ -609,7 +606,7 @@ impl Game {
                         .unwrap_or_default();
                     let line = format!(
                         "{} {}",
-                        crate::output::GameOutput::CharacterWakesRested(character.name.as_str()),
+                        world::output::GameOutput::CharacterWakesRested(character.name.as_str()),
                         incident_suffix,
                     );
                     collected_events.push((
@@ -641,8 +638,8 @@ impl Game {
         // tracks observer state, emits escalation/habituation/observation
         // messages so severity changes take effect before brain decisions.
         if self.config.phobias_enabled && !characters_to_act.is_empty() {
-            use crate::characters::afflictions::phobia::scan_character;
-            use crate::characters::afflictions::phobia::triggers::PhobiaContext;
+            use characters::afflictions::phobia::scan_character;
+            use characters::afflictions::phobia::triggers::PhobiaContext;
 
             // Monotonically increasing cycle number (Day 1 Day = 1, etc.).
             let phobia_cycle = (current_day.saturating_sub(1)) * 4 + phase.ord() as u32;
@@ -697,7 +694,7 @@ impl Game {
                     .map(|v| v.as_slice())
                     .unwrap_or(&[]);
 
-                let t_result = crate::characters::afflictions::trauma::process_traumas(
+                let t_result = characters::afflictions::trauma::process_traumas(
                     &mut self.characters[idx],
                     other_characters,
                     trauma_cycle,
@@ -730,7 +727,7 @@ impl Game {
                     .map(|v| v.as_slice())
                     .unwrap_or(&[]);
 
-                let msgs = crate::characters::afflictions::addiction::process_addictions(
+                let msgs = characters::afflictions::addiction::process_addictions(
                     &mut self.characters[idx],
                     other_characters,
                     addiction_cycle,
@@ -798,7 +795,7 @@ impl Game {
                 if character.status == CharacterStatus::RecentlyDead {
                     let killer = character.recently_killed_by.take();
                     drained_alliance_events.push(
-                        crate::characters::alliances::AllianceEvent::DeathRecorded {
+                        characters::alliances::AllianceEvent::DeathRecorded {
                             deceased: character.id,
                             killer,
                         },
@@ -829,7 +826,7 @@ impl Game {
                             let stamina_cost =
                                 calculate_stamina_cost(&move_action, &ad.terrain, character);
 
-                            crate::areas::DestinationInfo {
+                            areas::DestinationInfo {
                                 area: neighbor_area,
                                 terrain: ad.terrain.clone(),
                                 active_events: ad.events.clone(),
@@ -881,7 +878,7 @@ impl Game {
             // co-located trapped character instead of their chosen action.
             let mut override_suggestion = action_suggestion.clone();
             if character.is_alive()
-                && let Some(target_id) = crate::characters::rescue::evaluate_rescue_opportunity(
+                && let Some(target_id) = characters::rescue::evaluate_rescue_opportunity(
                     character,
                     environment_details.area_details,
                     nearby_characters,
@@ -893,7 +890,7 @@ impl Game {
                     probability: Some(1.0),
                 });
             }
-            let mut character_events: Vec<crate::messages::TaggedEvent> = Vec::new();
+            let mut character_events: Vec<world::messages::TaggedEvent> = Vec::new();
             character.process_turn_phase(
                 override_suggestion,
                 &mut environment_details,
@@ -989,14 +986,13 @@ impl Game {
                 .enumerate()
                 .filter(|(_, t)| {
                     t.is_alive()
-                        && crate::characters::afflictions::fixation::count_fixations(&t.afflictions)
-                            > 0
+                        && characters::afflictions::fixation::count_fixations(&t.afflictions) > 0
                 })
                 .map(|(i, _)| i)
                 .collect();
 
             if !fixation_indices.is_empty() {
-                use crate::characters::afflictions::fixation::{
+                use characters::afflictions::fixation::{
                     FixationContext, process_character_fixations,
                 };
                 use std::collections::HashMap;
@@ -1012,7 +1008,7 @@ impl Game {
                 // Build dead-character → killer lookup from drained alliance events.
                 let mut dead_character_killers: HashMap<Uuid, Option<Uuid>> = HashMap::new();
                 for event in &drained_alliance_events {
-                    if let crate::characters::alliances::AllianceEvent::DeathRecorded {
+                    if let characters::alliances::AllianceEvent::DeathRecorded {
                         deceased,
                         killer,
                     } = event
@@ -1096,7 +1092,7 @@ impl Game {
     /// same area within a phase collapse into a single emission — only the
     /// first is kept, duplicates are silently dropped.
     pub(super) fn flush_character_events(&mut self, collected_events: Vec<CollectedEvent>) {
-        use crate::messages::MessagePayload;
+        use shared::messages::MessagePayload;
 
         let mut last_identifier: Option<String> = None;
         let mut current_tick: u32 = self.tick_counter.boundary();
@@ -1121,7 +1117,7 @@ impl Game {
                 current_tick = self.tick_counter.next();
                 last_identifier = Some(identifier.clone());
             }
-            let source = crate::messages::MessageSource::Character(identifier.clone());
+            let source = shared::messages::MessageSource::Character(identifier.clone());
             let payload = payload.unwrap_or_else(|| Self::fallback_payload(&source));
             self.push_message(source, identifier, content, payload, current_tick);
         }
@@ -1135,7 +1131,7 @@ impl Game {
     /// gamemaker overrides a typed seam to inject suggestions.
     pub(super) fn run_character_cycle(
         &mut self,
-        phase: crate::messages::Phase,
+        phase: shared::messages::Phase,
         rng: &mut SmallRng,
         closed_areas: Vec<Area>,
         living_characters: Vec<Character>,
@@ -1185,9 +1181,9 @@ impl Game {
                     }
                     _ => unreachable!(),
                 };
-                let line = crate::output::GameOutput::PatronGift(recipient_id.as_ref(), &gift.item)
+                let line = world::output::GameOutput::PatronGift(recipient_id.as_ref(), &gift.item)
                     .to_string();
-                let source = crate::messages::MessageSource::Game(self.identifier.clone());
+                let source = shared::messages::MessageSource::Game(self.identifier.clone());
                 let subject = format!("patron_gift:{recipient_id}");
                 let tick = self.tick_counter.next();
                 let payload = gift.payload;
@@ -1213,7 +1209,7 @@ impl Game {
     /// 5. Close more areas by spawning more events if the characters are getting low.
     /// 6. Run the character cycle.
     /// 7. Update the characters in the game.
-    pub(super) fn do_a_cycle(&mut self, phase: crate::messages::Phase) -> Result<(), GameError> {
+    pub(super) fn do_a_cycle(&mut self, phase: shared::messages::Phase) -> Result<(), GameError> {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
 
         // Announce area events

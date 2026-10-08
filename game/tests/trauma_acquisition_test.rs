@@ -1,5 +1,5 @@
-use game::characters::Character;
-use game::characters::afflictions::trauma::TraumaAcquisition;
+use characters::Character;
+use characters::afflictions::trauma::TraumaAcquisition;
 use shared::afflictions::*;
 
 fn character_at_cycle(cycle: u32) -> Character {

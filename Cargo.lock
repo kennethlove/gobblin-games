@@ -171,11 +171,13 @@ name = "api"
 version = "0.1.15"
 dependencies = [
  "announcers",
+ "areas",
  "askama_escape",
  "async-trait",
  "axum",
  "axum-test",
  "base64-url",
+ "characters",
  "chrono",
  "confirm-email",
  "futures",
@@ -205,6 +207,7 @@ dependencies = [
  "url",
  "uuid",
  "validator",
+ "world",
 ]
 
 [[package]]
@@ -223,6 +226,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a3a1fd6f75306b68087b831f025c712524bcb19aad54e557b1129cfa0a2b207"
 dependencies = [
  "rustversion",
+]
+
+[[package]]
+name = "areas"
+version = "0.1.0"
+dependencies = [
+ "rand 0.10.1",
+ "rstest",
+ "serde",
+ "serde_json",
+ "shared",
+ "strum 0.28.0",
+ "strum_macros 0.28.0",
+ "tracing",
+ "uuid",
+ "world",
 ]
 
 [[package]]
@@ -756,6 +775,25 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.3.0",
  "rand_core 0.10.1",
+]
+
+[[package]]
+name = "characters"
+version = "0.1.0"
+dependencies = [
+ "areas",
+ "chrono",
+ "insta",
+ "proptest",
+ "rand 0.10.1",
+ "rstest",
+ "serde",
+ "serde_json",
+ "shared",
+ "strum 0.28.0",
+ "tokio",
+ "uuid",
+ "world",
 ]
 
 [[package]]
@@ -1854,6 +1892,8 @@ dependencies = [
 name = "game"
 version = "0.1.0"
 dependencies = [
+ "areas",
+ "characters",
  "chrono",
  "criterion",
  "indefinite",
@@ -1872,6 +1912,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "world",
 ]
 
 [[package]]
@@ -7018,6 +7059,22 @@ dependencies = [
  "serde_json",
  "unicode-xid",
  "wasmparser",
+]
+
+[[package]]
+name = "world"
+version = "0.1.0"
+dependencies = [
+ "indefinite",
+ "rand 0.10.1",
+ "rstest",
+ "serde",
+ "serde_json",
+ "shared",
+ "strum 0.28.0",
+ "strum_macros 0.28.0",
+ "thiserror 2.0.18",
+ "uuid",
 ]
 
 [[package]]

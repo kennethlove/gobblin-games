@@ -6,14 +6,14 @@
 //! outcomes still surface as `MessageSource::Character(_)` entries. Together
 //! these confirm the full event slice is unified through `Game.messages`.
 
-use game::areas::events::AreaEvent;
-use game::areas::{Area, AreaDetails};
-use game::characters::Character;
+use areas::events::AreaEvent;
+use areas::{Area, AreaDetails};
+use characters::Character;
 use game::games::Game;
-use game::messages::{GameMessage, MessageSource};
-use game::terrain::{BaseTerrain, TerrainType};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
+use shared::messages::{GameMessage, MessageSource};
+use world::terrain::{BaseTerrain, TerrainType};
 
 /// Drop two characters into a single area, fire an `AreaEvent` directly via
 /// `process_event_for_area`, and assert that:

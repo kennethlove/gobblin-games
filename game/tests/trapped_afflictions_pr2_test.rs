@@ -2,17 +2,17 @@
 //!
 //! See `docs/superpowers/specs/2026-05-04-trapped-afflictions-design.md` §18.
 
-use game::areas::AreaDetails;
-use game::characters::AfflictionDraft;
-use game::characters::Character;
-use game::characters::actions::Action;
+use areas::AreaDetails;
+use characters::AfflictionDraft;
+use characters::Character;
+use characters::actions::Action;
 use rand::prelude::*;
 use rand::rngs::SmallRng;
 use shared::afflictions::{AfflictionKind, AfflictionSource, Severity, TrapKind, TrappedMetadata};
 
 fn make_character(name: &str) -> Character {
     let mut t = Character::new(name.into(), None, None);
-    t.area = game::areas::Area::Hub;
+    t.area = areas::Area::Hub;
     t.attributes.strength = 30;
     t.attributes.defense = 15;
     t
@@ -32,8 +32,8 @@ fn add_buried(t: &mut Character, severity: Severity) {
 /// The target's defense is halved, making them more vulnerable.
 #[test]
 fn attack_while_trapped_defense_halved() {
-    use game::characters::combat::resolve::attack_contest;
-    use game::characters::combat_tuning::CombatTuning;
+    use characters::combat::resolve::attack_contest;
+    use characters::combat_tuning::CombatTuning;
 
     let mut attacker = make_character("Attacker");
     attacker.attributes.strength = 50;
@@ -53,9 +53,9 @@ fn attack_while_trapped_defense_halved() {
     assert!(
         matches!(
             outcome.result,
-            game::characters::actions::AttackResult::AttackerWins
-                | game::characters::actions::AttackResult::AttackerWinsDecisively
-                | game::characters::actions::AttackResult::CriticalHit
+            characters::actions::AttackResult::AttackerWins
+                | characters::actions::AttackResult::AttackerWinsDecisively
+                | characters::actions::AttackResult::CriticalHit
         ),
         "expected attacker win vs trapped target with halved defense, got {:?}",
         outcome.result
@@ -65,18 +65,18 @@ fn attack_while_trapped_defense_halved() {
 /// Test: rescue bonus computation works end-to-end via resolve_rescue.
 #[test]
 fn rescue_bonus_applied_to_trapped_target() {
-    use game::characters::rescue::resolve_rescue;
+    use characters::rescue::resolve_rescue;
 
     let mut rescuer = make_character("Rescuer");
     rescuer.attributes.strength = 40;
-    rescuer.area = game::areas::Area::Hub;
+    rescuer.area = areas::Area::Hub;
 
     let mut target = make_character("Target");
-    target.area = game::areas::Area::Hub;
+    target.area = areas::Area::Hub;
     add_buried(&mut target, Severity::Mild);
 
     let area = AreaDetails {
-        area: Some(game::areas::Area::Hub),
+        area: Some(areas::Area::Hub),
         ..Default::default()
     };
 
@@ -104,7 +104,7 @@ fn rescue_bonus_applied_to_trapped_target() {
     let has_event = events.iter().any(|e| {
         matches!(
             e.payload,
-            game::messages::MessagePayload::RescueAttempted { .. }
+            shared::messages::MessagePayload::RescueAttempted { .. }
         )
     });
     assert!(has_event, "expected RescueAttempted event");
@@ -113,8 +113,8 @@ fn rescue_bonus_applied_to_trapped_target() {
 /// Test: trapped character cannot move via hard gate.
 #[test]
 fn trapped_blocked_from_moving() {
-    use game::areas::Area;
-    use game::characters::brains::affliction_override::hard_gates_with_terrain;
+    use areas::Area;
+    use characters::brains::affliction_override::hard_gates_with_terrain;
 
     let mut character = make_character("Trapped");
     add_buried(&mut character, Severity::Moderate);
@@ -126,7 +126,7 @@ fn trapped_blocked_from_moving() {
 /// Test: trapped character can still consume items (UseItem(None)).
 #[test]
 fn trapped_allows_consumable_use() {
-    use game::characters::brains::affliction_override::hard_gates_with_terrain;
+    use characters::brains::affliction_override::hard_gates_with_terrain;
 
     let mut character = make_character("Trapped");
     add_buried(&mut character, Severity::Moderate);
@@ -141,19 +141,19 @@ fn trapped_allows_consumable_use() {
 /// Test: trapped character blocked from moving via affliction_override.
 #[test]
 fn trapped_override_blocks_move() {
-    use game::characters::brains::affliction_override::affliction_override;
+    use characters::brains::affliction_override::affliction_override;
 
     let mut character = make_character("Trapped");
     add_buried(&mut character, Severity::Moderate);
 
-    let result = affliction_override(&character, &Action::Move(Some(game::areas::Area::Hub)));
+    let result = affliction_override(&character, &Action::Move(Some(areas::Area::Hub)));
     assert_eq!(result, Some(Action::None));
 }
 
 /// Test: rescue bonus math matches spec.
 #[test]
 fn rescue_bonus_math() {
-    use game::characters::rescue::compute_rescue_bonus;
+    use characters::rescue::compute_rescue_bonus;
 
     let min_bonus = compute_rescue_bonus(0.0);
     assert!((min_bonus - 0.25).abs() < 1e-4);

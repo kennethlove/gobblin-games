@@ -268,7 +268,7 @@ fn test_check_game_state_continues() {
 
 #[test]
 fn test_prepare_cycle() {
-    use crate::messages::Phase;
+    use shared::messages::Phase;
     let mut game = Game::new("Test Game");
     let area = AreaDetails::new(Some("Lake".to_string()), Area::Sector1);
     let mut rng = rand::rng();
@@ -327,7 +327,7 @@ fn test_run_character_cycle() {
 
     let mut rng = SmallRng::seed_from_u64(42);
     let _ = game.run_character_cycle(
-        crate::messages::Phase::Day,
+        shared::messages::Phase::Day,
         &mut rng,
         closed_areas,
         vec![character1.clone(), character2.clone()],
@@ -388,7 +388,7 @@ fn survival_tick_increments_hunger_and_thirst_per_phase() {
     }
     let mut game = create_test_game_with_characters(vec![a, b]);
     game.day = Some(1);
-    let _ = game.run_phase(crate::messages::Phase::Day);
+    let _ = game.run_phase(shared::messages::Phase::Day);
     for t in &game.characters {
         assert_eq!(t.hunger, 1, "{} hunger should be 1 after one tick", t.name);
         assert_eq!(t.thirst, 1, "{} thirst should be 1 after one tick", t.name);
@@ -397,15 +397,15 @@ fn survival_tick_increments_hunger_and_thirst_per_phase() {
 
 #[test]
 fn survival_tick_routes_dehydration_death_through_character_killed() {
-    use crate::messages::MessagePayload;
     use shared::afflictions::DeathCause;
+    use shared::messages::MessagePayload;
     let mut a = Character::new("Doomed".to_string(), Some(1), None);
     a.thirst = 4;
     a.dehydration_drain_step = 5;
     a.blood = 10;
     let mut game = create_test_game_with_characters(vec![a]);
     game.day = Some(1);
-    let _ = game.run_phase(crate::messages::Phase::Day);
+    let _ = game.run_phase(shared::messages::Phase::Day);
     let killed = game.messages.iter().any(|m| {
         matches!(&m.payload,
             MessagePayload::CharacterKilled { cause, .. } if *cause == DeathCause::Dehydration)
@@ -416,7 +416,7 @@ fn survival_tick_routes_dehydration_death_through_character_killed() {
 #[test]
 #[serial]
 fn sleeping_character_naturally_wakes_after_duration_emits_character_woke() {
-    use crate::messages::{MessagePayload, Phase};
+    use shared::messages::{MessagePayload, Phase};
     let mut t = create_character("Sleeper", true);
     t.sleeping = true;
     t.sleep_remaining = 1;
@@ -448,7 +448,7 @@ fn sleeping_character_naturally_wakes_after_duration_emits_character_woke() {
 #[test]
 #[serial]
 fn sleeping_character_regenerates_stamina_each_phase() {
-    use crate::messages::Phase;
+    use shared::messages::Phase;
     let mut t = create_character("Sleeper", true);
     t.sleeping = true;
     t.sleep_remaining = 3;
@@ -470,8 +470,8 @@ fn sleeping_character_regenerates_stamina_each_phase() {
 #[test]
 #[serial]
 fn sleeping_wounded_character_does_not_regen_hp() {
-    use crate::messages::Phase;
     use shared::afflictions::{Affliction, AfflictionKind, AfflictionSource, Severity};
+    use shared::messages::Phase;
     let mut t = create_character("Sleeper", true);
     t.sleeping = true;
     t.sleep_remaining = 3;
@@ -510,7 +510,7 @@ fn sleeping_wounded_character_does_not_regen_hp() {
 #[test]
 #[serial]
 fn cycles_awake_does_not_increment_while_sleeping() {
-    use crate::messages::Phase;
+    use shared::messages::Phase;
     let mut t = create_character("Sleeper", true);
     t.sleeping = true;
     t.sleep_remaining = 3;
@@ -525,8 +525,8 @@ fn cycles_awake_does_not_increment_while_sleeping() {
 
 #[test]
 fn area_event_interrupts_sleeping_character() {
-    use crate::areas::events::AreaEvent;
-    use crate::messages::{MessagePayload, Phase};
+    use areas::events::AreaEvent;
+    use shared::messages::{MessagePayload, Phase};
     let mut t = create_character("Sleeper", true);
     t.sleeping = true;
     t.sleep_remaining = 5;
@@ -568,7 +568,7 @@ fn area_event_interrupts_sleeping_character() {
 
 #[test]
 fn alliance_summons_wakes_sleeping_target() {
-    use crate::messages::MessagePayload;
+    use shared::messages::MessagePayload;
     let mut summoner = create_character("Snipsnout", true);
     let mut target = create_character("Snaggletooth", true);
     target.sleeping = true;
@@ -580,12 +580,11 @@ fn alliance_summons_wakes_sleeping_target() {
     target.allies.push(summoner_id);
 
     let mut game = create_test_game_with_characters(vec![summoner, target]);
-    game.alliance_events.push(
-        crate::characters::alliances::AllianceEvent::AllianceSummons {
+    game.alliance_events
+        .push(characters::alliances::AllianceEvent::AllianceSummons {
             summoner: summoner_id,
             target: target_id,
-        },
-    );
+        });
     let mut rng = SmallRng::seed_from_u64(42);
     game.process_alliance_events(&mut rng);
 

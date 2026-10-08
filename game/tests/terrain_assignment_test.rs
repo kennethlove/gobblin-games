@@ -1,6 +1,6 @@
-use game::terrain::{BaseTerrain, Harshness, TerrainType};
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
+use world::terrain::{BaseTerrain, Harshness, TerrainType};
 
 #[test]
 fn test_random_terrain_generates_valid_terrain() {
@@ -37,7 +37,7 @@ fn test_balance_constraint_limits_harsh_terrains() {
         TerrainType::new(BaseTerrain::Desert, vec![]).unwrap(),
     ];
 
-    game::terrain::enforce_balance_constraint(&mut terrains, &mut rng);
+    world::terrain::enforce_balance_constraint(&mut terrains, &mut rng);
 
     // Should now have at most 3 harsh terrains
     let harsh_count = terrains

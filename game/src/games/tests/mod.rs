@@ -1,5 +1,5 @@
 use super::*;
-use crate::characters::Attributes;
+use characters::Attributes;
 
 pub(crate) fn create_test_game_with_characters(characters: Vec<Character>) -> Game {
     Game {
@@ -14,9 +14,9 @@ pub(crate) fn create_test_game_with_characters(characters: Vec<Character>) -> Ga
         messages: vec![],
         alliance_events: vec![],
         tick_counter: TickCounter::default(),
-        current_phase: crate::messages::Phase::Day,
+        current_phase: shared::messages::Phase::Day,
         emit_index: 0,
-        combat_tuning: crate::characters::combat_tuning::CombatTuning::default(),
+        combat_tuning: characters::combat_tuning::CombatTuning::default(),
         patrons: vec![],
     }
 }
@@ -36,3 +36,10 @@ pub(crate) fn create_character(name: &str, is_alive: bool) -> Character {
 mod alliances;
 mod messaging;
 mod survival;
+
+#[test]
+fn game_default_carries_default_combat_tuning() {
+    use characters::combat_tuning::CombatTuning;
+    let g = Game::default();
+    assert_eq!(g.combat_tuning, CombatTuning::default());
+}

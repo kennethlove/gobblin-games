@@ -274,7 +274,7 @@ pub fn render_commentary_card(seg: &announcers::CommentarySegment) -> String {
     )
 }
 
-pub fn render_character_row(character: &game::characters::Character, game_id: &str) -> String {
+pub fn render_character_row(character: &characters::Character, game_id: &str) -> String {
     let is_alive = character.is_alive();
     let health = character.effective_health();
     let health_class = if health > 60 {
@@ -296,7 +296,7 @@ pub fn render_character_row(character: &game::characters::Character, game_id: &s
     let status_text = if is_alive { "ALIVE" } else { "DEAD" };
     let dead_class = if !is_alive { " dead" } else { "" };
     let character_id = &character.identifier;
-    let team_color = game::clans::team_color(character.team);
+    let team_color = world::clans::team_color(character.team);
 
     format!(
         r#"<a href="/games/{game_id}/characters/{character_id}" class="roster-row{dead_class}" style="text-decoration:none;color:inherit;display:block;">
@@ -317,11 +317,11 @@ pub fn render_character_row(character: &game::characters::Character, game_id: &s
         name = html_escape(&character.name),
         team_hex = team_color.hex,
         team_name = team_color.name,
-        team_title = game::clans::team_label(character.team),
+        team_title = world::clans::team_label(character.team),
     )
 }
 
-pub fn render_character_card(character: &game::characters::Character) -> String {
+pub fn render_character_card(character: &characters::Character) -> String {
     let is_alive = character.is_alive();
     let health = character.effective_health();
     let _health_class = if health > 60 {
@@ -367,7 +367,7 @@ pub fn render_character_card(character: &game::characters::Character) -> String 
     )
 }
 
-pub fn render_area_card(area: &game::areas::AreaDetails) -> String {
+pub fn render_area_card(area: &areas::AreaDetails) -> String {
     let item_count = area.items.len();
     let event_count = area.events.len();
 
@@ -394,7 +394,7 @@ pub fn render_area_card(area: &game::areas::AreaDetails) -> String {
     )
 }
 
-pub fn render_character_detail(character: &game::characters::Character, _game_id: &str) -> String {
+pub fn render_character_detail(character: &characters::Character, _game_id: &str) -> String {
     let is_alive = character.is_alive();
     let health = character.effective_health();
     let status_class = if is_alive { "alive" } else { "dead" };
@@ -405,8 +405,8 @@ pub fn render_character_detail(character: &game::characters::Character, _game_id
     let thirst_c = thirst_color(character.thirst);
     let stamina = stamina_label(character.stamina, character.max_stamina);
     let stamina_c = stamina_color(character.stamina, character.max_stamina);
-    let team_color = game::clans::team_color(character.team);
-    let team_label = game::clans::team_label(character.team);
+    let team_color = world::clans::team_color(character.team);
+    let team_label = world::clans::team_label(character.team);
     let clan_name_line = if character.clan_name.is_empty() {
         String::new()
     } else {
@@ -486,7 +486,7 @@ pub struct AllianceGroup {
     pub characters: Vec<usize>,
 }
 
-pub fn build_alliance_groups(characters: &[&game::characters::Character]) -> Vec<AllianceGroup> {
+pub fn build_alliance_groups(characters: &[&characters::Character]) -> Vec<AllianceGroup> {
     let n = characters.len();
     let mut parent: Vec<usize> = (0..n).collect();
 
@@ -562,7 +562,7 @@ pub fn build_alliance_groups(characters: &[&game::characters::Character]) -> Vec
 
 pub fn render_alliance_group(
     group: &AllianceGroup,
-    characters: &[&game::characters::Character],
+    characters: &[&characters::Character],
     game_id: &str,
 ) -> String {
     let alive_count = group
@@ -594,11 +594,11 @@ pub struct TeamGroup<'a> {
     pub team: u32,
     pub alive_count: usize,
     pub total: usize,
-    pub characters: Vec<&'a game::characters::Character>,
+    pub characters: Vec<&'a characters::Character>,
 }
 
-pub fn build_team_groups<'a>(characters: &[&'a game::characters::Character]) -> Vec<TeamGroup<'a>> {
-    let mut groups: std::collections::HashMap<u32, Vec<&game::characters::Character>> =
+pub fn build_team_groups<'a>(characters: &[&'a characters::Character]) -> Vec<TeamGroup<'a>> {
+    let mut groups: std::collections::HashMap<u32, Vec<&characters::Character>> =
         std::collections::HashMap::new();
     for &character in characters {
         groups.entry(character.team).or_default().push(character);
@@ -624,7 +624,7 @@ pub fn render_team_group(group: &TeamGroup, game_id: &str) -> String {
     for character in &group.characters {
         rows.push_str(&render_character_row(character, game_id));
     }
-    let team_color = game::clans::team_color(group.team);
+    let team_color = world::clans::team_color(group.team);
     format!(
         r#"<div class="clan-group">
           <div class="alliance-header" style="border-left-color:var(--broad-accent);">
@@ -634,14 +634,14 @@ pub fn render_team_group(group: &TeamGroup, game_id: &str) -> String {
           {rows}
         </div>"#,
         hex = team_color.hex,
-        label = game::clans::team_label(group.team),
+        label = world::clans::team_label(group.team),
         alive = group.alive_count,
         total = group.total,
     )
 }
 
-fn terrain_color(terrain: &game::terrain::BaseTerrain) -> &'static str {
-    use game::terrain::BaseTerrain::*;
+fn terrain_color(terrain: &world::terrain::BaseTerrain) -> &'static str {
+    use world::terrain::BaseTerrain::*;
     match terrain {
         Forest => "#2d5a27",
         Desert => "#c4a35a",
@@ -687,20 +687,20 @@ fn hex_center(area_idx: usize) -> (f64, f64) {
 }
 
 pub fn render_hex_map(
-    areas: &[game::areas::AreaDetails],
-    characters: &[&game::characters::Character],
+    areas: &[areas::AreaDetails],
+    characters: &[&characters::Character],
 ) -> String {
     let area_order = [
-        game::areas::Area::Hub,
-        game::areas::Area::Sector1,
-        game::areas::Area::Sector2,
-        game::areas::Area::Sector3,
-        game::areas::Area::Sector4,
-        game::areas::Area::Sector5,
-        game::areas::Area::Sector6,
+        areas::Area::Hub,
+        areas::Area::Sector1,
+        areas::Area::Sector2,
+        areas::Area::Sector3,
+        areas::Area::Sector4,
+        areas::Area::Sector5,
+        areas::Area::Sector6,
     ];
 
-    let area_map: std::collections::HashMap<game::areas::Area, &game::areas::AreaDetails> = areas
+    let area_map: std::collections::HashMap<areas::Area, &areas::AreaDetails> = areas
         .iter()
         .filter_map(|a| a.area.map(|area| (area, a)))
         .collect();
@@ -719,7 +719,7 @@ pub fn render_hex_map(
         let terrain = area_map
             .get(area_type)
             .map(|a| a.terrain.base)
-            .unwrap_or(game::terrain::BaseTerrain::Clearing);
+            .unwrap_or(world::terrain::BaseTerrain::Clearing);
         let fill = terrain_color(&terrain);
 
         let terrain_label = format!("{:?}", terrain).to_uppercase();

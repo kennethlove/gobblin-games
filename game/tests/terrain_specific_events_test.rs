@@ -1,8 +1,8 @@
-use game::areas::events::AreaEvent;
-use game::areas::{Area, AreaDetails};
+use areas::events::AreaEvent;
+use areas::{Area, AreaDetails};
 use game::games::Game;
-use game::terrain::{BaseTerrain, TerrainType};
 use std::collections::HashMap;
+use world::terrain::{BaseTerrain, TerrainType};
 
 /// Test that game loop generates terrain-appropriate events
 /// Forest should get mostly wildfires, desert should get sandstorms, etc.
@@ -148,7 +148,7 @@ fn test_terrain_event_diversity() {
 /// Test that terrain-specific events have appropriate severity for that terrain
 #[test]
 fn test_terrain_specific_events_have_logical_severity() {
-    use game::areas::events::EventSeverity;
+    use areas::events::EventSeverity;
 
     // Wildfire in forest should be catastrophic
     let wildfire_in_forest = AreaEvent::Wildfire.severity_in_terrain(&BaseTerrain::Forest);

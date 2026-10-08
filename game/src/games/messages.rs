@@ -7,9 +7,9 @@ impl Game {
     /// This is a transitional helper used by the legacy log helpers
     /// pending full migration of every emission site to typed payloads.
     pub(crate) fn fallback_payload(
-        source: &crate::messages::MessageSource,
-    ) -> crate::messages::MessagePayload {
-        use crate::messages::{
+        source: &shared::messages::MessageSource,
+    ) -> shared::messages::MessagePayload {
+        use shared::messages::{
             AreaEventKind, AreaRef, CharacterRef, MessagePayload, MessageSource,
         };
         match source {
@@ -42,10 +42,10 @@ impl Game {
     /// action emissions advance the tick counter.
     pub(crate) fn push_message(
         &mut self,
-        source: crate::messages::MessageSource,
+        source: shared::messages::MessageSource,
         subject: String,
         content: String,
-        payload: crate::messages::MessagePayload,
+        payload: shared::messages::MessagePayload,
         tick: u32,
     ) {
         let game_day = self.day.unwrap_or(0);
@@ -60,7 +60,7 @@ impl Game {
         } else {
             format!("{}:{}", self.identifier, subject)
         };
-        let msg = crate::messages::GameMessage::new(
+        let msg = shared::messages::GameMessage::new(
             source,
             game_day,
             self.current_phase,
@@ -83,7 +83,7 @@ impl Game {
     /// [`Self::push_message`] directly.
     pub fn log(
         &mut self,
-        source: crate::messages::MessageSource,
+        source: shared::messages::MessageSource,
         subject: String,
         content: String,
     ) {
@@ -95,7 +95,7 @@ impl Game {
     /// Log a structured game output by rendering its `Display` impl into a `GameMessage`.
     pub fn log_output<D: std::fmt::Display>(
         &mut self,
-        source: crate::messages::MessageSource,
+        source: shared::messages::MessageSource,
         subject: String,
         output: D,
     ) {
@@ -109,10 +109,10 @@ impl Game {
     /// a typed `MessagePayload` and call [`Self::push_message`] directly.
     pub fn log_output_kind<D: std::fmt::Display>(
         &mut self,
-        source: crate::messages::MessageSource,
+        source: shared::messages::MessageSource,
         subject: String,
         output: D,
-        _kind: crate::messages::MessageKind,
+        _kind: shared::messages::MessageKind,
     ) {
         self.log(source, subject, output.to_string());
     }
@@ -124,7 +124,7 @@ impl Game {
     /// it themselves and call [`Self::push_message`].
     pub fn log_event(
         &mut self,
-        source: crate::messages::MessageSource,
+        source: shared::messages::MessageSource,
         subject: String,
         event: crate::events::GameEvent,
     ) {
@@ -137,10 +137,10 @@ impl Game {
     /// compatibility only.
     pub fn log_event_kind(
         &mut self,
-        source: crate::messages::MessageSource,
+        source: shared::messages::MessageSource,
         subject: String,
         event: crate::events::GameEvent,
-        _kind: crate::messages::MessageKind,
+        _kind: shared::messages::MessageKind,
     ) {
         self.log(source, subject, event.to_string());
     }

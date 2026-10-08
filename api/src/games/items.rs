@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use crate::AppError;
-use game::items::Item;
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
 use surrealdb_types::{RecordId, SerdeWrapper};
+use world::items::Item;
 
 pub(crate) async fn save_area_items(
     items: &Vec<Item>,

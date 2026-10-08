@@ -106,18 +106,14 @@ run_day_night_cycle(day: bool)
 - **Browser** (HTMX): Indirectly via API — API renders Maud templates for HTML display
 
 ### **Depends On**
+- **Path crates** (extracted from `game/src/`):
+  - `areas` — `Area` enum, `AreaDetails` struct, `AreaEvent` enum, hex topology
+  - `characters` — `Character` struct, statuses, `Action` logic, combat, afflictions, alliances
+  - `world` — terrain, items, output, clans, config, pathfinding, threats, naming, message helpers
 - **Modules (within `game/src/`)**:
-  - `areas` — `Area` enum, `AreaDetails` struct, `AreaEvent` enum, hex topology, pathfinding graph
-  - `characters` — `Character` struct, `CharacterStatus`/`CharacterEvent` enums, `Action` logic, combat, afflictions, alliances
-  - `items` — `Item` struct, `OwnsItems` trait, procedural generation
-  - `threats` — Animal encounters (bears, wolves, etc.)
-  - `terrain` — `BaseTerrain` enum, `TerrainDescriptor`, `TerrainType`, biome config
   - `events` — Typed `GameEvent` enum (serde-friendly counterpart to `GameOutput`)
   - `phases` — Per-phase pipeline scaffolding (environmental conditions, light levels)
   - `patrons` — Patron archetypes, budget bands, affinity tracking
-  - `config` — `GameConfig` struct with runtime-tunable game constants
-  - `clans` — team color palette, mascot epithets, per-goblin terrain affinity rolls
-  - `pathfinding` — Generic A* graph pathfinding
   - `witty_phrase_generator` — Random name generation for games
 - **External Crates**:
   - `rand` — RNG for procedural generation
@@ -130,7 +126,7 @@ run_day_night_cycle(day: bool)
 ## Key Files
 
 ### **lib.rs** (18 lines)
-Module aggregator. Exports all submodules and declares `witty_phrase_generator` as private. Re-exports key terrain types (`BaseTerrain`, `TerrainDescriptor`, `TerrainType`).
+Module aggregator. Declares `trauma_producers` and `witty_phrase_generator` as private.
 
 ### **games/mod.rs** (980 lines) — **Core Game State**
 - **Purpose**: `Game` struct definition, lifecycle methods, state queries
@@ -154,6 +150,20 @@ Module aggregator. Exports all submodules and declares `witty_phrase_generator` 
 - **Purpose**: Trauma producer invocation, area event announcements, event triggering
 - **Key Functions**: `run_trauma_producers()`, `announce_area_events()`, `trigger_cycle_events()`
 
+### **trauma_producers/** (835 lines) — **Trauma Producer Pipeline**
+- **Purpose**: Scan the current phase's message log; acquire/reinforce trauma afflictions on witnesses/survivors (moved up from `characters/afflictions/producers/` — orchestration, not character logic)
+- **Key Function**: `run_trauma_producers()` — gated on `game.config.trauma_enabled`
+
+| File | Lines | Role |
+|------|-------|------|
+| `mod.rs` | 37 | Module aggregator |
+| `shared.rs` | 145 | Shared producer utilities |
+| `survive_betrayal.rs` | 44 | Betrayal survival trauma producer |
+| `survive_near_death.rs` | 54 | Near-death survival trauma producer |
+| `witness_ally_death.rs` | 66 | Ally death witness trauma producer |
+| `witness_mass_casualty.rs` | 64 | Mass casualty witness trauma producer |
+| `tests.rs` | 425 | Producer tests |
+
 ### **games/messages.rs** (142 lines) — **Message Helpers**
 - **Purpose**: Fallback `MessagePayload` construction for legacy emission sites
 - **Key Function**: `fallback_payload()` — transitional helper pending full typed payload migration
@@ -165,27 +175,16 @@ Module aggregator. Exports all submodules and declares `witty_phrase_generator` 
 ### **games/tests.rs** (1624 lines) — **Game Integration Tests**
 - **Purpose**: Comprehensive test suite covering lifecycle, state transitions, area management, alliances, patrons
 
-### **messages.rs** (351 lines) — **Event Log System**
-- **Purpose**: Global message accumulation and retrieval with typed `MessagePayload` variants
-- **Key Types**:
-  - `MessageSource` enum — Discriminates event origin (Game/Area/Character)
-  - `GameMessage` struct — Event record with ID, source, day, subject, timestamp, content
-  - `MessagePayload` enum — 55+ typed variants (e.g., `CharacterKilled`, `AreaClosed`, `CombatEngagement`)
+### **messages.rs** — moved out to shared + world
+- Schema types (`MessageSource`, `GameMessage`, `MessagePayload`, `Phase`, refs): **`shared::messages`**
+- `TaggedEvent` accumulator + terrain narrative helpers (`movement_narrative`, etc.): **`world::messages`**
+- Log accumulation helpers (`get_all_messages()`, …) live on `Game` in `games/mod.rs`
 - **Global State**: `GLOBAL_MESSAGES` (thread-safe `VecDeque<GameMessage>`)
 - **API**:
   - Write: `add_message()`, `add_game_message()`, `add_area_message()`, `add_character_message()`
   - Read: `get_all_messages()`, `get_messages_by_source()`, `get_messages_by_day()`
   - Maintenance: `clear_messages()` (called at day start)
 - **Thread Safety**: `Mutex` guards ensure concurrent access safety (future-proofing for multi-threaded API)
-
-### **output.rs** (502 lines) — **Presentation Layer**
-- **Purpose**: Human-readable message formatting
-- **Key Type**: `GameOutput<'a>` enum
-  - 79+ variants covering all game events (day start, attacks, deaths, area events, etc.)
-  - Implements `Display` trait with emoji-rich formatting
-- **Formatting Utilities**: Uses `indefinite` crate for article insertion ("a sword", "an axe")
-- **Integration**: `games.rs` calls `format!("{}", GameOutput::*)` then passes strings to `add_*_message()`
-- **Design Note**: Decouples game logic from presentation — could swap to different languages/styles without touching `games.rs`
 
 ### **events/mod.rs** (654 lines) — **Event Module**
 - **Purpose**: Module aggregator for typed `GameEvent` system; contains parity tests ensuring `GameEvent` renders identically to `GameOutput`
@@ -199,20 +198,10 @@ Module aggregator. Exports all submodules and declares `witty_phrase_generator` 
 ### **events/display.rs** (517 lines) — **GameEvent Display**
 - **Purpose**: `Display` implementation for `GameEvent` variants, rendering to the same strings as `GameOutput`
 
-### **config.rs** (171 lines) — **Game Configuration**
-- **Purpose**: `GameConfig` struct centralizing all game constants and tuning knobs
-- **Key Fields**: `low_character_threshold`, `feast_*_count`, `day/night_event_frequency`, `trauma_enabled`, `phobias_enabled`, `fixations_enabled`, `addiction_enabled`, `event_severity_multiplier`
-- **Design**: Runtime-configurable for difficulty modes and feature toggles
-
 ### **clans.rs** (201 lines) — **Team Colors & Terrain Affinity**
 - **Purpose**: 8-color team palette + mascot epithets; per-goblin terrain affinity rolls
 - **Key Struct**: `TeamColor` (name, hex)
 - **Usage**: `character.team` picks the display color/epithet; `roll_terrain_affinity()` rolls 1–2 terrains from the goblin's own RNG
-
-### **pathfinding.rs** (178 lines) — **Graph Pathfinding**
-- **Purpose**: Generic A* pathfinding over weighted directed graphs
-- **Key Trait**: `Graph` (nodes, neighbors, heuristic) — implementable for hex grid or sub-tile grid
-- **Design**: Reusable at multiple granularities; v1 operates on 7-area hex graph
 
 ### **witty_phrase_generator/mod.rs** (260 lines) — **Name Generator**
 - **Purpose**: Procedural game name generation using word combinations
@@ -224,119 +213,11 @@ Module aggregator. Exports all submodules and declares `witty_phrase_generator` 
 
 ## Subdirectories
 
-### **areas/** (1799 lines total) — **Arena Topology**
-Hex-graph arena with 7+ areas, item inventories, and dynamic closures.
+### Extracted crates (workspace split)
 
-| File | Lines | Purpose |
-|------|-------|---------|
-| `mod.rs` | 394 | `Area` enum, `AreaDetails` struct, area lifecycle |
-| `events.rs` | 660 | `AreaEvent` enum, event triggering, hazard spawning |
-| `hex.rs` | 272 | Hex-graph topology, adjacency, pathfinding integration |
-| `path.rs` | 209 | Area path generation, connection management |
-| `water.rs` | 91 | Water source mechanics, dehydration effects |
-| `shelter.rs` | 90 | Shelter mechanics, protection from weather |
-| `forage.rs` | 39 | Foraging mechanics, resource gathering |
-| `weather.rs` | 34 | `Weather` enum (Clear, Rain, Storm, etc.) |
-
-### **characters/** (12,648 lines total) — **Autonomous AI Characters**
-AI-controlled characters with d20 combat, status effects, alliances, and context-aware decision-making.
-
-| File/Dir | Lines | Purpose |
-|----------|-------|---------|
-| `mod.rs` | 2473 | `Character` struct, lifecycle methods, process_turn_phase |
-| `tests.rs` | 710 | Character unit tests |
-| `actions.rs` | 320 | `Action` enum, action selection, behavior definitions |
-| `alliances.rs` | 523 | Alliance formation, breaks, event queue; MAX_ALLIES=5 |
-| `combat_beat.rs` | 568 | Game-side narration for `CombatBeat` (wear, outcomes, stress) |
-| `combat_tuning.rs` | 118 | `CombatTuning` — stress, stamina costs, band thresholds |
-| `events.rs` | 159 | `CharacterEvent` enum, random event generation |
-| `helpers.rs` | 183 | Utility functions for character calculations |
-| `incidents.rs` | 654 | Sleep incidents, shelter-based rest, dormancy processing |
-| `inventory.rs` | 400 | Item management, equip/unequip, durability tracking |
-| `movement.rs` | 276 | Movement between areas, travel restrictions |
-| `rescue.rs` | 428 | Rescue resolution for Trapped afflictions |
-| `stamina_band.rs` | 69 | `StaminaBand` derivation from stamina ratio (Fresh/Winded/Exhausted) |
-| `statuses.rs` | 87 | `CharacterStatus` enum (Healthy/RecentlyDead/Dead/Mauled) |
-| `survival.rs` | 327 | Hunger/thirst bands, survival mechanics, dehydration |
-| `traits.rs` | 459 | `Trait` enum (25+ personality traits), trait bonuses |
-| `traps.rs` | 25 | `PlacedTrap` struct, trap state management |
-
-### **characters/combat/** (2986 lines total) — **Combat Engine**
-D20-based combat system with attack contests, wound infliction, and stress.
-
-| File | Lines | Purpose |
-|------|-------|---------|
-| `mod.rs` | 360 | Combat orchestrator, `Character::attacks()` |
-| `resolve.rs` | 930 | Attack contest resolution, combat results application |
-| `inflict_table.rs` | 536 | Wound infliction tables, severity rolls |
-| `tests.rs` | 1133 | Combat integration tests |
-
-### **characters/brains/** (3463 lines total) — **Character AI**
-Decision-making engine with scoring, override layers for afflictions.
-
-| File | Lines | Purpose |
-|------|-------|---------|
-| `mod.rs` | 952 | `Brain` struct, decision orchestration, scoring |
-| `tests.rs` | 940 | Brain decision tests |
-| `scoring.rs` | 170 | Action scoring heuristics |
-| `decisions.rs` | 124 | Decision output types |
-| `affliction_override.rs` | 341 | Override actions for active afflictions |
-| `phobia_override.rs` | 367 | Override actions for phobia triggers |
-| `fixation_override.rs` | 388 | Override actions for fixation processing |
-| `addiction_override.rs` | 143 | Override actions for addiction cravings |
-| `trauma_override.rs` | 108 | Override actions for trauma responses |
-
-### **characters/afflictions/** (9523 lines total) — **Affliction System**
-Comprehensive health condition system: anatomy, trauma, phobias, fixations, addictions.
-
-| File/Dir | Lines | Purpose |
-|----------|-------|---------|
-| `mod.rs` | 202 | Module aggregator, acquisition API, tuning |
-| `anatomy.rs` | 800 | `AcquireResolution`, body part targeting, wound application |
-| `anatomy_tests.rs` | 590 | Anatomy resolution tests |
-| `trauma.rs` | 312 | `TraumaAcquisition`, trauma producers |
-| `trauma_tests.rs` | 319 | Trauma tests |
-| `phobia/mod.rs` | 27 | Phobia module aggregator |
-| `phobia/scan.rs` | 677 | Per-cycle phobia scan, trigger evaluation |
-| `phobia/reaction.rs` | 475 | Phobia reaction effects, panic responses |
-| `phobia/triggers.rs` | 384 | Trigger definitions, fear stimulus matching |
-| `phobia/spawn.rs` | 199 | Spawn-time phobia acquisition |
-| `phobia/outcomes.rs` | 116 | Phobia outcome resolution |
-| `fixation.rs` | 924 | Fixation acquisition, processing, obsessions |
-| `addiction.rs` | 369 | Addiction mechanics, craving system, decay |
-| `addiction_tests.rs` | 410 | Addiction tests |
-| `cascade.rs` | 477 | `CascadeResult`, affliction cascading |
-| `cure.rs` | 346 | `CureOutcome`, recovery mechanics, item-to-cure mapping |
-| `effects/mod.rs` | 13 | Effects module aggregator |
-| `effects/brain_bias.rs` | 341 | `BrainBias` computation for afflictions |
-| `effects/stat_modifiers.rs` | 436 | `StatModifiers` computation for afflictions |
-| `effects/trauma_effects.rs` | 57 | Trauma-specific effect application |
-| `trapped.rs` | 367 | Trapped affliction mechanics |
-| `tuning.rs` | 45 | `AfflictionTuning` constants |
-| `producers/mod.rs` | 37 | Trauma producer module aggregator |
-| `producers/shared.rs` | 143 | Shared producer utilities |
-| `producers/survive_betrayal.rs` | 44 | Betrayal survival trauma producer |
-| `producers/survive_near_death.rs` | 54 | Near-death survival trauma producer |
-| `producers/witness_ally_death.rs` | 66 | Ally death witness trauma producer |
-| `producers/witness_mass_casualty.rs` | 64 | Mass casualty witness trauma producer |
-| `producers/tests.rs` | 405 | Producer tests |
-| `integration_tests.rs` | 1527 | Cross-module integration tests |
-| `snapshot_tests.rs` | 93 | Snapshot regression tests |
-| `trauma_snapshot_tests.rs` | 55 | Trauma snapshot tests |
-
-### **characters/lifecycle/** (911 lines total) — **Character Lifecycle**
-Death, health, stamina, and status management.
-
-| File | Lines | Purpose |
-|------|-------|---------|
-| `status.rs` | 588 | Status transition logic, death processing |
-| `health.rs` | 378 | Health pool management, healing, damage |
-| `stamina.rs` | 139 | Stamina pool management, fatigue |
-| `death.rs` | 102 | Death resolution, item drops |
-| `mod.rs` | 4 | Module aggregator |
-
-### **characters/snapshots/** and **characters/afflictions/snapshots/**
-Snapshot test data directories (insta snapshot files for regression testing).
+- `areas` crate — arena topology: see [areas/codemap.md](../../areas/codemap.md)
+- `characters` crate — autonomous AI characters: see [characters/codemap.md](../../characters/codemap.md)
+- `items`, `output`, `clans` — moved to the `world` crate
 
 ### **events/** (1566 lines total) — **Typed Event System**
 Structured game events for persistence and analytics.
@@ -346,35 +227,6 @@ Structured game events for persistence and analytics.
 | `mod.rs` | 654 | Module aggregator, parity tests |
 | `types.rs` | 395 | `GameEvent` enum (55+ typed variants) |
 | `display.rs` | 517 | `Display` implementation for `GameEvent` |
-
-### **items/** (1083 lines total) — **Item System**
-Weapons, shields, and consumables with procedural generation.
-
-| File | Lines | Purpose |
-|------|-------|---------|
-| `mod.rs` | 349 | `Item` struct, `OwnsItems` trait, rarity system |
-| `tests.rs` | 461 | Item unit tests |
-| `generation.rs` | 217 | Procedural item generation |
-| `name_generator.rs` | 56 | Item name generation |
-
-### **terrain/** (472 lines total) — **Terrain System**
-Biome types, descriptors, and terrain configuration.
-
-| File | Lines | Purpose |
-|------|-------|---------|
-| `config.rs` | 149 | `Visibility`, `Harshness`, `ItemWeights` per terrain |
-| `assignment.rs` | 192 | Terrain-to-area assignment, balance constraints |
-| `types.rs` | 121 | `BaseTerrain` enum (12 biomes), `TerrainDescriptor`, `TerrainType` |
-| `mod.rs` | 8 | Module aggregator, re-exports |
-| `descriptors.rs` | 2 | (Placeholder) |
-
-### **threats/** (193 lines total) — **Environmental Hazards**
-Animal encounters and environmental threats.
-
-| File | Lines | Purpose |
-|------|-------|---------|
-| `animals.rs` | 192 | `Animal` enum, attack mechanics |
-| `mod.rs` | 1 | Module aggregator |
 
 ### **patrons/** (601 lines total) — **Patron System**
 Patron archetypes, budgets, and affinity tracking.

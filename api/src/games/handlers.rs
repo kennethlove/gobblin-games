@@ -4,10 +4,9 @@ use axum::Json;
 use axum::extract::{Extension, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use game::characters::Character;
+use characters::Character;
 use game::games::Game;
-use game::items::Item;
-use game::messages::GameMessage;
+use shared::messages::GameMessage;
 use shared::{
     CreateGame, DisplayGame, EditGame, GameStatus, ListDisplayGame, PaginatedGames,
     PaginationMetadata,
@@ -17,6 +16,7 @@ use strum::IntoEnumIterator;
 use surrealdb_types::{RecordId, SerdeWrapper};
 use uuid::Uuid;
 use validator::Validate;
+use world::items::Item;
 
 /// Creates a new game with fully initialized characters, areas, and items.
 /// The request body is validated before any database writes begin.
@@ -130,7 +130,7 @@ pub async fn create_game(
     let base_item_count = payload.item_quantity.base_item_count();
 
     // Create areas concurrently with customized item count
-    let area_names = game::areas::generate_area_names();
+    let area_names = areas::generate_area_names();
     let area_futures = Area::iter().zip(area_names).map(|(area, name)| {
         super::create_area(game_identifier.as_str(), area, name, base_item_count, &db)
     });
@@ -219,7 +219,7 @@ pub async fn quickstart(
 
     // Create 7 areas
     let base_item_count = shared::ItemQuantity::default().base_item_count();
-    let area_names = game::areas::generate_area_names();
+    let area_names = areas::generate_area_names();
     let area_futures = Area::iter().zip(area_names).map(|(area, name)| {
         super::create_area(game_identifier.as_str(), area, name, base_item_count, &db)
     });
