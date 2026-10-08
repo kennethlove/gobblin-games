@@ -401,7 +401,6 @@ fn survival_tick_routes_dehydration_death_through_character_killed() {
     use shared::messages::MessagePayload;
     let mut a = Character::new("Doomed".to_string(), Some(1), None);
     a.thirst = 4;
-    a.dehydration_drain_step = 5;
     a.blood = 10;
     let mut game = create_test_game_with_characters(vec![a]);
     game.day = Some(1);

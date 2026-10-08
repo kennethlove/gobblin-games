@@ -163,50 +163,85 @@ impl Game {
                     .sheltered_until
                     .is_some_and(|until| until > phase_index);
 
-                // Affliction cascade tick (spec §5). Runs once per phase per
-                // living character. Sheltered characters may recover; exposed may
-                // worsen. Severe + exposed can spawn successors or kill.
-                {
-                    use characters::afflictions::tuning::AfflictionTuning;
-                    use characters::afflictions::{CascadeOutcome, apply_cascade, tick_cascade};
-                    use shared::afflictions::Severity;
+                // Survival clock: bars, HP drain, band events, and the
+                // affliction cascade advance only on configured tick hours
+                // (6/day by default), independent of phase count.
+                let survival_tick_index: Option<usize> = self
+                    .config
+                    .survival_tick_hours
+                    .iter()
+                    .position(|&h| h == phase.hour());
 
-                    let affliction_list: Vec<_> = character.afflictions.values().cloned().collect();
-                    if !affliction_list.is_empty() {
-                        let tuning = AfflictionTuning::default();
-                        let cascade_result =
-                            tick_cascade(&affliction_list, sheltered, &tuning, rng);
-                        let successors = apply_cascade(&mut character.afflictions, &cascade_result);
-
-                        for succ in &successors {
-                            character.afflictions.insert(succ.key(), succ.clone());
-                        }
-
-                        let tref = CharacterRef {
-                            identifier: character.identifier.clone().into(),
-                            name: character.name.clone(),
+                if survival_tick_index.is_some() {
+                    // Affliction cascade tick (spec §5). Runs on
+                    // survival-tick hours (6/day). Sheltered characters may
+                    // recover; exposed may worsen. Severe + exposed can
+                    // spawn successors or kill.
+                    {
+                        use characters::afflictions::tuning::AfflictionTuning;
+                        use characters::afflictions::{
+                            CascadeOutcome, apply_cascade, tick_cascade,
                         };
+                        use shared::afflictions::Severity;
 
-                        for (kind, outcome) in &cascade_result.outcomes {
-                            match outcome {
-                                CascadeOutcome::SteppedDown { from, to } => {
-                                    if matches!(to, Severity::Mild)
-                                        && matches!(from, Severity::Mild)
-                                    {
-                                        let line = format!("{}'s {} healed.", character.name, kind);
-                                        collected_events.push((
-                                            character.identifier.to_string(),
-                                            character.name.clone(),
-                                            line,
-                                            Some(MessagePayload::AfflictionHealed {
-                                                character_id: tref.identifier.to_string(),
-                                                affliction: kind.to_string(),
-                                            }),
-                                            None,
-                                        ));
-                                    } else {
+                        let affliction_list: Vec<_> =
+                            character.afflictions.values().cloned().collect();
+                        if !affliction_list.is_empty() {
+                            let tuning = AfflictionTuning::default();
+                            let cascade_result =
+                                tick_cascade(&affliction_list, sheltered, &tuning, rng);
+                            let successors =
+                                apply_cascade(&mut character.afflictions, &cascade_result);
+
+                            for succ in &successors {
+                                character.afflictions.insert(succ.key(), succ.clone());
+                            }
+
+                            let tref = CharacterRef {
+                                identifier: character.identifier.clone().into(),
+                                name: character.name.clone(),
+                            };
+
+                            for (kind, outcome) in &cascade_result.outcomes {
+                                match outcome {
+                                    CascadeOutcome::SteppedDown { from, to } => {
+                                        if matches!(to, Severity::Mild)
+                                            && matches!(from, Severity::Mild)
+                                        {
+                                            let line =
+                                                format!("{}'s {} healed.", character.name, kind);
+                                            collected_events.push((
+                                                character.identifier.to_string(),
+                                                character.name.clone(),
+                                                line,
+                                                Some(MessagePayload::AfflictionHealed {
+                                                    character_id: tref.identifier.to_string(),
+                                                    affliction: kind.to_string(),
+                                                }),
+                                                None,
+                                            ));
+                                        } else {
+                                            let line = format!(
+                                                "{}'s {} improved: {} → {}.",
+                                                character.name, kind, from, to
+                                            );
+                                            collected_events.push((
+                                                character.identifier.to_string(),
+                                                character.name.clone(),
+                                                line,
+                                                Some(MessagePayload::AfflictionProgressed {
+                                                    character_id: tref.identifier.to_string(),
+                                                    affliction: kind.to_string(),
+                                                    from_severity: from.to_string(),
+                                                    to_severity: to.to_string(),
+                                                }),
+                                                None,
+                                            ));
+                                        }
+                                    }
+                                    CascadeOutcome::SteppedUp { from, to } => {
                                         let line = format!(
-                                            "{}'s {} improved: {} → {}.",
+                                            "{}'s {} worsened: {} → {}.",
                                             character.name, kind, from, to
                                         );
                                         collected_events.push((
@@ -222,71 +257,51 @@ impl Game {
                                             None,
                                         ));
                                     }
+                                    CascadeOutcome::SpawnedSuccessor { from, to } => {
+                                        let line = format!(
+                                            "{}'s {} cascaded into {}.",
+                                            character.name, from, to
+                                        );
+                                        collected_events.push((
+                                            character.identifier.to_string(),
+                                            character.name.clone(),
+                                            line,
+                                            Some(MessagePayload::AfflictionCascaded {
+                                                character_id: tref.identifier.to_string(),
+                                                from_affliction: from.to_string(),
+                                                to_affliction: to.to_string(),
+                                            }),
+                                            None,
+                                        ));
+                                    }
+                                    CascadeOutcome::DeathRoll { survived: false } => {
+                                        let line =
+                                            format!("{} succumbs to {}.", character.name, kind);
+                                        collected_events.push((
+                                            character.identifier.to_string(),
+                                            character.name.clone(),
+                                            line,
+                                            Some(MessagePayload::CharacterKilled {
+                                                victim: tref.clone(),
+                                                killer: None,
+                                                cause: shared::afflictions::DeathCause::Affliction(
+                                                    kind.clone(),
+                                                ),
+                                            }),
+                                            None,
+                                        ));
+                                        character.status = CharacterStatus::RecentlyDead;
+                                    }
+                                    _ => {}
                                 }
-                                CascadeOutcome::SteppedUp { from, to } => {
-                                    let line = format!(
-                                        "{}'s {} worsened: {} → {}.",
-                                        character.name, kind, from, to
-                                    );
-                                    collected_events.push((
-                                        character.identifier.to_string(),
-                                        character.name.clone(),
-                                        line,
-                                        Some(MessagePayload::AfflictionProgressed {
-                                            character_id: tref.identifier.to_string(),
-                                            affliction: kind.to_string(),
-                                            from_severity: from.to_string(),
-                                            to_severity: to.to_string(),
-                                        }),
-                                        None,
-                                    ));
-                                }
-                                CascadeOutcome::SpawnedSuccessor { from, to } => {
-                                    let line = format!(
-                                        "{}'s {} cascaded into {}.",
-                                        character.name, from, to
-                                    );
-                                    collected_events.push((
-                                        character.identifier.to_string(),
-                                        character.name.clone(),
-                                        line,
-                                        Some(MessagePayload::AfflictionCascaded {
-                                            character_id: tref.identifier.to_string(),
-                                            from_affliction: from.to_string(),
-                                            to_affliction: to.to_string(),
-                                        }),
-                                        None,
-                                    ));
-                                }
-                                CascadeOutcome::DeathRoll { survived: false } => {
-                                    let line = format!("{} succumbs to {}.", character.name, kind);
-                                    collected_events.push((
-                                        character.identifier.to_string(),
-                                        character.name.clone(),
-                                        line,
-                                        Some(MessagePayload::CharacterKilled {
-                                            victim: tref.clone(),
-                                            killer: None,
-                                            cause: shared::afflictions::DeathCause::Affliction(
-                                                kind.clone(),
-                                            ),
-                                        }),
-                                        None,
-                                    ));
-                                    character.status = CharacterStatus::RecentlyDead;
-                                }
-                                _ => {}
+                            }
+
+                            if cascade_result.character_died {
+                                continue;
                             }
                         }
-
-                        if cascade_result.character_died {
-                            continue;
-                        }
                     }
-                }
-
-                let prior_hunger = hunger_band(character.hunger);
-                let prior_thirst = thirst_band(character.thirst);
+                } // survival-tick gate (cascade half)
 
                 // Sleep substrate: once per phase, every living
                 // character that did NOT spend the phase asleep ages by one
@@ -296,42 +311,69 @@ impl Game {
                     character.cycles_awake = character.cycles_awake.saturating_add(1);
                 }
 
-                tick_survival(character, &weather, sheltered);
-                let hp_lost_starv = apply_starvation_drain(character);
-                let hp_lost_dehy = apply_dehydration_drain(character);
-
-                let new_hunger = hunger_band(character.hunger);
-                let new_thirst = thirst_band(character.thirst);
                 let tref = CharacterRef {
                     identifier: character.identifier.clone().into(),
                     name: character.name.clone(),
                 };
 
-                if new_hunger != prior_hunger {
-                    collected_events.push((
-                        character.identifier.to_string(),
-                        character.name.clone(),
-                        String::new(),
-                        Some(MessagePayload::HungerBandChanged {
-                            character: tref.clone(),
-                            from: prior_hunger,
-                            to: new_hunger,
-                        }),
-                        None,
-                    ));
-                }
-                if new_thirst != prior_thirst {
-                    collected_events.push((
-                        character.identifier.to_string(),
-                        character.name.clone(),
-                        String::new(),
-                        Some(MessagePayload::ThirstBandChanged {
-                            character: tref.clone(),
-                            from: prior_thirst,
-                            to: new_thirst,
-                        }),
-                        None,
-                    ));
+                // Bands as they stand going into the survival tick; stamina
+                // recovery reads them every phase.
+                let mut cur_hunger = hunger_band(character.hunger);
+                let mut cur_thirst = thirst_band(character.thirst);
+
+                // Survival clock: bars, HP drain, and band-change events
+                // advance only on configured survival-tick hours (6/day).
+                let mut hp_lost_starv = 0;
+                let mut hp_lost_dehy = 0;
+                if let Some(tick_index) = survival_tick_index {
+                    let prior_hunger = cur_hunger;
+                    let prior_thirst = cur_thirst;
+
+                    tick_survival(character, &weather, sheltered, tick_index);
+                    hp_lost_starv = apply_starvation_drain(
+                        character,
+                        current_day as u16,
+                        self.config.starvation_hp_base_per_day,
+                        self.config.starvation_growth_pct,
+                        tick_index,
+                    );
+                    hp_lost_dehy = apply_dehydration_drain(
+                        character,
+                        current_day as u16,
+                        self.config.dehydration_hp_base_per_day,
+                        self.config.dehydration_growth_pct,
+                        tick_index,
+                    );
+
+                    cur_hunger = hunger_band(character.hunger);
+                    cur_thirst = thirst_band(character.thirst);
+
+                    if cur_hunger != prior_hunger {
+                        collected_events.push((
+                            character.identifier.to_string(),
+                            character.name.clone(),
+                            String::new(),
+                            Some(MessagePayload::HungerBandChanged {
+                                character: tref.clone(),
+                                from: prior_hunger,
+                                to: cur_hunger,
+                            }),
+                            None,
+                        ));
+                    }
+                    if cur_thirst != prior_thirst {
+                        collected_events.push((
+                            character.identifier.to_string(),
+                            character.name.clone(),
+                            String::new(),
+                            Some(MessagePayload::ThirstBandChanged {
+                                character: tref.clone(),
+                                from: prior_thirst,
+                                to: cur_thirst,
+                            }),
+                            None,
+                        ));
+                    }
                 }
 
                 // Stamina recovery + band-cross detection. Runs once per
@@ -351,8 +393,8 @@ impl Game {
                     character.recover_stamina(
                         &characters::actions::Action::None,
                         sheltered,
-                        new_hunger,
-                        new_thirst,
+                        cur_hunger,
+                        cur_thirst,
                         &combat_tuning_snapshot,
                     );
                     let new_band = stamina_band(

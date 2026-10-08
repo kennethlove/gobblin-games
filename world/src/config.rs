@@ -54,6 +54,22 @@ pub struct GameConfig {
     /// Sanity level at which characters may attempt suicide
     pub sanity_break_level: u32,
 
+    // Survival cadence (per-day schedules, independent of phase count)
+    /// Even hours on which the survival clock ticks: hunger/thirst bars,
+    /// starvation/dehydration HP drain, and the affliction cascade all
+    /// advance only at these hours (6 per day, every 4 h).
+    pub survival_tick_hours: [u8; 6],
+    /// Starvation drain on the first starvation day, in damage units
+    /// (blood cost = units × 10). ~10 units/day at the old cadence.
+    pub starvation_hp_base_per_day: u32,
+    /// Daily growth of the starvation drain; 125 = ×1.25 per starvation
+    /// day, ceiling-applied (12, 15, 19, 24, 30, …).
+    pub starvation_growth_pct: u32,
+    /// Dehydration drain on the first dehydrated day (damage units).
+    pub dehydration_hp_base_per_day: u32,
+    /// Daily growth of the dehydration drain (ceiling ×1.25 by default).
+    pub dehydration_growth_pct: u32,
+
     // Attribute maximums (from characters/mod.rs)
     pub max_health: u32,
     pub max_sanity: u32,
@@ -98,6 +114,13 @@ impl Default for GameConfig {
 
             // Character lifecycle
             sanity_break_level: 9,
+
+            // Survival cadence: tick every 4 h; day-scaled flat drains.
+            survival_tick_hours: [0, 4, 8, 12, 16, 20],
+            starvation_hp_base_per_day: 12,
+            starvation_growth_pct: 125,
+            dehydration_hp_base_per_day: 12,
+            dehydration_growth_pct: 125,
 
             // Attribute maximums
             max_health: 100,
