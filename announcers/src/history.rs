@@ -521,7 +521,8 @@ impl CharacterHistories {
                 | MessagePayload::CycleEnd { .. }
                 | MessagePayload::PhaseStarted { .. }
                 | MessagePayload::PhaseEnded { .. }
-                | MessagePayload::GameEnded { .. } => {}
+                | MessagePayload::GameEnded { .. }
+                | MessagePayload::DaySummary { .. } => {}
 
                 // ------- Observation events (don't add to subject's history) -------
                 MessagePayload::PhobiaObserved { .. }

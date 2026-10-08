@@ -1231,6 +1231,24 @@ fn importance_tiers_match_decision() {
             },
             ServerLogOnly, // progress lives on the rescue state
         ),
+        (
+            DaySummary {
+                day: 1,
+                rollup: DayRollup {
+                    deaths: 2,
+                    kill_leaders: vec![],
+                    alliances_formed: 1,
+                    alliances_dissolved: 0,
+                    betrayals: 0,
+                    items_found: 3,
+                    items_used: 2,
+                    survivors: 22,
+                    fallen: 2,
+                },
+                goblins: vec![],
+            },
+            Persist, // the compiled day digest
+        ),
     ];
 
     // Every payload variant appears in the table (dupes allowed for
@@ -1241,7 +1259,7 @@ fn importance_tiers_match_decision() {
     }
     assert_eq!(
         kinds.len(),
-        90,
+        91,
         "table must cover every MessagePayload variant"
     );
     assert!(cases.len() >= 90, "table rows: {}", cases.len());

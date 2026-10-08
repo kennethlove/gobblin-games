@@ -101,3 +101,85 @@ async fn store_only_important() {
 
     test_db.cleanup().await;
 }
+
+#[tokio::test]
+async fn day_summary_in_log() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "day_summary").await;
+
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Summary Game" }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Two full game days.
+    for _ in 0..2 {
+        server
+            .put(&format!("/api/games/{}/next", game_id))
+            .add_header("Authorization", user.auth_header())
+            .await
+            .assert_status_ok();
+    }
+
+    // Every day that produced messages has exactly one compiled digest,
+    // with one entry per goblin (default roster = 24).
+    let logs = server
+        .get(&format!("/api/games/{}/log", game_id))
+        .add_header("Authorization", user.auth_header())
+        .await;
+    logs.assert_status_ok();
+    let entries = logs.json::<serde_json::Value>();
+    let entries = entries.as_array().expect("log is a JSON array");
+
+    let summary_days: Vec<u32> = entries
+        .iter()
+        .filter_map(|e| {
+            if e["payload"]["type"] == "DaySummary" {
+                e["payload"]["day"].as_u64().map(|d| d as u32)
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert!(
+        !summary_days.is_empty(),
+        "at least one DaySummary must be stored after two full days"
+    );
+
+    for day in summary_days {
+        let day_logs = server
+            .get(&format!("/api/games/{}/log/{}", game_id, day))
+            .add_header("Authorization", user.auth_header())
+            .await;
+        day_logs.assert_status_ok();
+        let day_entries = day_logs.json::<serde_json::Value>();
+        let day_entries = day_entries.as_array().expect("day log is an array");
+        let summaries: Vec<_> = day_entries
+            .iter()
+            .filter(|e| e["payload"]["type"] == "DaySummary")
+            .collect();
+        assert_eq!(summaries.len(), 1, "exactly one DaySummary for day {day}");
+        let goblins = summaries[0]["payload"]["goblins"]
+            .as_array()
+            .expect("goblins array");
+        assert_eq!(goblins.len(), 24, "one entry per goblin on day {day}");
+        // Rollup sanity: roster snapshot adds up.
+        let rollup = &summaries[0]["payload"]["rollup"];
+        assert_eq!(
+            rollup["survivors"].as_u64().unwrap() + rollup["fallen"].as_u64().unwrap(),
+            24,
+            "survivors + fallen = roster on day {day}"
+        );
+    }
+
+    test_db.cleanup().await;
+}

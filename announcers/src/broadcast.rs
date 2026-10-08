@@ -414,7 +414,8 @@ impl BroadcastPackageBuilder {
             MessagePayload::CycleStart { .. }
             | MessagePayload::CycleEnd { .. }
             | MessagePayload::PhaseStarted { .. }
-            | MessagePayload::PhaseEnded { .. } => Some(EventLine {
+            | MessagePayload::PhaseEnded { .. }
+            | MessagePayload::DaySummary { .. } => Some(EventLine {
                 kind: EventKind::State,
                 prose,
                 structured: None,

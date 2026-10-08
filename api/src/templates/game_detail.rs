@@ -76,6 +76,7 @@ fn message_archetype(payload: &shared::messages::MessagePayload) -> &'static str
         | RescueAttempted
         | PartialRescueProgress => "event",
         SleepIncident => "commentary",
+        DaySummary => "summary",
     }
 }
 
@@ -85,6 +86,7 @@ fn archetype_label(archetype: &str) -> &'static str {
         "death" => "ELIMINATED",
         "event" => "ARENA EVENT",
         "commentary" => "ANALYSIS",
+        "summary" => "DAY SUMMARY",
         _ => "EVENT",
     }
 }
@@ -123,6 +125,7 @@ fn message_kind_label(payload: &shared::messages::MessagePayload) -> &'static st
         | RescueAttempted
         | PartialRescueProgress => "Trapped",
         SleepIncident => "Sleep",
+        DaySummary => "Summary",
     }
 }
 
@@ -160,6 +163,7 @@ fn kind_color(payload: &shared::messages::MessagePayload) -> &'static str {
         | RescueAttempted
         | PartialRescueProgress => "var(--warning)",
         SleepIncident => "var(--info)",
+        DaySummary => "var(--muted)",
     }
 }
 

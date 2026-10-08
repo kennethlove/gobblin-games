@@ -115,7 +115,9 @@ impl MessagePayload {
             | AddictionRelapse { .. } => Importance::Persist,
 
             // --- Persist: arena + game lifecycle ------------------------
-            AreaClosed { .. } | AreaEvent { .. } | GameEnded { .. } => Importance::Persist,
+            AreaClosed { .. } | AreaEvent { .. } | GameEnded { .. } | DaySummary { .. } => {
+                Importance::Persist
+            }
 
             // --- ServerLogOnly: derivable state / low drama -------------
             Generic
@@ -273,8 +275,14 @@ impl MessagePayload {
             | WoundAmputated { .. }
             | ConditionAcquired { .. }
             | ConditionResolved { .. }
-            | CharacterDesperate { .. }
-            | Generic
+            | CharacterDesperate { .. } => {}
+            DaySummary {
+                rollup, goblins, ..
+            } => {
+                refs.extend(rollup.kill_leaders.iter().map(|l| &l.character));
+                refs.extend(goblins.iter().map(|g| &g.character));
+            }
+            Generic
             | AreaClosed { .. }
             | AreaEvent { .. }
             | CycleStart { .. }
