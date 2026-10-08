@@ -745,7 +745,7 @@ mod tests {
             identifier: format!("msg-{n}"),
             source: shared::messages::MessageSource::Game("game-1".into()),
             game_day: 1,
-            phase: Phase::Day,
+            phase: Phase::DAY,
             tick: 0,
             emit_index: n,
             subject: String::new(),

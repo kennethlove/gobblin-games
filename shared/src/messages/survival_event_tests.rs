@@ -169,13 +169,13 @@ fn wake_reason_serde_roundtrip_interrupted_variants() {
 fn character_slept_woke_payload_kind_is_state() {
     let slept = MessagePayload::CharacterSlept {
         character: tref(),
-        phase: Phase::Night,
+        phase: Phase::NIGHT,
         restored_stamina: 5,
         restored_hp: 2,
     };
     let woke = MessagePayload::CharacterWoke {
         character: tref(),
-        phase: Phase::Dawn,
+        phase: Phase::DAWN,
         reason: WakeReason::Rested,
     };
     assert_eq!(slept.kind(), MessageKind::CharacterSlept);
@@ -186,13 +186,13 @@ fn character_slept_woke_payload_kind_is_state() {
 fn character_slept_woke_involves_character() {
     let slept = MessagePayload::CharacterSlept {
         character: tref(),
-        phase: Phase::Night,
+        phase: Phase::NIGHT,
         restored_stamina: 0,
         restored_hp: 0,
     };
     let woke = MessagePayload::CharacterWoke {
         character: tref(),
-        phase: Phase::Dawn,
+        phase: Phase::DAWN,
         reason: WakeReason::Rested,
     };
     assert!(slept.involves("t1"));

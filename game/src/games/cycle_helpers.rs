@@ -69,14 +69,18 @@ impl Game {
         phase: shared::messages::Phase,
         rng: &mut SmallRng,
     ) -> Result<(), GameError> {
-        use shared::messages::Phase;
-        let frequency = match phase {
-            Phase::Day => DAY_EVENT_FREQUENCY,
-            Phase::Night => NIGHT_EVENT_FREQUENCY,
-            // Substrate-only: Dawn/Dusk are silent in PR1. PR2 redistributes.
-            Phase::Dawn | Phase::Dusk => return Ok(()),
+        // Substrate-only: the dawn/dusk anchors (06, 18) stay silent
+        // in PR1. Day-band hours fire day events, night-band hours fire
+        // night events.
+        if matches!(phase.hour(), 6 | 18) {
+            return Ok(());
+        }
+        let frequency = if phase.is_night_default() {
+            NIGHT_EVENT_FREQUENCY
+        } else {
+            DAY_EVENT_FREQUENCY
         };
-        let day = phase == Phase::Day;
+        let day = !phase.is_night_default();
 
         // Collect events to trigger (avoid borrow conflicts)
         let mut events_to_process: Vec<(Area, AreaEvent)> = Vec::new();

@@ -12,39 +12,73 @@ fn phase_display_roundtrip() {
         let s = p.to_string();
         assert_eq!(s.parse::<Phase>().unwrap(), p);
     }
-    assert_eq!(Phase::Dawn.to_string(), "dawn");
-    assert_eq!(Phase::Day.to_string(), "day");
-    assert_eq!(Phase::Dusk.to_string(), "dusk");
-    assert_eq!(Phase::Night.to_string(), "night");
+    assert_eq!(Phase::DAWN.to_string(), "06");
+    assert_eq!(Phase::DAY.to_string(), "12");
+    assert_eq!(Phase::DUSK.to_string(), "18");
+    assert_eq!(Phase::NIGHT.to_string(), "00");
     assert!("noon".parse::<Phase>().is_err());
+    assert!("07".parse::<Phase>().is_err(), "odd hours are not phases");
+    assert!("24".parse::<Phase>().is_err());
+    assert!("dawn".parse::<Phase>().is_err());
 }
 
 #[test]
-fn phase_serde_lowercase() {
-    assert_eq!(serde_json::to_string(&Phase::Dawn).unwrap(), "\"dawn\"");
-    assert_eq!(serde_json::to_string(&Phase::Day).unwrap(), "\"day\"");
-    assert_eq!(serde_json::to_string(&Phase::Dusk).unwrap(), "\"dusk\"");
-    assert_eq!(serde_json::to_string(&Phase::Night).unwrap(), "\"night\"");
-    let p: Phase = serde_json::from_str("\"night\"").unwrap();
-    assert_eq!(p, Phase::Night);
+fn phase_serde_hour_labels() {
+    assert_eq!(serde_json::to_string(&Phase::DAWN).unwrap(), "\"06\"");
+    assert_eq!(serde_json::to_string(&Phase::DAY).unwrap(), "\"12\"");
+    assert_eq!(serde_json::to_string(&Phase::DUSK).unwrap(), "\"18\"");
+    assert_eq!(serde_json::to_string(&Phase::NIGHT).unwrap(), "\"00\"");
+    let p: Phase = serde_json::from_str("\"06\"").unwrap();
+    assert_eq!(p, Phase::DAWN);
 }
 
 #[test]
 fn phase_ord_and_next_canonical_cycle() {
-    assert_eq!(Phase::Dawn.ord(), 0);
-    assert_eq!(Phase::Day.ord(), 1);
-    assert_eq!(Phase::Dusk.ord(), 2);
-    assert_eq!(Phase::Night.ord(), 3);
-    // Canonical cycle wraps Night -> Dawn so the engine can advance the
+    // Cycle position from the day start (06): 06→0 … 04→11.
+    assert_eq!(Phase::DAWN.ord(), 0);
+    assert_eq!(Phase::DAY.ord(), 3);
+    assert_eq!(Phase::DUSK.ord(), 6);
+    assert_eq!(Phase::NIGHT.ord(), 9);
+    assert_eq!(Phase::DAY_END.ord(), 11);
+    // Canonical cycle wraps 04 -> 06 so the engine can advance the
     // game-day at the boundary without special-casing the wire format.
-    assert_eq!(Phase::Dawn.next(), Phase::Day);
-    assert_eq!(Phase::Day.next(), Phase::Dusk);
-    assert_eq!(Phase::Dusk.next(), Phase::Night);
-    assert_eq!(Phase::Night.next(), Phase::Dawn);
+    assert_eq!(Phase::DAWN.next(), Phase(8));
+    assert_eq!(Phase::DAY_END.next(), Phase::DAWN);
+    assert_eq!(Phase::NIGHT.next(), Phase(2));
     assert_eq!(
         Phase::all(),
-        [Phase::Dawn, Phase::Day, Phase::Dusk, Phase::Night]
+        [
+            Phase(6),
+            Phase(8),
+            Phase(10),
+            Phase(12),
+            Phase(14),
+            Phase(16),
+            Phase(18),
+            Phase(20),
+            Phase(22),
+            Phase(0),
+            Phase(2),
+            Phase(4),
+        ]
     );
+    assert_eq!(Phase::all().len(), Phase::PHASES_PER_DAY as usize);
+
+    // Ord sorts chronologically across the day boundary.
+    let mut hours: Vec<Phase> = Phase::all().to_vec();
+    hours.sort();
+    assert_eq!(hours, Phase::all());
+}
+
+#[test]
+fn phase_is_night_defaults() {
+    // Night runs 20 -> 06 by default (wrap-around).
+    assert!(Phase(20).is_night_default());
+    assert!(Phase(0).is_night_default());
+    assert!(Phase(4).is_night_default());
+    assert!(!Phase(6).is_night_default());
+    assert!(!Phase(12).is_night_default());
+    assert!(!Phase(18).is_night_default());
 }
 
 #[test]
@@ -263,7 +297,7 @@ fn game_message_new_populates_required_fields() {
     let msg = GameMessage::new(
         MessageSource::Game("g".into()),
         2,
-        Phase::Night,
+        Phase::NIGHT,
         3,
         0,
         "subj".into(),
@@ -271,7 +305,7 @@ fn game_message_new_populates_required_fields() {
         MessagePayload::SanityBreak { character: t("a") },
     );
     assert_eq!(msg.game_day, 2);
-    assert_eq!(msg.phase, Phase::Night);
+    assert_eq!(msg.phase, Phase::NIGHT);
     assert_eq!(msg.tick, 3);
     assert_eq!(msg.emit_index, 0);
     assert_eq!(msg.payload.kind(), MessageKind::SanityBreak);
@@ -292,14 +326,14 @@ fn make_msg(day: u32, phase: Phase, payload: MessagePayload) -> GameMessage {
 
 #[test]
 fn summarize_empty_input_with_current_day_zero() {
-    let result = summarize_periods(&[], (0, Phase::Day));
+    let result = summarize_periods(&[], (0, Phase::DAY));
     assert_eq!(
         result.len(),
         1,
         "current period (day 0, Day) should always be seeded"
     );
     assert_eq!(result[0].day, 0);
-    assert_eq!(result[0].phase, Phase::Day);
+    assert_eq!(result[0].phase, Phase::DAY);
     assert!(result[0].is_current);
     assert_eq!(result[0].event_count, 0);
     assert_eq!(result[0].deaths, 0);
@@ -325,59 +359,60 @@ fn summarize_groups_by_day_and_phase() {
     };
 
     let msgs = vec![
-        make_msg(1, Phase::Day, killed.clone()),
-        make_msg(1, Phase::Day, moved.clone()),
-        make_msg(1, Phase::Night, moved.clone()),
-        make_msg(2, Phase::Day, killed.clone()),
+        make_msg(1, Phase::DAY, killed.clone()),
+        make_msg(1, Phase::DAY, moved.clone()),
+        make_msg(1, Phase::NIGHT, moved.clone()),
+        make_msg(2, Phase::DAY, killed.clone()),
     ];
-    let result = summarize_periods(&msgs, (2, Phase::Day));
-    // Day 1: Day/Dusk/Night (Dawn1 skipped per spec §3) + Day 2: Dawn/Day.
-    assert_eq!(result.len(), 5);
+    let result = summarize_periods(&msgs, (2, Phase::DAY));
+    // Day 1 runs the full 12-phase cycle; day 2 is in progress up to
+    // the current phase (12, ord 3) → 12 + 4 = 16 periods.
+    assert_eq!(result.len(), 16);
     assert_eq!(
-        result[0],
+        result[3],
         PeriodSummary {
             day: 1,
-            phase: Phase::Day,
+            phase: Phase::DAY,
             deaths: 1,
             event_count: 2,
             is_current: false
         }
     );
     assert_eq!(
-        result[1],
+        result[6],
         PeriodSummary {
             day: 1,
-            phase: Phase::Dusk,
+            phase: Phase::DUSK,
             deaths: 0,
             event_count: 0,
             is_current: false
         }
     );
     assert_eq!(
-        result[2],
+        result[9],
         PeriodSummary {
             day: 1,
-            phase: Phase::Night,
+            phase: Phase::NIGHT,
             deaths: 0,
             event_count: 1,
             is_current: false
         }
     );
     assert_eq!(
-        result[3],
+        result[12],
         PeriodSummary {
             day: 2,
-            phase: Phase::Dawn,
+            phase: Phase::DAWN,
             deaths: 0,
             event_count: 0,
             is_current: false
         }
     );
     assert_eq!(
-        result[4],
+        result[15],
         PeriodSummary {
             day: 2,
-            phase: Phase::Day,
+            phase: Phase::DAY,
             deaths: 1,
             event_count: 1,
             is_current: true
@@ -387,17 +422,18 @@ fn summarize_groups_by_day_and_phase() {
 
 #[test]
 fn summarize_includes_empty_reached_periods() {
-    let result = summarize_periods(&[], (2, Phase::Day));
-    // Day 1: Day/Dusk/Night (Dawn1 skipped) + Day 2: Dawn/Day.
-    assert_eq!(result.len(), 5);
+    let result = summarize_periods(&[], (2, Phase::DAY));
+    // Day 1: full 12-phase cycle + day 2 up to the current phase (12).
+    assert_eq!(result.len(), 16);
     assert_eq!(result[0].day, 1);
-    assert_eq!(result[0].phase, Phase::Day);
-    assert_eq!(result[1].phase, Phase::Dusk);
-    assert_eq!(result[2].phase, Phase::Night);
-    assert_eq!(result[3].day, 2);
-    assert_eq!(result[3].phase, Phase::Dawn);
-    assert_eq!(result[4].phase, Phase::Day);
-    assert!(result[4].is_current);
+    assert_eq!(result[0].phase, Phase::DAWN);
+    assert_eq!(result[6].phase, Phase::DUSK);
+    assert_eq!(result[9].phase, Phase::NIGHT);
+    assert_eq!(result[11].phase, Phase::DAY_END);
+    assert_eq!(result[12].day, 2);
+    assert_eq!(result[12].phase, Phase::DAWN);
+    assert_eq!(result[15].phase, Phase::DAY);
+    assert!(result[15].is_current);
 }
 
 #[test]
@@ -415,14 +451,21 @@ fn summarize_counts_combat_kills_as_deaths() {
         detail_lines: vec![],
     });
     let msgs = vec![
-        make_msg(1, Phase::Day, combat_kill.clone()),
-        make_msg(1, Phase::Day, combat_wound),
-        make_msg(1, Phase::Day, combat_kill),
+        make_msg(1, Phase::DAY, combat_kill.clone()),
+        make_msg(1, Phase::DAY, combat_wound),
+        make_msg(1, Phase::DAY, combat_kill),
     ];
-    let result = summarize_periods(&msgs, (1, Phase::Day));
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0].deaths, 2);
-    assert_eq!(result[0].event_count, 3);
+    let result = summarize_periods(&msgs, (1, Phase::DAY));
+    // Day 1 in progress up to the current phase (12): 06, 08, 10, 12.
+    assert_eq!(result.len(), 4);
+    assert_eq!(result[3].deaths, 2);
+    assert_eq!(result[3].event_count, 3);
+    assert!(result[3].is_current);
+    assert!(
+        result[..3]
+            .iter()
+            .all(|p| p.deaths == 0 && p.event_count == 0)
+    );
 }
 
 #[test]
@@ -435,10 +478,10 @@ fn summarize_is_current_flag_set_correctly() {
         character: tref,
         hp_restored: 1,
     };
-    let msgs = vec![make_msg(2, Phase::Night, p.clone())];
-    let result = summarize_periods(&msgs, (2, Phase::Night));
+    let msgs = vec![make_msg(2, Phase::NIGHT, p.clone())];
+    let result = summarize_periods(&msgs, (2, Phase::NIGHT));
     let current: Vec<_> = result.iter().filter(|s| s.is_current).collect();
     assert_eq!(current.len(), 1);
     assert_eq!(current[0].day, 2);
-    assert_eq!(current[0].phase, Phase::Night);
+    assert_eq!(current[0].phase, Phase::NIGHT);
 }

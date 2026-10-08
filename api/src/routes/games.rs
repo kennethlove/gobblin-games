@@ -692,7 +692,7 @@ pub async fn timeline_handler(
         .filter(|m| m.game_day == current_day)
         .max_by_key(|m| (m.phase, m.tick, m.emit_index))
         .map(|m| m.phase)
-        .unwrap_or(shared::messages::Phase::Day);
+        .unwrap_or(shared::messages::Phase::DAY_START);
 
     let periods = shared::messages::summarize_periods(&messages, (current_day, current_phase));
 

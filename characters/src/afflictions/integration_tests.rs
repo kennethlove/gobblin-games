@@ -80,7 +80,7 @@ mod tests {
                 &mut target,
                 &mut rng,
                 &mut events,
-                shared::messages::Phase::Day,
+                shared::messages::Phase::DAY,
                 &tuning,
             );
 
@@ -98,7 +98,7 @@ mod tests {
                 &mut target2,
                 &mut rng2,
                 &mut events2,
-                shared::messages::Phase::Day,
+                shared::messages::Phase::DAY,
                 &tuning,
             );
 
@@ -139,7 +139,7 @@ mod tests {
                 &mut target,
                 &mut rng,
                 &mut events,
-                shared::messages::Phase::Day,
+                shared::messages::Phase::DAY,
                 &tuning,
             );
 
@@ -176,7 +176,7 @@ mod tests {
             &mut target,
             &mut rng,
             &mut events,
-            shared::messages::Phase::Day,
+            shared::messages::Phase::DAY,
             &tuning,
         );
 
@@ -205,7 +205,7 @@ mod tests {
             &mut target,
             &mut rng,
             &mut events,
-            shared::messages::Phase::Day,
+            shared::messages::Phase::DAY,
             &tuning,
         );
 
@@ -465,7 +465,7 @@ mod tests {
             &mut target,
             &mut rng,
             &mut events,
-            shared::messages::Phase::Day,
+            shared::messages::Phase::DAY,
             &tuning,
         );
 
@@ -515,7 +515,7 @@ mod tests {
             &mut target,
             &mut rng,
             &mut events,
-            shared::messages::Phase::Day,
+            shared::messages::Phase::DAY,
             &tuning,
         );
 
@@ -541,7 +541,7 @@ mod tests {
             &mut target,
             &mut rng,
             &mut events,
-            shared::messages::Phase::Day,
+            shared::messages::Phase::DAY,
             &tuning,
         );
 
@@ -675,7 +675,7 @@ mod tests {
                 &mut target_clone,
                 &mut rng,
                 &mut swing_events,
-                shared::messages::Phase::Day,
+                shared::messages::Phase::DAY,
                 &tuning,
             );
             // Merge afflictions back.

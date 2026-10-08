@@ -235,7 +235,7 @@ mod tests {
             identifier: "msg-1".to_string(),
             source: MessageSource::Game("game-1".to_string()),
             game_day: 1,
-            phase: Phase::Day,
+            phase: Phase::DAY,
             tick: 1,
             emit_index: 0,
             subject: String::new(),

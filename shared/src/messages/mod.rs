@@ -16,60 +16,147 @@ pub enum MessageSource {
     Character(String), // Character identifier
 }
 
-/// One of the four narrative beats within a game-day. Ordinal order
-/// (`Dawn = 0, Day = 1, Dusk = 2, Night = 3`) drives all chronological
-/// sorting of `GameMessage`s; the `Day` and `Night` variants keep their
-/// pre-existing serialized forms (`"day"` / `"night"`) so persisted games
-/// from the two-phase era continue to deserialize.
+/// One phase of the game day: an even-hour slot in `00..=22`.
 ///
-/// See `docs/superpowers/specs/2026-05-03-four-phase-day-design.md` (§§2-4).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Phase {
-    Dawn,
-    Day,
-    Dusk,
-    Night,
-}
+/// 12 phases per day (2 h each). The game-day cycle starts at
+/// [`Phase::DAY_START_HOUR`] (06 by default) and runs
+/// `06, 08, …, 22, 00, 02, 04`, so night hours (20–04) sit at the tail
+/// of the game day. Ordinal order (`ord()` = position in that cycle)
+/// drives chronological sorting of `GameMessage`s.
+///
+/// Named hour anchors ([`Phase::DAWN`] / [`DAY`] / [`DUSK`] / [`NIGHT`])
+/// exist for code that reasons about the day's narrative slots.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Phase(u8);
 
 impl Phase {
-    /// Numeric ordinal used to sort messages within a game-day. Stable
-    /// across the wire format because `summarize_periods` relies on it.
+    /// Phases per game day (12 × 2 h slots).
+    pub const PHASES_PER_DAY: u8 = 12;
+    /// Default game-day start hour (first phase of every game day).
+    pub const DAY_START_HOUR: u8 = 6;
+    /// Default nightfall hour (phases from here to day start are night).
+    pub const NIGHTFALL_HOUR: u8 = 20;
+    /// Every valid even hour, ascending.
+    pub const HOURS: [u8; 12] = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22];
+
+    // Four-phase-day anchors, kept as named constants for code that
+    // reasons about the day's narrative slots.
+    /// First phase of the game day (06).
+    pub const DAWN: Phase = Phase(Self::DAY_START_HOUR); // 06
+    /// Midday (12).
+    pub const DAY: Phase = Phase(12);
+    /// Evening (18).
+    pub const DUSK: Phase = Phase(18);
+    /// Late night (00).
+    pub const NIGHT: Phase = Phase(0);
+    /// First phase of the game day (alias of [`Self::DAWN`]).
+    pub const DAY_START: Phase = Phase(Self::DAY_START_HOUR);
+    /// Last phase of the game day (04 — followed by the day start).
+    pub const DAY_END: Phase = Phase(4);
+
+    /// The hour label of this phase (`00` … `22`).
+    pub const fn hour(self) -> u8 {
+        self.0
+    }
+
+    /// Phase for an even hour in `00..=22`; `None` for odd or ≥ 24.
+    pub const fn from_hour(hour: u8) -> Option<Phase> {
+        if hour < 24 && hour.is_multiple_of(2) {
+            Some(Phase(hour))
+        } else {
+            None
+        }
+    }
+
+    /// Chronological ordinal: position in the game-day cycle starting at
+    /// [`Self::DAY_START_HOUR`] (`06` → 0, …, `04` → 11). Stable across
+    /// the wire format because `summarize_periods` relies on it.
     pub const fn ord(self) -> u8 {
-        match self {
-            Phase::Dawn => 0,
-            Phase::Day => 1,
-            Phase::Dusk => 2,
-            Phase::Night => 3,
+        if self.0 >= Self::DAY_START_HOUR {
+            (self.0 - Self::DAY_START_HOUR) / 2
+        } else {
+            (self.0 + 24 - Self::DAY_START_HOUR) / 2
         }
     }
 
-    /// Next phase in the canonical `Dawn → Day → Dusk → Night → Dawn`
-    /// cycle. Day-boundary handling (incrementing `current_day` after
-    /// `Night`) lives in the engine driver, not here.
+    /// Next phase in the canonical `06 → 08 → … → 04 → 06` cycle.
+    /// Day-boundary handling lives in the engine driver, not here.
     pub const fn next(self) -> Phase {
-        match self {
-            Phase::Dawn => Phase::Day,
-            Phase::Day => Phase::Dusk,
-            Phase::Dusk => Phase::Night,
-            Phase::Night => Phase::Dawn,
+        Phase((self.0 + 2) % 24)
+    }
+
+    /// All 12 phases in cycle order, starting at [`Self::DAY_START`].
+    pub const fn all() -> [Phase; 12] {
+        [
+            Phase(6),
+            Phase(8),
+            Phase(10),
+            Phase(12),
+            Phase(14),
+            Phase(16),
+            Phase(18),
+            Phase(20),
+            Phase(22),
+            Phase(0),
+            Phase(2),
+            Phase(4),
+        ]
+    }
+
+    /// Whether this phase counts as night for the given day boundary
+    /// hours. Handles wrap-around (`day_start > nightfall`, the default:
+    /// night runs 20 → 06).
+    pub const fn is_night(self, day_start: u8, nightfall: u8) -> bool {
+        if day_start <= nightfall {
+            self.0 >= nightfall || self.0 < day_start
+        } else {
+            self.0 >= nightfall && self.0 < day_start
         }
     }
 
-    /// All four phases in canonical order. Useful for iterating a full day.
-    pub const fn all() -> [Phase; 4] {
-        [Phase::Dawn, Phase::Day, Phase::Dusk, Phase::Night]
+    /// Night check with the default boundaries (day starts 06, night
+    /// falls 20). Configurable per game once day/night hours land.
+    pub const fn is_night_default(self) -> bool {
+        self.is_night(Self::DAY_START_HOUR, Self::NIGHTFALL_HOUR)
+    }
+
+    /// Two-digit hour label (`"00"` … `"22"`).
+    pub fn label(self) -> String {
+        format!("{:02}", self.0)
+    }
+}
+
+impl PartialOrd for Phase {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Phase {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // Chronological (cycle) order, not raw hour: 04 is the last phase
+        // of the day even though its hour is smallest.
+        self.ord().cmp(&other.ord())
+    }
+}
+
+impl Serialize for Phase {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
+    }
+}
+
+impl<'de> Deserialize<'de> for Phase {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        let raw = String::deserialize(deserializer)?;
+        Phase::from_str(&raw).map_err(D::Error::custom)
     }
 }
 
 impl std::fmt::Display for Phase {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Phase::Dawn => write!(f, "dawn"),
-            Phase::Day => write!(f, "day"),
-            Phase::Dusk => write!(f, "dusk"),
-            Phase::Night => write!(f, "night"),
-        }
+        write!(f, "{:02}", self.0)
     }
 }
 
@@ -78,7 +165,7 @@ pub struct ParsePhaseError;
 
 impl std::fmt::Display for ParsePhaseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "phase must be 'dawn', 'day', 'dusk', or 'night'")
+        write!(f, "phase must be an even hour '00'..'22'")
     }
 }
 
@@ -87,13 +174,8 @@ impl std::error::Error for ParsePhaseError {}
 impl FromStr for Phase {
     type Err = ParsePhaseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "dawn" => Ok(Phase::Dawn),
-            "day" => Ok(Phase::Day),
-            "dusk" => Ok(Phase::Dusk),
-            "night" => Ok(Phase::Night),
-            _ => Err(ParsePhaseError),
-        }
+        let hour: u8 = s.parse().map_err(|_| ParsePhaseError)?;
+        Phase::from_hour(hour).ok_or(ParsePhaseError)
     }
 }
 
@@ -947,22 +1029,18 @@ pub fn summarize_periods(messages: &[GameMessage], current: (u32, Phase)) -> Vec
     // every prior (day, phase) pair starting at day 1 so the summary list
     // is dense up to the live period without gaps for empty cycles.
     //
-    // Day 0 only ever has a `Day` phase (NotStarted seed). Day 1 skips
-    // `Dawn`. Day 2+ runs all four phases.
+    // Day 0 only ever has the day-start phase (NotStarted seed). Every
+    // game day runs the full 12-phase cycle from the day start.
     bucket
         .entry((current_day, current_phase.ord()))
         .or_insert((0, 0));
     for d in 1..=current_day {
         let max_ord = if d < current_day {
-            Phase::Night.ord()
+            Phase::DAY_END.ord()
         } else {
             current_phase.ord()
         };
         for phase in Phase::all() {
-            // Skip Dawn1 — never emitted by the engine.
-            if d == 1 && phase == Phase::Dawn {
-                continue;
-            }
             if phase.ord() <= max_ord {
                 bucket.entry((d, phase.ord())).or_insert((0, 0));
             }
@@ -972,12 +1050,10 @@ pub fn summarize_periods(messages: &[GameMessage], current: (u32, Phase)) -> Vec
     bucket
         .into_iter()
         .map(|((day, p), (deaths, count))| {
-            let phase = match p {
-                0 => Phase::Dawn,
-                1 => Phase::Day,
-                2 => Phase::Dusk,
-                _ => Phase::Night,
-            };
+            let phase = Phase::all()
+                .get(p as usize)
+                .copied()
+                .unwrap_or(Phase::DAY_END);
             PeriodSummary {
                 day,
                 phase,

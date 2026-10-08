@@ -2356,7 +2356,7 @@ mod tests {
                     name: "X".to_string(),
                 },
             },
-            shared::messages::Phase::Day,
+            shared::messages::Phase::DAY,
             &mut events,
         );
         assert!(!woke);
@@ -2374,7 +2374,7 @@ mod tests {
             shared::messages::InterruptionKind::AreaEvent {
                 kind: shared::messages::AreaEventKind::Fire,
             },
-            shared::messages::Phase::Night,
+            shared::messages::Phase::NIGHT,
             &mut events,
         );
         assert!(woke);
@@ -2384,7 +2384,7 @@ mod tests {
         assert_eq!(events.len(), 1);
         match &events[0].payload {
             shared::messages::MessagePayload::CharacterWoke { reason, phase, .. } => {
-                assert_eq!(*phase, shared::messages::Phase::Night);
+                assert_eq!(*phase, shared::messages::Phase::NIGHT);
                 match reason {
                     shared::messages::WakeReason::Interrupted {
                         event:

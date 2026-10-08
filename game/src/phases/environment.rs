@@ -80,10 +80,11 @@ pub struct AreaPhaseConditions {
 /// blizzard darkens night further but already maxes at Dark). Biome
 /// applies a one-step modifier for dense canopy / underground.
 pub fn derive_light_level(phase: Phase, biome: BaseTerrain, weather: Weather) -> LightLevel {
-    let baseline = match phase {
-        Phase::Day => LightLevel::Bright,
-        Phase::Dawn | Phase::Dusk => LightLevel::Dim,
-        Phase::Night => LightLevel::Dark,
+    let baseline = match phase.hour() {
+        8..=16 => LightLevel::Bright,
+        6 | 18 => LightLevel::Dim,
+        // Night-band hours: 20, 22, 00, 02, 04.
+        _ => LightLevel::Dark,
     };
     let after_weather = match weather {
         Weather::Clear | Weather::Heatwave => baseline,
@@ -145,13 +146,30 @@ fn candidate_probabilities(
 ) -> Vec<(AfflictionKind, f32)> {
     use AfflictionKind::*;
     use BaseTerrain::*;
-    use Phase::*;
     use Weather::*;
+
+    // Bucket the 12-phase day into the four narrative slots the spec's
+    // probability tables were written against.
+    #[derive(Clone, Copy)]
+    enum Slot {
+        Dawn,
+        Day,
+        Dusk,
+        Night,
+    }
+    use Slot::*;
+    let slot = match phase.hour() {
+        6 => Slot::Dawn,
+        18 => Slot::Dusk,
+        8..=16 => Slot::Day,
+        // Night-band hours: 20, 22, 00, 02, 04.
+        _ => Slot::Night,
+    };
 
     let mut out: Vec<(AfflictionKind, f32)> = Vec::new();
 
     // ---- Cold / Frozen pressure ------------------------------------
-    let cold = match (phase, biome, weather) {
+    let cold = match (slot, biome, weather) {
         // Spec §6.2: Night + tundra + any → strong chance Frozen
         (Night, Tundra, _) => 0.40,
         // Spec §6.2: Dawn + tundra + clear → small chance Frozen
@@ -172,7 +190,7 @@ fn candidate_probabilities(
     }
 
     // ---- Heat / Overheated pressure --------------------------------
-    let heat = match (phase, biome, weather) {
+    let heat = match (slot, biome, weather) {
         // Spec §6.2: Day + desert + clear → moderate chance Overheated
         (Day, Desert, Clear) => 0.30,
         (Day, Desert, Heatwave) => 0.50,
@@ -186,7 +204,7 @@ fn candidate_probabilities(
     }
 
     // ---- Sickness from exposure ------------------------------------
-    let sick = match (phase, biome, weather) {
+    let sick = match (slot, biome, weather) {
         // Spec §6.2: Day + jungle + storm → moderate chance Sick
         (Day, Jungle, HeavyRain) => 0.25,
         (_, Wetlands, HeavyRain) => 0.15,
@@ -232,10 +250,10 @@ mod tests {
     }
 
     #[rstest]
-    #[case(Phase::Day, BaseTerrain::Clearing, Weather::Clear, LightLevel::Bright)]
-    #[case(Phase::Dawn, BaseTerrain::Clearing, Weather::Clear, LightLevel::Dim)]
-    #[case(Phase::Dusk, BaseTerrain::Clearing, Weather::Clear, LightLevel::Dim)]
-    #[case(Phase::Night, BaseTerrain::Clearing, Weather::Clear, LightLevel::Dark)]
+    #[case(Phase::DAY, BaseTerrain::Clearing, Weather::Clear, LightLevel::Bright)]
+    #[case(Phase::DAWN, BaseTerrain::Clearing, Weather::Clear, LightLevel::Dim)]
+    #[case(Phase::DUSK, BaseTerrain::Clearing, Weather::Clear, LightLevel::Dim)]
+    #[case(Phase::NIGHT, BaseTerrain::Clearing, Weather::Clear, LightLevel::Dark)]
     fn light_level_baseline_per_phase(
         #[case] p: Phase,
         #[case] b: BaseTerrain,
@@ -249,12 +267,12 @@ mod tests {
     fn light_level_jungle_is_one_step_darker_than_clearing() {
         // Day + jungle + clear should be Dim (forest canopy darkens).
         assert_eq!(
-            derive_light_level(Phase::Day, BaseTerrain::Jungle, Weather::Clear),
+            derive_light_level(Phase::DAY, BaseTerrain::Jungle, Weather::Clear),
             LightLevel::Dim
         );
         // Day + forest + clear → Dim as well.
         assert_eq!(
-            derive_light_level(Phase::Day, BaseTerrain::Forest, Weather::Clear),
+            derive_light_level(Phase::DAY, BaseTerrain::Forest, Weather::Clear),
             LightLevel::Dim
         );
     }
@@ -263,7 +281,7 @@ mod tests {
     fn light_level_blizzard_max_darkens() {
         // Day + clearing + blizzard → Dark (two darken steps from Bright).
         assert_eq!(
-            derive_light_level(Phase::Day, BaseTerrain::Clearing, Weather::Blizzard),
+            derive_light_level(Phase::DAY, BaseTerrain::Clearing, Weather::Blizzard),
             LightLevel::Dark
         );
     }
@@ -272,7 +290,7 @@ mod tests {
     fn sheltered_character_gets_no_afflictions() {
         let mut rng = SmallRng::seed_from_u64(1);
         let drafts = roll_environmental_afflictions(
-            Phase::Night,
+            Phase::NIGHT,
             BaseTerrain::Tundra,
             Weather::Blizzard,
             true,
@@ -286,7 +304,7 @@ mod tests {
         let make = || {
             let mut rng = SmallRng::seed_from_u64(42);
             roll_environmental_afflictions(
-                Phase::Night,
+                Phase::NIGHT,
                 BaseTerrain::Tundra,
                 Weather::Clear,
                 false,
@@ -303,7 +321,7 @@ mod tests {
         for seed in 0..200u64 {
             let mut rng = SmallRng::seed_from_u64(seed);
             let drafts = roll_environmental_afflictions(
-                Phase::Night,
+                Phase::NIGHT,
                 BaseTerrain::Tundra,
                 Weather::Clear,
                 false,
@@ -323,7 +341,7 @@ mod tests {
         for seed in 0..200u64 {
             let mut rng = SmallRng::seed_from_u64(seed);
             let drafts = roll_environmental_afflictions(
-                Phase::Day,
+                Phase::DAY,
                 BaseTerrain::Desert,
                 Weather::Clear,
                 false,
@@ -343,7 +361,7 @@ mod tests {
         for seed in 0..200u64 {
             let mut rng = SmallRng::seed_from_u64(seed);
             let drafts = roll_environmental_afflictions(
-                Phase::Day,
+                Phase::DAY,
                 BaseTerrain::Jungle,
                 Weather::HeavyRain,
                 false,
@@ -363,7 +381,7 @@ mod tests {
         for seed in 0..50u64 {
             let mut rng = SmallRng::seed_from_u64(seed);
             let drafts = roll_environmental_afflictions(
-                Phase::Day,
+                Phase::DAY,
                 BaseTerrain::Clearing,
                 Weather::Clear,
                 false,

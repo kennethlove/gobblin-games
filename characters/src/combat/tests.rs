@@ -120,7 +120,7 @@ fn attacks_self(mut small_rng: SmallRng) {
         &mut target,
         &mut small_rng,
         &mut Vec::new(),
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &CombatTuning::default(),
     );
     assert_eq!(outcome, AttackOutcome::Wound(attacker.clone(), target));
@@ -137,7 +137,7 @@ fn attacks_self_suicide(mut small_rng: SmallRng) {
         &mut target,
         &mut small_rng,
         &mut Vec::new(),
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &CombatTuning::default(),
     );
     assert_eq!(outcome, AttackOutcome::Kill(attacker, target));
@@ -156,7 +156,7 @@ fn attacks_wound(mut small_rng: SmallRng) {
         &mut target,
         &mut small_rng,
         &mut Vec::new(),
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &CombatTuning::default(),
     );
     assert_eq!(
@@ -181,7 +181,7 @@ fn attacks_kill(mut small_rng: SmallRng) {
         &mut target,
         &mut small_rng,
         &mut Vec::new(),
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &CombatTuning::default(),
     );
     assert!(matches!(result, AttackOutcome::Kill(_, _)));
@@ -202,7 +202,7 @@ fn attacks_miss(mut small_rng: SmallRng) {
         &mut target,
         &mut small_rng,
         &mut Vec::new(),
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &CombatTuning::default(),
     );
     assert_eq!(result, AttackOutcome::Miss(attacker, target));
@@ -221,7 +221,7 @@ fn attacks_deducts_stamina_costs(mut small_rng: SmallRng) {
         &mut target,
         &mut small_rng,
         &mut Vec::new(),
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &tuning,
     );
     assert_eq!(attacker.stamina, 100 - tuning.stamina_cost_attacker);
@@ -241,7 +241,7 @@ fn attacks_saturates_at_zero_when_below_cost(mut small_rng: SmallRng) {
         &mut target,
         &mut small_rng,
         &mut Vec::new(),
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &tuning,
     );
     assert_eq!(attacker.stamina, 0);
@@ -279,14 +279,14 @@ fn attacker_winded_takes_attack_roll_penalty() {
             &mut t1,
             &mut rng_a,
             &mut Vec::new(),
-            shared::messages::Phase::Day,
+            shared::messages::Phase::DAY,
             &tuning,
         );
         let out_b = a_winded.attacks(
             &mut t2,
             &mut rng_b,
             &mut Vec::new(),
-            shared::messages::Phase::Day,
+            shared::messages::Phase::DAY,
             &tuning,
         );
 
@@ -312,7 +312,7 @@ fn combat_beat_carries_stamina_costs(mut small_rng: SmallRng) {
         &mut target,
         &mut small_rng,
         &mut events,
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &tuning,
     );
     let beats: Vec<_> = events
@@ -548,7 +548,7 @@ fn attacks_target_killed_records_killer_id() {
         &mut target,
         &mut rng,
         &mut Vec::new(),
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &CombatTuning::default(),
     );
 
@@ -587,7 +587,7 @@ fn attacks_attacker_killed_records_target_id() {
         &mut target,
         &mut rng,
         &mut Vec::new(),
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &CombatTuning::default(),
     );
 
@@ -625,7 +625,7 @@ fn attacks_emits_one_combat_taggedevent(mut small_rng: SmallRng) {
         &mut target,
         &mut small_rng,
         &mut events,
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &CombatTuning::default(),
     );
 
@@ -668,7 +668,7 @@ fn attacks_emits_one_combat_swing_per_call(small_rng: SmallRng) {
             &mut target,
             &mut rng,
             &mut events,
-            shared::messages::Phase::Day,
+            shared::messages::Phase::DAY,
             &CombatTuning::default(),
         );
 
@@ -701,7 +701,7 @@ fn self_attack_emits_one_combat_swing(mut small_rng: SmallRng) {
         &mut clone,
         &mut small_rng,
         &mut events,
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &CombatTuning::default(),
     );
     let swings: usize = events
@@ -752,7 +752,7 @@ fn weapon_break_records_forfeit_and_penalty_on_beat() {
         &mut target,
         &mut rng,
         &mut events,
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &CombatTuning::default(),
     );
 
@@ -798,7 +798,7 @@ fn shield_break_records_forfeit_and_penalty_on_beat() {
         &mut target,
         &mut rng,
         &mut events,
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &CombatTuning::default(),
     );
 
@@ -844,7 +844,7 @@ fn fumble_clears_attacker_break_penalty_on_beat() {
             &mut target,
             &mut rng,
             &mut events,
-            shared::messages::Phase::Day,
+            shared::messages::Phase::DAY,
             &CombatTuning::default(),
         );
 
@@ -899,7 +899,7 @@ fn unarmed_unshielded_emits_no_break_penalty() {
         &mut target,
         &mut rng,
         &mut events,
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &CombatTuning::default(),
     );
 
@@ -940,7 +940,7 @@ fn combat_beat_wear_matches_engagement_detail_wear_lines() {
             &mut target,
             &mut rng,
             &mut events,
-            shared::messages::Phase::Day,
+            shared::messages::Phase::DAY,
             &CombatTuning::default(),
         );
 
@@ -1007,7 +1007,7 @@ fn combat_swing_records_stress_damage() {
         &mut target,
         &mut rng,
         &mut events,
-        shared::messages::Phase::Day,
+        shared::messages::Phase::DAY,
         &CombatTuning::default(),
     );
 
@@ -1048,7 +1048,7 @@ fn combat_beat_stress_matches_engagement_horrified_line() {
             &mut target,
             &mut rng,
             &mut events,
-            shared::messages::Phase::Day,
+            shared::messages::Phase::DAY,
             &CombatTuning::default(),
         );
 
@@ -1101,7 +1101,7 @@ fn attacking_sleeping_target_emits_ambush_wake(mut small_rng: SmallRng) {
         &mut target,
         &mut small_rng,
         &mut events,
-        shared::messages::Phase::Night,
+        shared::messages::Phase::NIGHT,
         &CombatTuning::default(),
     );
 

@@ -30,8 +30,8 @@ impl Game {
         living_characters: Vec<Character>,
         living_characters_count: usize,
     ) -> CycleContext {
-        use shared::messages::Phase;
-        let day = phase == Phase::Day;
+        // Daytime = any hour from the day start (06) up to nightfall (20).
+        let day = !phase.is_night_default();
         let action_suggestion = match (self.day, day) {
             (Some(1), true) => Some(ActionSuggestion {
                 action: Action::Move(None),
@@ -460,7 +460,10 @@ impl Game {
                     .and_then(|&idx| self.areas.get(idx))
                     .map(|a| a.terrain.base)
                     .unwrap_or(world::terrain::types::BaseTerrain::Clearing);
-                let phase_index: u32 = self.day.unwrap_or(1) * 4 + phase.ord() as u32;
+                // Day/night-slot index (2 per day — shelter is a
+                // day/night mechanic, see the phase redesign notes).
+                let phase_index: u32 =
+                    self.day.unwrap_or(1) * 2 + u32::from(phase.is_night_default());
                 let is_sheltered = character
                     .sheltered_until
                     .is_some_and(|until| until > phase_index);
@@ -642,7 +645,9 @@ impl Game {
             use characters::afflictions::phobia::triggers::PhobiaContext;
 
             // Monotonically increasing cycle number (Day 1 Day = 1, etc.).
-            let phobia_cycle = (current_day.saturating_sub(1)) * 4 + phase.ord() as u32;
+            let phobia_cycle = (current_day.saturating_sub(1))
+                * u32::from(shared::messages::Phase::PHASES_PER_DAY)
+                + phase.ord() as u32;
 
             for &idx in &characters_to_act {
                 let area = self.characters[idx].area;
@@ -685,7 +690,9 @@ impl Game {
         // Run after phobia scan, before action execution.
         // Handles flashback rolls, observer tracking, and decay.
         if self.config.trauma_enabled && !characters_to_act.is_empty() {
-            let trauma_cycle = (current_day.saturating_sub(1)) * 4 + phase.ord() as u32;
+            let trauma_cycle = (current_day.saturating_sub(1))
+                * u32::from(shared::messages::Phase::PHASES_PER_DAY)
+                + phase.ord() as u32;
 
             for &idx in &characters_to_act {
                 let area = self.characters[idx].area;
@@ -718,7 +725,9 @@ impl Game {
         // Run after trauma processing, before action execution.
         // Handles High/Withdrawal tick, decay, observer tracking.
         if self.config.addiction_enabled && !characters_to_act.is_empty() {
-            let addiction_cycle = (current_day.saturating_sub(1)) * 4 + phase.ord() as u32;
+            let addiction_cycle = (current_day.saturating_sub(1))
+                * u32::from(shared::messages::Phase::PHASES_PER_DAY)
+                + phase.ord() as u32;
 
             for &idx in &characters_to_act {
                 let area = self.characters[idx].area;
@@ -1045,7 +1054,9 @@ impl Game {
                     .collect();
 
                 let fix_ctx = FixationContext {
-                    cycle: (current_day.saturating_sub(1)) * 4 + phase.ord() as u32,
+                    cycle: (current_day.saturating_sub(1))
+                        * u32::from(shared::messages::Phase::PHASES_PER_DAY)
+                        + phase.ord() as u32,
                     dead_character_killers: &dead_character_killers,
                     id_to_uuid: &id_to_uuid,
                     character_areas: &character_areas,

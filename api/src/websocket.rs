@@ -151,12 +151,12 @@ pub fn broadcast_game_message(broadcaster: &GameBroadcaster, game_id: &str, mess
 pub fn broadcast_game_started(broadcaster: &GameBroadcaster, game_id: &str, day: u32) {
     let payload = MessagePayload::CycleStart {
         day,
-        phase: Phase::Day,
+        phase: Phase::DAY_START,
     };
     let msg = GameMessage::new(
         MessageSource::Game(game_id.to_string()),
         day,
-        Phase::Day,
+        Phase::DAY_START,
         0,
         0,
         format!("game:{}", game_id),

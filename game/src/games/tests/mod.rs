@@ -14,7 +14,7 @@ pub(crate) fn create_test_game_with_characters(characters: Vec<Character>) -> Ga
         messages: vec![],
         alliance_events: vec![],
         tick_counter: TickCounter::default(),
-        current_phase: shared::messages::Phase::Day,
+        current_phase: shared::messages::Phase::DAY,
         emit_index: 0,
         combat_tuning: characters::combat_tuning::CombatTuning::default(),
         patrons: vec![],

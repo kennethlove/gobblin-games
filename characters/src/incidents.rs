@@ -56,12 +56,16 @@ impl SleepShelter {
 // ---------------------------------------------------------------------------
 
 /// Base incident chance (0-100) for a given phase of day.
+///
+/// Hour bands on the 12-phase day (night falls at 20, day starts at 06):
+/// dawn anchor 06, day 08–16, dusk anchor 18, night 20–04.
 pub fn base_incident_chance(phase: shared::messages::Phase) -> u32 {
-    match phase {
-        shared::messages::Phase::Day => SLEEP_INCIDENT_DAY_PCT,
-        shared::messages::Phase::Dawn => SLEEP_INCIDENT_DAWN_PCT,
-        shared::messages::Phase::Dusk => SLEEP_INCIDENT_DUSK_PCT,
-        shared::messages::Phase::Night => SLEEP_INCIDENT_NIGHT_PCT,
+    match phase.hour() {
+        6 => SLEEP_INCIDENT_DAWN_PCT,
+        18 => SLEEP_INCIDENT_DUSK_PCT,
+        8..=16 => SLEEP_INCIDENT_DAY_PCT,
+        // 20, 22, 00, 02, 04 — night hours.
+        _ => SLEEP_INCIDENT_NIGHT_PCT,
     }
 }
 
@@ -467,7 +471,7 @@ mod tests {
         for _ in 0..100 {
             if SleepIncident::roll(
                 &mut rng,
-                Phase::Night,
+                Phase::NIGHT,
                 BaseTerrain::Forest,
                 false,
                 &shelter,
@@ -642,9 +646,9 @@ mod tests {
 
     #[test]
     fn base_incident_chance_by_phase() {
-        assert_eq!(base_incident_chance(Phase::Day), 8);
-        assert_eq!(base_incident_chance(Phase::Dawn), 12);
-        assert_eq!(base_incident_chance(Phase::Dusk), 12);
-        assert_eq!(base_incident_chance(Phase::Night), 22);
+        assert_eq!(base_incident_chance(Phase::DAY), 8);
+        assert_eq!(base_incident_chance(Phase::DAWN), 12);
+        assert_eq!(base_incident_chance(Phase::DUSK), 12);
+        assert_eq!(base_incident_chance(Phase::NIGHT), 22);
     }
 }

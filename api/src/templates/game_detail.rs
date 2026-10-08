@@ -1,4 +1,3 @@
-use shared::messages::Phase;
 use shared::{DisplayGame, GameStatus};
 
 /// Determine the phase label and class from game state and messages.
@@ -11,14 +10,31 @@ pub fn current_broadcast_phase(
         GameStatus::NotStarted => ("day", "STAGING"),
         GameStatus::InProgress => {
             if let Some(last) = messages.last() {
-                match last.phase {
-                    Phase::Dawn => ("dawn", "DAWN"),
-                    Phase::Day => ("day", "DAY"),
-                    Phase::Dusk => ("dusk", "DUSK"),
-                    Phase::Night => ("night", "NIGHT"),
-                }
+                // Hour-label badge (00–22) with the day/night band class
+                // used for styling.
+                let class = match last.phase.hour() {
+                    6 => "dawn",
+                    8..=16 => "day",
+                    18 => "dusk",
+                    _ => "night",
+                };
+                let label: &'static str = match last.phase.hour() {
+                    0 => "00",
+                    2 => "02",
+                    4 => "04",
+                    6 => "06",
+                    8 => "08",
+                    10 => "10",
+                    12 => "12",
+                    14 => "14",
+                    16 => "16",
+                    18 => "18",
+                    20 => "20",
+                    _ => "22",
+                };
+                (class, label)
             } else {
-                ("day", "DAY")
+                ("day", "06")
             }
         }
     }

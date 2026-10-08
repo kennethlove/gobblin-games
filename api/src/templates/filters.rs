@@ -174,11 +174,9 @@ pub fn slug(value: &Value, _: Kwargs, _: &State) -> TeraResult<Value> {
 
 pub fn phase_label(value: &Value, _: Kwargs, _: &State) -> TeraResult<Value> {
     let phase = value.as_str().unwrap_or("");
+    // Hour labels ("00".."22") pass through; anything else is staging.
     let label = match phase {
-        "dawn" => "DAWN",
-        "day" => "DAY",
-        "dusk" => "DUSK",
-        "night" => "NIGHT",
+        "00" | "02" | "04" | "06" | "08" | "10" | "12" | "14" | "16" | "18" | "20" | "22" => phase,
         _ => "STAGING",
     };
     Ok(Value::from(label))
@@ -187,10 +185,10 @@ pub fn phase_label(value: &Value, _: Kwargs, _: &State) -> TeraResult<Value> {
 pub fn phase_class(value: &Value, _: Kwargs, _: &State) -> TeraResult<Value> {
     let phase = value.as_str().unwrap_or("");
     let class = match phase {
-        "dawn" => "phase-dawn",
-        "day" => "phase-day",
-        "dusk" => "phase-dusk",
-        "night" => "phase-night",
+        "06" => "phase-dawn",
+        "08" | "10" | "12" | "14" | "16" => "phase-day",
+        "18" => "phase-dusk",
+        "00" | "02" | "04" | "20" | "22" => "phase-night",
         _ => "phase-day",
     };
     Ok(Value::from(class))
