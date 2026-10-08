@@ -106,7 +106,7 @@ run_day_night_cycle(day: bool)
 - **Browser** (HTMX): Indirectly via API — API renders Maud templates for HTML display
 
 ### **Depends On**
-- **Path crates** (extracted from `game/src/` in dww.18):
+- **Path crates** (extracted from `game/src/`):
   - `areas` — `Area` enum, `AreaDetails` struct, `AreaEvent` enum, hex topology
   - `characters` — `Character` struct, statuses, `Action` logic, combat, afflictions, alliances
   - `world` — terrain, items, output, clans, config, pathfinding, threats, naming, message helpers
@@ -175,7 +175,7 @@ Module aggregator. Declares `trauma_producers` and `witty_phrase_generator` as p
 ### **games/tests.rs** (1624 lines) — **Game Integration Tests**
 - **Purpose**: Comprehensive test suite covering lifecycle, state transitions, area management, alliances, patrons
 
-### **messages.rs** — moved out (dww.18)
+### **messages.rs** — moved out to shared + world
 - Schema types (`MessageSource`, `GameMessage`, `MessagePayload`, `Phase`, refs): **`shared::messages`**
 - `TaggedEvent` accumulator + terrain narrative helpers (`movement_narrative`, etc.): **`world::messages`**
 - Log accumulation helpers (`get_all_messages()`, …) live on `Game` in `games/mod.rs`
@@ -213,11 +213,11 @@ Module aggregator. Declares `trauma_producers` and `witty_phrase_generator` as p
 
 ## Subdirectories
 
-### Extracted crates (dww.18)
+### Extracted crates (workspace split)
 
 - `areas` crate — arena topology: see [areas/codemap.md](../../areas/codemap.md)
 - `characters` crate — autonomous AI characters: see [characters/codemap.md](../../characters/codemap.md)
-- `items`, `output`, `clans` — moved to the `world` crate in dww.18
+- `items`, `output`, `clans` — moved to the `world` crate
 
 ### **events/** (1566 lines total) — **Typed Event System**
 Structured game events for persistence and analytics.

@@ -1,6 +1,6 @@
 # areas crate — Arena Topology
 
-Extracted from `game/src/areas/` in dww.18. Deps: `world` (terrain, items), `shared`.
+Extracted from `game/src/areas/` during the workspace crate split. Deps: `world` (terrain, items), `shared`.
 
 ### **areas/** (1799 lines total) — **Arena Topology**
 Hex-graph arena with 7+ areas, item inventories, and dynamic closures.

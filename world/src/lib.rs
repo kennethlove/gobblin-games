@@ -2,8 +2,7 @@
 //!
 //! Terrain, topology/pathfinding, threats, naming, and game
 //! configuration — extracted from `game` so the domain entity stops
-//! living inside the simulation orchestrator (see gobblin-games-dww.16
-//! decision notes).
+//! living inside the simulation orchestrator.
 
 pub mod clans;
 pub mod config;

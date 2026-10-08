@@ -1,6 +1,6 @@
 # characters crate — Autonomous AI Characters
 
-Extracted from `game/src/characters/` in dww.18. Deps: `areas`, `world`, `shared`.
+Extracted from `game/src/characters/` during the workspace crate split. Deps: `areas`, `world`, `shared`.
 
 Insta snapshot files renamed `game__characters__*` -> `characters__*`.
 
