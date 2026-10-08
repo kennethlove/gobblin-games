@@ -149,6 +149,17 @@ check-api:
 test:
     cargo test --package game
 
+# Stress the 128-goblin roster ceiling: engine determinism + API/DB path.
+# Perf history: `just bench-stress`.
+stress:
+    cargo test --package game --test roster_stress_test
+    cargo test --package api --test roster_stress_test -- --nocapture
+
+# Criterion benches for 128-goblin roster processing/storage.
+# Save a baseline: `cargo bench -p game --bench roster_stress_bench --save-baseline roster`
+bench-stress:
+    cargo bench --package game --bench roster_stress_bench
+
 # Run all workspace tests (WARNING: may be slow or hang)
 test-all:
     cargo test --workspace

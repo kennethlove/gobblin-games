@@ -32,3 +32,7 @@ tokio = { version = "1.52.1", features = ["macros", "rt"] }
 [[bench]]
 name = "game_cycle_bench"
 harness = false
+
+[[bench]]
+name = "roster_stress_bench"
+harness = false
