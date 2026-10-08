@@ -390,6 +390,6 @@ pub enum GameEvent {
     },
     /// One combat swing carrying the full typed beat.
     CombatSwing {
-        beat: crate::characters::combat_beat::CombatBeat,
+        beat: characters::combat_beat::CombatBeat,
     },
 }

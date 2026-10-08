@@ -4,7 +4,7 @@ use axum::Json;
 use axum::extract::{Extension, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use game::characters::Character;
+use characters::Character;
 use game::games::Game;
 use shared::messages::GameMessage;
 use shared::{

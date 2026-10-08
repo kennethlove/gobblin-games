@@ -1,7 +1,7 @@
 //! Integration tests for affliction storage and serde round-trip.
 
-use game::characters::afflictions::AcquireResolution;
-use game::characters::{AfflictionDraft, Character};
+use characters::afflictions::AcquireResolution;
+use characters::{AfflictionDraft, Character};
 use shared::afflictions::{AfflictionKind, AfflictionSource, BodyPart, Severity};
 
 /// Test that a full acquisition flow works end-to-end.

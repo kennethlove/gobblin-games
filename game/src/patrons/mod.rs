@@ -2,8 +2,8 @@ use shared::afflictions::AfflictionKind;
 use shared::audience::AudienceEvent;
 use shared::patrons::ArchetypeId;
 
-use crate::characters::Character;
 use crate::games::Game;
+use characters::Character;
 use world::items::Item;
 
 pub struct PatronContext<'a> {
@@ -149,7 +149,7 @@ pub fn update_affinities(game: &mut Game, events: &[AudienceEvent]) {
     use shared::patrons::{ArchetypeId, MAX_AFFINITY, MIN_AFFINITY, weight_for};
 
     // Take an owned snapshot of characters so the patron loop can borrow `&mut`.
-    let characters_snapshot: Vec<crate::characters::Character> = game.characters.clone();
+    let characters_snapshot: Vec<characters::Character> = game.characters.clone();
 
     for patron in &mut game.patrons {
         let mods = modifiers_for(patron.archetype);
@@ -188,7 +188,7 @@ pub fn update_affinities(game: &mut Game, events: &[AudienceEvent]) {
 fn loyalist_team_modifier(
     bound: Option<u8>,
     ev: &AudienceEvent,
-    characters: &[crate::characters::Character],
+    characters: &[characters::Character],
 ) -> f32 {
     let Some(team) = bound else {
         return 1.0;

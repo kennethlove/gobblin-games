@@ -6,7 +6,7 @@
 //! silently dropped by the old `try_log_action` no-op.
 
 use areas::{Area, AreaDetails};
-use game::characters::Character;
+use characters::Character;
 use game::games::Game;
 use shared::messages::{GameMessage, MessageSource};
 use world::terrain::{BaseTerrain, TerrainType};

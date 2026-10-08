@@ -1,7 +1,7 @@
 //! Stamina-as-combat-resource integration tests (PR1 backend).
 //! See docs/superpowers/specs/2026-05-03-stamina-combat-resource-design.md.
 
-use game::characters::Character;
+use characters::Character;
 use game::games::Game;
 use shared::messages::{MessagePayload, StaminaBand};
 

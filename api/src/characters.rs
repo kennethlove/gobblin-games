@@ -5,7 +5,7 @@ use axum::extract::{Extension, Multipart, Path, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use game::characters::Character;
+use characters::Character;
 use serde::{Deserialize, Serialize};
 use shared::EditCharacter;
 use shared::messages::GameMessage;

@@ -174,7 +174,7 @@ pub enum StaminaBand {
 /// Visible hunger band derived from a character's hunger counter. Lives in
 /// `shared/` because it is wire-visible via
 /// `MessagePayload::HungerBandChanged`. The mapping (counter → band) lives
-/// in `game::characters::survival::hunger_band`.
+/// in `characters::survival::hunger_band`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum HungerBand {
     Sated,
@@ -186,7 +186,7 @@ pub enum HungerBand {
 /// Visible thirst band derived from a character's thirst counter. Lives in
 /// `shared/` because it is wire-visible via
 /// `MessagePayload::ThirstBandChanged`. The mapping (counter → band) lives
-/// in `game::characters::survival::thirst_band`.
+/// in `characters::survival::thirst_band`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ThirstBand {
     Sated,

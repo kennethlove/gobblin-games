@@ -274,7 +274,7 @@ pub fn render_commentary_card(seg: &announcers::CommentarySegment) -> String {
     )
 }
 
-pub fn render_character_row(character: &game::characters::Character, game_id: &str) -> String {
+pub fn render_character_row(character: &characters::Character, game_id: &str) -> String {
     let is_alive = character.is_alive();
     let health = character.effective_health();
     let health_class = if health > 60 {
@@ -321,7 +321,7 @@ pub fn render_character_row(character: &game::characters::Character, game_id: &s
     )
 }
 
-pub fn render_character_card(character: &game::characters::Character) -> String {
+pub fn render_character_card(character: &characters::Character) -> String {
     let is_alive = character.is_alive();
     let health = character.effective_health();
     let _health_class = if health > 60 {
@@ -394,7 +394,7 @@ pub fn render_area_card(area: &areas::AreaDetails) -> String {
     )
 }
 
-pub fn render_character_detail(character: &game::characters::Character, _game_id: &str) -> String {
+pub fn render_character_detail(character: &characters::Character, _game_id: &str) -> String {
     let is_alive = character.is_alive();
     let health = character.effective_health();
     let status_class = if is_alive { "alive" } else { "dead" };
@@ -486,7 +486,7 @@ pub struct AllianceGroup {
     pub characters: Vec<usize>,
 }
 
-pub fn build_alliance_groups(characters: &[&game::characters::Character]) -> Vec<AllianceGroup> {
+pub fn build_alliance_groups(characters: &[&characters::Character]) -> Vec<AllianceGroup> {
     let n = characters.len();
     let mut parent: Vec<usize> = (0..n).collect();
 
@@ -562,7 +562,7 @@ pub fn build_alliance_groups(characters: &[&game::characters::Character]) -> Vec
 
 pub fn render_alliance_group(
     group: &AllianceGroup,
-    characters: &[&game::characters::Character],
+    characters: &[&characters::Character],
     game_id: &str,
 ) -> String {
     let alive_count = group
@@ -594,11 +594,11 @@ pub struct TeamGroup<'a> {
     pub team: u32,
     pub alive_count: usize,
     pub total: usize,
-    pub characters: Vec<&'a game::characters::Character>,
+    pub characters: Vec<&'a characters::Character>,
 }
 
-pub fn build_team_groups<'a>(characters: &[&'a game::characters::Character]) -> Vec<TeamGroup<'a>> {
-    let mut groups: std::collections::HashMap<u32, Vec<&game::characters::Character>> =
+pub fn build_team_groups<'a>(characters: &[&'a characters::Character]) -> Vec<TeamGroup<'a>> {
+    let mut groups: std::collections::HashMap<u32, Vec<&characters::Character>> =
         std::collections::HashMap::new();
     for &character in characters {
         groups.entry(character.team).or_default().push(character);
@@ -688,7 +688,7 @@ fn hex_center(area_idx: usize) -> (f64, f64) {
 
 pub fn render_hex_map(
     areas: &[areas::AreaDetails],
-    characters: &[&game::characters::Character],
+    characters: &[&characters::Character],
 ) -> String {
     let area_order = [
         areas::Area::Hub,

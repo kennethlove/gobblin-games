@@ -8,8 +8,8 @@ use crate::{AppError, AppState};
 use areas::{Area, AreaDetails};
 use axum::Router;
 use axum::routing::{get, post, put};
+use characters::Character;
 use chrono::{DateTime, Utc};
-use game::characters::Character;
 use game::games::Game;
 use serde::{Deserialize, Serialize};
 use shared::messages::MessagePayload;
@@ -692,7 +692,7 @@ impl From<GameLog> for GameMessage {
 }
 
 /// Build a fresh [`announcers::CharacterDigest`] from a game Character.
-fn build_character_digest(t: &game::characters::Character) -> announcers::CharacterDigest {
+fn build_character_digest(t: &characters::Character) -> announcers::CharacterDigest {
     announcers::CharacterDigest {
         identifier: t.identifier.to_string(),
         name: t.name.clone(),

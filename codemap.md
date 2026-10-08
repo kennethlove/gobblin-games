@@ -6,7 +6,7 @@
 
 ## System Architecture
 
-**5-Crate Rust Workspace:**
+**6-Crate Rust Workspace:**
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -27,8 +27,8 @@
 │  │  • Stateless, deterministic, no I/O                   │  │
 │  │  • Turn-based AI characters with d20 combat             │  │
 │  │  • Event sourcing via global message queue            │  │
-│  │  • Built on world/ substrate (terrain, pathfinding,   │  │
-│  │    threats, naming, config — extracted, see dww.18)   │  │
+│  │  • Built on world/, areas/, and characters/ crates      │  │
+│  │    (extracted from game/ — see dww.18)                 │  │
 │  └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
                        │ emits event log
@@ -107,8 +107,8 @@ just api  # API server only (http://localhost:3000) - requires SurrealDB running
 |-----------|------------------------|--------------|
 | **`game/`** | Pure Rust simulation engine - stateless game logic with no I/O dependencies | [game/codemap.md](game/codemap.md) |
 | **`game/src/`** | Core game engine implementing turn-based Gobblin' Games simulation with event sourcing | [game/src/codemap.md](game/src/codemap.md) |
-| **`game/src/characters/`** | Autonomous AI characters with d20 combat, status effects, and context-aware decision-making | [game/src/characters/codemap.md](game/src/characters/codemap.md) |
-| **`game/src/areas/`** | 5-region arena topology (Hub + cardinals) with item inventory and dynamic closures | [game/src/areas/codemap.md](game/src/areas/codemap.md) |
+| **`characters/`** | Autonomous AI characters with d20 combat, status effects, and context-aware decision-making (extracted from game/, dww.18) | [characters/codemap.md](characters/codemap.md) |
+| **`areas/`** | 5-region arena topology (Hub + cardinals) with item inventory and dynamic closures (extracted from game/, dww.18) | [areas/codemap.md](areas/codemap.md) |
 | **`game/src/items/`** | Procedurally-generated weapons, shields, and consumables with factory pattern creation | [game/src/items/codemap.md](game/src/items/codemap.md) |
 | **`world/`** | Domain substrate below game: terrain, pathfinding, threats, naming, config (extracted from game/, dww.18) | — |
 | **`world/src/threats/`** | Environmental hazards and animal attacks (bears, wolves, etc.) | [world/src/threats/codemap.md](world/src/threats/codemap.md) |
@@ -150,7 +150,7 @@ just api  # API server only (http://localhost:3000) - requires SurrealDB running
 ### Build Tools
 
 - **Task Runner**: just (Makefile alternative)
-- **Package Manager**: Cargo (workspace with 5 crates)
+- **Package Manager**: Cargo (workspace with 6 crates)
 - **Docker**: Multi-stage builds for API
 - **Version Manager**: mise (for Rust toolchain)
 

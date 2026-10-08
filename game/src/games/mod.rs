@@ -1,8 +1,8 @@
-use crate::characters::actions::Action;
-use crate::characters::statuses::CharacterStatus;
-use crate::characters::{ActionSuggestion, Character};
 use areas::events::AreaEvent;
 use areas::{Area, AreaDetails};
+use characters::actions::Action;
+use characters::statuses::CharacterStatus;
+use characters::{ActionSuggestion, Character};
 use rand::Rng;
 use rand::RngExt;
 use rand::prelude::*;
@@ -269,7 +269,7 @@ pub struct Game {
     /// turns inside `run_day_night_cycle`. Lives only for the duration of a
     /// single cycle; never persisted. See spec §7.5.
     #[serde(default, skip)]
-    pub alliance_events: Vec<crate::characters::alliances::AllianceEvent>,
+    pub alliance_events: Vec<characters::alliances::AllianceEvent>,
     /// Per-period tick counter; transient, never persisted.
     #[serde(skip, default)]
     pub tick_counter: TickCounter,
@@ -286,7 +286,7 @@ pub struct Game {
     /// Tunable combat & stamina knobs. See spec
     /// `2026-05-03-stamina-combat-resource-design.md`.
     #[serde(default)]
-    pub combat_tuning: crate::characters::combat_tuning::CombatTuning,
+    pub combat_tuning: characters::combat_tuning::CombatTuning,
 
     /// NPC patrons that observe events and build per-character affinity.
     /// Lazily spawned on first cycle for backward-compat with pre-patronship games.
@@ -329,7 +329,7 @@ impl Default for Game {
             tick_counter: TickCounter::default(),
             current_phase: shared::messages::Phase::Day,
             emit_index: 0,
-            combat_tuning: crate::characters::combat_tuning::CombatTuning::default(),
+            combat_tuning: characters::combat_tuning::CombatTuning::default(),
             patrons: vec![],
         }
     }
@@ -385,7 +385,7 @@ struct CycleContext {
     /// `Brain::choose_destination` as a crowd penalty.
     enemy_density: HashMap<Area, u32>,
     /// Cached combat tuning so the executor never has to re-borrow `self`.
-    combat_tuning_snapshot: crate::characters::combat_tuning::CombatTuning,
+    combat_tuning_snapshot: characters::combat_tuning::CombatTuning,
     /// Read-only snapshot of every area for multi-hop pathfinding.
     all_areas_snapshot: Vec<AreaDetails>,
     /// Areas closed for this cycle, propagated into `EnvironmentContext`.
@@ -425,7 +425,7 @@ impl Game {
         self.status = GameStatus::Finished;
     }
 
-    /// Run the post-game recovery ([`crate::characters::revival`]) before
+    /// Run the post-game recovery ([`characters::revival`]) before
     /// characters are written back: every dead goblin runs the revival
     /// roll (Clean / Penalty / Scar / Bonus) and the outcome lands as
     /// persistent state (traits / attribute deltas); every survivor is
@@ -434,9 +434,9 @@ impl Game {
         let mut rng = rand::rng();
         for character in &mut self.characters {
             if character.is_alive() {
-                crate::characters::revival::restore(character);
+                characters::revival::restore(character);
             } else {
-                crate::characters::revival::revive(character, &mut rng);
+                characters::revival::revive(character, &mut rng);
             }
         }
     }
@@ -766,7 +766,7 @@ impl Game {
                         ),
                     };
                     character.statistics.killed_by = Some(cause.to_string());
-                    character.status = crate::characters::statuses::CharacterStatus::RecentlyDead;
+                    character.status = characters::statuses::CharacterStatus::RecentlyDead;
                     (name, id, cause)
                 };
 
@@ -885,7 +885,7 @@ impl Game {
                     // up. Without this, env-killed characters were silently
                     // promoted to Dead at the next cycle and never triggered
                     // "has fallen" or DeathRecorded.
-                    character.status = crate::characters::statuses::CharacterStatus::RecentlyDead;
+                    character.status = characters::statuses::CharacterStatus::RecentlyDead;
 
                     let content = if result.instant_death {
                         format!(

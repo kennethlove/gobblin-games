@@ -3,8 +3,8 @@
 //! docs/superpowers/specs/2026-05-03-shelter-hunger-thirst-design.md.
 
 use areas::weather::Weather;
-use game::characters::Character;
-use game::characters::survival::{
+use characters::Character;
+use characters::survival::{
     ThirstBand, apply_dehydration_drain, apply_starvation_drain, drink_water, thirst_band,
     tick_survival,
 };

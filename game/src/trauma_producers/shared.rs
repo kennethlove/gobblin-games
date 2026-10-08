@@ -3,9 +3,9 @@
 //! Provides internal data structures (`TraumaEvent`, `TraumaMessage`),
 //! the applying/forwarding helpers, and the phobia co-acquire stub.
 
-use crate::characters::Character;
-use crate::characters::afflictions::TraumaAcquisition;
 use crate::games::Game;
+use characters::Character;
+use characters::afflictions::TraumaAcquisition;
 use shared::afflictions::{DeathCause, Severity, TraumaSource};
 use shared::messages::{CharacterRef, MessagePayload, MessageSource};
 

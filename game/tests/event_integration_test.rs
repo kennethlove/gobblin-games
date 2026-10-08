@@ -1,6 +1,6 @@
 use areas::events::AreaEvent;
 use areas::{Area, AreaDetails};
-use game::characters::Character;
+use characters::Character;
 use game::games::Game;
 use rand::SeedableRng;
 use rand::rngs::SmallRng;

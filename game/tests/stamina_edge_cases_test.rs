@@ -1,7 +1,7 @@
 #![allow(clippy::field_reassign_with_default)]
 
-use game::characters::actions::Action;
-use game::characters::{Character, calculate_stamina_cost};
+use characters::actions::Action;
+use characters::{Character, calculate_stamina_cost};
 use rstest::rstest;
 use world::terrain::{BaseTerrain, TerrainType};
 
@@ -154,9 +154,9 @@ fn test_best_case_combined() {
 /// Edge case: stamina recovery
 #[test]
 fn test_stamina_restoration() {
-    use game::characters::actions::Action;
-    use game::characters::combat_tuning::CombatTuning;
-    use game::characters::survival::{HungerBand, ThirstBand};
+    use characters::actions::Action;
+    use characters::combat_tuning::CombatTuning;
+    use characters::survival::{HungerBand, ThirstBand};
 
     let mut character = Character::default();
     assert_eq!(character.stamina, 100, "Initial stamina should be 100");

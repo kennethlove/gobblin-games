@@ -3,7 +3,7 @@
 //! rebalances.
 
 use areas::{Area, AreaDetails};
-use game::characters::Character;
+use characters::Character;
 use game::games::Game;
 use game::patrons::{PatronContext, translate, update_affinities};
 use rand::SeedableRng;

@@ -13,7 +13,7 @@ impl Game {
     ///   success. After the cascade, unconditionally scrub the deceased's
     ///   id from every surviving character's `allies` list.
     pub fn process_alliance_events(&mut self, rng: &mut impl Rng) {
-        use crate::characters::alliances::{AllianceEvent, sanity_break_roll};
+        use characters::alliances::{AllianceEvent, sanity_break_roll};
 
         // Take the events into a local Vec so we can release the borrow on
         // `self.alliance_events` before mutating `self.characters`.
@@ -165,9 +165,8 @@ impl Game {
                     let (Some(ip), Some(it)) = (idx_p, idx_t) else {
                         continue;
                     };
-                    if self.characters[ip].allies.len() >= crate::characters::alliances::MAX_ALLIES
-                        || self.characters[it].allies.len()
-                            >= crate::characters::alliances::MAX_ALLIES
+                    if self.characters[ip].allies.len() >= characters::alliances::MAX_ALLIES
+                        || self.characters[it].allies.len() >= characters::alliances::MAX_ALLIES
                     {
                         continue;
                     }

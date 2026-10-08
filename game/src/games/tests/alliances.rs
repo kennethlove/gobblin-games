@@ -11,12 +11,11 @@ fn process_alliance_events_betrayal_removes_pair_on_victim_side() {
     let vid = victim.id;
 
     let mut game = create_test_game_with_characters(vec![betrayer, victim]);
-    game.alliance_events.push(
-        crate::characters::alliances::AllianceEvent::BetrayalRecorded {
+    game.alliance_events
+        .push(characters::alliances::AllianceEvent::BetrayalRecorded {
             betrayer: bid,
             victim: vid,
-        },
-    );
+        });
 
     let mut rng = SmallRng::seed_from_u64(53);
     game.process_alliance_events(&mut rng);
@@ -35,12 +34,11 @@ fn process_alliance_events_betrayer_not_marked_for_trust_shock() {
     let vid = victim.id;
 
     let mut game = create_test_game_with_characters(vec![betrayer, victim]);
-    game.alliance_events.push(
-        crate::characters::alliances::AllianceEvent::BetrayalRecorded {
+    game.alliance_events
+        .push(characters::alliances::AllianceEvent::BetrayalRecorded {
             betrayer: bid,
             victim: vid,
-        },
-    );
+        });
 
     let mut rng = SmallRng::seed_from_u64(53);
     game.process_alliance_events(&mut rng);
@@ -62,7 +60,7 @@ fn process_alliance_events_death_removes_deceased_from_all_ally_lists() {
     let did = deceased.id;
     let mut game = create_test_game_with_characters(vec![deceased, a, b]);
     game.alliance_events
-        .push(crate::characters::alliances::AllianceEvent::DeathRecorded {
+        .push(characters::alliances::AllianceEvent::DeathRecorded {
             deceased: did,
             killer: None,
         });
@@ -87,12 +85,12 @@ fn run_character_cycle_drains_character_alliance_events_into_game_queue() {
     character2.allies.push(character1.id);
     let bid = character1.id;
     let vid = character2.id;
-    character1.alliance_events.push(
-        crate::characters::alliances::AllianceEvent::BetrayalRecorded {
+    character1
+        .alliance_events
+        .push(characters::alliances::AllianceEvent::BetrayalRecorded {
             betrayer: bid,
             victim: vid,
-        },
-    );
+        });
 
     let mut game = create_test_game_with_characters(vec![character1.clone(), character2.clone()]);
     let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
@@ -128,7 +126,7 @@ fn run_character_cycle_drains_character_alliance_events_into_game_queue() {
 
 #[test]
 fn run_character_cycle_forms_alliance_between_compatible_same_area_characters() {
-    use crate::characters::traits::Trait;
+    use characters::traits::Trait;
     let mut t1 = create_character("Snipsnout", true);
     let mut t2 = create_character("Pricklepaw", true);
     t1.team = 1;
@@ -177,8 +175,8 @@ fn run_character_cycle_forms_alliance_between_compatible_same_area_characters() 
 
 #[test]
 fn run_character_cycle_treacherous_character_betrays_same_area_ally_when_timer_elapses() {
-    use crate::characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
-    use crate::characters::traits::Trait;
+    use characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
+    use characters::traits::Trait;
 
     let mut betrayer = create_character("Rendmaw", true);
     let mut victim = create_character("Gnawpaw", true);
@@ -227,8 +225,8 @@ fn run_character_cycle_treacherous_character_betrays_same_area_ally_when_timer_e
 
 #[test]
 fn run_character_cycle_treacherous_no_betrayal_without_same_area_ally_resets_timer() {
-    use crate::characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
-    use crate::characters::traits::Trait;
+    use characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
+    use characters::traits::Trait;
 
     let mut loner = create_character("Snoutrot", true);
     let mut other = create_character("Scabface", true);
@@ -271,7 +269,7 @@ fn run_character_cycle_treacherous_no_betrayal_without_same_area_ally_resets_tim
 
 #[test]
 fn run_character_cycle_enqueues_death_recorded_for_recently_dead_ally() {
-    use crate::characters::traits::Trait;
+    use characters::traits::Trait;
 
     let mut deceased = create_character("Nib", true);
     let mut survivor = create_character("Snaggletooth", true);
@@ -320,7 +318,7 @@ fn run_character_cycle_enqueues_death_recorded_for_recently_dead_ally() {
 
 #[test]
 fn run_character_cycle_three_way_preserves_existing_alliance() {
-    use crate::characters::traits::Trait;
+    use characters::traits::Trait;
 
     let mut a = create_character("Snaggletooth", true);
     let mut b = create_character("Grubworm", true);
@@ -470,7 +468,7 @@ fn run_character_cycle_environmental_death_emits_killer_none() {
 
 #[test]
 fn alliance_formation_emits_message_with_alliance_formed_kind() {
-    use crate::characters::traits::Trait;
+    use characters::traits::Trait;
 
     let mut t1 = create_character("Snipsnout", true);
     let mut t2 = create_character("Pricklepaw", true);
@@ -527,8 +525,8 @@ fn alliance_formation_emits_message_with_alliance_formed_kind() {
 
 #[test]
 fn betrayal_emits_message_with_betrayal_triggered_kind() {
-    use crate::characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
-    use crate::characters::traits::Trait;
+    use characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
+    use characters::traits::Trait;
 
     let mut betrayer = create_character("Rendmaw", true);
     let mut victim = create_character("Gnawpaw", true);
@@ -574,7 +572,7 @@ fn betrayal_emits_message_with_betrayal_triggered_kind() {
 
 #[test]
 fn alliance_formed_message_content_matches_game_event_display() {
-    use crate::characters::traits::Trait;
+    use characters::traits::Trait;
 
     let mut t1 = create_character("Snipsnout", true);
     let mut t2 = create_character("Pricklepaw", true);
@@ -649,8 +647,8 @@ fn alliance_formed_message_content_matches_game_event_display() {
 fn betrayal_triggered_message_content_matches_game_event_display() {
     use crate::events::GameEvent;
 
-    use crate::characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
-    use crate::characters::traits::Trait;
+    use characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
+    use characters::traits::Trait;
 
     let mut betrayer = create_character("Rendmaw", true);
     let mut victim = create_character("Gnawpaw", true);

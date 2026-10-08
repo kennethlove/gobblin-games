@@ -580,12 +580,11 @@ fn alliance_summons_wakes_sleeping_target() {
     target.allies.push(summoner_id);
 
     let mut game = create_test_game_with_characters(vec![summoner, target]);
-    game.alliance_events.push(
-        crate::characters::alliances::AllianceEvent::AllianceSummons {
+    game.alliance_events
+        .push(characters::alliances::AllianceEvent::AllianceSummons {
             summoner: summoner_id,
             target: target_id,
-        },
-    );
+        });
     let mut rng = SmallRng::seed_from_u64(42);
     game.process_alliance_events(&mut rng);
 

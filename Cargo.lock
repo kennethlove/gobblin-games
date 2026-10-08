@@ -177,6 +177,7 @@ dependencies = [
  "axum",
  "axum-test",
  "base64-url",
+ "characters",
  "chrono",
  "confirm-email",
  "futures",
@@ -774,6 +775,25 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.3.0",
  "rand_core 0.10.1",
+]
+
+[[package]]
+name = "characters"
+version = "0.1.0"
+dependencies = [
+ "areas",
+ "chrono",
+ "insta",
+ "proptest",
+ "rand 0.10.1",
+ "rstest",
+ "serde",
+ "serde_json",
+ "shared",
+ "strum 0.28.0",
+ "tokio",
+ "uuid",
+ "world",
 ]
 
 [[package]]
@@ -1873,6 +1893,7 @@ name = "game"
 version = "0.1.0"
 dependencies = [
  "areas",
+ "characters",
  "chrono",
  "criterion",
  "indefinite",

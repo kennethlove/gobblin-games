@@ -3,7 +3,7 @@
 //! uniformly from every `BaseTerrain`, plus a 40% chance of a second,
 //! distinct terrain.
 
-use game::characters::Character;
+use characters::Character;
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use strum::IntoEnumIterator;

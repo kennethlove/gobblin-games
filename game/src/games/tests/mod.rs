@@ -1,5 +1,5 @@
 use super::*;
-use crate::characters::Attributes;
+use characters::Attributes;
 
 pub(crate) fn create_test_game_with_characters(characters: Vec<Character>) -> Game {
     Game {
@@ -16,7 +16,7 @@ pub(crate) fn create_test_game_with_characters(characters: Vec<Character>) -> Ga
         tick_counter: TickCounter::default(),
         current_phase: shared::messages::Phase::Day,
         emit_index: 0,
-        combat_tuning: crate::characters::combat_tuning::CombatTuning::default(),
+        combat_tuning: characters::combat_tuning::CombatTuning::default(),
         patrons: vec![],
     }
 }
@@ -39,7 +39,7 @@ mod survival;
 
 #[test]
 fn game_default_carries_default_combat_tuning() {
-    use crate::characters::combat_tuning::CombatTuning;
+    use characters::combat_tuning::CombatTuning;
     let g = Game::default();
     assert_eq!(g.combat_tuning, CombatTuning::default());
 }

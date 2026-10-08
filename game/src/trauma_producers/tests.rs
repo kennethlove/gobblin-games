@@ -1,8 +1,8 @@
 use super::run_trauma_producers;
 use super::shared::map_cause_to_death_cause;
-use crate::characters::Character;
 use crate::games::Game;
 use areas::Area;
+use characters::Character;
 use shared::afflictions::DeathCause;
 use shared::messages::Phase;
 use shared::messages::{CharacterRef, GameMessage, MessagePayload, MessageSource};

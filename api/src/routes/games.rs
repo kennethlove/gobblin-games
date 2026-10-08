@@ -241,7 +241,7 @@ pub async fn game_detail_handler(
         .bind(("identifier", identifier.clone()))
         .await;
 
-    let characters: Vec<game::characters::Character> = match characters_result {
+    let characters: Vec<characters::Character> = match characters_result {
         Ok(mut result) => {
             let raw_rows: Vec<serde_json::Value> = result.take(0).unwrap_or_default();
             raw_rows

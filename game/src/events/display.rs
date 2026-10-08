@@ -544,7 +544,7 @@ impl Display for GameEvent {
                 )
             }
             GameEvent::CombatSwing { beat } => {
-                use crate::characters::combat_beat::CombatBeatExt;
+                use characters::combat_beat::CombatBeatExt;
                 let lines = beat.to_log_lines();
                 write!(f, "{}", lines.join(" "))
             }

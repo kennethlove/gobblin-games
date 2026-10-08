@@ -1,4 +1,3 @@
-pub mod characters;
 pub mod events;
 pub mod games;
 pub mod patrons;

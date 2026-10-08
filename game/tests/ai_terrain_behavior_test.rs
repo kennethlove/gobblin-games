@@ -1,6 +1,6 @@
 use areas::{Area, AreaDetails};
-use game::characters::Character;
-use game::characters::brains::Brain;
+use characters::Character;
+use characters::brains::Brain;
 use rand::prelude::*;
 use rstest::{fixture, rstest};
 use serial_test::serial;
@@ -111,7 +111,7 @@ fn test_concealed_terrain_boosts_hiding(mut small_rng: SmallRng) {
     // (This tests the weight boost logic)
     assert!(matches!(
         action,
-        game::characters::actions::Action::Hide | game::characters::actions::Action::Move(_)
+        characters::actions::Action::Hide | characters::actions::Action::Move(_)
     ));
 }
 
@@ -139,8 +139,7 @@ fn test_resource_scarce_terrain_boosts_search(mut small_rng: SmallRng) {
     // Should prefer moving/searching in resource-scarce terrain when alone
     assert!(matches!(
         action,
-        game::characters::actions::Action::Move(_)
-            | game::characters::actions::Action::SetTrap { .. }
+        characters::actions::Action::Move(_) | characters::actions::Action::SetTrap { .. }
     ));
 }
 
