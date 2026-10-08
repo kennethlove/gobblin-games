@@ -922,6 +922,8 @@ pub enum MessagePayload {
 
 pub mod impls;
 
+pub use impls::Importance;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameMessage {
     pub identifier: String,
