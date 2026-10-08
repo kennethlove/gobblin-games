@@ -296,7 +296,7 @@ impl Brain {
                         return Action::Rest;
                     }
                     let goal = best_goal;
-                    if let Some((path, _cost)) = crate::areas::path::plan_path(
+                    if let Some((path, _cost)) = crate::characters::path::plan_path(
                         all_areas,
                         closed_areas,
                         character,

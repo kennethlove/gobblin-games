@@ -11,13 +11,13 @@ pub mod incidents;
 pub mod inventory;
 pub mod lifecycle;
 pub mod movement;
+pub mod path;
 pub mod rescue;
 pub mod revival;
 pub mod stamina_band;
 pub mod statuses;
 pub mod survival;
 pub mod traits;
-pub mod traps;
 pub mod wounds;
 
 // Re-export key items from sub-modules
@@ -1066,7 +1066,7 @@ impl Character {
         let roll: u32 = _rng.random_range(1..=20);
         let concealment = 10 + int_mod + roll / 2; // Base 10 + int bonus + luck
 
-        let trap = crate::characters::traps::PlacedTrap {
+        let trap = crate::areas::traps::PlacedTrap {
             id: uuid::Uuid::new_v4().to_string(),
             kind,
             severity,

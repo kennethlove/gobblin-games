@@ -9,9 +9,9 @@
 //!   areas are routed around when alternatives exist, but still
 //!   traversable as a last resort (8pq Q4 = K, "high penalty").
 
+use super::actions::Action;
+use super::{Character, calculate_stamina_cost};
 use crate::areas::{Area, AreaDetails};
-use crate::characters::actions::Action;
-use crate::characters::{Character, calculate_stamina_cost};
 use crate::pathfinding::{Graph, astar};
 use crate::terrain::Harshness;
 use std::collections::HashMap;

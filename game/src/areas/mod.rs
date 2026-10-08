@@ -1,8 +1,8 @@
 pub mod events;
 pub mod forage;
 pub mod hex;
-pub mod path;
 pub mod shelter;
+pub mod traps;
 pub mod water;
 pub mod weather;
 
@@ -178,7 +178,7 @@ pub struct AreaDetails {
     pub terrain: TerrainType,
     /// Traps placed by characters in this area.
     #[serde(default)]
-    pub placed_traps: Vec<crate::characters::traps::PlacedTrap>,
+    pub placed_traps: Vec<traps::PlacedTrap>,
     /// Per-character sub-tile slot assignments within this area-hex.
     /// Presentation/positioning only — game logic operates at the area
     /// level. Keys are character identifiers; values are area-local sub

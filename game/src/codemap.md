@@ -246,10 +246,10 @@ Hex-graph arena with 7+ areas, item inventories, and dynamic closures.
 | `mod.rs` | 394 | `Area` enum, `AreaDetails` struct, area lifecycle |
 | `events.rs` | 660 | `AreaEvent` enum, event triggering, hazard spawning |
 | `hex.rs` | 272 | Hex-graph topology, adjacency, pathfinding integration |
-| `path.rs` | 209 | Area path generation, connection management |
 | `water.rs` | 91 | Water source mechanics, dehydration effects |
 | `shelter.rs` | 90 | Shelter mechanics, protection from weather |
 | `forage.rs` | 39 | Foraging mechanics, resource gathering |
+| `traps.rs` | 25 | `PlacedTrap` struct — lives on `AreaDetails::placed_traps` |
 | `weather.rs` | 34 | `Weather` enum (Clear, Rain, Storm, etc.) |
 
 ### **characters/** (12,648 lines total) — **Autonomous AI Characters**
@@ -268,12 +268,12 @@ AI-controlled characters with d20 combat, status effects, alliances, and context
 | `incidents.rs` | 654 | Sleep incidents, shelter-based rest, dormancy processing |
 | `inventory.rs` | 400 | Item management, equip/unequip, durability tracking |
 | `movement.rs` | 276 | Movement between areas, travel restrictions |
+| `path.rs` | 209 | Per-character path planning (`AreaGraph`, `plan_path`) — moved from `areas/` |
 | `rescue.rs` | 428 | Rescue resolution for Trapped afflictions |
 | `stamina_band.rs` | 69 | `StaminaBand` derivation from stamina ratio (Fresh/Winded/Exhausted) |
 | `statuses.rs` | 87 | `CharacterStatus` enum (Healthy/RecentlyDead/Dead/Mauled) |
 | `survival.rs` | 327 | Hunger/thirst bands, survival mechanics, dehydration |
 | `traits.rs` | 459 | `Trait` enum (25+ personality traits), trait bonuses |
-| `traps.rs` | 25 | `PlacedTrap` struct, trap state management |
 
 ### **characters/combat/** (2986 lines total) — **Combat Engine**
 D20-based combat system with attack contests, wound infliction, and stress.
