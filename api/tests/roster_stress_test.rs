@@ -151,3 +151,77 @@ async fn roster_stress_128_end_to_end() {
 
     test_db.cleanup().await;
 }
+
+/// Volume budget: after the persist gate, one full game day at the
+/// 128-goblin worst case must store far fewer rows than the old
+/// everything-is-a-message stream (which ran to thousands per day).
+#[tokio::test]
+async fn message_volume_budget_at_128() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "volume_budget").await;
+
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({
+            "name": "Volume Budget",
+            "team_count": TEAM_COUNT,
+            "goblins_per_team": GOBLINS_PER_TEAM,
+        }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        fetch_character_count(&server, &user, &game_id).await,
+        ROSTER
+    );
+
+    // Start, then one full game day (12 phases) at 128 goblins.
+    for _ in 0..2 {
+        server
+            .put(&format!("/api/games/{}/next", game_id))
+            .add_header("Authorization", user.auth_header())
+            .await
+            .assert_status_ok();
+    }
+
+    let logs = server
+        .get(&format!("/api/games/{}/log", game_id))
+        .add_header("Authorization", user.auth_header())
+        .await;
+    logs.assert_status_ok();
+    let entries = logs.json::<serde_json::Value>();
+    let entries = entries.as_array().expect("log is a JSON array");
+    println!("message rows after 1 full day at 128: {}", entries.len());
+
+    assert!(
+        !entries.is_empty(),
+        "the day must have produced persisted messages"
+    );
+    // Budget: observed ~140 rows/day gated at 128 goblins (previously
+    // thousands — movement alone was 768-1536/day). 400 = ~3x headroom
+    // for RNG variance while still tripping on any single re-gated class
+    // (e.g. CharacterMoved coming back = +800).
+    const MESSAGE_BUDGET_PER_DAY: usize = 400;
+    assert!(
+        entries.len() <= MESSAGE_BUDGET_PER_DAY,
+        "stored message rows {} exceed the per-day budget {}",
+        entries.len(),
+        MESSAGE_BUDGET_PER_DAY
+    );
+
+    // The digest is part of the stored stream.
+    let summaries = entries
+        .iter()
+        .filter(|e| e["payload"]["type"] == "DaySummary")
+        .count();
+    assert_eq!(summaries, 1, "exactly one DaySummary in the day's rows");
+
+    test_db.cleanup().await;
+}

@@ -44,3 +44,7 @@ package-lock.json
 
 # Beads tracker (local only, never committed)
 .beads/
+
+# Local assets and notes — kept out of the repo
+/Avatars/
+/docs/DESIGN.md

@@ -387,6 +387,49 @@ pub enum PhobiaEffect {
     Freeze,
 }
 
+/// Kill leader line inside a [`MessagePayload::DaySummary`] rollup.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DayKillLeader {
+    pub character: CharacterRef,
+    pub kills: u32,
+}
+
+/// Game-day rollup: counts folded from the day's stored messages plus
+/// end-of-day roster state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DayRollup {
+    pub deaths: u32,
+    /// Top killers of the day (most kills first, capped at 3).
+    pub kill_leaders: Vec<DayKillLeader>,
+    pub alliances_formed: u32,
+    pub alliances_dissolved: u32,
+    pub betrayals: u32,
+    pub items_found: u32,
+    pub items_used: u32,
+    /// Roster state at day end.
+    pub survivors: u32,
+    pub fallen: u32,
+}
+
+/// Per-goblin digest for one game day, inside a
+/// [`MessagePayload::DaySummary`]. End-of-day state is snapshotted here
+/// so the log reads without joining character rows.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GoblinDaySummary {
+    pub character: CharacterRef,
+    pub team: u32,
+    pub kills: u32,
+    pub wounds_taken: u32,
+    pub items_found: u32,
+    pub items_used: u32,
+    /// Formed/proposed/dissolved/betrayal events involving this goblin.
+    pub alliance_changes: u32,
+    /// End-of-day snapshot.
+    pub alive: bool,
+    pub blood: u32,
+    pub sanity: u32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 #[derive(strum::EnumDiscriminants)]
@@ -918,9 +961,20 @@ pub enum MessagePayload {
         /// Only meaningful at Severe; always `PARTIAL_RESCUE_THRESHOLD` (2).
         threshold: u8,
     },
+
+    /// Compiled end-of-day digest — the one stored summary row per game
+    /// day: day rollup plus a per-goblin array. Emitted at the end of
+    /// `run_full_day`; `day` matches the stored messages' `game_day`.
+    DaySummary {
+        day: u32,
+        rollup: DayRollup,
+        goblins: Vec<GoblinDaySummary>,
+    },
 }
 
 pub mod impls;
+
+pub use impls::Importance;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameMessage {

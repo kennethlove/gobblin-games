@@ -1,9 +1,162 @@
 use super::*;
 use crate::ids::CharacterId;
 
+/// Whether a payload is persisted to the message log or routed to server
+/// logs only. Single source of truth for the persist gate (api), the log
+/// and timeline read paths, and the debug feed — see the
+/// "compile goblin log to important events" epic for the decision table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Importance {
+    /// Dramatically changes a goblin's (or the arena's) state — persisted.
+    Persist,
+    /// State is derivable from data or the event is low drama — emitted as
+    /// `tracing::debug!` server logs only.
+    ServerLogOnly,
+}
+
 impl MessagePayload {
     pub fn kind(&self) -> MessageKind {
         MessageKind::from(self)
+    }
+
+    /// Persistence tier for this payload (see [`Importance`]).
+    ///
+    /// Rules of thumb:
+    /// - deaths, injuries, traps, state-changing item use, alliances,
+    ///   betrayals, affliction acquisition/escalation, roster and arena
+    ///   state changes, day summaries → [`Importance::Persist`]
+    /// - anything derivable from current character/area data (HP, sanity,
+    ///   bands, position, plain rest/sleep bookkeeping) or pure observers
+    ///   and decay → [`Importance::ServerLogOnly`]
+    /// - combat tiers by outcome: landed swings/flees persist, misses and
+    ///   stalemates do not
+    /// - `CycleStart` persists only at the day-start and nightfall hours
+    ///   (2/day); the other 10 phase starts are clock bookkeeping
+    /// - interrupted wakes persist (something hit them); rested wakes do not
+    pub fn importance(&self) -> Importance {
+        use MessagePayload::*;
+        match self {
+            // --- Outcome-dependent combat tiers -------------------------
+            Combat(e) if matches!(e.outcome, CombatOutcome::Stalemate) => {
+                Importance::ServerLogOnly
+            }
+            Combat(_) => Importance::Persist, // Killed/Wounded/flees
+            CombatSwing(b)
+                if matches!(
+                    b.outcome,
+                    crate::combat_beat::SwingOutcome::Miss
+                ) => Importance::ServerLogOnly,
+            CombatSwing(_) => Importance::Persist,
+            CycleStart { phase, .. }
+                if phase.hour() == Phase::DAY_START_HOUR
+                    || phase.hour() == Phase::NIGHTFALL_HOUR =>
+            {
+                Importance::Persist
+            }
+            CycleStart { .. } | CycleEnd { .. } | PhaseStarted { .. } | PhaseEnded { .. } => {
+                Importance::ServerLogOnly
+            }
+            CharacterWoke {
+                reason: WakeReason::Interrupted { .. },
+                ..
+            } => Importance::Persist,
+
+            // --- Persist: deaths, injuries, traps -----------------------
+            CharacterKilled { .. }
+            | CharacterBledOut { .. }
+            | CharacterWounded { .. }
+            | WoundInflicted { .. }
+            | WoundInfected { .. }
+            | WoundHealed { .. }
+            | WoundTreated { .. }
+            | WoundAmputated { .. }
+            | CharacterTrapped { .. }
+            | TrappedEscaped { .. }
+            | CharacterDiedWhileTrapped { .. }
+            | TrapSet { .. }
+            | TrapTriggered { .. }
+            | RescueAttempted { .. }
+            | SleepIncident { .. } => Importance::Persist,
+
+            // --- Persist: alliances and betrayal ------------------------
+            AllianceFormed { .. }
+            | AllianceProposed { .. }
+            | AllianceDissolved { .. }
+            | BetrayalTriggered { .. }
+            | TrustShockBreak { .. } => Importance::Persist,
+
+            // --- Persist: items that change state -----------------------
+            ItemFound { .. }
+            | ItemUsed { .. }
+            | SubstanceUsed { .. } // addictive consumable use
+            | PatronGift { .. } => Importance::Persist,
+
+            // --- Persist: mental/affliction acquisition + escalation ----
+            ConditionAcquired { .. }
+            | ConditionResolved { .. }
+            | AfflictionAcquired { .. }
+            | AfflictionProgressed { .. }
+            | AfflictionCascaded { .. }
+            | TraumaAcquired { .. }
+            | TraumaReinforced { .. }
+            | TraumaEscalated { .. }
+            | TraumaFlashback { .. }
+            | PhobiaAcquired { .. }
+            | PhobiaTriggered { .. }
+            | PhobiaEscalated { .. }
+            | FixationAcquired { .. }
+            | FixationEscalated { .. }
+            | FixationFired { .. }
+            | FixationConsummated { .. }
+            | FixationThwarted { .. }
+            | AddictionAcquired { .. }
+            | AddictionReinforced { .. }
+            | AddictionEscalated { .. }
+            | AddictionRelapse { .. } => Importance::Persist,
+
+            // --- Persist: arena + game lifecycle ------------------------
+            AreaClosed { .. } | AreaEvent { .. } | GameEnded { .. } | DaySummary { .. } => {
+                Importance::Persist
+            }
+
+            // --- ServerLogOnly: derivable state / low drama -------------
+            Generic
+            | CharacterAttacked { .. }
+            | CharacterMoved { .. }
+            | CharacterHidden { .. }
+            | ItemDropped { .. }
+            | CharacterRested { .. }
+            | CharacterStarved { .. }
+            | CharacterDehydrated { .. }
+            | SanityBreak { .. }
+            | CharacterDesperate { .. }
+            | HungerBandChanged { .. }
+            | ThirstBandChanged { .. }
+            | StaminaBandChanged { .. }
+            | ShelterSought { .. }
+            | Foraged { .. }
+            | Drank { .. }
+            | Ate { .. }
+            | CharacterSlept { .. }
+            | CharacterWoke { .. } // unguarded: rested wakes (Interrupted persists above)
+            | WoundBled { .. } // per-tick blood drain — derivable from `blood`
+            | AfflictionHealed { .. }
+            | PhobiaObserved { .. }
+            | PhobiaForgotten { .. }
+            | PhobiaHabituated { .. } // severity decay — derivable
+            | TraumaObserved { .. }
+            | TraumaForgotten { .. }
+            | TraumaHabituated { .. } // severity decay — derivable
+            | TraumaAvoidance { .. }
+            | FixationFaded { .. }
+            | AddictionResisted { .. }
+            | AddictionCraving { .. }
+            | AddictionObserved { .. }
+            | AddictionForgotten { .. }
+            | AddictionHabituated { .. }
+            | Struggling { .. }
+            | PartialRescueProgress { .. } => Importance::ServerLogOnly,
+        }
     }
 
     pub fn character_refs(&self) -> Vec<&CharacterRef> {
@@ -122,8 +275,14 @@ impl MessagePayload {
             | WoundAmputated { .. }
             | ConditionAcquired { .. }
             | ConditionResolved { .. }
-            | CharacterDesperate { .. }
-            | Generic
+            | CharacterDesperate { .. } => {}
+            DaySummary {
+                rollup, goblins, ..
+            } => {
+                refs.extend(rollup.kill_leaders.iter().map(|l| &l.character));
+                refs.extend(goblins.iter().map(|g| &g.character));
+            }
+            Generic
             | AreaClosed { .. }
             | AreaEvent { .. }
             | CycleStart { .. }

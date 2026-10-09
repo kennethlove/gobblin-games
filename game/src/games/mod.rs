@@ -17,6 +17,7 @@ use world::items::OwnsItems;
 
 pub mod alliances;
 pub mod cycle_helpers;
+pub mod day_summary;
 pub mod messages;
 pub mod patrons;
 
@@ -572,14 +573,13 @@ impl Game {
         Ok(())
     }
 
-    /// True when this phase begins a new game-day. Day 1 begins at
-    /// `Phase::DAY` (no Dawn1 per spec §3); Day 2+ begins at `Phase::DAWN`.
+    /// True when this phase begins a new game-day: the configured day
+    /// start (06 by default), which is the first phase of every
+    /// `run_full_day` cycle. (The old four-phase rule — Day 1 at `DAY`,
+    /// later days at `DAWN` — fired at noon on the 12-phase day and split
+    /// one run's messages across two `game_day` labels.)
     fn is_new_day_boundary(&self, phase: shared::messages::Phase) -> bool {
-        matches!(
-            (self.day, phase),
-            (None | Some(0), shared::messages::Phase::DAY)
-                | (Some(_), shared::messages::Phase::DAWN)
-        )
+        phase.hour() == self.config.day_start_hour
     }
 
     /// Announces the start of the cycle.
@@ -1010,6 +1010,24 @@ impl Game {
         for &p in &shared::messages::Phase::all() {
             self.run_phase(p)?;
         }
+        // Compiled digest: the day's one stored summary row, labelled with
+        // the same game_day the phase messages carry (counter flips next).
+        let summary_day = self.day.unwrap_or(0);
+        let summary_payload = self.compile_day_summary(summary_day);
+        let summary_content = match &summary_payload {
+            shared::messages::MessagePayload::DaySummary { rollup, .. } => format!(
+                "Day {}: {} fallen, {} standing.",
+                summary_day, rollup.fallen, rollup.survivors
+            ),
+            _ => String::new(),
+        };
+        self.push_message(
+            shared::messages::MessageSource::Game(self.identifier.clone()),
+            format!("game:{}", self.identifier),
+            summary_content,
+            summary_payload,
+            self.tick_counter.boundary(),
+        );
         self.day = Some(next_day);
         Ok(())
     }

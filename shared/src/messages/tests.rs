@@ -485,3 +485,791 @@ fn summarize_is_current_flag_set_correctly() {
     assert_eq!(current[0].day, 2);
     assert_eq!(current[0].phase, Phase::NIGHT);
 }
+
+/// The decision table: every `MessagePayload` variant's persistence tier,
+/// asserted explicitly. New variants must be classified here (and in
+/// `MessagePayload::importance`, which is exhaustive at compile time).
+#[test]
+fn importance_tiers_match_decision() {
+    use crate::afflictions::{DeathCause, Severity, TrapKind};
+    use crate::combat_beat::{CombatBeat, StressReport, SwingOutcome};
+    use Importance::{Persist, ServerLogOnly};
+    use MessagePayload::*;
+
+    let area = AreaRef {
+        identifier: "a".into(),
+        name: "A".into(),
+    };
+    let item = ItemRef {
+        identifier: "i".into(),
+        name: "I".into(),
+    };
+    let beat = |outcome| CombatBeat {
+        attacker: t("a"),
+        target: t("b"),
+        weapon: None,
+        shield: None,
+        wear: vec![],
+        outcome,
+        stress: StressReport {
+            stress_damage: 0,
+            stressed: None,
+        },
+        attacker_stamina_cost: 1,
+        target_stamina_cost: 1,
+    };
+    let engagement = |outcome| CombatEngagement {
+        attacker: t("a"),
+        target: t("b"),
+        outcome,
+        detail_lines: vec![],
+    };
+
+    let cases: Vec<(MessagePayload, Importance)> = vec![
+        (Generic, ServerLogOnly),
+        (
+            CharacterKilled {
+                victim: t("v"),
+                killer: None,
+                cause: DeathCause::Combat,
+            },
+            Persist,
+        ),
+        (
+            CharacterWounded {
+                victim: t("v"),
+                attacker: None,
+                hp_lost: 10,
+            },
+            Persist,
+        ),
+        (
+            CharacterAttacked {
+                victim: t("v"),
+                attacker: None,
+            },
+            ServerLogOnly, // outcome surfaces via Wounded/Combat
+        ),
+        (Combat(engagement(CombatOutcome::Killed)), Persist),
+        (Combat(engagement(CombatOutcome::Wounded)), Persist),
+        (Combat(engagement(CombatOutcome::TargetFled)), Persist),
+        (Combat(engagement(CombatOutcome::AttackerFled)), Persist),
+        (Combat(engagement(CombatOutcome::Stalemate)), ServerLogOnly),
+        (CombatSwing(beat(SwingOutcome::Miss)), ServerLogOnly),
+        (
+            CombatSwing(beat(SwingOutcome::Wound { damage: 5 })),
+            Persist,
+        ),
+        (
+            AllianceFormed {
+                members: vec![t("a"), t("b")],
+            },
+            Persist,
+        ),
+        (
+            AllianceProposed {
+                proposer: t("a"),
+                target: t("b"),
+            },
+            Persist,
+        ),
+        (
+            AllianceDissolved {
+                members: vec![t("a")],
+                reason: "r".into(),
+            },
+            Persist,
+        ),
+        (
+            BetrayalTriggered {
+                betrayer: t("a"),
+                victim: t("b"),
+            },
+            Persist,
+        ),
+        (
+            TrustShockBreak {
+                character: t("a"),
+                partner: t("b"),
+            },
+            Persist,
+        ),
+        (
+            CharacterMoved {
+                character: t("c"),
+                from: area.clone(),
+                to: area.clone(),
+            },
+            ServerLogOnly, // position derivable; from/to goes to server logs
+        ),
+        (
+            CharacterHidden {
+                character: t("c"),
+                area: area.clone(),
+            },
+            ServerLogOnly, // hidden flag lives on the character
+        ),
+        (AreaClosed { area: area.clone() }, Persist),
+        (
+            AreaEvent {
+                area: area.clone(),
+                kind: AreaEventKind::Hazard,
+                description: "d".into(),
+            },
+            Persist,
+        ),
+        (
+            ItemFound {
+                character: t("c"),
+                item: item.clone(),
+                area: area.clone(),
+            },
+            Persist,
+        ),
+        (
+            ItemUsed {
+                character: t("c"),
+                item: item.clone(),
+            },
+            Persist,
+        ),
+        (
+            ItemDropped {
+                character: t("c"),
+                item: item.clone(),
+                area: area.clone(),
+            },
+            ServerLogOnly,
+        ),
+        (
+            PatronGift {
+                recipient: t("c"),
+                item: item.clone(),
+                donor: "donor".into(),
+            },
+            Persist,
+        ),
+        (
+            CharacterRested {
+                character: t("c"),
+                hp_restored: 5,
+            },
+            ServerLogOnly, // hp derivable
+        ),
+        (
+            CharacterStarved {
+                character: t("c"),
+                hp_lost: 20,
+            },
+            ServerLogOnly, // per-tick hp drain
+        ),
+        (
+            CharacterDehydrated {
+                character: t("c"),
+                hp_lost: 20,
+            },
+            ServerLogOnly, // per-tick hp drain
+        ),
+        (SanityBreak { character: t("c") }, ServerLogOnly), // sanity derivable
+        (CharacterBledOut { character: t("c") }, Persist),
+        (
+            WoundInfected {
+                character: t("c"),
+                body_part: "arm".into(),
+            },
+            Persist,
+        ),
+        (
+            WoundHealed {
+                character: t("c"),
+                body_part: "arm".into(),
+            },
+            Persist,
+        ),
+        (
+            WoundInflicted {
+                character: t("c"),
+                wound_type: "cut".into(),
+                severity: "Mild".into(),
+                body_part: "arm".into(),
+            },
+            Persist,
+        ),
+        (
+            WoundBled {
+                character: t("c"),
+                blood_lost: 10,
+            },
+            ServerLogOnly, // per-tick drain, derivable from `blood`
+        ),
+        (
+            WoundTreated {
+                character: t("c"),
+                body_part: "arm".into(),
+            },
+            Persist,
+        ),
+        (
+            WoundAmputated {
+                character: t("c"),
+                body_part: "arm".into(),
+            },
+            Persist,
+        ),
+        (
+            ConditionAcquired {
+                character: t("c"),
+                condition: "x".into(),
+                severity: "Mild".into(),
+            },
+            Persist,
+        ),
+        (
+            ConditionResolved {
+                character: t("c"),
+                condition: "x".into(),
+            },
+            Persist,
+        ),
+        (
+            CharacterDesperate {
+                character: t("c"),
+                reason: "low hp".into(),
+            },
+            ServerLogOnly, // threshold derivable from blood/sanity
+        ),
+        (
+            HungerBandChanged {
+                character: t("c"),
+                from: HungerBand::Sated,
+                to: HungerBand::Starving,
+            },
+            ServerLogOnly,
+        ),
+        (
+            ThirstBandChanged {
+                character: t("c"),
+                from: ThirstBand::Sated,
+                to: ThirstBand::Dehydrated,
+            },
+            ServerLogOnly,
+        ),
+        (
+            StaminaBandChanged {
+                character: t("c"),
+                from: StaminaBand::Fresh,
+                to: StaminaBand::Exhausted,
+            },
+            ServerLogOnly,
+        ),
+        (
+            ShelterSought {
+                character: t("c"),
+                area: area.clone(),
+                success: true,
+                roll: 10,
+            },
+            ServerLogOnly, // shelter state derivable
+        ),
+        (
+            Foraged {
+                character: t("c"),
+                area: area.clone(),
+                success: true,
+                debt_recovered: 1,
+            },
+            ServerLogOnly, // hunger derivable; finds surface via ItemFound
+        ),
+        (
+            Drank {
+                character: t("c"),
+                source: DrinkSource::Terrain { area: area.clone() },
+                debt_recovered: 1,
+            },
+            ServerLogOnly,
+        ),
+        (
+            Ate {
+                character: t("c"),
+                item: item.clone(),
+                debt_recovered: 1,
+            },
+            ServerLogOnly, // consumption surfaces via ItemUsed
+        ),
+        (
+            CycleStart {
+                day: 1,
+                phase: Phase::DAY_START,
+            },
+            Persist,
+        ),
+        (
+            CycleStart {
+                day: 1,
+                phase: Phase::from_hour(Phase::NIGHTFALL_HOUR).unwrap(),
+            },
+            Persist,
+        ),
+        (
+            CycleStart {
+                day: 1,
+                phase: Phase::from_hour(12).unwrap(),
+            },
+            ServerLogOnly, // 10 other phase starts are clock bookkeeping
+        ),
+        (
+            CycleEnd {
+                day: 1,
+                phase: Phase::DAY,
+            },
+            ServerLogOnly,
+        ),
+        (
+            PhaseStarted {
+                day: 1,
+                phase: Phase::DAY,
+                weather_summary: None,
+            },
+            ServerLogOnly,
+        ),
+        (
+            PhaseEnded {
+                day: 1,
+                phase: Phase::DAY,
+            },
+            ServerLogOnly,
+        ),
+        (
+            CharacterSlept {
+                character: t("c"),
+                phase: Phase::NIGHT,
+                restored_stamina: 1,
+                restored_hp: 0,
+            },
+            ServerLogOnly,
+        ),
+        (
+            CharacterWoke {
+                character: t("c"),
+                phase: Phase::NIGHT,
+                reason: WakeReason::Rested,
+            },
+            ServerLogOnly,
+        ),
+        (
+            CharacterWoke {
+                character: t("c"),
+                phase: Phase::NIGHT,
+                reason: WakeReason::Interrupted {
+                    event: InterruptionKind::Ambush { attacker: t("a") },
+                },
+            },
+            Persist, // something hit them
+        ),
+        (
+            SleepIncident {
+                character: t("c"),
+                kind: SleepIncidentKind::Annoying,
+                description: "d".into(),
+            },
+            Persist,
+        ),
+        (
+            GameEnded {
+                winner: None,
+                winning_team: None,
+            },
+            Persist,
+        ),
+        (
+            AfflictionAcquired {
+                character_id: "c".into(),
+                affliction: "flu".into(),
+                severity: "Mild".into(),
+            },
+            Persist,
+        ),
+        (
+            AfflictionProgressed {
+                character_id: "c".into(),
+                affliction: "flu".into(),
+                from_severity: "Mild".into(),
+                to_severity: "Severe".into(),
+            },
+            Persist,
+        ),
+        (
+            AfflictionHealed {
+                character_id: "c".into(),
+                affliction: "flu".into(),
+            },
+            ServerLogOnly, // afflictions field shows current state
+        ),
+        (
+            AfflictionCascaded {
+                character_id: "c".into(),
+                from_affliction: "wound".into(),
+                to_affliction: "infection".into(),
+            },
+            Persist,
+        ),
+        (
+            TraumaAcquired {
+                character: "c".into(),
+                severity: "Mild".into(),
+                source: "death".into(),
+            },
+            Persist,
+        ),
+        (
+            TraumaReinforced {
+                character: "c".into(),
+                from_severity: "Mild".into(),
+                to_severity: "Moderate".into(),
+                floor_bumped: true,
+            },
+            Persist,
+        ),
+        (
+            PhobiaAcquired {
+                character: "c".into(),
+                trigger: "fire".into(),
+                severity: "Mild".into(),
+                origin: "trauma".into(),
+            },
+            Persist,
+        ),
+        (
+            PhobiaTriggered {
+                character: "c".into(),
+                trigger: "fire".into(),
+                severity: "Mild".into(),
+                effect: PhobiaEffect::Penalty,
+            },
+            Persist,
+        ),
+        (
+            PhobiaEscalated {
+                character: "c".into(),
+                trigger: "fire".into(),
+                from_severity: "Mild".into(),
+                to_severity: "Severe".into(),
+            },
+            Persist,
+        ),
+        (
+            PhobiaHabituated {
+                character: "c".into(),
+                trigger: "fire".into(),
+                from_severity: "Severe".into(),
+                to_severity: None,
+            },
+            ServerLogOnly, // decay
+        ),
+        (
+            PhobiaObserved {
+                observer: "o".into(),
+                subject: "s".into(),
+                trigger: "fire".into(),
+            },
+            ServerLogOnly,
+        ),
+        (
+            PhobiaForgotten {
+                observer: "o".into(),
+                subject: "s".into(),
+                trigger: "fire".into(),
+            },
+            ServerLogOnly,
+        ),
+        (
+            TraumaEscalated {
+                character: "c".into(),
+                from_severity: "Mild".into(),
+                to_severity: "Moderate".into(),
+            },
+            Persist,
+        ),
+        (
+            TraumaFlashback {
+                character: "c".into(),
+                severity: "Severe".into(),
+                source: "death".into(),
+            },
+            Persist,
+        ),
+        (
+            TraumaAvoidance {
+                character: "c".into(),
+                source: "fire".into(),
+                prevented_action: "move".into(),
+            },
+            ServerLogOnly,
+        ),
+        (
+            TraumaObserved {
+                observer: "o".into(),
+                subject: "s".into(),
+                source: "death".into(),
+            },
+            ServerLogOnly,
+        ),
+        (
+            TraumaForgotten {
+                observer: "o".into(),
+                subject: "s".into(),
+                source: "death".into(),
+            },
+            ServerLogOnly,
+        ),
+        (
+            TraumaHabituated {
+                character: "c".into(),
+                from_severity: "Severe".into(),
+                to_severity: None,
+            },
+            ServerLogOnly,
+        ),
+        (
+            FixationAcquired {
+                character_id: "c".into(),
+                target: "t".into(),
+                severity: "Mild".into(),
+                origin: "x".into(),
+            },
+            Persist,
+        ),
+        (
+            FixationEscalated {
+                character_id: "c".into(),
+                target: "t".into(),
+                old_severity: "Mild".into(),
+                new_severity: "Severe".into(),
+            },
+            Persist,
+        ),
+        (
+            FixationFired {
+                character_id: "c".into(),
+                target: "t".into(),
+                severity: "Mild".into(),
+                action: "move".into(),
+            },
+            Persist,
+        ),
+        (
+            FixationConsummated {
+                character_id: "c".into(),
+                target: "t".into(),
+            },
+            Persist,
+        ),
+        (
+            FixationThwarted {
+                character_id: "c".into(),
+                target: "t".into(),
+                reason: "gone".into(),
+            },
+            Persist,
+        ),
+        (
+            FixationFaded {
+                character_id: "c".into(),
+                target: "t".into(),
+            },
+            ServerLogOnly,
+        ),
+        (
+            SubstanceUsed {
+                character: "c".into(),
+                item: "i".into(),
+                substance: "s".into(),
+            },
+            Persist,
+        ),
+        (
+            AddictionAcquired {
+                character: "c".into(),
+                substance: "s".into(),
+                severity: "Mild".into(),
+                use_count: 1,
+            },
+            Persist,
+        ),
+        (
+            AddictionReinforced {
+                character: "c".into(),
+                substance: "s".into(),
+                severity: "Mild".into(),
+            },
+            Persist,
+        ),
+        (
+            AddictionEscalated {
+                character: "c".into(),
+                substance: "s".into(),
+                from_severity: "Mild".into(),
+                to_severity: "Moderate".into(),
+            },
+            Persist,
+        ),
+        (
+            AddictionResisted {
+                character: "c".into(),
+                substance: "s".into(),
+                reason: "cap".into(),
+            },
+            ServerLogOnly, // nothing changed
+        ),
+        (
+            AddictionRelapse {
+                character: "c".into(),
+                substance: "s".into(),
+                prior_uses: 3,
+            },
+            Persist,
+        ),
+        (
+            AddictionCraving {
+                character: "c".into(),
+                substance: "s".into(),
+                severity: "Mild".into(),
+            },
+            ServerLogOnly,
+        ),
+        (
+            AddictionObserved {
+                observer: "o".into(),
+                subject: "s".into(),
+                substance: "x".into(),
+            },
+            ServerLogOnly,
+        ),
+        (
+            AddictionForgotten {
+                observer: "o".into(),
+                subject: "s".into(),
+                substance: "x".into(),
+            },
+            ServerLogOnly,
+        ),
+        (
+            AddictionHabituated {
+                character: "c".into(),
+                substance: "s".into(),
+                from_severity: "Severe".into(),
+                to_severity: None,
+            },
+            ServerLogOnly,
+        ),
+        (
+            CharacterTrapped {
+                character: "c".into(),
+                kind: TrapKind::Drowning,
+                severity: Severity::Severe,
+            },
+            Persist,
+        ),
+        (
+            Struggling {
+                character: "c".into(),
+                kind: TrapKind::Drowning,
+                severity: Severity::Severe,
+                cycles_trapped: 1,
+            },
+            ServerLogOnly, // cycles_trapped lives on the affliction
+        ),
+        (
+            TrappedEscaped {
+                character: "c".into(),
+                kind: TrapKind::Drowning,
+                cycles_trapped: 2,
+                rescued_by: vec![],
+            },
+            Persist,
+        ),
+        (
+            CharacterDiedWhileTrapped {
+                character: "c".into(),
+                kind: TrapKind::Drowning,
+            },
+            Persist,
+        ),
+        (
+            TrapSet {
+                character: t("c"),
+                trap_kind: "pit".into(),
+            },
+            Persist,
+        ),
+        (
+            TrapTriggered {
+                victim: t("c"),
+                trap_kind: "pit".into(),
+            },
+            Persist,
+        ),
+        (
+            RescueAttempted {
+                rescuer: "r".into(),
+                target: "t".into(),
+                kind: TrapKind::Drowning,
+                severity: Severity::Severe,
+                bonus: 1.0,
+            },
+            Persist,
+        ),
+        (
+            PartialRescueProgress {
+                rescuer: "r".into(),
+                target: "t".into(),
+                kind: TrapKind::Drowning,
+                severity: Severity::Severe,
+                bonus: 1.0,
+                progress: 1,
+                threshold: 2,
+            },
+            ServerLogOnly, // progress lives on the rescue state
+        ),
+        (
+            DaySummary {
+                day: 1,
+                rollup: DayRollup {
+                    deaths: 2,
+                    kill_leaders: vec![],
+                    alliances_formed: 1,
+                    alliances_dissolved: 0,
+                    betrayals: 0,
+                    items_found: 3,
+                    items_used: 2,
+                    survivors: 22,
+                    fallen: 2,
+                },
+                goblins: vec![],
+            },
+            Persist, // the compiled day digest
+        ),
+    ];
+
+    // Every payload variant appears in the table (dupes allowed for
+    // outcome-dependent tiers; distinct kinds must cover the enum).
+    let mut kinds: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (payload, _) in &cases {
+        kinds.insert(format!("{:?}", payload.kind()));
+    }
+    assert_eq!(
+        kinds.len(),
+        91,
+        "table must cover every MessagePayload variant"
+    );
+    assert!(cases.len() >= 90, "table rows: {}", cases.len());
+
+    for (payload, want) in cases {
+        assert_eq!(
+            payload.importance(),
+            want,
+            "tier mismatch for {:?}",
+            payload.kind()
+        );
+    }
+}
