@@ -12,14 +12,48 @@ use rand::RngExt;
 /// Leading nouns for the `<Noun> of the <Thing>` pattern, mostly plural
 /// ("Tears", "Shines") with a mass noun or two ("Shine").
 const PLURALS: &[&str] = &[
-    "Tears", "Drops", "Puddles", "Spores", "Warts", "Teeth", "Bones", "Shines", "Cinders",
-    "Whispers", "Giggles", "Bubbles", "Grubs", "Beetles", "Sparks", "Crumbs", "Shine",
+    "Tears",
+    "Drops",
+    "Puddles",
+    "Spores",
+    "Warts",
+    "Teeth",
+    "Bones",
+    "Shines",
+    "Cinders",
+    "Whispers",
+    "Giggles",
+    "Bubbles",
+    "Grubs",
+    "Beetles",
+    "Sparks",
+    "Crumbs",
+    "Shine",
+    "Ashes",
+    "Splinters",
+    "Bolts",
+    "Cogs",
+    "Gears",
+    "Motes",
+    "Flecks",
+    "Threads",
+    "Vapors",
+    "Grit",
+    "Rustlings",
+    "Hisses",
+    "Murmurs",
+    "Sighs",
+    "Ticks",
+    "Patches",
+    "Lumps",
 ];
 
 /// Leading verbs for the `<Verb> on the <Thing>` pattern.
 const ACTIONS: &[&str] = &[
     "Shine", "Crawl", "Creep", "Slip", "Slosh", "Gleam", "Gnaw", "Squeak", "Drip", "Stumble",
-    "Wander", "Grumble", "Sniffle", "Waddle", "Lurk", "Flicker",
+    "Wander", "Grumble", "Sniffle", "Waddle", "Lurk", "Flicker", "Rattle", "Hiss", "Tinker",
+    "Clank", "Scratch", "Bumble", "Totter", "Splash", "Smolder", "Tremble", "Echo", "Whistle",
+    "Croak", "Rustle", "Scrabble", "Gurgle",
 ];
 
 /// Trailing things the name points at.
@@ -43,11 +77,40 @@ const THINGS: &[&str] = &[
     "Root",
     "Ditch",
     "Rainbow",
+    "Anvil",
+    "Bellows",
+    "Crucible",
+    "Tongs",
+    "Chisel",
+    "Hammer",
+    "Grindstone",
+    "Cog",
+    "Gear",
+    "Mire",
+    "Silt",
+    "Moss",
+    "Lichen",
+    "Bracken",
+    "Thorn",
+    "Scree",
+    "Slag",
+    "Rivet",
+    "Bolt",
+    "Kettle",
+    "Cauldron",
+    "Sconce",
+    "Tallow",
+    "Brine",
+    "Sap",
+    "Husk",
+    "Chaff",
 ];
 
 /// Opening nouns for the `Of the <Noun> ...` poetic patterns.
 const POETIC_NOUNS: &[&str] = &[
     "Twilight", "Wind", "Lathe", "Wheel", "Dawn", "Dusk", "Storm", "Tide", "Ember", "Frost",
+    "Anvil", "Forge", "Thunder", "Rain", "Smoke", "Moon", "Ash", "Slag", "Steam", "Crucible",
+    "Mire", "Brine", "Furnace", "Rime", "Soot", "Char", "Pitch", "Tar",
 ];
 
 /// Adverb middles for the poetic pattern: "Of the Wind Regretfully Blown".
@@ -60,11 +123,41 @@ const POETIC_ADVERBS: &[&str] = &[
     "Wearily",
     "Endlessly",
     "Reluctantly",
+    "Steadily",
+    "Grimly",
+    "Stubbornly",
+    "Forlornly",
+    "Relentlessly",
+    "Mournfully",
+    "Proudly",
+    "Wistfully",
+    "Somberly",
+    "Fiercely",
+    "Meekly",
 ];
 
 /// Noun closers after the article middle: "Of the Twilight the Darkness".
 const POETIC_NOUN_FORMS: &[&str] = &[
-    "Darkness", "Swarf", "Spoke", "Silence", "Gloom", "Splendor", "Havoc",
+    "Darkness",
+    "Swarf",
+    "Spoke",
+    "Silence",
+    "Gloom",
+    "Splendor",
+    "Havoc",
+    "Rust",
+    "Sorrow",
+    "Wonder",
+    "Fury",
+    "Stillness",
+    "Ruin",
+    "Winter",
+    "Hunger",
+    "Whisper",
+    "Delight",
+    "Soot",
+    "Grace",
+    "Mercy",
 ];
 
 /// Poetic verb-forms after an adverb middle: "Of the Wind Regretfully Blown".
@@ -76,37 +169,104 @@ const POETIC_VERB_FORMS: &[&str] = &[
     "Whispered",
     "Forgotten",
     "Shattered",
+    "Humbled",
+    "Kindled",
+    "Spent",
+    "Unbound",
+    "Unmade",
+    "Weathered",
+    "Buried",
+    "Unearthed",
+    "Forged",
+    "Tempered",
 ];
 
 /// Sensory heads and their noun pools for
 /// `<Sense> of the <Noun> on <Phrase>` names.
 const SENSE_POOLS: [(&str, &[&str]); 5] = [
-    ("Sound", &["Rain", "Thunder", "Hail", "Bell"]),
-    ("Sight", &["Dawn", "Dusk", "Moon", "Horizon"]),
-    ("Smell", &["Smoke", "Mildew", "Tar", "Rot"]),
-    ("Taste", &["Salt", "Honey", "Ash", "Iron"]),
-    ("Touch", &["Wind", "Frost", "Stone", "Briar"]),
+    (
+        "Sound",
+        &[
+            "Rain", "Thunder", "Hail", "Bell", "Anvil", "Drum", "Whistle", "Rattle",
+        ],
+    ),
+    (
+        "Sight",
+        &[
+            "Dawn", "Dusk", "Moon", "Horizon", "Ember", "Beacon", "Shadow", "Comet",
+        ],
+    ),
+    (
+        "Smell",
+        &[
+            "Smoke", "Mildew", "Tar", "Rot", "Tallow", "Brine", "Pine", "Manure",
+        ],
+    ),
+    (
+        "Taste",
+        &[
+            "Salt", "Honey", "Ash", "Iron", "Soot", "Root", "Berry", "Vinegar",
+        ],
+    ),
+    (
+        "Touch",
+        &[
+            "Wind", "Frost", "Stone", "Briar", "Rust", "Moss", "Ember", "Sand",
+        ],
+    ),
 ];
 
 /// Ground phrases closing `<Sense> of the <Noun> on <Phrase>` names.
-const GROUND_PHRASES: &[&str] = &["Hard Ground", "Soft Mud", "Wet Stone"];
+const GROUND_PHRASES: &[&str] = &[
+    "Hard Ground",
+    "Soft Mud",
+    "Wet Stone",
+    "Cold Iron",
+    "Loose Scree",
+    "Broken Cobbles",
+    "Frozen Ruts",
+    "Sandy Loam",
+    "Ashen Soil",
+    "Soggy Peat",
+];
 
 /// Adjectives for `The <Adjective> <Noun> <Verb>` names.
-const THE_ADJECTIVES: &[&str] = &["Cold", "Long", "Hollow", "Quiet", "Bitter", "Restless"];
+const THE_ADJECTIVES: &[&str] = &[
+    "Cold",
+    "Long",
+    "Hollow",
+    "Quiet",
+    "Bitter",
+    "Restless",
+    "Crooked",
+    "Weary",
+    "Rusty",
+    "Grim",
+    "Sleepless",
+    "Meager",
+    "Keen",
+    "Grumbling",
+    "Leaning",
+    "Wheezy",
+];
 
 /// Verbs for `The <Adjective> <Noun> <Verb>` names.
 const THE_VERBS: &[&str] = &[
-    "Wakes", "Falls", "Waits", "Hums", "Turns", "Bites", "Creeps",
+    "Wakes", "Falls", "Waits", "Hums", "Turns", "Bites", "Creeps", "Rustles", "Whimpers",
+    "Skitters", "Grinds", "Creaks", "Snuffles", "Patters", "Mutters", "Clinks",
 ];
 
 /// One-word goblin nicknames.
-const NICKNAMES: &[&str] = &["Stinky"];
+const NICKNAMES: &[&str] = &[
+    "Stinky", "Grimy", "Squelch", "Nibble", "Stump", "Warty", "Grease", "Smudge", "Pudge",
+    "Twitch", "Grub", "Squeak", "Blister", "Cinder", "Rots",
+];
 
 /// Rare human-style given names, e.g. "Billy".
-const HUMAN_FIRST: &[&str] = &["Billy"];
+const HUMAN_FIRST: &[&str] = &["Billy", "Marnie", "Wendell", "Greta", "Silas"];
 
 /// Surnames for rare human-style names, e.g. "Slick".
-const HUMAN_LAST: &[&str] = &["Slick"];
+const HUMAN_LAST: &[&str] = &["Slick", "Grange", "Slade", "Quill", "Harrow"];
 
 fn pick<'a>(options: &'a [&'a str], rng: &mut impl Rng) -> &'a str {
     options[rng.random_range(0..options.len())]
