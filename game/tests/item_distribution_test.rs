@@ -1,3 +1,5 @@
+use rand::SeedableRng;
+use rand::rngs::SmallRng;
 use world::items::Item;
 use world::terrain::BaseTerrain;
 
@@ -6,6 +8,9 @@ use world::terrain::BaseTerrain;
 #[test]
 fn test_desert_favors_consumables() {
     let terrain = BaseTerrain::Desert;
+    // Fixed seed: the counts below are reproducible, so this distribution
+    // assertion can never flake on CI.
+    let mut rng = SmallRng::seed_from_u64(1001);
     let mut consumable_count = 0;
     let mut weapon_count = 0;
     let mut shield_count = 0;
@@ -13,7 +18,7 @@ fn test_desert_favors_consumables() {
     // Generate 1000 items so the distribution assertions below are
     // stable across RNG tails (n=100 was tail-flaky).
     for _ in 0..1000 {
-        let item = Item::new_random_with_terrain(terrain, None);
+        let item = Item::new_random_with_terrain_and_rng(terrain, None, &mut rng);
         if item.is_weapon() {
             weapon_count += 1;
         } else if item.is_defensive() {
@@ -43,12 +48,14 @@ fn test_desert_favors_consumables() {
 #[test]
 fn test_urban_ruins_favors_weapons() {
     let terrain = BaseTerrain::UrbanRuins;
+    // Fixed seed keeps this draw reproducible.
+    let mut rng = SmallRng::seed_from_u64(2002);
     let mut weapon_count = 0;
     let mut shield_count = 0;
     let mut consumable_count = 0;
 
     for _ in 0..1000 {
-        let item = Item::new_random_with_terrain(terrain, None);
+        let item = Item::new_random_with_terrain_and_rng(terrain, None, &mut rng);
         if item.is_weapon() {
             weapon_count += 1;
         } else if item.is_defensive() {
@@ -77,12 +84,14 @@ fn test_urban_ruins_favors_weapons() {
 #[test]
 fn test_clearing_balanced_distribution() {
     let terrain = BaseTerrain::Clearing;
+    // Fixed seed: the tight 30-70 bands below stay deterministic run to run.
+    let mut rng = SmallRng::seed_from_u64(3003);
     let mut weapon_count = 0;
     let mut shield_count = 0;
     let mut consumable_count = 0;
 
     for _ in 0..150 {
-        let item = Item::new_random_with_terrain(terrain, None);
+        let item = Item::new_random_with_terrain_and_rng(terrain, None, &mut rng);
         if item.is_weapon() {
             weapon_count += 1;
         } else if item.is_defensive() {
@@ -116,12 +125,14 @@ fn test_clearing_balanced_distribution() {
 #[test]
 fn test_mountains_favors_combat_gear() {
     let terrain = BaseTerrain::Mountains;
+    // Fixed seed keeps this draw reproducible.
+    let mut rng = SmallRng::seed_from_u64(4004);
     let mut weapon_count = 0;
     let mut shield_count = 0;
     let mut consumable_count = 0;
 
     for _ in 0..1000 {
-        let item = Item::new_random_with_terrain(terrain, None);
+        let item = Item::new_random_with_terrain_and_rng(terrain, None, &mut rng);
         if item.is_weapon() {
             weapon_count += 1;
         } else if item.is_defensive() {
@@ -151,6 +162,8 @@ fn test_mountains_favors_combat_gear() {
 #[test]
 fn test_tundra_distribution() {
     let terrain = BaseTerrain::Tundra;
+    // Fixed seed keeps this draw reproducible.
+    let mut rng = SmallRng::seed_from_u64(5005);
     let mut weapon_count = 0;
     let mut shield_count = 0;
     let mut consumable_count = 0;
@@ -158,7 +171,7 @@ fn test_tundra_distribution() {
     // Use a larger sample so the 0.3/0.4/0.3 distribution stabilises
     // (n=100 regularly produced ties given the narrow shield margin).
     for _ in 0..1000 {
-        let item = Item::new_random_with_terrain(terrain, None);
+        let item = Item::new_random_with_terrain_and_rng(terrain, None, &mut rng);
         if item.is_weapon() {
             weapon_count += 1;
         } else if item.is_defensive() {
@@ -196,9 +209,11 @@ fn test_all_terrains_produce_valid_items() {
         BaseTerrain::Geothermal,
     ];
 
+    // Fixed seed keeps the validity sweep reproducible too.
+    let mut rng = SmallRng::seed_from_u64(6006);
     for terrain in terrains {
         for _ in 0..10 {
-            let item = Item::new_random_with_terrain(terrain, None);
+            let item = Item::new_random_with_terrain_and_rng(terrain, None, &mut rng);
 
             // Item should have valid properties
             assert!(!item.identifier.is_empty(), "Item should have identifier");
@@ -256,14 +271,16 @@ fn test_item_weights_sum_to_one() {
 fn test_named_items_respect_terrain_weights() {
     let terrain = BaseTerrain::Desert;
 
+    // Fixed seed keeps this draw reproducible.
+    let mut rng = SmallRng::seed_from_u64(7007);
     // Desert should still favor consumables even with custom names
-    let item = Item::new_random_with_terrain(terrain, Some("Special Item"));
+    let item = Item::new_random_with_terrain_and_rng(terrain, Some("Special Item"), &mut rng);
     assert!(!item.name.is_empty(), "Named item should have a name");
 
     // Generate multiple and verify distribution still works
     let mut consumable_count = 0;
     for _ in 0..200 {
-        let item = Item::new_random_with_terrain(terrain, Some("Test Item"));
+        let item = Item::new_random_with_terrain_and_rng(terrain, Some("Test Item"), &mut rng);
         if !item.is_weapon() && !item.is_defensive() {
             consumable_count += 1;
         }
