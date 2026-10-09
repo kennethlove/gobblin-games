@@ -3,7 +3,6 @@ use areas::events::AreaEvent;
 use areas::{Area, AreaDetails};
 use rand::rngs::SmallRng;
 use std::collections::HashMap;
-use world::items::Item;
 
 impl Game {
     pub(super) fn run_trauma_producers(&mut self, _phase: shared::messages::Phase) {
@@ -112,21 +111,6 @@ impl Game {
             self.process_event_for_area(&area, &event, rng)?;
         }
 
-        // Day 3 is Feast Day, refill the Hub with a random assortment of items
-        if day
-            && self.day == Some(3)
-            && let Some(area_details) = self.areas.iter_mut().find(|ad| ad.area == Some(Area::Hub))
-        {
-            for _ in 0..rng.random_range(1..=FEAST_WEAPON_COUNT) {
-                area_details.add_item(Item::new_random_weapon());
-            }
-            for _ in 0..rng.random_range(1..=FEAST_SHIELD_COUNT) {
-                area_details.add_item(Item::new_random_shield());
-            }
-            for _ in 0..rng.random_range(1..=FEAST_CONSUMABLE_COUNT) {
-                area_details.add_item(Item::new_random_consumable());
-            }
-        }
         Ok(())
     }
 

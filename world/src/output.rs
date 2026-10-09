@@ -11,7 +11,6 @@ pub enum GameOutput<'a> {
     GameDayStart(u32),
     GameDayEnd(u32),
     FirstDayStart,
-    FeastDayStart,
     CharactersLeft(u32),
     GameNightStart(u32),
     GameNightEnd(u32),
@@ -114,9 +113,6 @@ impl<'a> Display for GameOutput<'a> {
             }
             GameOutput::FirstDayStart => {
                 write!(f, "=== 🎉 The Gobblin' Games begin! 🎉 ===")
-            }
-            GameOutput::FeastDayStart => {
-                write!(f, "=== 😋 Day 3: The Scramble ===")
             }
             GameOutput::CharactersLeft(character_count) => {
                 write!(f, "=== 📌 Goblins alive: {} ===", character_count)

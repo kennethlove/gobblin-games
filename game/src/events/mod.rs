@@ -51,7 +51,6 @@ mod tests {
                 GameOutput::GameDayEnd(4),
             ),
             (GameEvent::FirstDayStart, GameOutput::FirstDayStart),
-            (GameEvent::FeastDayStart, GameOutput::FeastDayStart),
             (
                 GameEvent::CharactersLeft {
                     character_count: 12,
@@ -579,8 +578,8 @@ mod tests {
     #[test]
     fn parity_table_covers_every_variant() {
         // Bumps any time a variant is added without a parity row.
-        // 73 = current count of GameEvent variants in types.rs.
-        assert_eq!(parity_table().len(), 73);
+        // 72 = current count of GameEvent variants in types.rs.
+        assert_eq!(parity_table().len(), 72);
     }
 
     #[test]
@@ -608,7 +607,6 @@ mod tests {
     #[test]
     fn serde_roundtrip_unit_variant() {
         roundtrip(&GameEvent::FirstDayStart);
-        roundtrip(&GameEvent::FeastDayStart);
         roundtrip(&GameEvent::NoOneWins);
     }
 
