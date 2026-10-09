@@ -35,15 +35,25 @@ const WEAPON_ADJECTIVES: &[&str] = &[
 ];
 
 pub fn generate_shield_name() -> String {
-    let mut rng = SmallRng::from_rng(&mut rand::rng());
-    let adjective = SHIELD_ADJECTIVES.choose(&mut rng).unwrap().to_owned();
+    generate_shield_name_with_rng(&mut rand::rng())
+}
+
+/// Generate a shield name, drawing the word choices from `rng` so callers
+/// can reproduce the name with a fixed seed.
+pub fn generate_shield_name_with_rng(rng: &mut impl Rng) -> String {
+    let adjective = SHIELD_ADJECTIVES.choose(rng).unwrap().to_owned();
     format!("{} {}", adjective, "shield")
 }
 
 pub fn generate_weapon_name() -> String {
-    let mut rng = SmallRng::from_rng(&mut rand::rng());
-    let adjective = WEAPON_ADJECTIVES.choose(&mut rng).unwrap().to_owned();
-    let noun = WEAPON_NOUNS.choose(&mut rng).unwrap().to_owned();
+    generate_weapon_name_with_rng(&mut rand::rng())
+}
+
+/// Generate a weapon name, drawing the word choices from `rng` so callers
+/// can reproduce the name with a fixed seed.
+pub fn generate_weapon_name_with_rng(rng: &mut impl Rng) -> String {
+    let adjective = WEAPON_ADJECTIVES.choose(rng).unwrap().to_owned();
+    let noun = WEAPON_NOUNS.choose(rng).unwrap().to_owned();
     format!("{} {}", adjective, noun)
 }
 

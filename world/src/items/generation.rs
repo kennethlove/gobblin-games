@@ -1,5 +1,5 @@
 use super::*;
-use crate::items::name_generator::{generate_shield_name, generate_weapon_name};
+use crate::items::name_generator::{generate_shield_name_with_rng, generate_weapon_name_with_rng};
 use crate::terrain::BaseTerrain;
 use rand::RngExt;
 use rand::prelude::*;
@@ -8,7 +8,12 @@ use strum::IntoEnumIterator;
 impl ItemRarity {
     /// Roll for item rarity using weighted distribution.
     pub fn random() -> ItemRarity {
-        let mut rng = SmallRng::from_rng(&mut rand::rng());
+        Self::random_with_rng(&mut rand::rng())
+    }
+
+    /// Roll for item rarity using weighted distribution, drawing every
+    /// random value from `rng` so callers can reproduce the roll.
+    pub fn random_with_rng(rng: &mut impl Rng) -> ItemRarity {
         let roll: f32 = rng.random();
 
         if roll < 0.60 {
@@ -25,7 +30,11 @@ impl ItemRarity {
 
 impl ItemType {
     pub fn random() -> ItemType {
-        let mut rng = SmallRng::from_rng(&mut rand::rng());
+        Self::random_with_rng(&mut rand::rng())
+    }
+
+    /// Pick a random item type from `rng`.
+    pub fn random_with_rng(rng: &mut impl Rng) -> ItemType {
         // Weighted distribution: weapons and consumables remain dominant;
         // food and water enter the spawn pool but are rarer (spec).
         match rng.random_range(0..10) {
@@ -39,28 +48,36 @@ impl ItemType {
 
 impl Attribute {
     pub fn random() -> Attribute {
-        let mut rng = SmallRng::from_rng(&mut rand::rng());
-        Attribute::iter().choose(&mut rng).unwrap()
+        Self::random_with_rng(&mut rand::rng())
+    }
+
+    /// Pick a random attribute from `rng`.
+    pub fn random_with_rng(rng: &mut impl Rng) -> Attribute {
+        Attribute::iter().choose(rng).unwrap()
     }
 }
 
 impl Item {
     pub fn new_random(name: Option<&str>) -> Item {
-        let mut rng = SmallRng::from_rng(&mut rand::rng());
+        Self::new_random_with_rng(name, &mut rand::rng())
+    }
 
-        let item_type = ItemType::random();
+    /// Seedable variant of [`Item::new_random`]: every random choice is
+    /// drawn from `rng`, so a fixed seed reproduces the same item.
+    pub fn new_random_with_rng(name: Option<&str>, rng: &mut impl Rng) -> Item {
+        let item_type = ItemType::random_with_rng(rng);
         let is_shield = rng.random_bool(0.5);
 
         match (item_type, name) {
-            (ItemType::Consumable, Some(name)) => Self::new_consumable(name),
-            (ItemType::Consumable, None) => Self::new_random_consumable(),
+            (ItemType::Consumable, Some(name)) => Self::new_consumable_with_rng(name, rng),
+            (ItemType::Consumable, None) => Self::new_random_consumable_with_rng(rng),
             (ItemType::Weapon, Some(name)) => match is_shield {
-                false => Self::new_weapon(name),
-                true => Self::new_shield(name),
+                false => Self::new_weapon_with_rng(name, rng),
+                true => Self::new_shield_with_rng(name, rng),
             },
             (ItemType::Weapon, None) => match is_shield {
-                false => Self::new_random_weapon(),
-                true => Self::new_random_shield(),
+                false => Self::new_random_weapon_with_rng(rng),
+                true => Self::new_random_shield_with_rng(rng),
             },
             (ItemType::Food(n), name) => Self::new_food(name, n),
             (ItemType::Water(n), name) => Self::new_water(name, n),
@@ -88,7 +105,17 @@ impl Item {
     /// let item = Item::new_random_with_terrain(BaseTerrain::UrbanRuins, None);
     /// ```
     pub fn new_random_with_terrain(terrain: BaseTerrain, name: Option<&str>) -> Item {
-        let mut rng = SmallRng::from_rng(&mut rand::rng());
+        Self::new_random_with_terrain_and_rng(terrain, name, &mut rand::rng())
+    }
+
+    /// Seedable variant of [`Item::new_random_with_terrain`]: the terrain roll
+    /// and every item detail are drawn from `rng`, so a fixed seed reproduces
+    /// the same sequence of items.
+    pub fn new_random_with_terrain_and_rng(
+        terrain: BaseTerrain,
+        name: Option<&str>,
+        rng: &mut impl Rng,
+    ) -> Item {
         let weights = terrain.item_weights();
 
         // Use weighted random selection based on terrain
@@ -97,28 +124,31 @@ impl Item {
         if roll < weights.weapons {
             // Generate weapon
             match name {
-                Some(n) => Self::new_weapon(n),
-                None => Self::new_random_weapon(),
+                Some(n) => Self::new_weapon_with_rng(n, rng),
+                None => Self::new_random_weapon_with_rng(rng),
             }
         } else if roll < weights.weapons + weights.shields {
             // Generate shield
             match name {
-                Some(n) => Self::new_shield(n),
-                None => Self::new_random_shield(),
+                Some(n) => Self::new_shield_with_rng(n, rng),
+                None => Self::new_random_shield_with_rng(rng),
             }
         } else {
             // Generate consumable
             match name {
-                Some(n) => Self::new_consumable(n),
-                None => Self::new_random_consumable(),
+                Some(n) => Self::new_consumable_with_rng(n, rng),
+                None => Self::new_random_consumable_with_rng(rng),
             }
         }
     }
 
     pub fn new_weapon(name: &str) -> Item {
-        let mut rng = SmallRng::from_rng(&mut rand::rng());
+        Self::new_weapon_with_rng(name, &mut rand::rng())
+    }
 
-        let rarity = ItemRarity::random();
+    /// Build a named weapon whose rarity and stats come from `rng`.
+    pub fn new_weapon_with_rng(name: &str, rng: &mut impl Rng) -> Item {
+        let rarity = ItemRarity::random_with_rng(rng);
         let attribute = Attribute::Strength;
         let (min, max) = rarity.effect_range();
         let effect = rng.random_range(min..=max);
@@ -136,15 +166,23 @@ impl Item {
     }
 
     pub fn new_random_weapon() -> Item {
-        let name = generate_weapon_name();
-        Item::new_weapon(name.as_str())
+        Self::new_random_weapon_with_rng(&mut rand::rng())
+    }
+
+    /// Build a weapon with a generated name, drawing everything from `rng`.
+    pub fn new_random_weapon_with_rng(rng: &mut impl Rng) -> Item {
+        let name = generate_weapon_name_with_rng(rng);
+        Self::new_weapon_with_rng(name.as_str(), rng)
     }
 
     pub fn new_consumable(name: &str) -> Item {
-        let mut rng = SmallRng::from_rng(&mut rand::rng());
+        Self::new_consumable_with_rng(name, &mut rand::rng())
+    }
 
-        let rarity = ItemRarity::random();
-        let attribute = Attribute::random();
+    /// Build a named consumable whose rarity and stats come from `rng`.
+    pub fn new_consumable_with_rng(name: &str, rng: &mut impl Rng) -> Item {
+        let rarity = ItemRarity::random_with_rng(rng);
+        let attribute = Attribute::random_with_rng(rng);
         let (min, max) = rarity.effect_range();
         let effect = rng.random_range(min..=max);
 
@@ -152,9 +190,13 @@ impl Item {
     }
 
     pub fn new_random_consumable() -> Item {
-        let mut rng = SmallRng::from_rng(&mut rand::rng());
-        let rarity = ItemRarity::random();
-        let attribute = Attribute::random();
+        Self::new_random_consumable_with_rng(&mut rand::rng())
+    }
+
+    /// Build a consumable with a generated name, drawing everything from `rng`.
+    pub fn new_random_consumable_with_rng(rng: &mut impl Rng) -> Item {
+        let rarity = ItemRarity::random_with_rng(rng);
+        let attribute = Attribute::random_with_rng(rng);
         let name = attribute.consumable_name();
         let (min, max) = rarity.effect_range();
         let effect = rng.random_range(min..=max);
@@ -163,9 +205,12 @@ impl Item {
     }
 
     pub fn new_shield(name: &str) -> Item {
-        let mut rng = SmallRng::from_rng(&mut rand::rng());
+        Self::new_shield_with_rng(name, &mut rand::rng())
+    }
 
-        let rarity = ItemRarity::random();
+    /// Build a named shield whose rarity and stats come from `rng`.
+    pub fn new_shield_with_rng(name: &str, rng: &mut impl Rng) -> Item {
+        let rarity = ItemRarity::random_with_rng(rng);
         let item_type = ItemType::Weapon;
         let attribute = Attribute::Defense;
         let (min, max) = rarity.effect_range();
@@ -177,8 +222,13 @@ impl Item {
     }
 
     pub fn new_random_shield() -> Item {
-        let name = generate_shield_name();
-        Item::new_shield(name.as_str())
+        Self::new_random_shield_with_rng(&mut rand::rng())
+    }
+
+    /// Build a shield with a generated name, drawing everything from `rng`.
+    pub fn new_random_shield_with_rng(rng: &mut impl Rng) -> Item {
+        let name = generate_shield_name_with_rng(rng);
+        Self::new_shield_with_rng(name.as_str(), rng)
     }
 
     /// Construct a Food item carrying `value` hunger-debt relief. `name` is
