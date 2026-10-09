@@ -8,12 +8,6 @@ pub struct GameConfig {
     // Game lifecycle constants (from games.rs)
     /// Character count threshold for area constriction
     pub low_character_threshold: u32,
-    /// Number of weapons spawned during feast
-    pub feast_weapon_count: u32,
-    /// Number of shields spawned during feast
-    pub feast_shield_count: u32,
-    /// Number of consumables spawned during feast
-    pub feast_consumable_count: u32,
     /// Probability of day events occurring (1.0 = 100%, 0.25 = 25%)
     pub day_event_frequency: f64,
     /// Probability of night events occurring (1.0 = 100%, 0.125 = 12.5%)
@@ -97,9 +91,6 @@ impl Default for GameConfig {
         Self {
             // Game lifecycle
             low_character_threshold: 8,
-            feast_weapon_count: 2,
-            feast_shield_count: 2,
-            feast_consumable_count: 4,
             day_event_frequency: 1.0 / 4.0,
             night_event_frequency: 1.0 / 8.0,
             instant_death_enabled: true,
@@ -157,7 +148,6 @@ mod tests {
     fn test_default_config() {
         let config = GameConfig::default();
         assert_eq!(config.low_character_threshold, 8);
-        assert_eq!(config.feast_weapon_count, 2);
         assert_eq!(config.max_health, 100);
         assert_eq!(config.low_health_limit, 20);
     }

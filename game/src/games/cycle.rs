@@ -38,10 +38,6 @@ impl Game {
                 action: Action::Move(None),
                 probability: Some(0.5),
             }),
-            (Some(3), true) => Some(ActionSuggestion {
-                action: Action::Move(Some(Area::Hub)),
-                probability: Some(0.75),
-            }),
             (_, _) => None,
         };
 
@@ -1261,10 +1257,9 @@ impl Game {
     /// 1. Announce area events.
     /// 2. Open an area if there are no open areas.
     /// 3. Trigger any events for this cycle if we're past the first three days.
-    /// 4. Trigger Feast Day events.
-    /// 5. Close more areas by spawning more events if the characters are getting low.
-    /// 6. Run the character cycle.
-    /// 7. Update the characters in the game.
+    /// 4. Close more areas by spawning more events if the characters are getting low.
+    /// 5. Run the character cycle.
+    /// 6. Update the characters in the game.
     pub(super) fn do_a_cycle(&mut self, phase: shared::messages::Phase) -> Result<(), GameError> {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
 

@@ -17,7 +17,7 @@ Core game engine implementing the Gobblin' Games simulation. This directory prov
 
 ### **Strategy Pattern**
 - `Action` enum (in `characters/actions.rs`) encapsulates different character behaviors
-- `ActionSuggestion` allows external influence on AI decisions (e.g., Feast Day bias)
+- `ActionSuggestion` allows external influence on AI decisions (e.g., day-1 random move bias)
 - `Brain` module uses different decision strategies based on context (enemy count, health, afflictions)
 
 ### **Template Method**
@@ -45,7 +45,7 @@ Core game engine implementing the Gobblin' Games simulation. This directory prov
   - `Game::new(name)` — Creates game instance
   - `Game::start()` — Initializes simulation
   - `Game::run_day_night_cycle(is_day: bool)` — Advances one half-day cycle
-- **Configuration**: `GameConfig` struct centralizes magic numbers (`low_character_threshold`, `feast_weapon_count`, etc.) with runtime-tunable knobs
+- **Configuration**: `GameConfig` struct centralizes magic numbers (`low_character_threshold`, `day_event_frequency`, etc.) with runtime-tunable knobs
 
 ### **Execution Flow**
 ```
@@ -63,10 +63,9 @@ run_day_night_cycle(day: bool)
   │     ├─> ensure_open_area() [guarantee at least one safe zone]
   │     ├─> trigger_cycle_events(day, rng)
   │     │     ├─> spawn random AreaEvents [1/4 day, 1/8 night frequency]
-  │     │     └─> Feast Day logic [day 3: refill Hub]
   │     ├─> constrain_areas(rng) [close areas if <8 characters alive]
   │     ├─> run_character_cycle(day, rng, ...)
-  │     │     ├─> pre-compute ActionSuggestions [day 1: Move, day 3: Hub]
+  │     │     ├─> pre-compute ActionSuggestions [day 1: Move]
   │     │     ├─> build area/character lookup HashMaps [optimization]
   │     │     └─> for each character:
   │     │           ├─> apply random CharacterEvent [based on luck]

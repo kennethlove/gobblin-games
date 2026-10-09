@@ -16,9 +16,6 @@ impl Display for GameEvent {
             GameEvent::FirstDayStart => {
                 write!(f, "=== 🎉 The Gobblin' Games begin! 🎉 ===")
             }
-            GameEvent::FeastDayStart => {
-                write!(f, "=== 😋 Day 3: The Scramble ===")
-            }
             GameEvent::CharactersLeft { character_count } => {
                 write!(f, "=== 📌 Goblins alive: {} ===", character_count)
             }

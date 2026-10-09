@@ -13,7 +13,6 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use uuid::Uuid;
 use world::items::Item;
-use world::items::OwnsItems;
 
 pub mod alliances;
 pub mod cycle_helpers;
@@ -212,9 +211,6 @@ impl From<String> for GameError {
 }
 
 const LOW_CHARACTER_THRESHOLD: u32 = 8;
-const FEAST_WEAPON_COUNT: u32 = 2;
-const FEAST_SHIELD_COUNT: u32 = 2;
-const FEAST_CONSUMABLE_COUNT: u32 = 4;
 const DAY_EVENT_FREQUENCY: f64 = 1.0 / 4.0;
 const NIGHT_EVENT_FREQUENCY: f64 = 1.0 / 8.0;
 

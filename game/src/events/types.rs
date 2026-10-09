@@ -47,7 +47,6 @@ pub enum GameEvent {
         day_number: u32,
     },
     FirstDayStart,
-    FeastDayStart,
     CharactersLeft {
         character_count: u32,
     },
