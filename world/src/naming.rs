@@ -262,12 +262,6 @@ const NICKNAMES: &[&str] = &[
     "Twitch", "Grub", "Squeak", "Blister", "Cinder", "Rots",
 ];
 
-/// Rare human-style given names, e.g. "Billy".
-const HUMAN_FIRST: &[&str] = &["Billy", "Marnie", "Wendell", "Greta", "Silas"];
-
-/// Surnames for rare human-style names, e.g. "Slick".
-const HUMAN_LAST: &[&str] = &["Slick", "Grange", "Slade", "Quill", "Harrow"];
-
 fn pick<'a>(options: &'a [&'a str], rng: &mut impl Rng) -> &'a str {
     options[rng.random_range(0..options.len())]
 }
@@ -320,7 +314,7 @@ const CLAN_PLACES: &[&str] = &[
 
 /// A goblin name pattern with explicit word choices, so tests can
 /// reconstruct exact example names.
-enum GoblinNamePattern<'a> {
+pub enum GoblinNamePattern<'a> {
     /// `<Noun> of the <Thing>` — "Tears of the Mushroom".
     NounOf(&'a str, &'a str),
     /// `<Verb> on the <Thing>` — "Shine on the Moon".
@@ -340,7 +334,10 @@ enum GoblinNamePattern<'a> {
 }
 
 /// Build the name for an explicit pattern choice.
-fn build_goblin_name(pattern: GoblinNamePattern<'_>) -> String {
+/// Build an exact name from an explicit pattern (used by tests to prove
+/// example names are generatable, and available to callers that need a
+/// specific name rather than a random draw).
+pub fn build_goblin_name(pattern: GoblinNamePattern<'_>) -> String {
     match pattern {
         GoblinNamePattern::NounOf(noun, thing) => format!("{noun} of the {thing}"),
         GoblinNamePattern::VerbOn(verb, thing) => format!("{verb} on the {thing}"),
@@ -359,9 +356,21 @@ fn build_goblin_name(pattern: GoblinNamePattern<'_>) -> String {
     }
 }
 
+/// Rare human-style goblin name via the `fake` crate's English name
+/// provider ("First Last"), e.g. "Marcus Webb". Shares the caller's
+/// rng, so seeded generation stays deterministic.
+pub fn human_name(rng: &mut impl Rng) -> String {
+    use fake::Fake;
+    use fake::faker::name::raw::Name;
+    use fake::locales::EN;
+    Name(EN).fake_with_rng(rng)
+}
+
 /// Generate a goblin name: usually a short phrase like "Tears of the
 /// Mushroom" or "Of the Wind Regretfully Blown", rarely a nickname like
-/// "Stinky" or a human-style name like "Billy Slick".
+/// "Stinky" or a human-style name like "Marcus Webb" (from the `fake`
+/// crate's name provider; exact names remain reconstructable through
+/// [`build_goblin_name`] with explicit parts).
 pub fn goblin_name(rng: &mut impl Rng) -> String {
     // Weighted roll; human-style names stay rare.
     let pattern = match rng.random_range(0..100) {
@@ -385,7 +394,7 @@ pub fn goblin_name(rng: &mut impl Rng) -> String {
             pick(THE_VERBS, rng),
         ),
         90..=96 => GoblinNamePattern::Nickname(pick(NICKNAMES, rng)),
-        _ => GoblinNamePattern::Human(pick(HUMAN_FIRST, rng), pick(HUMAN_LAST, rng)),
+        _ => return human_name(rng),
     };
     build_goblin_name(pattern)
 }
@@ -436,8 +445,16 @@ mod tests {
                     seen[0] = true;
                 }
                 (2, _) => {
-                    assert!(HUMAN_FIRST.contains(&parts[0]), "{name}");
-                    assert!(HUMAN_LAST.contains(&parts[1]), "{name}");
+                    // Human-style branch comes from the fake crate's
+                    // English name provider ("First Last"); pools no
+                    // longer drive generation.
+                    for word in &parts {
+                        assert!(
+                            word.chars()
+                                .all(|c| c.is_alphabetic() || c == '\'' || c == '-'),
+                            "{name}"
+                        );
+                    }
                     seen[1] = true;
                 }
                 (4, "The") => {
@@ -583,8 +600,6 @@ mod tests {
             "Of the Twilight the Darkness"
         );
 
-        assert!(HUMAN_FIRST.contains(&"Billy"));
-        assert!(HUMAN_LAST.contains(&"Slick"));
         assert_eq!(
             build_goblin_name(GoblinNamePattern::Human("Billy", "Slick")),
             "Billy Slick"
@@ -631,5 +646,31 @@ mod tests {
         let mut a = SmallRng::seed_from_u64(42);
         let mut b = SmallRng::seed_from_u64(42);
         assert_eq!(clan_name(&mut a), clan_name(&mut b));
+    }
+
+    #[test]
+    fn human_name_is_deterministic_and_full_shaped() {
+        let mut a = SmallRng::seed_from_u64(99);
+        let mut b = SmallRng::seed_from_u64(99);
+        let first = human_name(&mut a);
+        let second = human_name(&mut b);
+        assert_eq!(first, second, "seeded human names must be deterministic");
+        assert!(!first.is_empty());
+        assert!(first.contains(' '), "full names are 'First Last': {first}");
+        assert!(
+            first
+                .chars()
+                .all(|c| c.is_alphabetic() || c == ' ' || c == '\'' || c == '-'),
+            "unexpected characters in {first}"
+        );
+    }
+
+    #[test]
+    fn goblin_name_stays_deterministic_through_human_branch() {
+        let mut a = SmallRng::seed_from_u64(1234);
+        let mut b = SmallRng::seed_from_u64(1234);
+        for _ in 0..200 {
+            assert_eq!(goblin_name(&mut a), goblin_name(&mut b));
+        }
     }
 }
