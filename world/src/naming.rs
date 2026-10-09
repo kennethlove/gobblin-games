@@ -12,14 +12,48 @@ use rand::RngExt;
 /// Leading nouns for the `<Noun> of the <Thing>` pattern, mostly plural
 /// ("Tears", "Shines") with a mass noun or two ("Shine").
 const PLURALS: &[&str] = &[
-    "Tears", "Drops", "Puddles", "Spores", "Warts", "Teeth", "Bones", "Shines", "Cinders",
-    "Whispers", "Giggles", "Bubbles", "Grubs", "Beetles", "Sparks", "Crumbs", "Shine",
+    "Tears",
+    "Drops",
+    "Puddles",
+    "Spores",
+    "Warts",
+    "Teeth",
+    "Bones",
+    "Shines",
+    "Cinders",
+    "Whispers",
+    "Giggles",
+    "Bubbles",
+    "Grubs",
+    "Beetles",
+    "Sparks",
+    "Crumbs",
+    "Shine",
+    "Ashes",
+    "Splinters",
+    "Bolts",
+    "Cogs",
+    "Gears",
+    "Motes",
+    "Flecks",
+    "Threads",
+    "Vapors",
+    "Grit",
+    "Rustlings",
+    "Hisses",
+    "Murmurs",
+    "Sighs",
+    "Ticks",
+    "Patches",
+    "Lumps",
 ];
 
 /// Leading verbs for the `<Verb> on the <Thing>` pattern.
 const ACTIONS: &[&str] = &[
     "Shine", "Crawl", "Creep", "Slip", "Slosh", "Gleam", "Gnaw", "Squeak", "Drip", "Stumble",
-    "Wander", "Grumble", "Sniffle", "Waddle", "Lurk", "Flicker",
+    "Wander", "Grumble", "Sniffle", "Waddle", "Lurk", "Flicker", "Rattle", "Hiss", "Tinker",
+    "Clank", "Scratch", "Bumble", "Totter", "Splash", "Smolder", "Tremble", "Echo", "Whistle",
+    "Croak", "Rustle", "Scrabble", "Gurgle",
 ];
 
 /// Trailing things the name points at.
@@ -43,11 +77,40 @@ const THINGS: &[&str] = &[
     "Root",
     "Ditch",
     "Rainbow",
+    "Anvil",
+    "Bellows",
+    "Crucible",
+    "Tongs",
+    "Chisel",
+    "Hammer",
+    "Grindstone",
+    "Cog",
+    "Gear",
+    "Mire",
+    "Silt",
+    "Moss",
+    "Lichen",
+    "Bracken",
+    "Thorn",
+    "Scree",
+    "Slag",
+    "Rivet",
+    "Bolt",
+    "Kettle",
+    "Cauldron",
+    "Sconce",
+    "Tallow",
+    "Brine",
+    "Sap",
+    "Husk",
+    "Chaff",
 ];
 
 /// Opening nouns for the `Of the <Noun> ...` poetic patterns.
 const POETIC_NOUNS: &[&str] = &[
     "Twilight", "Wind", "Lathe", "Wheel", "Dawn", "Dusk", "Storm", "Tide", "Ember", "Frost",
+    "Anvil", "Forge", "Thunder", "Rain", "Smoke", "Moon", "Ash", "Slag", "Steam", "Crucible",
+    "Mire", "Brine", "Furnace", "Rime", "Soot", "Char", "Pitch", "Tar",
 ];
 
 /// Adverb middles for the poetic pattern: "Of the Wind Regretfully Blown".
@@ -60,11 +123,41 @@ const POETIC_ADVERBS: &[&str] = &[
     "Wearily",
     "Endlessly",
     "Reluctantly",
+    "Steadily",
+    "Grimly",
+    "Stubbornly",
+    "Forlornly",
+    "Relentlessly",
+    "Mournfully",
+    "Proudly",
+    "Wistfully",
+    "Somberly",
+    "Fiercely",
+    "Meekly",
 ];
 
 /// Noun closers after the article middle: "Of the Twilight the Darkness".
 const POETIC_NOUN_FORMS: &[&str] = &[
-    "Darkness", "Swarf", "Spoke", "Silence", "Gloom", "Splendor", "Havoc",
+    "Darkness",
+    "Swarf",
+    "Spoke",
+    "Silence",
+    "Gloom",
+    "Splendor",
+    "Havoc",
+    "Rust",
+    "Sorrow",
+    "Wonder",
+    "Fury",
+    "Stillness",
+    "Ruin",
+    "Winter",
+    "Hunger",
+    "Whisper",
+    "Delight",
+    "Soot",
+    "Grace",
+    "Mercy",
 ];
 
 /// Poetic verb-forms after an adverb middle: "Of the Wind Regretfully Blown".
@@ -76,37 +169,98 @@ const POETIC_VERB_FORMS: &[&str] = &[
     "Whispered",
     "Forgotten",
     "Shattered",
+    "Humbled",
+    "Kindled",
+    "Spent",
+    "Unbound",
+    "Unmade",
+    "Weathered",
+    "Buried",
+    "Unearthed",
+    "Forged",
+    "Tempered",
 ];
 
 /// Sensory heads and their noun pools for
 /// `<Sense> of the <Noun> on <Phrase>` names.
 const SENSE_POOLS: [(&str, &[&str]); 5] = [
-    ("Sound", &["Rain", "Thunder", "Hail", "Bell"]),
-    ("Sight", &["Dawn", "Dusk", "Moon", "Horizon"]),
-    ("Smell", &["Smoke", "Mildew", "Tar", "Rot"]),
-    ("Taste", &["Salt", "Honey", "Ash", "Iron"]),
-    ("Touch", &["Wind", "Frost", "Stone", "Briar"]),
+    (
+        "Sound",
+        &[
+            "Rain", "Thunder", "Hail", "Bell", "Anvil", "Drum", "Whistle", "Rattle",
+        ],
+    ),
+    (
+        "Sight",
+        &[
+            "Dawn", "Dusk", "Moon", "Horizon", "Ember", "Beacon", "Shadow", "Comet",
+        ],
+    ),
+    (
+        "Smell",
+        &[
+            "Smoke", "Mildew", "Tar", "Rot", "Tallow", "Brine", "Pine", "Manure",
+        ],
+    ),
+    (
+        "Taste",
+        &[
+            "Salt", "Honey", "Ash", "Iron", "Soot", "Root", "Berry", "Vinegar",
+        ],
+    ),
+    (
+        "Touch",
+        &[
+            "Wind", "Frost", "Stone", "Briar", "Rust", "Moss", "Ember", "Sand",
+        ],
+    ),
 ];
 
 /// Ground phrases closing `<Sense> of the <Noun> on <Phrase>` names.
-const GROUND_PHRASES: &[&str] = &["Hard Ground", "Soft Mud", "Wet Stone"];
+const GROUND_PHRASES: &[&str] = &[
+    "Hard Ground",
+    "Soft Mud",
+    "Wet Stone",
+    "Cold Iron",
+    "Loose Scree",
+    "Broken Cobbles",
+    "Frozen Ruts",
+    "Sandy Loam",
+    "Ashen Soil",
+    "Soggy Peat",
+];
 
 /// Adjectives for `The <Adjective> <Noun> <Verb>` names.
-const THE_ADJECTIVES: &[&str] = &["Cold", "Long", "Hollow", "Quiet", "Bitter", "Restless"];
+const THE_ADJECTIVES: &[&str] = &[
+    "Cold",
+    "Long",
+    "Hollow",
+    "Quiet",
+    "Bitter",
+    "Restless",
+    "Crooked",
+    "Weary",
+    "Rusty",
+    "Grim",
+    "Sleepless",
+    "Meager",
+    "Keen",
+    "Grumbling",
+    "Leaning",
+    "Wheezy",
+];
 
 /// Verbs for `The <Adjective> <Noun> <Verb>` names.
 const THE_VERBS: &[&str] = &[
-    "Wakes", "Falls", "Waits", "Hums", "Turns", "Bites", "Creeps",
+    "Wakes", "Falls", "Waits", "Hums", "Turns", "Bites", "Creeps", "Rustles", "Whimpers",
+    "Skitters", "Grinds", "Creaks", "Snuffles", "Patters", "Mutters", "Clinks",
 ];
 
 /// One-word goblin nicknames.
-const NICKNAMES: &[&str] = &["Stinky"];
-
-/// Rare human-style given names, e.g. "Billy".
-const HUMAN_FIRST: &[&str] = &["Billy"];
-
-/// Surnames for rare human-style names, e.g. "Slick".
-const HUMAN_LAST: &[&str] = &["Slick"];
+const NICKNAMES: &[&str] = &[
+    "Stinky", "Grimy", "Squelch", "Nibble", "Stump", "Warty", "Grease", "Smudge", "Pudge",
+    "Twitch", "Grub", "Squeak", "Blister", "Cinder", "Rots",
+];
 
 fn pick<'a>(options: &'a [&'a str], rng: &mut impl Rng) -> &'a str {
     options[rng.random_range(0..options.len())]
@@ -160,7 +314,7 @@ const CLAN_PLACES: &[&str] = &[
 
 /// A goblin name pattern with explicit word choices, so tests can
 /// reconstruct exact example names.
-enum GoblinNamePattern<'a> {
+pub enum GoblinNamePattern<'a> {
     /// `<Noun> of the <Thing>` — "Tears of the Mushroom".
     NounOf(&'a str, &'a str),
     /// `<Verb> on the <Thing>` — "Shine on the Moon".
@@ -180,7 +334,10 @@ enum GoblinNamePattern<'a> {
 }
 
 /// Build the name for an explicit pattern choice.
-fn build_goblin_name(pattern: GoblinNamePattern<'_>) -> String {
+/// Build an exact name from an explicit pattern (used by tests to prove
+/// example names are generatable, and available to callers that need a
+/// specific name rather than a random draw).
+pub fn build_goblin_name(pattern: GoblinNamePattern<'_>) -> String {
     match pattern {
         GoblinNamePattern::NounOf(noun, thing) => format!("{noun} of the {thing}"),
         GoblinNamePattern::VerbOn(verb, thing) => format!("{verb} on the {thing}"),
@@ -199,9 +356,21 @@ fn build_goblin_name(pattern: GoblinNamePattern<'_>) -> String {
     }
 }
 
+/// Rare human-style goblin name via the `fake` crate's English name
+/// provider ("First Last"), e.g. "Marcus Webb". Shares the caller's
+/// rng, so seeded generation stays deterministic.
+pub fn human_name(rng: &mut impl Rng) -> String {
+    use fake::Fake;
+    use fake::faker::name::raw::Name;
+    use fake::locales::EN;
+    Name(EN).fake_with_rng(rng)
+}
+
 /// Generate a goblin name: usually a short phrase like "Tears of the
 /// Mushroom" or "Of the Wind Regretfully Blown", rarely a nickname like
-/// "Stinky" or a human-style name like "Billy Slick".
+/// "Stinky" or a human-style name like "Marcus Webb" (from the `fake`
+/// crate's name provider; exact names remain reconstructable through
+/// [`build_goblin_name`] with explicit parts).
 pub fn goblin_name(rng: &mut impl Rng) -> String {
     // Weighted roll; human-style names stay rare.
     let pattern = match rng.random_range(0..100) {
@@ -225,7 +394,7 @@ pub fn goblin_name(rng: &mut impl Rng) -> String {
             pick(THE_VERBS, rng),
         ),
         90..=96 => GoblinNamePattern::Nickname(pick(NICKNAMES, rng)),
-        _ => GoblinNamePattern::Human(pick(HUMAN_FIRST, rng), pick(HUMAN_LAST, rng)),
+        _ => return human_name(rng),
     };
     build_goblin_name(pattern)
 }
@@ -276,8 +445,16 @@ mod tests {
                     seen[0] = true;
                 }
                 (2, _) => {
-                    assert!(HUMAN_FIRST.contains(&parts[0]), "{name}");
-                    assert!(HUMAN_LAST.contains(&parts[1]), "{name}");
+                    // Human-style branch comes from the fake crate's
+                    // English name provider ("First Last"); pools no
+                    // longer drive generation.
+                    for word in &parts {
+                        assert!(
+                            word.chars()
+                                .all(|c| c.is_alphabetic() || c == '\'' || c == '-'),
+                            "{name}"
+                        );
+                    }
                     seen[1] = true;
                 }
                 (4, "The") => {
@@ -423,8 +600,6 @@ mod tests {
             "Of the Twilight the Darkness"
         );
 
-        assert!(HUMAN_FIRST.contains(&"Billy"));
-        assert!(HUMAN_LAST.contains(&"Slick"));
         assert_eq!(
             build_goblin_name(GoblinNamePattern::Human("Billy", "Slick")),
             "Billy Slick"
@@ -471,5 +646,31 @@ mod tests {
         let mut a = SmallRng::seed_from_u64(42);
         let mut b = SmallRng::seed_from_u64(42);
         assert_eq!(clan_name(&mut a), clan_name(&mut b));
+    }
+
+    #[test]
+    fn human_name_is_deterministic_and_full_shaped() {
+        let mut a = SmallRng::seed_from_u64(99);
+        let mut b = SmallRng::seed_from_u64(99);
+        let first = human_name(&mut a);
+        let second = human_name(&mut b);
+        assert_eq!(first, second, "seeded human names must be deterministic");
+        assert!(!first.is_empty());
+        assert!(first.contains(' '), "full names are 'First Last': {first}");
+        assert!(
+            first
+                .chars()
+                .all(|c| c.is_alphabetic() || c == ' ' || c == '\'' || c == '-'),
+            "unexpected characters in {first}"
+        );
+    }
+
+    #[test]
+    fn goblin_name_stays_deterministic_through_human_branch() {
+        let mut a = SmallRng::seed_from_u64(1234);
+        let mut b = SmallRng::seed_from_u64(1234);
+        for _ in 0..200 {
+            assert_eq!(goblin_name(&mut a), goblin_name(&mut b));
+        }
     }
 }

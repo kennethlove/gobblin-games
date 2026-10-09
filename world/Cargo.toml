@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+fake = "5.1.0"
 indefinite = "0.1.11"
 rand = "0.10"
 serde = { version = "1.0.228", features = ["derive"] }
