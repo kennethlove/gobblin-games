@@ -33,6 +33,8 @@ pub async fn create_game(
     payload
         .validate()
         .map_err(|e| AppError::ValidationError(format!("{}", e)))?;
+    shared::validate_day_night_hours(payload.day_start_hour, payload.nightfall_hour)
+        .map_err(|e| AppError::ValidationError(format!("{}", e)))?;
 
     // Generate server-controlled fields. Game::default() runs WPGen to
     // produce a three-word "clever" name; use it as the fallback when
@@ -63,6 +65,11 @@ pub async fn create_game(
     // `characters`) that SurrealDB v3 strictly rejects on SCHEMAFULL tables.
     // See also save_game which uses explicit UPDATE SET for the same reason.
     let game_rid = RecordId::new("game", game_identifier.as_str());
+    let config = world::config::GameConfig {
+        day_start_hour: payload.day_start_hour.unwrap_or(6),
+        nightfall_hour: payload.nightfall_hour.unwrap_or(20),
+        ..Default::default()
+    };
     let body = serde_json::json!({
         "identifier": &game_identifier,
         "name": &game_name,
@@ -72,6 +79,8 @@ pub async fn create_game(
         "team_count": team_count,
         "goblins_per_team": goblins_per_team,
         "max_goblins_per_player": max_goblins_per_player,
+        "config": serde_json::to_value(&config)
+            .map_err(|e| AppError::InternalServerError(format!("Failed to encode config: {e}")))?,
     });
 
     // Construct Game with server-controlled fields
@@ -83,7 +92,7 @@ pub async fn create_game(
         characters: vec![],
         areas: vec![],
         private: true, // Default to private
-        config: Default::default(),
+        config,
         messages: vec![],
         alliance_events: vec![],
         ..Default::default()

@@ -44,6 +44,15 @@
         <input type="number" id="max_goblins_per_player" name="max_goblins_per_player" min="1" max="24" value="1" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-amber-500">
         <p class="text-xs text-gray-500 mt-1">For joining players — you may always bring as many as you like.</p>
       </div>
+      <div>
+        <label for="day_start_hour" class="block text-sm font-medium text-gray-300 mb-1">Day starts (hour)</label>
+        <input type="number" id="day_start_hour" name="day_start_hour" min="0" max="22" step="2" value="6" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-amber-500">
+      </div>
+      <div>
+        <label for="nightfall_hour" class="block text-sm font-medium text-gray-300 mb-1">Night falls (hour)</label>
+        <input type="number" id="nightfall_hour" name="nightfall_hour" min="0" max="22" step="2" value="20" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-amber-500">
+        <p class="text-xs text-gray-500 mt-1">Even hours only; night runs nightfall back to day start.</p>
+      </div>
     </div>
 
     {% if goblins %}

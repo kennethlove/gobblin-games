@@ -500,3 +500,96 @@ async fn timeline_summary_returns_404_for_missing_game() {
 
     test_db.cleanup().await;
 }
+
+/// Create a game with shifted day/night boundaries; config must persist
+/// and round-trip through the detail endpoint (gobblin-games-1mb.3).
+#[tokio::test]
+async fn test_create_game_with_shifted_day_night_hours() {
+    let test_db = TestDb::new().await;
+    let app_state = test_db.app_state();
+    let router = create_test_router(app_state);
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "nightowl").await;
+
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({
+            "name": "Night Falls Early",
+            "day_start_hour": 8,
+            "nightfall_hour": 18,
+        }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let created = response.json::<serde_json::Value>();
+    let identifier = created["identifier"].as_str().unwrap().to_string();
+
+    // Round-trip through the detail endpoint: config survives persistence.
+    let detail = server
+        .get(&format!("/api/games/{identifier}"))
+        .add_header("Authorization", user.auth_header())
+        .await;
+    detail.assert_status(axum::http::StatusCode::OK);
+    let body = detail.json::<serde_json::Value>();
+    assert_eq!(body["config"]["day_start_hour"], 8);
+    assert_eq!(body["config"]["nightfall_hour"], 18);
+
+    test_db.cleanup().await;
+}
+
+/// Games created without hour payload default to 6/20 in stored config.
+#[tokio::test]
+async fn test_create_game_defaults_day_night_hours() {
+    let test_db = TestDb::new().await;
+    let app_state = test_db.app_state();
+    let router = create_test_router(app_state);
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "dawnlover").await;
+
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Default Hours" }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let created = response.json::<serde_json::Value>();
+    let identifier = created["identifier"].as_str().unwrap().to_string();
+
+    let detail = server
+        .get(&format!("/api/games/{identifier}"))
+        .add_header("Authorization", user.auth_header())
+        .await;
+    let body = detail.json::<serde_json::Value>();
+    assert_eq!(body["config"]["day_start_hour"], 6);
+    assert_eq!(body["config"]["nightfall_hour"], 20);
+
+    test_db.cleanup().await;
+}
+
+/// Invalid day/night hours (odd, out of range, or equal) are rejected 400.
+#[tokio::test]
+async fn test_create_game_rejects_invalid_day_night_hours() {
+    let test_db = TestDb::new().await;
+    let app_state = test_db.app_state();
+    let router = create_test_router(app_state);
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "badhours").await;
+
+    for payload in [
+        json!({"name": "Odd", "day_start_hour": 7}),
+        json!({"name": "Late", "day_start_hour": 24}),
+        json!({"name": "Same", "day_start_hour": 12, "nightfall_hour": 12}),
+    ] {
+        let response = server
+            .post("/api/games")
+            .add_header("Authorization", user.auth_header())
+            .json(&payload)
+            .await;
+        response.assert_status(axum::http::StatusCode::BAD_REQUEST);
+    }
+
+    test_db.cleanup().await;
+}

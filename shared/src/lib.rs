@@ -145,6 +145,15 @@ pub struct CreateGame {
     #[serde(default)]
     #[validate(range(min = 1, message = "Goblins per player must be at least 1"))]
     pub max_goblins_per_player: Option<u32>,
+
+    /// First phase hour of every game day (even, 00–22; default 6).
+    /// Paired with `nightfall_hour`; validated together.
+    #[serde(default)]
+    pub day_start_hour: Option<u8>,
+
+    /// Hour night falls (even, 00–22; default 20).
+    #[serde(default)]
+    pub nightfall_hour: Option<u8>,
 }
 
 /// Roster ceiling: team_count × goblins_per_team must stay within
@@ -177,6 +186,32 @@ pub fn validate_roster_size(game: &CreateGame) -> Result<(), ValidationError> {
         return Err(error);
     }
     Ok(())
+}
+
+/// Day/night boundary validation for game creation: effective hours (absent
+/// = `GameConfig` defaults 6/20) must be even, under 24, and distinct.
+/// Mirrors `GameConfig::day_night_hours_valid` (`world` depends on `shared`,
+/// so the check lives here too).
+pub fn validate_day_night_hours(
+    day_start_hour: Option<u8>,
+    nightfall_hour: Option<u8>,
+) -> Result<(), ValidationError> {
+    let day_start = day_start_hour.unwrap_or(6);
+    let nightfall = nightfall_hour.unwrap_or(20);
+    let valid = day_start < 24
+        && nightfall < 24
+        && day_start.is_multiple_of(2)
+        && nightfall.is_multiple_of(2)
+        && day_start != nightfall;
+    if valid {
+        Ok(())
+    } else {
+        let mut error = ValidationError::new("invalid_day_night_hours");
+        error.message = Some(
+            "Day start and nightfall must be even hours under 24 and differ from each other".into(),
+        );
+        Err(error)
+    }
 }
 
 pub type DeleteCharacter = String;
@@ -309,9 +344,42 @@ pub struct DisplayGame {
     pub private: bool,
     #[serde(default)]
     pub is_mine: bool,
+    /// Day/night boundaries from the game's stored `config` object. Only
+    /// the two boundary hours are read here (extra config keys ignored);
+    /// missing on rows written before the `config` column — defaults.
+    #[serde(default)]
+    pub config: DayNightHours,
     pub created_by: CreatedBy,
     #[serde(default)]
     pub winner: Option<CharacterRef>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+/// Day/night boundary hours projected from a game's stored `GameConfig`
+/// object. Lives in `shared` because `world` depends on `shared` (can't
+/// reverse); extra GameConfig keys are ignored on deserialize.
+pub struct DayNightHours {
+    #[serde(default = "default_day_start_hour")]
+    pub day_start_hour: u8,
+    #[serde(default = "default_nightfall_hour")]
+    pub nightfall_hour: u8,
+}
+
+impl Default for DayNightHours {
+    fn default() -> Self {
+        Self {
+            day_start_hour: default_day_start_hour(),
+            nightfall_hour: default_nightfall_hour(),
+        }
+    }
+}
+
+fn default_day_start_hour() -> u8 {
+    6
+}
+
+fn default_nightfall_hour() -> u8 {
+    20
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -375,6 +443,46 @@ pub struct PaginatedGames {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn day_night_hours_defaults_are_valid() {
+        assert!(validate_day_night_hours(None, None).is_ok());
+    }
+
+    #[test]
+    fn day_night_hours_accepts_shifted_pair() {
+        assert!(validate_day_night_hours(Some(8), Some(18)).is_ok());
+        assert!(validate_day_night_hours(Some(0), Some(22)).is_ok());
+    }
+
+    #[test]
+    fn day_night_hours_rejects_odd_or_out_of_range_or_equal() {
+        assert!(validate_day_night_hours(Some(7), Some(20)).is_err());
+        assert!(validate_day_night_hours(Some(6), Some(21)).is_err());
+        assert!(validate_day_night_hours(Some(24), Some(20)).is_err());
+        assert!(validate_day_night_hours(Some(12), Some(12)).is_err());
+    }
+
+    #[test]
+    fn day_night_hours_partial_pair_validated_against_defaults() {
+        // Only day start supplied; nightfall defaults to 20.
+        assert!(validate_day_night_hours(Some(20), None).is_err());
+        assert!(validate_day_night_hours(Some(8), None).is_ok());
+    }
+
+    #[test]
+    fn day_night_hours_ignores_extra_game_config_keys() {
+        // DisplayGame.config deserializes from the full GameConfig object;
+        // extra keys must be ignored, absent hours default to 6/20.
+        let json = r#"{"day_start_hour": 8, "nightfall_hour": 18, "max_strength": 50}"#;
+        let hours: DayNightHours = serde_json::from_str(json).unwrap();
+        assert_eq!(hours.day_start_hour, 8);
+        assert_eq!(hours.nightfall_hour, 18);
+
+        let empty: DayNightHours = serde_json::from_str("{}").unwrap();
+        assert_eq!(empty.day_start_hour, 6);
+        assert_eq!(empty.nightfall_hour, 20);
+    }
 
     #[test]
     fn test_short_display_name_validation() {

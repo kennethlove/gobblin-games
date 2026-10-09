@@ -4,6 +4,10 @@ use shared::messages::Phase;
 /// Configuration for game constants and tuning parameters.
 /// Centralizes magic numbers to enable runtime configuration and difficulty modes.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+// Per-field defaults from `Default` on hydration: a partial stored
+// `config` object (pre-migration rows, forward-compatible writers) fills
+// missing fields instead of failing the whole Game deserialize.
+#[serde(default)]
 pub struct GameConfig {
     // Game lifecycle constants (from games.rs)
     /// Character count threshold for area constriction
@@ -253,6 +257,18 @@ impl GameConfig {
 #[cfg(test)]
 mod day_night_tests {
     use super::*;
+
+    #[test]
+    fn partial_stored_config_hydrates_with_defaults() {
+        // Rows written before the `config` column (or by forward-compatible
+        // writers) may store a partial object; serde(default) fills gaps
+        // from GameConfig::default() instead of failing the whole Game.
+        let partial = r#"{"day_start_hour": 10}"#;
+        let cfg: GameConfig = serde_json::from_str(partial).expect("partial hydrate");
+        assert_eq!(cfg.day_start_hour, 10);
+        assert_eq!(cfg.nightfall_hour, 20);
+        assert!(cfg.day_night_hours_valid());
+    }
 
     #[test]
     fn defaults_produce_expected_slots() {
