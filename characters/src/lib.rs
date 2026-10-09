@@ -192,10 +192,11 @@ pub struct Character {
     pub area: Area,
     /// What is their current status?
     pub status: CharacterStatus,
-    /// This is their thinker. Persisted across saves so runtime state
-    /// (psychotic break, preferred-action overrides, derived thresholds)
-    /// survives load. `#[serde(default)]` lets pre-fix rows that omit the
-    /// `brain` column hydrate via `Brain::default()`.
+    /// This is their thinker. Persisted so load restores the same brain as
+    /// the save; `reset_for_new_game` re-derives it from traits on entry, so
+    /// runtime state (psychotic break, preferred-action overrides) never
+    /// crosses a game boundary. `#[serde(default)]` lets pre-fix rows that
+    /// omit the `brain` column hydrate via `Brain::default()`.
     #[serde(default)]
     pub brain: Brain,
     /// How they present themselves to the real world
@@ -336,9 +337,13 @@ pub struct Character {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub addiction_use_count: BTreeMap<Substance, u32>,
     /// Substances the character has ever been addicted to (spec §5.1 step 5c).
-    /// Populated on acquisition, never cleared. Enables the relapse short-circuit:
-    /// if `ever_addicted_to.contains(s)` and no current `Addiction(s)`, next use
-    /// of `s` auto-acquires at Mild.
+    /// Populated on acquisition, never cleared — including by
+    /// `reset_for_new_game`. Carrying this across games is intentional
+    /// progression: the relapse short-circuit depends on it, so a goblin who
+    /// was addicted in a previous game auto-acquires at Mild on re-exposure
+    /// in the next one. Do not "fix" this as a per-game leak.
+    /// Enables the relapse short-circuit: if `ever_addicted_to.contains(s)`
+    /// and no current `Addiction(s)`, next use of `s` auto-acquires at Mild.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub ever_addicted_to: BTreeSet<Substance>,
     /// Cycles remaining in hangover (alcohol after-effect).
@@ -438,12 +443,16 @@ impl Character {
     /// enters a new one (the persistent-vs-per-game split): status and
     /// health, stamina, area, hunger/thirst, shelter and drain steps,
     /// allies and betrayals, afflictions, sleep and pending events,
-    /// per-game statistics, items, and a fresh terrain-affinity roll from
-    /// the goblin's own RNG. Untouched: identity, name, team, clan name,
-    /// avatar, traits, attributes, brain, lifetime statistics (kills,
-    /// wins, defeats, draws), and `ever_addicted_to`.
+    /// per-game statistics, items, a fresh terrain-affinity roll from
+    /// the goblin's own RNG, and a brain re-derived from traits (clearing
+    /// psychotic breaks and preferred-action overrides left by the last
+    /// game). Untouched: identity, name, team, clan name, avatar, traits,
+    /// attributes, lifetime statistics (kills, wins, defeats, draws), and
+    /// `ever_addicted_to` — the latter intentionally, so the addiction
+    /// relapse short-circuit (see that field's doc) carries across games.
     pub fn reset_for_new_game(&mut self) {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
+        self.brain = Brain::from_traits(&self.traits, &mut rng);
         self.set_status(CharacterStatus::default());
         self.blood = default_blood();
         self.wounds.clear();
@@ -2156,8 +2165,11 @@ mod tests {
 
     #[rstest]
     fn reset_for_new_game_clears_per_game_state_keeps_identity() {
+        use crate::actions::Action;
+        use crate::brains::PsychoticBreakType;
         use crate::statuses::CharacterStatus;
         use areas::Area;
+        use shared::afflictions::Substance;
         let mut me = Character::new(
             "Stinky".to_string(),
             Some(3),
@@ -2183,6 +2195,11 @@ mod tests {
         me.statistics.killed_by = Some("Snaggletooth".to_string());
         me.statistics.game = "old-game".to_string();
         me.statistics.kills = 2;
+        me.brain.psychotic_break = Some(PsychoticBreakType::Berserk);
+        me.brain.preferred_action = Some(Action::Hide);
+        me.brain.preferred_action_percentage = 0.75;
+        me.brain.thresholds.low_health = u32::MAX; // stale sentinel
+        me.ever_addicted_to.insert(Substance::Alcohol);
 
         me.reset_for_new_game();
 
@@ -2212,6 +2229,19 @@ mod tests {
         assert_eq!(me.traits, traits_before);
         assert_eq!(me.attributes.strength, strength_before);
         assert_eq!(me.clan_name, clan_before);
+        // Brain runtime state from the last game is gone: no lingering
+        // psychotic break, no stale preferred-action override.
+        assert!(me.brain.psychotic_break.is_none());
+        assert!(me.brain.preferred_action.is_none());
+        assert_eq!(me.brain.preferred_action_percentage, 0.0);
+        // Thresholds re-derive from the surviving traits (stale sentinel is
+        // gone). A fresh derivation from empty traits would also clear it,
+        // but traits survive the reset, so the brain stays coherent with
+        // them — see the brain field's doc comment.
+        assert_ne!(me.brain.thresholds.low_health, u32::MAX);
+        // Intentional progression: addiction history survives (relapse
+        // short-circuit, spec §5.1). See the field's doc comment.
+        assert!(me.ever_addicted_to.contains(&Substance::Alcohol));
     }
 
     #[rstest]
