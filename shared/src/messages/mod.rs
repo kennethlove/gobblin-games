@@ -454,11 +454,16 @@ pub enum MessagePayload {
     },
 
     Combat(CombatEngagement),
-    /// One physical-combat swing in fully typed form (see `CombatBeat`).
-    /// Emitted alongside the existing `Combat`/`CharacterKilled`/`CharacterWounded`
-    /// payloads so consumers can render structured swing data without parsing
-    /// `detail_lines` strings.
-    CombatSwing(crate::combat_beat::CombatBeat),
+    /// Emitted at the start of each multi-round combat round so the UI can
+    /// open a round group. `combat_id` groups the whole fight's beats.
+    CombatRoundStart { combat_id: String, round: u32 },
+    /// One combatant's action within a round (see `CombatBeat`).
+    CombatBeat(crate::combat_beat::CombatBeat),
+    /// Emitted once when a fight terminates, carrying the terminal result.
+    CombatEnded {
+        combat_id: String,
+        result: crate::combat_beat::CombatResult,
+    },
 
     AllianceFormed {
         members: Vec<CharacterRef>,

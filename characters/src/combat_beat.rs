@@ -5,7 +5,8 @@
 //! extension trait.
 
 pub use shared::combat_beat::{
-    CombatBeat, StressReport, SwingOutcome, WearOutcomeReport, WearReport,
+    BeatOutcome, CombatActionKind, CombatBeat, StressReport, SwingOutcome, WearOutcomeReport,
+    WearReport,
 };
 
 use world::output::GameOutput;
@@ -13,8 +14,10 @@ use world::output::GameOutput;
 /// Render a `CombatBeat` into the prose lines historically emitted by
 /// `Character::attacks()`.
 ///
-/// Order: wear lines (weapon then shield, in `wear` vec order), then outcome
-/// lines, then optional trailing horrified line if `stress.stress_damage > 0`.
+/// For `Attack` beats the order is: wear lines (weapon then shield, in `wear`
+/// vec order), then outcome lines, then an optional trailing horrified line if
+/// the swing's `stress.stress_damage > 0`. Non-swing actions render a single
+/// descriptive line.
 pub trait CombatBeatExt {
     fn to_log_lines(&self) -> Vec<String>;
 }
@@ -22,20 +25,54 @@ pub trait CombatBeatExt {
 impl CombatBeatExt for CombatBeat {
     fn to_log_lines(&self) -> Vec<String> {
         let mut out = Vec::with_capacity(4);
+        let a = &self.actor.name;
+        let t = self
+            .target
+            .as_ref()
+            .map(|c| c.name.as_str())
+            .unwrap_or("");
+
+        // Non-swing actions narrate a single line and stop.
+        match &self.action {
+            CombatActionKind::Flee => {
+                return vec![match &self.outcome {
+                    BeatOutcome::Fled => format!("{a} flees from {t}!"),
+                    _ => format!("{a} tries to flee but {t} cuts them off!"),
+                }];
+            }
+            CombatActionKind::Cower => {
+                return vec![format!("{a} cowers and begs {t} for mercy!")];
+            }
+            CombatActionKind::Spare => {
+                return vec![format!("{a} spares {t}.")];
+            }
+            CombatActionKind::Execute => {
+                return vec![format!("{a} executes the helpless {t}.")];
+            }
+            CombatActionKind::UseItem { item } => {
+                return vec![format!("{a} uses {} in the fight.", item.name)];
+            }
+            CombatActionKind::Attack => {}
+        }
+
+        // Attack: extract the swing outcome + stress from the beat outcome.
+        let BeatOutcome::Swing { outcome, stress, .. } = &self.outcome else {
+            return out;
+        };
 
         // 1. Wear lines.
         for w in &self.wear {
             match w.outcome {
                 WearOutcomeReport::Pristine => {}
                 WearOutcomeReport::Worn => {
-                    if w.owner.identifier == self.attacker.identifier {
+                    if w.owner.identifier == self.actor.identifier {
                         out.push(GameOutput::WeaponWear(&w.owner.name, &w.item.name).to_string());
                     } else {
                         out.push(GameOutput::ShieldWear(&w.owner.name, &w.item.name).to_string());
                     }
                 }
                 WearOutcomeReport::Broken => {
-                    if w.owner.identifier == self.attacker.identifier {
+                    if w.owner.identifier == self.actor.identifier {
                         out.push(GameOutput::WeaponBreak(&w.owner.name, &w.item.name).to_string());
                         if let Some(penalty) = w.mid_action_penalty {
                             out.push(
@@ -65,9 +102,7 @@ impl CombatBeatExt for CombatBeat {
         }
 
         // 2. Outcome lines.
-        let a = &self.attacker.name;
-        let t = &self.target.name;
-        match &self.outcome {
+        match outcome {
             SwingOutcome::Miss => {
                 out.push(GameOutput::CharacterAttackMiss(a, t).to_string());
             }
@@ -113,17 +148,13 @@ impl CombatBeatExt for CombatBeat {
         }
 
         // 3. Optional trailing horrified line.
-        if self.stress.stress_damage > 0 {
-            // Prefer the stressed character's name when threaded through; fall
-            // back to the attacker for legacy/default beats so older snapshots
-            // (e.g. tests that build beats without `stressed`) still render.
-            let name = self
-                .stress
+        if stress.stress_damage > 0 {
+            let name = stress
                 .stressed
                 .as_ref()
-                .map(|t| t.name.as_str())
+                .map(|c| c.name.as_str())
                 .unwrap_or(a);
-            out.push(GameOutput::CharacterHorrified(name, self.stress.stress_damage).to_string());
+            out.push(GameOutput::CharacterHorrified(name, stress.stress_damage).to_string());
         }
 
         out
@@ -142,19 +173,43 @@ mod tests {
         }
     }
 
+    fn sword() -> shared::messages::ItemRef {
+        shared::messages::ItemRef {
+            identifier: "sword-1".into(),
+            name: "Iron Sword".into(),
+        }
+    }
+
+    fn shield() -> shared::messages::ItemRef {
+        shared::messages::ItemRef {
+            identifier: "shield-1".into(),
+            name: "Iron Buckler".into(),
+        }
+    }
+
+    fn swing_beat(outcome: SwingOutcome) -> CombatBeat {
+        CombatBeat {
+            round: 1,
+            order: 0,
+            actor: t("Alice"),
+            action: CombatActionKind::Attack,
+            target: Some(t("Bob")),
+            weapon: Some(sword()),
+            shield: Some(shield()),
+            wear: vec![],
+            outcome: BeatOutcome::Swing {
+                outcome,
+                stress: StressReport::default(),
+                actor_stamina_cost: 0,
+                target_stamina_cost: 0,
+            },
+            significant: false,
+        }
+    }
+
     #[test]
     fn miss_renders_one_line() {
-        let beat = CombatBeat {
-            attacker: t("Alice"),
-            target: t("Bob"),
-            weapon: None,
-            shield: None,
-            wear: vec![],
-            outcome: SwingOutcome::Miss,
-            stress: StressReport::default(),
-            attacker_stamina_cost: 0,
-            target_stamina_cost: 0,
-        };
+        let beat = swing_beat(SwingOutcome::Miss);
         let lines = beat.to_log_lines();
         assert_eq!(lines.len(), 1);
         assert!(
@@ -166,29 +221,14 @@ mod tests {
 
     #[test]
     fn weapon_break_with_penalty_renders_shatters_line() {
-        use shared::messages::ItemRef;
-        let attacker = t("Alice");
-        let weapon_ref = ItemRef {
-            identifier: "weapon-1".into(),
-            name: "Iron Sword".into(),
-        };
-        let beat = CombatBeat {
-            attacker: attacker.clone(),
-            target: t("Bob"),
-            weapon: Some(weapon_ref.clone()),
-            shield: None,
-            wear: vec![WearReport {
-                owner: attacker.clone(),
-                item: weapon_ref,
-                outcome: WearOutcomeReport::Broken,
-                forfeited_effect: Some(5),
-                mid_action_penalty: Some(3),
-            }],
-            outcome: SwingOutcome::Miss,
-            stress: StressReport::default(),
-            attacker_stamina_cost: 0,
-            target_stamina_cost: 0,
-        };
+        let mut beat = swing_beat(SwingOutcome::Miss);
+        beat.wear.push(WearReport {
+            owner: t("Alice"),
+            item: sword(),
+            outcome: WearOutcomeReport::Broken,
+            forfeited_effect: Some(5),
+            mid_action_penalty: Some(3),
+        });
         let lines = beat.to_log_lines();
         assert!(
             lines.iter().any(|l| l.contains("shatters mid-swing")),
@@ -203,49 +243,26 @@ mod tests {
     }
 
     #[test]
-    fn shield_break_with_penalty_renders_shatters_line() {
-        use shared::messages::ItemRef;
-        let attacker = t("Alice");
-        let target = t("Bob");
-        let shield_ref = ItemRef {
-            identifier: "shield-1".into(),
-            name: "Iron Buckler".into(),
-        };
+    fn flee_fled_renders_one_line() {
         let beat = CombatBeat {
-            attacker: attacker.clone(),
-            target: target.clone(),
+            round: 1,
+            order: 1,
+            actor: t("Bob"),
+            action: CombatActionKind::Flee,
+            target: None,
             weapon: None,
-            shield: Some(shield_ref.clone()),
-            wear: vec![WearReport {
-                owner: target,
-                item: shield_ref,
-                outcome: WearOutcomeReport::Broken,
-                forfeited_effect: Some(4),
-                mid_action_penalty: Some(2),
-            }],
-            outcome: SwingOutcome::Miss,
-            stress: StressReport::default(),
-            attacker_stamina_cost: 0,
-            target_stamina_cost: 0,
+            shield: None,
+            wear: vec![],
+            outcome: BeatOutcome::Fled,
+            significant: true,
         };
         let lines = beat.to_log_lines();
-        assert!(
-            lines.iter().any(|l| l.contains("shatters mid-block")),
-            "expected shatters-mid-block line; got {:?}",
-            lines
-        );
-        assert!(
-            lines.iter().any(|l| l.contains("-2 defense")),
-            "expected '-2 defense' in shatters line; got {:?}",
-            lines
-        );
+        assert_eq!(lines.len(), 1);
     }
 
     /// Snapshot tests covering every `SwingOutcome` variant plus
     /// representative wear/stress combinations. These lock the
-    /// "single source of truth" property of `to_log_lines()`: future
-    /// combat changes that drift the rendered narration must update
-    /// the snapshot deliberately rather than silently regressing.
+    /// "single source of truth" property of `to_log_lines()`.
     mod snapshots {
         use super::*;
         use shared::messages::{CharacterRef, ItemRef};
@@ -271,18 +288,31 @@ mod tests {
             }
         }
 
-        /// Build a beat with the given outcome and no wear/stress.
+        /// Build an Attack beat with the given swing outcome and no wear/stress.
         fn base_beat(outcome: SwingOutcome) -> CombatBeat {
             CombatBeat {
-                attacker: t("Alice"),
-                target: t("Bob"),
+                round: 1,
+                order: 0,
+                actor: t("Alice"),
+                action: CombatActionKind::Attack,
+                target: Some(t("Bob")),
                 weapon: Some(sword()),
                 shield: Some(shield()),
                 wear: vec![],
-                outcome,
-                stress: StressReport::default(),
-                attacker_stamina_cost: 0,
-                target_stamina_cost: 0,
+                outcome: BeatOutcome::Swing {
+                    outcome,
+                    stress: StressReport::default(),
+                    actor_stamina_cost: 0,
+                    target_stamina_cost: 0,
+                },
+                significant: false,
+            }
+        }
+
+        /// Set the stress on a swing beat (helper for snapshot construction).
+        fn set_stress(b: &mut CombatBeat, stress: StressReport) {
+            if let BeatOutcome::Swing { stress: s, .. } = &mut b.outcome {
+                *s = stress;
             }
         }
 
@@ -410,19 +440,25 @@ mod tests {
         // Stress combinations.
         snap!(wound_with_attacker_stress, {
             let mut b = base_beat(SwingOutcome::Wound { damage: 6 });
-            b.stress = StressReport {
-                stress_damage: 8,
-                stressed: Some(t("Alice")),
-            };
+            set_stress(
+                &mut b,
+                StressReport {
+                    stress_damage: 8,
+                    stressed: Some(t("Alice")),
+                },
+            );
             b
         });
 
         snap!(block_wound_with_defender_stress, {
             let mut b = base_beat(SwingOutcome::BlockWound { damage: 8 });
-            b.stress = StressReport {
-                stress_damage: 5,
-                stressed: Some(t("Bob")),
-            };
+            set_stress(
+                &mut b,
+                StressReport {
+                    stress_damage: 5,
+                    stressed: Some(t("Bob")),
+                },
+            );
             b
         });
 
@@ -435,16 +471,18 @@ mod tests {
                 forfeited_effect: Some(5),
                 mid_action_penalty: Some(2),
             });
-            b.stress = StressReport {
-                stress_damage: 12,
-                stressed: Some(t("Alice")),
-            };
+            set_stress(
+                &mut b,
+                StressReport {
+                    stress_damage: 12,
+                    stressed: Some(t("Alice")),
+                },
+            );
             b
         });
 
         // --- Gap-coverage snapshots ---
 
-        // `Pristine` wear must produce no extra lines (no-op branch).
         snap!(wound_with_pristine_weapon_and_shield, {
             let mut b = base_beat(SwingOutcome::Wound { damage: 5 });
             b.wear.push(WearReport {
@@ -464,7 +502,6 @@ mod tests {
             b
         });
 
-        // Both weapon and shield worn (not broken) in one beat.
         snap!(wound_with_both_worn, {
             let mut b = base_beat(SwingOutcome::Wound { damage: 6 });
             b.wear.push(WearReport {
@@ -484,17 +521,18 @@ mod tests {
             b
         });
 
-        // Stress with no `stressed` set falls back to the attacker name.
         snap!(wound_with_stress_fallback_to_attacker, {
             let mut b = base_beat(SwingOutcome::Wound { damage: 4 });
-            b.stress = StressReport {
-                stress_damage: 6,
-                stressed: None,
-            };
+            set_stress(
+                &mut b,
+                StressReport {
+                    stress_damage: 6,
+                    stressed: None,
+                },
+            );
             b
         });
 
-        // Critical hit + weapon break with penalty + attacker stress.
         snap!(critical_hit_with_weapon_break_and_stress, {
             let mut b = base_beat(SwingOutcome::CriticalHitWound { damage: 18 });
             b.wear.push(WearReport {
@@ -504,14 +542,16 @@ mod tests {
                 forfeited_effect: Some(6),
                 mid_action_penalty: Some(3),
             });
-            b.stress = StressReport {
-                stress_damage: 4,
-                stressed: Some(t("Alice")),
-            };
+            set_stress(
+                &mut b,
+                StressReport {
+                    stress_damage: 4,
+                    stressed: Some(t("Alice")),
+                },
+            );
             b
         });
 
-        // BlockWound (counter) + shield break + penalty + defender stress.
         snap!(block_wound_with_shield_break_and_stress, {
             let mut b = base_beat(SwingOutcome::BlockWound { damage: 7 });
             b.wear.push(WearReport {
@@ -521,25 +561,28 @@ mod tests {
                 forfeited_effect: Some(4),
                 mid_action_penalty: Some(2),
             });
-            b.stress = StressReport {
-                stress_damage: 5,
-                stressed: Some(t("Bob")),
-            };
+            set_stress(
+                &mut b,
+                StressReport {
+                    stress_damage: 5,
+                    stressed: Some(t("Bob")),
+                },
+            );
             b
         });
 
-        // AttackerDied (PerfectBlock kill) with defender stress.
         snap!(attacker_died_with_defender_stress, {
             let mut b = base_beat(SwingOutcome::AttackerDied { damage: 10 });
-            b.stress = StressReport {
-                stress_damage: 9,
-                stressed: Some(t("Bob")),
-            };
+            set_stress(
+                &mut b,
+                StressReport {
+                    stress_damage: 9,
+                    stressed: Some(t("Bob")),
+                },
+            );
             b
         });
 
-        // FumbleDeath + weapon break (rare but emittable: the swing breaks the
-        // weapon then the fumble kills the attacker).
         snap!(fumble_death_with_weapon_break, {
             let mut b = base_beat(SwingOutcome::FumbleDeath { self_damage: 8 });
             b.wear.push(WearReport {
@@ -552,7 +595,6 @@ mod tests {
             b
         });
 
-        // SelfAttackWound with weapon worn (self-targeted swing still wears gear).
         snap!(self_attack_wound_with_weapon_worn, {
             let mut b = base_beat(SwingOutcome::SelfAttackWound { damage: 3 });
             b.wear.push(WearReport {

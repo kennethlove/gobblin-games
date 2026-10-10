@@ -46,7 +46,8 @@ fn message_archetype(payload: &shared::messages::MessagePayload) -> &'static str
     use shared::messages::MessageKind::*;
     match payload.kind() {
         CharacterKilled => "death",
-        Combat | CombatSwing | CharacterAttacked | CharacterWounded | TrapSet | TrapTriggered => {
+        Combat | CombatBeat | CombatRoundStart | CombatEnded | CharacterAttacked
+        | CharacterWounded | TrapSet | TrapTriggered => {
             "action"
         }
         AllianceFormed | AllianceProposed | AllianceDissolved | BetrayalTriggered
@@ -96,7 +97,7 @@ fn message_kind_label(payload: &shared::messages::MessagePayload) -> &'static st
     match payload.kind() {
         CharacterKilled => "Death",
         Combat | CharacterAttacked | CharacterWounded | TrapSet | TrapTriggered => "Combat",
-        CombatSwing => "Combat",
+        CombatBeat | CombatRoundStart | CombatEnded => "Combat",
         AllianceFormed | AllianceProposed | AllianceDissolved | BetrayalTriggered
         | TrustShockBreak => "Alliance",
         CharacterMoved | CharacterHidden | AreaClosed | AreaEvent => "Movement",
@@ -133,7 +134,8 @@ fn kind_color(payload: &shared::messages::MessagePayload) -> &'static str {
     use shared::messages::MessageKind::*;
     match payload.kind() {
         CharacterKilled => "var(--danger)",
-        Combat | CombatSwing | CharacterAttacked | CharacterWounded | TrapSet | TrapTriggered => {
+        Combat | CombatBeat | CombatRoundStart | CombatEnded | CharacterAttacked
+        | CharacterWounded | TrapSet | TrapTriggered => {
             "var(--waiting)"
         }
         AllianceFormed | AllianceProposed | AllianceDissolved | BetrayalTriggered

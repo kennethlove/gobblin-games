@@ -139,12 +139,38 @@ impl BroadcastPackageBuilder {
                 })
             }
 
-            MessagePayload::CombatSwing(beat) => {
+            MessagePayload::CombatBeat(beat) => {
                 let structured = serde_json::to_value(beat).ok();
                 Some(EventLine {
                     kind: EventKind::Combat,
                     prose,
                     structured,
+                })
+            }
+
+            MessagePayload::CombatRoundStart { combat_id, round } => {
+                let structured = serde_json::json!({
+                    "type": "combat_round_start",
+                    "combat_id": combat_id,
+                    "round": round,
+                });
+                Some(EventLine {
+                    kind: EventKind::Combat,
+                    prose,
+                    structured: Some(structured),
+                })
+            }
+
+            MessagePayload::CombatEnded { combat_id, result } => {
+                let structured = serde_json::json!({
+                    "type": "combat_ended",
+                    "combat_id": combat_id,
+                    "result": result,
+                });
+                Some(EventLine {
+                    kind: EventKind::Combat,
+                    prose,
+                    structured: Some(structured),
                 })
             }
 

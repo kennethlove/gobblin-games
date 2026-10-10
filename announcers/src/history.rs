@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
-use shared::combat_beat::SwingOutcome;
+use shared::combat_beat::{BeatOutcome, SwingOutcome};
 use shared::messages::{CharacterRef, GameMessage, MessagePayload};
 
 use crate::types::CharacterDigest;
@@ -171,27 +171,55 @@ impl CharacterHistories {
                     );
                 }
 
-                MessagePayload::CombatSwing(beat) => {
+                MessagePayload::CombatBeat(beat) => {
+                    // Only Attack beats carry a swing outcome; label them as
+                    // before. Other action kinds fall through with a generic
+                    // label so the history stays complete.
                     let outcome_label = match &beat.outcome {
-                        SwingOutcome::Wound { .. } => "hit",
-                        SwingOutcome::Miss => "missed",
-                        SwingOutcome::CriticalHitWound { .. } => "critical hit",
-                        SwingOutcome::BlockWound { .. } => "blocked",
-                        SwingOutcome::SelfAttackWound { .. } => "self-wound",
-                        SwingOutcome::Suicide { .. } => "suicide",
-                        SwingOutcome::FumbleSurvive { .. } => "fumble (survived)",
-                        SwingOutcome::FumbleDeath { .. } => "fumble (died)",
-                        SwingOutcome::AttackerDied { .. } => "attacker died",
-                        SwingOutcome::Kill { .. } => "kill",
+                        BeatOutcome::Swing { outcome, .. } => match outcome {
+                            SwingOutcome::Wound { .. } => "hit",
+                            SwingOutcome::Miss => "missed",
+                            SwingOutcome::CriticalHitWound { .. } => "critical hit",
+                            SwingOutcome::BlockWound { .. } => "blocked",
+                            SwingOutcome::SelfAttackWound { .. } => "self-wound",
+                            SwingOutcome::Suicide { .. } => "suicide",
+                            SwingOutcome::FumbleSurvive { .. } => "fumble (survived)",
+                            SwingOutcome::FumbleDeath { .. } => "fumble (died)",
+                            SwingOutcome::AttackerDied { .. } => "attacker died",
+                            SwingOutcome::Kill { .. } => "kill",
+                        },
+                        BeatOutcome::ItemUsed => "used an item",
+                        BeatOutcome::Fled => "fled",
+                        BeatOutcome::FailedFlee => "failed to flee",
+                        BeatOutcome::Cowered => "cowered",
+                        BeatOutcome::Spared => "spared",
+                        BeatOutcome::Executed { .. } => "executed",
                     };
                     self.push_event(
-                        &beat.attacker.identifier,
-                        &format!("Swung at {} — {outcome_label}", beat.target.name),
+                        &beat.actor.identifier,
+                        &format!(
+                            "Acted on {} — {outcome_label}",
+                            beat.target.as_ref().map(|c| c.name.as_str()).unwrap_or("—")
+                        ),
                     );
-                    self.push_event(
-                        &beat.target.identifier,
-                        &format!("Target of {}'s swing — {outcome_label}", beat.attacker.name),
-                    );
+                    if let Some(target) = &beat.target {
+                        self.push_event(
+                            &target.identifier,
+                            &format!("Target of {}'s action — {outcome_label}", beat.actor.name),
+                        );
+                    }
+                }
+
+                // Round markers and fight conclusions: the per-character beat
+                // events above already carry the detail; nothing to add here.
+                MessagePayload::CombatRoundStart { .. } => {}
+                MessagePayload::CombatEnded { result, .. } => {
+                    if let shared::combat_beat::CombatResult::Winner { character } = result {
+                        self.push_highlight(
+                            &character.identifier,
+                            "Won a fight",
+                        );
+                    }
                 }
 
                 // ------- Alliance -------
