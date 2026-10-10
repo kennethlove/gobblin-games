@@ -16,6 +16,13 @@ DEFINE FIELD OVERWRITE private ON game DEFAULT true;
 DEFINE FIELD OVERWRITE team_count ON game TYPE int DEFAULT 8;
 DEFINE FIELD OVERWRITE goblins_per_team ON game TYPE int DEFAULT 3;
 DEFINE FIELD OVERWRITE max_goblins_per_player ON game TYPE int DEFAULT 1;
+-- Per-game tuning (GameConfig). Written as a full object at create/save;
+-- DEFAULT {} covers pre-migration rows (GameConfig's serde defaults fill
+-- the missing hours). `config.*` wildcard: nested fields are server-owned
+-- plain data (validated by GameConfig serde + create handler), and a
+-- per-key schema would churn on every config change.
+DEFINE FIELD OVERWRITE config ON game TYPE object DEFAULT {};
+DEFINE FIELD OVERWRITE config.* ON game TYPE any;
 
 DEFINE INDEX OVERWRITE game_identifier ON game FIELDS identifier UNIQUE;
 
@@ -33,6 +40,7 @@ DEFINE FUNCTION OVERWRITE fn::get_full_game($game_id: string) {
         (day ?? 0) AS day,
         private,
         created_by,
+        config,
         (
             SELECT *, ->owns->item[*] AS items
             FROM <-playing_in<-character[*]
@@ -79,6 +87,7 @@ DEFINE FUNCTION OVERWRITE fn::get_display_game($game_id: string) {
         private,
         created_by.username,
         created_by.id == $auth.id AS is_mine,
+        config,
         $characters.in AS characters,
         count($characters.in) as character_count,
         count(SELECT * FROM $characters.in WHERE attributes.health > 0) AS living_count,
@@ -112,6 +121,7 @@ DEFINE FUNCTION OVERWRITE fn::get_detail_game($game_id: string) {
         status,
         (day ?? 0) AS day,
         private,
+        config,
         (
             SELECT *,
             ->owns->item[*] AS items

@@ -48,6 +48,12 @@ pub struct CreateGameRequest {
     /// Goblins each joining player may bring (default 1).
     #[serde(default)]
     pub max_goblins_per_player: Option<u32>,
+    /// First phase hour of every game day (even, 00–22; default 6).
+    #[serde(default)]
+    pub day_start_hour: Option<u8>,
+    /// Hour night falls (even, 00–22; default 20).
+    #[serde(default)]
+    pub nightfall_hour: Option<u8>,
 }
 
 // ── HTMX page handlers ──────────────────────────────────────────────
@@ -362,10 +368,14 @@ SELECT (
     let fallen = characters.len() as u32 - alive;
     let total = characters.len() as u32;
 
-    // Day/night boundaries come from the game config once per-game config
-    // persists (game table is SCHEMAFULL without a `config` column yet —
-    // follow-up on the phase-redesign config bead); defaults 06/20 now.
-    let cfg = world::config::GameConfig::default();
+    // Day/night boundaries come from the game's stored config (projected
+    // into DisplayGame.config as boundary hours; full GameConfig rebuilt
+    // here since current_broadcast_phase only reads the boundaries).
+    let cfg = world::config::GameConfig {
+        day_start_hour: game.config.day_start_hour,
+        nightfall_hour: game.config.nightfall_hour,
+        ..Default::default()
+    };
     let (phase_class, phase_label) = game_detail::current_broadcast_phase(&game, &messages, &cfg);
 
     // Sort characters: alive first, then alphabetically
@@ -1003,6 +1013,15 @@ pub async fn create_game_post_handler(
     use surrealdb_types::RecordId;
 
     let game_rid = RecordId::new("game", game_identifier.as_str());
+    if let Err(e) = shared::validate_day_night_hours(form.day_start_hour, form.nightfall_hour) {
+        tracing::warn!(error = %e, "invalid day/night hours on game create");
+        return Redirect::to("/games/new").into_response();
+    }
+    let config = world::config::GameConfig {
+        day_start_hour: form.day_start_hour.unwrap_or(6),
+        nightfall_hour: form.nightfall_hour.unwrap_or(20),
+        ..Default::default()
+    };
     let body = serde_json::json!({
         "identifier": &game_identifier,
         "name": &game_name,
@@ -1012,6 +1031,8 @@ pub async fn create_game_post_handler(
         "team_count": team_count,
         "goblins_per_team": goblins_per_team,
         "max_goblins_per_player": max_goblins_per_player,
+        // GameConfig is plain numeric fields — encoding can't fail in practice.
+        "config": serde_json::to_value(&config).unwrap_or(serde_json::Value::Null),
     });
 
     if user_db

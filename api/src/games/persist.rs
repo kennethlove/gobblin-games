@@ -246,10 +246,14 @@ pub(crate) async fn save_game(
     // around the message payload above), so we use a plain UPDATE query that
     // names the fields we want written.
     if let Err(e) = db
-        .query("UPDATE $record_id SET day = $day, status = $status")
+        .query("UPDATE $record_id SET day = $day, status = $status, config = $config")
         .bind(("record_id", game_identifier.clone()))
         .bind(("day", game.day.unwrap_or(0) as i64))
         .bind(("status", game.status.to_string()))
+        .bind((
+            "config",
+            serde_json::to_value(&game.config).unwrap_or(serde_json::Value::Null),
+        ))
         .await
     {
         let _ = db.query("ROLLBACK").await;
