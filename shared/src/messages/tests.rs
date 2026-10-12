@@ -1323,10 +1323,10 @@ fn importance_tiers_match_decision() {
 /// `impls.rs` would otherwise let new variants silently vanish from
 /// per-character message feeds (the api timeline filter relies on this).
 ///
-/// Expected sets pin *current* routing: the wound/condition detail
-/// variants and the fixation `target` carry character identifiers but are
-/// deliberately not routed to per-character feeds today; change those
-/// rows consciously if the routing decision changes.
+/// Expected sets pin the routing decision: every character identifier a
+/// payload carries — its `CharacterRef`s, its String ids, and a fixation
+/// `target` — must be reported; change rows consciously if the routing
+/// decision changes.
 #[test]
 fn smoke_involves_matches_character_refs_for_all_variants() {
     use crate::afflictions::{DeathCause, Severity, TrapKind};
@@ -1560,9 +1560,6 @@ fn smoke_involves_matches_character_refs_for_all_variants() {
             },
             vec!["id-c"],
         ),
-        // Wound/condition detail lines carry a `character` ref but the
-        // current routing keeps them out of per-character feeds (see the
-        // doc comment above).
         (
             WoundInflicted {
                 character: t("c"),
@@ -1570,28 +1567,28 @@ fn smoke_involves_matches_character_refs_for_all_variants() {
                 severity: "Mild".into(),
                 body_part: "arm".into(),
             },
-            vec![],
+            vec!["id-c"],
         ),
         (
             WoundBled {
                 character: t("c"),
                 blood_lost: 10,
             },
-            vec![],
+            vec!["id-c"],
         ),
         (
             WoundTreated {
                 character: t("c"),
                 body_part: "arm".into(),
             },
-            vec![],
+            vec!["id-c"],
         ),
         (
             WoundAmputated {
                 character: t("c"),
                 body_part: "arm".into(),
             },
-            vec![],
+            vec!["id-c"],
         ),
         (
             ConditionAcquired {
@@ -1599,21 +1596,21 @@ fn smoke_involves_matches_character_refs_for_all_variants() {
                 condition: "x".into(),
                 severity: "Mild".into(),
             },
-            vec![],
+            vec!["id-c"],
         ),
         (
             ConditionResolved {
                 character: t("c"),
                 condition: "x".into(),
             },
-            vec![],
+            vec!["id-c"],
         ),
         (
             CharacterDesperate {
                 character: t("c"),
                 reason: "low hp".into(),
             },
-            vec![],
+            vec!["id-c"],
         ),
         (
             HungerBandChanged {
@@ -1890,8 +1887,8 @@ fn smoke_involves_matches_character_refs_for_all_variants() {
             },
             vec!["c"],
         ),
-        // Fixations: only the obsessed character is routed, not the
-        // fixation target (current routing decision, pinned above).
+        // Fixations: both the obsessed character and the fixation target
+        // are routed.
         (
             FixationAcquired {
                 character_id: "c".into(),
@@ -1899,7 +1896,7 @@ fn smoke_involves_matches_character_refs_for_all_variants() {
                 severity: "Mild".into(),
                 origin: "x".into(),
             },
-            vec!["c"],
+            vec!["c", "t"],
         ),
         (
             FixationEscalated {
@@ -1908,7 +1905,7 @@ fn smoke_involves_matches_character_refs_for_all_variants() {
                 old_severity: "Mild".into(),
                 new_severity: "Moderate".into(),
             },
-            vec!["c"],
+            vec!["c", "t"],
         ),
         (
             FixationFired {
@@ -1917,14 +1914,14 @@ fn smoke_involves_matches_character_refs_for_all_variants() {
                 severity: "Mild".into(),
                 action: "move".into(),
             },
-            vec!["c"],
+            vec!["c", "t"],
         ),
         (
             FixationConsummated {
                 character_id: "c".into(),
                 target: "t".into(),
             },
-            vec!["c"],
+            vec!["c", "t"],
         ),
         (
             FixationThwarted {
@@ -1932,14 +1929,14 @@ fn smoke_involves_matches_character_refs_for_all_variants() {
                 target: "t".into(),
                 reason: "gone".into(),
             },
-            vec!["c"],
+            vec!["c", "t"],
         ),
         (
             FixationFaded {
                 character_id: "c".into(),
                 target: "t".into(),
             },
-            vec!["c"],
+            vec!["c", "t"],
         ),
         (
             SubstanceUsed {

@@ -241,7 +241,14 @@ impl MessagePayload {
             | CharacterSlept { character, .. }
             | CharacterWoke { character, .. }
             | SleepIncident { character, .. }
-            | TrapSet { character, .. } => refs.push(character),
+            | TrapSet { character, .. }
+            | WoundInflicted { character, .. }
+            | WoundBled { character, .. }
+            | WoundTreated { character, .. }
+            | WoundAmputated { character, .. }
+            | ConditionAcquired { character, .. }
+            | ConditionResolved { character, .. }
+            | CharacterDesperate { character, .. } => refs.push(character),
             TrapTriggered { victim, .. } => refs.push(victim),
             PatronGift { recipient, .. } => refs.push(recipient),
             GameEnded { winner, .. } => {
@@ -288,14 +295,7 @@ impl MessagePayload {
             | TraumaObserved { .. }
             | TraumaForgotten { .. }
             | AddictionObserved { .. }
-            | AddictionForgotten { .. }
-            | WoundInflicted { .. }
-            | WoundBled { .. }
-            | WoundTreated { .. }
-            | WoundAmputated { .. }
-            | ConditionAcquired { .. }
-            | ConditionResolved { .. }
-            | CharacterDesperate { .. } => {}
+            | AddictionForgotten { .. } => {}
             DaySummary {
                 rollup, goblins, ..
             } => {
@@ -364,12 +364,6 @@ impl MessagePayload {
                 character: character_id,
                 ..
             }
-            | FixationAcquired { character_id, .. }
-            | FixationEscalated { character_id, .. }
-            | FixationFired { character_id, .. }
-            | FixationConsummated { character_id, .. }
-            | FixationThwarted { character_id, .. }
-            | FixationFaded { character_id, .. }
             | SubstanceUsed {
                 character: character_id,
                 ..
@@ -418,6 +412,40 @@ impl MessagePayload {
                 character: character_id,
                 ..
             } => character_id.parse::<CharacterId>().ok() == Some(id),
+            // The fixation `target` is a freeform subject String, not a
+            // CharacterRef, so it can only be matched here in stage 2 — the
+            // same asymmetry as the observer/subject/rescuer/target Strings.
+            FixationAcquired {
+                character_id,
+                target,
+                ..
+            }
+            | FixationEscalated {
+                character_id,
+                target,
+                ..
+            }
+            | FixationFired {
+                character_id,
+                target,
+                ..
+            }
+            | FixationConsummated {
+                character_id,
+                target,
+            }
+            | FixationThwarted {
+                character_id,
+                target,
+                ..
+            }
+            | FixationFaded {
+                character_id,
+                target,
+            } => {
+                character_id.parse::<CharacterId>().ok() == Some(id.clone())
+                    || target.parse::<CharacterId>().ok() == Some(id)
+            }
             PhobiaObserved {
                 observer, subject, ..
             }
