@@ -8,6 +8,7 @@
 
 pub mod inflict_table;
 pub mod resolve;
+pub mod round_loop;
 
 #[cfg(test)]
 mod tests;

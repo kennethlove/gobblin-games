@@ -38,6 +38,23 @@ pub struct CombatTuning {
     // --- Brain scoring nudges ---
     pub winded_attack_score_penalty: i32,
     pub fresh_target_visibly_tired_bonus: i32,
+
+    // --- Multi-round combat (spec 2026-10-09 §3.3, §5, §6) ---
+    /// Initiative roll is `1..=initiative_die` + modifiers.
+    pub initiative_die: u32,
+    /// Stamina-band initiative modifiers (Fresh / Winded / Exhausted).
+    pub initiative_fresh_bonus: i32,
+    pub initiative_winded_bonus: i32,
+    pub initiative_exhausted_bonus: i32,
+    /// Weapon speed contribution: weapon `effect` is halved and added to
+    /// initiative. Placeholder divisor, tuned post-observability.
+    pub initiative_weapon_speed_divisor: i32,
+    /// Safety cap on rounds; reaching it without a winner ends in a Draw.
+    pub max_rounds: u32,
+    /// Flee contest: fleer wins if `d20 + speed_mod > chaser_d20 + speed_mod`.
+    /// Fleer rolls with this extra modifier (goblins are somewhat cowardly but
+    /// fleeing is still risky). Placeholder, tuned later.
+    pub flee_contest_modifier: i32,
 }
 
 impl Default for CombatTuning {
@@ -66,6 +83,14 @@ impl Default for CombatTuning {
 
             winded_attack_score_penalty: -10,
             fresh_target_visibly_tired_bonus: 5,
+
+            initiative_die: 20,
+            initiative_fresh_bonus: 2,
+            initiative_winded_bonus: 0,
+            initiative_exhausted_bonus: -2,
+            initiative_weapon_speed_divisor: 2,
+            max_rounds: 12,
+            flee_contest_modifier: 0,
         }
     }
 }
