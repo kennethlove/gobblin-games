@@ -1064,7 +1064,15 @@ mod tests {
             Box::new(CombatBrain::new(CombatTuning::default())),
         );
 
-        let _ = combat.advance_round(&mut rng, &mut events);
+        // Flee is now a real contest (tuned negative modifier); Alice's agility
+        // edge makes her re-attempt each round until she escapes. Bounded so a
+        // pathological RNG can't hang the test.
+        for _ in 0..20 {
+            if combat.is_over() {
+                break;
+            }
+            combat.advance_round(&mut rng, &mut events);
+        }
         let result = combat.result().cloned();
         drop(combat);
         assert_eq!(
@@ -1073,6 +1081,118 @@ mod tests {
                 fled: alice,
                 remaining: bob,
             })
+        );
+    }
+
+    /// Tuning-pass distribution sanity (seeded, deliberately loose bands —
+    /// these guard the *shape* of the tuned defaults, not exact numbers).
+    /// Reference distributions measured with `cargo run --example
+    /// tuning_harness -- 4000`: winner 76.5% / fled 20.7% / draw 2.8%,
+    /// rounds 2-6 66.8%, flee success 25.9%, initiative near-even.
+    #[test]
+    fn tuned_defaults_produce_sane_fight_distributions() {
+        use crate::brains::combat::CombatBrain;
+        use shared::combat_beat::CombatActionKind;
+        use shared::messages::MessagePayload;
+
+        let tuning = CombatTuning::default();
+        const N: usize = 400;
+        let mut draws = 0usize;
+        let mut fled_fights = 0usize;
+        let mut rounds_2_6 = 0usize;
+        let mut flee_attempts = 0usize;
+        let mut flee_successes = 0usize;
+        let mut alice_initiative = 0usize;
+
+        for seed in 0..N as u64 {
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let mut a = char_named("Alice");
+            let mut b = char_named("Bob");
+            a.traits.clear();
+            a.items.clear();
+            b.traits.clear();
+            b.items.clear();
+
+            struct Brain(CombatBrain);
+            impl CombatActionProvider for Brain {
+                fn action(&mut self, actor: &Character, opponent: &Character) -> CombatActionKind {
+                    self.0.action(actor, opponent)
+                }
+                fn verdict(&mut self, actor: &Character, cowerer: &Character) -> CombatActionKind {
+                    self.0.verdict(actor, cowerer)
+                }
+            }
+
+            let mut events = Vec::new();
+            let mut combat = CombatRoundLoop::with_provider(
+                &mut a,
+                &mut b,
+                format!("c{seed}"),
+                tuning.clone(),
+                Box::new(Brain(CombatBrain::new(tuning.clone()))),
+            );
+
+            let mut rounds = 0u32;
+            while !combat.is_over() {
+                rounds += 1;
+                combat.advance_round(&mut rng, &mut events);
+            }
+            if (2..=6).contains(&rounds) {
+                rounds_2_6 += 1;
+            }
+            match combat.result() {
+                Some(CombatResult::Draw) => draws += 1,
+                Some(CombatResult::Fled { .. }) => fled_fights += 1,
+                _ => {}
+            }
+            for ev in &events {
+                if let MessagePayload::CombatBeat(beat) = &ev.payload {
+                    if matches!(beat.action, CombatActionKind::Flee) {
+                        flee_attempts += 1;
+                        if matches!(beat.outcome, shared::combat_beat::BeatOutcome::Fled) {
+                            flee_successes += 1;
+                        }
+                    }
+                    if beat.round == 1 && beat.order == 0 && beat.actor.name == "Alice" {
+                        alice_initiative += 1;
+                    }
+                }
+            }
+        }
+
+        let draws_pct = draws * 100 / N;
+        assert!(draws_pct < 10, "draws must stay rare: {draws_pct}%");
+
+        let rounds_pct = rounds_2_6 * 100 / N;
+        assert!(
+            rounds_pct >= 50,
+            "most fights should run 2-6 rounds: {rounds_pct}%"
+        );
+
+        // Flee must be meaningful but not dominant: some fights end in flee,
+        // and roughly a quarter of attempts actually escape (loose 10-40% band).
+        assert!(
+            fled_fights > 0,
+            "flee should end a meaningful share of fights"
+        );
+        assert!(
+            fled_fights * 100 / N <= 40,
+            "flee must not dominate: {}%",
+            fled_fights * 100 / N
+        );
+        if flee_attempts >= 20 {
+            let success_pct = flee_successes * 100 / flee_attempts;
+            assert!(
+                (10..=40).contains(&success_pct),
+                "flee success band: {success_pct}%"
+            );
+        }
+
+        // Initiative should stay near-even for equal fighters (loose 40-60% band).
+        let init_pct = alice_initiative * 100 / N;
+        assert!(
+            (40..=60).contains(&init_pct),
+            "initiative should be near-even: {init_pct}%"
         );
     }
 }

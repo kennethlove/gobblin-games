@@ -54,9 +54,10 @@ pub struct CombatTuning {
     pub initiative_weapon_speed_divisor: i32,
     /// Safety cap on rounds; reaching it without a winner ends in a Draw.
     pub max_rounds: u32,
-    /// Flee contest: fleer wins if `d20 + speed_mod > chaser_d20 + speed_mod`.
-    /// Fleer rolls with this extra modifier (goblins are somewhat cowardly but
-    /// fleeing is still risky). Placeholder, tuned later.
+    /// Flee contest: fleer rolls `d20 + speed + band + flee_contest_modifier`
+    /// against the chaser's `d20 + speed + band`. Negative: running is risky —
+    /// tuned so roughly a fifth of flee attempts actually escape (measured
+    /// via `cargo run --example tuning_harness`).
     pub flee_contest_modifier: i32,
 
     // --- Combat brain weights (spec 2026-10-09 §4, §7) ---
@@ -122,19 +123,19 @@ impl Default for CombatTuning {
             fresh_target_visibly_tired_bonus: 5,
 
             initiative_die: 20,
-            initiative_fresh_bonus: 2,
+            initiative_fresh_bonus: 3,
             initiative_winded_bonus: 0,
-            initiative_exhausted_bonus: -2,
+            initiative_exhausted_bonus: -3,
             initiative_weapon_speed_divisor: 2,
             max_rounds: 12,
-            flee_contest_modifier: 0,
+            flee_contest_modifier: -7,
 
             brain_attack_base: 40,
             brain_attack_aggressive_bonus: 10,
             brain_attack_wounded_penalty: -15,
             brain_heal_wounded_bonus: 45,
             brain_flee_base: 5,
-            brain_flee_wounded_bonus: 15,
+            brain_flee_wounded_bonus: 12,
             brain_flee_exhausted_bonus: 20,
             brain_flee_cautious_bonus: 15,
             brain_flee_outmatched_bonus: 10,
