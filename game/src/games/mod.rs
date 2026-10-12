@@ -211,8 +211,6 @@ impl From<String> for GameError {
 }
 
 const LOW_CHARACTER_THRESHOLD: u32 = 8;
-const DAY_EVENT_FREQUENCY: f64 = 1.0 / 4.0;
-const NIGHT_EVENT_FREQUENCY: f64 = 1.0 / 8.0;
 
 /// Per-period tick counter. Resets to 0 at every phase boundary.
 /// Phase-boundary side-effect messages get tick=0.

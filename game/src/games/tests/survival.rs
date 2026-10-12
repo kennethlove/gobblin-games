@@ -293,6 +293,8 @@ fn test_trigger_cycle_events() {}
 /// from the game config: hour 18 is a plain night phase under shifted
 /// hours (day 08 / night 18) but the silent dusk anchor under the
 /// defaults (06/20), and the anchors move with the configured hours.
+/// The band probabilities come from the config too — pinned to 1.0 / 0.0
+/// per band here so the band classification asserts as exact counts.
 #[test]
 fn smoke_night_event_frequency_uses_configured_hours() {
     use shared::messages::Phase;
@@ -303,9 +305,6 @@ fn smoke_night_event_frequency_uses_configured_hours() {
         game.day = Some(2);
         game.config.day_start_hour = day_start_hour;
         game.config.nightfall_hour = nightfall_hour;
-        // Many areas make "some area fires" deterministic in practice at
-        // the night rate (a silent result is a ~3e-8 fluke; the seed
-        // fixes the outcome outright).
         for i in 0..128 {
             game.areas
                 .push(AreaDetails::new(Some(format!("Lake{i}")), Area::Sector1));
@@ -326,15 +325,19 @@ fn smoke_night_event_frequency_uses_configured_hours() {
         "default dusk anchor stays silent"
     );
 
-    // Shifted hours: the same hour 18 is a plain night phase, so the
-    // night band fires.
+    // Shifted hours: hour 18 is a plain night phase, so the configured
+    // night frequency applies (1.0) and the day frequency (0.0) never
+    // does — "every area fires" is exact and seed-independent.
     let mut shifted_night = game_with_hours(8, 18);
+    shifted_night.config.night_event_frequency = 1.0;
+    shifted_night.config.day_event_frequency = 0.0;
     shifted_night
         .trigger_cycle_events(Phase::from_hour(18).unwrap(), &mut rng)
         .unwrap();
-    assert!(
-        areas_that_fired(&shifted_night) > 0,
-        "shifted night hour fires at the night rate"
+    assert_eq!(
+        areas_that_fired(&shifted_night),
+        128,
+        "shifted night hour fires via the configured night frequency"
     );
 
     // Shifted hours: the dawn anchor moves to hour 8 — silent there …
@@ -348,15 +351,69 @@ fn smoke_night_event_frequency_uses_configured_hours() {
         "shifted dawn anchor stays silent"
     );
 
-    // … while hour 8 is an ordinary day phase under the defaults (day 2
-    // day hours fire at the day rate).
+    // … while hour 8 is an ordinary day phase under the defaults, fired
+    // through the configured day frequency.
     let mut default_day = game_with_hours(6, 20);
+    default_day.config.day_event_frequency = 1.0;
+    default_day.config.night_event_frequency = 0.0;
     default_day
         .trigger_cycle_events(Phase::from_hour(8).unwrap(), &mut rng)
         .unwrap();
+    assert_eq!(
+        areas_that_fired(&default_day),
+        128,
+        "default day hour fires via the configured day frequency"
+    );
+}
+
+/// The configured frequency is a per-area per-cycle probability: 1.0
+/// fires every area, 0.0 fires none, and the default night rate (1/8,
+/// from `GameConfig::default()`) fires a strict non-empty subset — all
+/// deterministic.
+#[test]
+fn smoke_cycle_event_frequency_drives_cadence() {
+    use shared::messages::Phase;
+
+    let night_game = |night_event_frequency: f64| {
+        let mut game = Game::new("Test Game");
+        game.status = GameStatus::InProgress;
+        game.day = Some(2);
+        game.config.night_event_frequency = night_event_frequency;
+        for i in 0..128 {
+            game.areas
+                .push(AreaDetails::new(Some(format!("Lake{i}")), Area::Sector1));
+        }
+        game
+    };
+    let areas_that_fired = |game: &Game| game.areas.iter().filter(|a| !a.events.is_empty()).count();
+    // Hour 22 is an ordinary night phase under the default hours.
+    let night = Phase::from_hour(22).unwrap();
+
+    let mut always = night_game(1.0);
+    let mut rng = SmallRng::seed_from_u64(0);
+    always.trigger_cycle_events(night, &mut rng).unwrap();
+    assert_eq!(
+        areas_that_fired(&always),
+        128,
+        "frequency 1.0 fires every area"
+    );
+
+    let mut never = night_game(0.0);
+    let mut rng = SmallRng::seed_from_u64(0);
+    never.trigger_cycle_events(night, &mut rng).unwrap();
+    assert_eq!(areas_that_fired(&never), 0, "frequency 0.0 fires no area");
+
+    // The default night rate straight from GameConfig::default(): a
+    // non-empty proper subset of the 128 areas fires under the pinned
+    // seed (a silent or all-firing outcome would be a ~0 fluke).
+    let default_rate = world::config::GameConfig::default().night_event_frequency;
+    let mut partial = night_game(default_rate);
+    let mut rng = SmallRng::seed_from_u64(0);
+    partial.trigger_cycle_events(night, &mut rng).unwrap();
+    let fired = areas_that_fired(&partial);
     assert!(
-        areas_that_fired(&default_day) > 0,
-        "default day hour fires at the day rate"
+        fired > 0 && fired < 128,
+        "default night rate fires a proper subset, fired={fired}"
     );
 }
 
