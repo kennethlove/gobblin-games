@@ -149,6 +149,17 @@ check-api:
 test:
     cargo test --package game
 
+# Smoke gate for the per-change verification loop: compile every test
+# target, then run all lib tests (~7s steady state). Integration binaries
+# (api in-memory DB boots, game stress/fuzz suites) are skipped on purpose.
+# Reserve `just test-all` for pre-push/CI, or add targeted api integration
+# tests (e.g. `cargo test -p api --test games_tests --test join_tests`)
+# when touching api routes. New invariant tests should carry a `smoke_`
+# name prefix for discoverability, but this recipe runs the full lib set.
+smoke:
+    cargo check --workspace --tests
+    cargo test --workspace --lib
+
 # Stress the 128-goblin roster ceiling: engine determinism + API/DB path.
 # Perf history: `just bench-stress`.
 stress:
