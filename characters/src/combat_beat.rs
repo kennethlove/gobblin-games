@@ -26,11 +26,7 @@ impl CombatBeatExt for CombatBeat {
     fn to_log_lines(&self) -> Vec<String> {
         let mut out = Vec::with_capacity(4);
         let a = &self.actor.name;
-        let t = self
-            .target
-            .as_ref()
-            .map(|c| c.name.as_str())
-            .unwrap_or("");
+        let t = self.target.as_ref().map(|c| c.name.as_str()).unwrap_or("");
 
         // Non-swing actions narrate a single line and stop.
         match &self.action {
@@ -56,7 +52,10 @@ impl CombatBeatExt for CombatBeat {
         }
 
         // Attack: extract the swing outcome + stress from the beat outcome.
-        let BeatOutcome::Swing { outcome, stress, .. } = &self.outcome else {
+        let BeatOutcome::Swing {
+            outcome, stress, ..
+        } = &self.outcome
+        else {
             return out;
         };
 

@@ -559,13 +559,19 @@ fn importance_tiers_match_decision() {
         (Combat(engagement(CombatOutcome::AttackerFled)), Persist),
         (Combat(engagement(CombatOutcome::Stalemate)), ServerLogOnly),
         (CombatBeat(beat(SwingOutcome::Miss)), ServerLogOnly),
+        (CombatBeat(beat(SwingOutcome::Wound { damage: 5 })), Persist),
         (
-            CombatBeat(beat(SwingOutcome::Wound { damage: 5 })),
-            Persist,
+            CombatRoundStart {
+                combat_id: "c1".into(),
+                round: 1,
+            },
+            ServerLogOnly,
         ),
-        (CombatRoundStart { combat_id: "c1".into(), round: 1 }, ServerLogOnly),
         (
-            CombatEnded { combat_id: "c1".into(), result: crate::combat_beat::CombatResult::Draw },
+            CombatEnded {
+                combat_id: "c1".into(),
+                result: crate::combat_beat::CombatResult::Draw,
+            },
             Persist,
         ),
         (

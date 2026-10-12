@@ -867,8 +867,7 @@ fn fumble_clears_attacker_break_penalty_on_beat() {
         let is_fumble = matches!(
             beat.outcome,
             shared::combat_beat::BeatOutcome::Swing {
-                outcome:
-                    shared::combat_beat::SwingOutcome::FumbleSurvive { .. }
+                outcome: shared::combat_beat::SwingOutcome::FumbleSurvive { .. }
                     | shared::combat_beat::SwingOutcome::FumbleDeath { .. },
                 ..
             }

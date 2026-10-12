@@ -1,8 +1,8 @@
 use super::*;
 use areas::{Area, AreaDetails};
+use characters::combat::round_loop::CombatRoundLoop;
 use characters::events::CharacterEvent;
 use characters::incidents::{SleepIncident, SleepShelter, apply_sleep_incident};
-use characters::combat::round_loop::CombatRoundLoop;
 use characters::statuses::CharacterStatus;
 use characters::{
     ActionSuggestion, Character, EncounterContext, EnvironmentContext, calculate_stamina_cost,
@@ -1088,8 +1088,7 @@ impl Game {
             };
 
             let mut fight_events: Vec<world::messages::TaggedEvent> = Vec::new();
-            let mut fight_result: Option<shared::combat_beat::CombatResult> = None;
-            {
+            let fight_result = {
                 let mut combat = CombatRoundLoop::new(
                     attacker,
                     target,
@@ -1119,20 +1118,20 @@ impl Game {
                         ));
                     }
                 }
-                fight_result = combat.result().cloned();
-            }
+                combat.result().cloned()
+            };
             // `combat` (and the split_at_mut borrows) dropped here.
 
             // Bookkeeping: winner gains a kill (attacks() already set
             // RecentlyDead/recently_killed_by on the real target).
-            if let Some(shared::combat_beat::CombatResult::Winner { character }) = &fight_result {
-                if let Some(winner) = self
+            if let Some(winner) = fight_result.as_ref().and_then(|result| match result {
+                shared::combat_beat::CombatResult::Winner { character } => self
                     .characters
                     .iter_mut()
-                    .find(|c| character.identifier == c.identifier)
-                {
-                    winner.statistics.kills += 1;
-                }
+                    .find(|c| character.identifier == c.identifier),
+                _ => None,
+            }) {
+                winner.statistics.kills += 1;
             }
 
             // Emit the terminal result.

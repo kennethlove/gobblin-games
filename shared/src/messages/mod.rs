@@ -456,7 +456,10 @@ pub enum MessagePayload {
     Combat(CombatEngagement),
     /// Emitted at the start of each multi-round combat round so the UI can
     /// open a round group. `combat_id` groups the whole fight's beats.
-    CombatRoundStart { combat_id: String, round: u32 },
+    CombatRoundStart {
+        combat_id: String,
+        round: u32,
+    },
     /// One combatant's action within a round (see `CombatBeat`).
     CombatBeat(crate::combat_beat::CombatBeat),
     /// Emitted once when a fight terminates, carrying the terminal result.

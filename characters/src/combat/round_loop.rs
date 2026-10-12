@@ -17,9 +17,7 @@ use crate::combat_tuning::CombatTuning;
 use crate::stamina_band::stamina_band;
 use rand::RngExt;
 use rand::prelude::*;
-use shared::combat_beat::{
-    BeatOutcome, CombatActionKind, CombatBeat, CombatResult, CombatRound,
-};
+use shared::combat_beat::{BeatOutcome, CombatActionKind, CombatBeat, CombatResult, CombatRound};
 use shared::messages::{CharacterRef, MessagePayload};
 use world::messages::TaggedEvent;
 
@@ -88,7 +86,13 @@ impl<'a> CombatRoundLoop<'a> {
         combat_id: String,
         tuning: CombatTuning,
     ) -> Self {
-        Self::with_provider(first, second, combat_id, tuning, Box::new(AttackOnlyProvider))
+        Self::with_provider(
+            first,
+            second,
+            combat_id,
+            tuning,
+            Box::new(AttackOnlyProvider),
+        )
     }
 
     /// Start a fight with a custom action provider (the combat brain, or a
@@ -126,7 +130,11 @@ impl<'a> CombatRoundLoop<'a> {
     /// Advance one round. Returns the resolved [`CombatRound`] (possibly with
     /// fewer than two beats if the fight ended mid-round) and appends this
     /// round's message events to `events`.
-    pub fn advance_round(&mut self, rng: &mut impl Rng, events: &mut Vec<TaggedEvent>) -> CombatRound {
+    pub fn advance_round(
+        &mut self,
+        rng: &mut impl Rng,
+        events: &mut Vec<TaggedEvent>,
+    ) -> CombatRound {
         if self.result.is_some() {
             return CombatRound {
                 number: self.round,
@@ -265,7 +273,8 @@ impl<'a> CombatRoundLoop<'a> {
             (&*self.second, &*self.first, false)
         };
 
-        let fleer_roll = initiative_roll(fleer, &self.tuning, rng) + self.tuning.flee_contest_modifier;
+        let fleer_roll =
+            initiative_roll(fleer, &self.tuning, rng) + self.tuning.flee_contest_modifier;
         let chaser_roll = initiative_roll(chaser, &self.tuning, rng);
         let fled = fleer_roll > chaser_roll;
 
@@ -472,7 +481,11 @@ mod tests {
 
         let round = combat.advance_round(&mut rng, &mut events);
         assert!(!combat.is_over(), "failed flee must not end the fight");
-        assert_eq!(round.beats.len(), 2, "both actors still act after a failed flee");
+        assert_eq!(
+            round.beats.len(),
+            2,
+            "both actors still act after a failed flee"
+        );
     }
 
     /// Reaching the round cap terminates a stalemate in a Draw.
@@ -488,8 +501,10 @@ mod tests {
         b.stamina = 100;
         b.max_stamina = 1000;
 
-        let mut tuning = CombatTuning::default();
-        tuning.max_rounds = 3;
+        let tuning = CombatTuning {
+            max_rounds: 3,
+            ..CombatTuning::default()
+        };
 
         let mut rng = SmallRng::seed_from_u64(9);
         let mut events = Vec::new();

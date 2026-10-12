@@ -389,6 +389,6 @@ pub enum GameEvent {
     },
     /// One combat swing carrying the full typed beat.
     CombatSwing {
-        beat: characters::combat_beat::CombatBeat,
+        beat: Box<characters::combat_beat::CombatBeat>,
     },
 }

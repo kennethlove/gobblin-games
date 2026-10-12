@@ -47,9 +47,7 @@ fn message_archetype(payload: &shared::messages::MessagePayload) -> &'static str
     match payload.kind() {
         CharacterKilled => "death",
         Combat | CombatBeat | CombatRoundStart | CombatEnded | CharacterAttacked
-        | CharacterWounded | TrapSet | TrapTriggered => {
-            "action"
-        }
+        | CharacterWounded | TrapSet | TrapTriggered => "action",
         AllianceFormed | AllianceProposed | AllianceDissolved | BetrayalTriggered
         | TrustShockBreak => "commentary",
         CharacterMoved | CharacterHidden | AreaClosed | AreaEvent => "commentary",
@@ -135,9 +133,7 @@ fn kind_color(payload: &shared::messages::MessagePayload) -> &'static str {
     match payload.kind() {
         CharacterKilled => "var(--danger)",
         Combat | CombatBeat | CombatRoundStart | CombatEnded | CharacterAttacked
-        | CharacterWounded | TrapSet | TrapTriggered => {
-            "var(--waiting)"
-        }
+        | CharacterWounded | TrapSet | TrapTriggered => "var(--waiting)",
         AllianceFormed | AllianceProposed | AllianceDissolved | BetrayalTriggered
         | TrustShockBreak => "var(--info)",
         CharacterMoved | CharacterHidden | AreaClosed | AreaEvent => "var(--accent)",
