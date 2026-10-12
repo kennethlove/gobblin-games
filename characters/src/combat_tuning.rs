@@ -7,7 +7,10 @@
 
 use serde::{Deserialize, Serialize};
 
+// Container-level default: tuning rows persisted before newer knobs existed
+// deserialize against `Default` instead of failing on missing fields.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct CombatTuning {
     // --- Existing constants (verbatim from combat.rs:21-26) ---
     pub decisive_win_multiplier: f64,
@@ -55,6 +58,40 @@ pub struct CombatTuning {
     /// Fleer rolls with this extra modifier (goblins are somewhat cowardly but
     /// fleeing is still risky). Placeholder, tuned later.
     pub flee_contest_modifier: i32,
+
+    // --- Combat brain weights (spec 2026-10-09 §4, §7) ---
+    /// Baseline score for Attack.
+    pub brain_attack_base: i32,
+    /// Added for Aggressive/Reckless traits.
+    pub brain_attack_aggressive_bonus: i32,
+    /// Applied to Attack when badly wounded (blood below the wounded band).
+    pub brain_attack_wounded_penalty: i32,
+    /// Score for UseItem when wounded and a health consumable is carried.
+    pub brain_heal_wounded_bonus: i32,
+    /// Baseline score for Flee.
+    pub brain_flee_base: i32,
+    /// Added to Flee when wounded.
+    pub brain_flee_wounded_bonus: i32,
+    /// Added to Flee in the Exhausted stamina band.
+    pub brain_flee_exhausted_bonus: i32,
+    /// Added to Flee for the Cautious trait (the cowardly proxy).
+    pub brain_flee_cautious_bonus: i32,
+    /// Added to Flee when the opponent has the higher strength.
+    pub brain_flee_outmatched_bonus: i32,
+    /// Baseline score for Cower.
+    pub brain_cower_base: i32,
+    /// Added to Cower when hopeless (near-dead AND Exhausted).
+    pub brain_cower_hopeless_bonus: i32,
+    /// Spare score: opponent is a recorded ally.
+    pub brain_spare_ally_bonus: i32,
+    /// Spare score: same non-zero team.
+    pub brain_spare_team_bonus: i32,
+    /// Spare score for Loyal/Friendly traits.
+    pub brain_spare_trait_bonus: i32,
+    /// Execute score for the Treacherous trait.
+    pub brain_execute_treacherous_bonus: i32,
+    /// Execute score for the Aggressive trait.
+    pub brain_execute_aggressive_bonus: i32,
 }
 
 impl Default for CombatTuning {
@@ -91,6 +128,23 @@ impl Default for CombatTuning {
             initiative_weapon_speed_divisor: 2,
             max_rounds: 12,
             flee_contest_modifier: 0,
+
+            brain_attack_base: 40,
+            brain_attack_aggressive_bonus: 10,
+            brain_attack_wounded_penalty: -15,
+            brain_heal_wounded_bonus: 45,
+            brain_flee_base: 5,
+            brain_flee_wounded_bonus: 15,
+            brain_flee_exhausted_bonus: 20,
+            brain_flee_cautious_bonus: 15,
+            brain_flee_outmatched_bonus: 10,
+            brain_cower_base: 0,
+            brain_cower_hopeless_bonus: 60,
+            brain_spare_ally_bonus: 100,
+            brain_spare_team_bonus: 40,
+            brain_spare_trait_bonus: 30,
+            brain_execute_treacherous_bonus: 50,
+            brain_execute_aggressive_bonus: 20,
         }
     }
 }

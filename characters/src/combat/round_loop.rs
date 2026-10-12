@@ -27,6 +27,14 @@ use super::resolve::tref;
 /// later; the loop only needs the chosen [`CombatActionKind`].
 pub trait CombatActionProvider {
     fn action(&mut self, actor: &Character, opponent: &Character) -> CombatActionKind;
+
+    /// Forced Spare/Execute verdict when `actor` faces an opponent who has
+    /// cowered (spec §7). Defaults to `Execute` — hostile strangers get no
+    /// mercy; the combat brain overrides with alliance/trait-aware scoring.
+    fn verdict(&mut self, _actor: &Character, cowerer: &Character) -> CombatActionKind {
+        let _ = cowerer;
+        CombatActionKind::Execute
+    }
 }
 
 /// Placeholder provider: every combatant attacks every round.
@@ -74,6 +82,10 @@ pub struct CombatRoundLoop<'a> {
     combat_id: String,
     round: u32,
     result: Option<CombatResult>,
+    /// Set once a combatant cowers: `Some(true)` when the first (initiative-
+    /// side) character is the cowerer. The cowerer's later beats are
+    /// suppressed; the opponent's next action resolves as a forced verdict.
+    cowering: Option<bool>,
     tuning: CombatTuning,
     provider: Box<dyn CombatActionProvider + 'a>,
 }
@@ -110,6 +122,7 @@ impl<'a> CombatRoundLoop<'a> {
             combat_id,
             round: 0,
             result: None,
+            cowering: None,
             tuning,
             provider,
         }
@@ -185,6 +198,16 @@ impl<'a> CombatRoundLoop<'a> {
         events: &mut Vec<TaggedEvent>,
         beats: &mut Vec<CombatBeat>,
     ) {
+        // Once someone has cowered: suppress their beats and turn the
+        // opponent's next action into the forced verdict (spec §7).
+        if let Some(cowerer_is_first) = self.cowering {
+            if actor_is_first == cowerer_is_first {
+                return; // already begging — no repeat cower beat
+            }
+            self.resolve_verdict(round_no, order, actor_is_first, events, beats);
+            return;
+        }
+
         // Pick the action against the opponent. The provider borrows the two
         // characters immutably; pick which pair based on who acts.
         let action = if actor_is_first {
@@ -204,10 +227,38 @@ impl<'a> CombatRoundLoop<'a> {
             CombatActionKind::Flee => {
                 self.resolve_flee(round_no, order, actor_is_first, rng, events, beats);
             }
-            // Cower / Spare / Execute and item use are combat-brain territory
-            // (kam.2). The default provider never emits them; leave the beat
-            // unhandled here so the brain can own the verdict flow.
-            _ => {}
+            CombatActionKind::UseItem { item } => {
+                self.resolve_use_item(round_no, order, actor_is_first, item, events, beats);
+            }
+            CombatActionKind::Cower => {
+                // Record the cower and emit its beat; the fight continues until
+                // the opponent answers with Spare/Execute.
+                self.cowering = Some(actor_is_first);
+                let actor_ref = if actor_is_first {
+                    tref(&self.first)
+                } else {
+                    tref(&self.second)
+                };
+                let beat = CombatBeat {
+                    round: round_no,
+                    order,
+                    actor: actor_ref,
+                    action: CombatActionKind::Cower,
+                    target: None,
+                    weapon: None,
+                    shield: None,
+                    wear: vec![],
+                    outcome: BeatOutcome::Cowered,
+                    significant: true,
+                };
+                beats.push(beat.clone());
+                events.push(TaggedEvent::new(
+                    String::new(),
+                    MessagePayload::CombatBeat(beat),
+                ));
+            }
+            // Spare/Execute only ever arrive through the forced verdict path.
+            CombatActionKind::Spare | CombatActionKind::Execute => {}
         }
     }
 
@@ -316,6 +367,146 @@ impl<'a> CombatRoundLoop<'a> {
         }
     }
 
+    /// The cowerer's opponent answers with the provider's forced verdict
+    /// (spec §7): `Spare` ends the fight with both alive, `Execute` kills the
+    /// cowerer and ends it with a winner.
+    fn resolve_verdict(
+        &mut self,
+        round_no: u32,
+        order: u8,
+        actor_is_first: bool,
+        events: &mut Vec<TaggedEvent>,
+        beats: &mut Vec<CombatBeat>,
+    ) {
+        let verdict = if actor_is_first {
+            self.provider.verdict(&*self.first, &*self.second)
+        } else {
+            self.provider.verdict(&*self.second, &*self.first)
+        };
+
+        if matches!(verdict, CombatActionKind::Spare) {
+            let (winner, spared) = if actor_is_first {
+                (tref(&self.first), tref(&self.second))
+            } else {
+                (tref(&self.second), tref(&self.first))
+            };
+            let beat = CombatBeat {
+                round: round_no,
+                order,
+                actor: winner.clone(),
+                action: CombatActionKind::Spare,
+                target: Some(spared.clone()),
+                weapon: None,
+                shield: None,
+                wear: vec![],
+                outcome: BeatOutcome::Spared,
+                significant: true,
+            };
+            beats.push(beat.clone());
+            events.push(TaggedEvent::new(
+                String::new(),
+                MessagePayload::CombatBeat(beat),
+            ));
+            self.result = Some(CombatResult::Spared { winner, spared });
+            return;
+        }
+
+        // Execute: the verdict kills the cowerer outright. Drain their blood
+        // (same observable death state an attack kill leaves behind for the
+        // cycle's death processing) and report the kill.
+        let (killer, victim) = if actor_is_first {
+            (&*self.first, &mut *self.second)
+        } else {
+            (&*self.second, &mut *self.first)
+        };
+        let (killer_ref, victim_ref) = (tref(killer), tref(victim));
+        let damage = victim.blood;
+        victim.blood = 0;
+
+        events.push(TaggedEvent::new(
+            String::new(),
+            MessagePayload::CharacterKilled {
+                victim: victim_ref.clone(),
+                killer: Some(killer_ref.clone()),
+                cause: shared::afflictions::DeathCause::Combat,
+            },
+        ));
+
+        let beat = CombatBeat {
+            round: round_no,
+            order,
+            actor: killer_ref.clone(),
+            action: CombatActionKind::Execute,
+            target: Some(victim_ref.clone()),
+            weapon: None,
+            shield: None,
+            wear: vec![],
+            outcome: BeatOutcome::Executed { damage },
+            significant: true,
+        };
+        beats.push(beat.clone());
+        events.push(TaggedEvent::new(
+            String::new(),
+            MessagePayload::CombatBeat(beat),
+        ));
+        self.result = Some(CombatResult::Winner {
+            character: killer_ref,
+        });
+    }
+
+    /// Consume a health/relevant consumable (brain-chosen `UseItem`). A failed
+    /// use produces no beat — the actor simply loses their action.
+    fn resolve_use_item(
+        &mut self,
+        round_no: u32,
+        order: u8,
+        actor_is_first: bool,
+        item: shared::messages::ItemRef,
+        events: &mut Vec<TaggedEvent>,
+        beats: &mut Vec<CombatBeat>,
+    ) {
+        let actor: &mut Character = if actor_is_first {
+            &mut *self.first
+        } else {
+            &mut *self.second
+        };
+        let Some(chosen) = actor
+            .consumables()
+            .into_iter()
+            .find(|i| item.identifier == i.identifier)
+        else {
+            return;
+        };
+
+        let mut scratch: Vec<TaggedEvent> = Vec::new();
+        if actor
+            .try_use_consumable(&chosen, &mut scratch, None)
+            .is_err()
+        {
+            return;
+        }
+        events.extend(scratch);
+
+        let beat = CombatBeat {
+            round: round_no,
+            order,
+            actor: tref(actor),
+            action: CombatActionKind::UseItem { item },
+            target: None,
+            weapon: None,
+            shield: None,
+            wear: vec![],
+            outcome: BeatOutcome::ItemUsed,
+            significant: false,
+        };
+        beats.push(beat.clone());
+        events.push(TaggedEvent::new(
+            String::new(),
+            MessagePayload::CombatBeat(beat),
+        ));
+        self.check_termination_after_beat();
+    }
+
     /// Check kill / stamina-draw after an attack beat and set `result` if the
     /// fight ended.
     fn check_termination_after_beat(&mut self) {
@@ -363,6 +554,10 @@ mod tests {
 
         let mut b = char_named("Bob");
         b.blood = 1;
+        // Pin initiative: Alice must act first so the kill skips beat 2.
+        // (Default agility left this test flaky on d20 variance.)
+        b.attributes.agility = 0;
+        b.stamina = 1; // Exhausted band → initiative −2, always behind Alice
 
         let mut rng = SmallRng::seed_from_u64(7);
         let mut events = Vec::new();
@@ -501,10 +696,8 @@ mod tests {
         b.stamina = 100;
         b.max_stamina = 1000;
 
-        let tuning = CombatTuning {
-            max_rounds: 3,
-            ..CombatTuning::default()
-        };
+        let mut tuning = CombatTuning::default();
+        tuning.max_rounds = 3;
 
         let mut rng = SmallRng::seed_from_u64(9);
         let mut events = Vec::new();
@@ -565,5 +758,319 @@ mod tests {
                 assert!(beat.round <= last_round);
             }
         }
+    }
+
+    // --- Cower / verdict flow (spec §7) ---
+
+    /// Alice (initiative-first) cowers; Bob's same-round verdict spares her.
+    /// Both beats land in round 1 and the fight ends with both alive.
+    #[test]
+    fn cower_then_spare_produces_both_beats_and_spared_result() {
+        struct AliceCowers;
+        impl CombatActionProvider for AliceCowers {
+            fn action(&mut self, a: &Character, _o: &Character) -> CombatActionKind {
+                if a.name == "Alice" {
+                    CombatActionKind::Cower
+                } else {
+                    CombatActionKind::Attack
+                }
+            }
+            fn verdict(&mut self, _a: &Character, _c: &Character) -> CombatActionKind {
+                CombatActionKind::Spare
+            }
+        }
+
+        let mut a = char_named("Alice");
+        a.attributes.agility = 100;
+        let mut b = char_named("Bob");
+        b.attributes.agility = 0;
+        let (alice, bob) = (tref(&a), tref(&b));
+
+        let mut rng = SmallRng::seed_from_u64(13);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_provider(
+            &mut a,
+            &mut b,
+            "c7".into(),
+            CombatTuning::default(),
+            Box::new(AliceCowers),
+        );
+
+        let round = combat.advance_round(&mut rng, &mut events);
+        assert!(combat.is_over());
+        let result = combat.result().cloned();
+        drop(combat);
+        assert_eq!(
+            result,
+            Some(CombatResult::Spared {
+                winner: bob,
+                spared: alice,
+            })
+        );
+        assert_eq!(round.beats.len(), 2);
+        assert_eq!(round.beats[0].action, CombatActionKind::Cower);
+        assert_eq!(round.beats[0].outcome, BeatOutcome::Cowered);
+        assert!(round.beats[0].significant);
+        assert_eq!(round.beats[1].action, CombatActionKind::Spare);
+        assert_eq!(round.beats[1].outcome, BeatOutcome::Spared);
+        assert!(a.is_alive(), "spared means alive");
+    }
+
+    /// Default verdict (no brain override) executes the cowerer: kill beat,
+    /// victim down to zero blood, Winner result.
+    #[test]
+    fn cower_then_execute_kills_and_ends_fight() {
+        struct AliceCowers;
+        impl CombatActionProvider for AliceCowers {
+            fn action(&mut self, a: &Character, _o: &Character) -> CombatActionKind {
+                if a.name == "Alice" {
+                    CombatActionKind::Cower
+                } else {
+                    CombatActionKind::Attack
+                }
+            }
+        }
+
+        let mut a = char_named("Alice");
+        a.attributes.agility = 100;
+        let mut b = char_named("Bob");
+        b.attributes.agility = 0;
+        let bob = tref(&b);
+
+        let mut rng = SmallRng::seed_from_u64(17);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_provider(
+            &mut a,
+            &mut b,
+            "c8".into(),
+            CombatTuning::default(),
+            Box::new(AliceCowers),
+        );
+
+        let round = combat.advance_round(&mut rng, &mut events);
+        assert!(combat.is_over());
+        let result = combat.result().cloned();
+        drop(combat);
+        assert_eq!(result, Some(CombatResult::Winner { character: bob }));
+        assert_eq!(round.beats.len(), 2);
+        assert_eq!(round.beats[1].action, CombatActionKind::Execute);
+        assert_eq!(
+            round.beats[1].outcome,
+            BeatOutcome::Executed { damage: 1000 }
+        );
+        assert_eq!(a.blood, 0, "executed means dead");
+        assert!(
+            events.iter().any(|ev| matches!(
+                ev.payload,
+                MessagePayload::CharacterKilled { ref killer, .. }
+                    if killer.as_ref().is_some_and(|k| k.name == "Bob")
+            )),
+            "execution must report the kill"
+        );
+    }
+
+    /// The verdict comes on the opponent's next action — even when that's in
+    /// the following round — and the cowerer never acts (or re-cowers) between.
+    #[test]
+    fn verdict_arrives_on_opponents_next_action_even_across_rounds() {
+        struct AliceCowersBobAttacks;
+        impl CombatActionProvider for AliceCowersBobAttacks {
+            fn action(&mut self, a: &Character, _o: &Character) -> CombatActionKind {
+                if a.name == "Alice" {
+                    CombatActionKind::Cower
+                } else {
+                    CombatActionKind::Attack
+                }
+            }
+            fn verdict(&mut self, _a: &Character, _c: &Character) -> CombatActionKind {
+                CombatActionKind::Spare
+            }
+        }
+
+        let mut a = char_named("Alice");
+        a.attributes.agility = 0;
+        a.attributes.strength = 0;
+        let mut b = char_named("Bob");
+        b.attributes.agility = 100;
+        b.attributes.strength = 0;
+
+        let mut rng = SmallRng::seed_from_u64(23);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_provider(
+            &mut a,
+            &mut b,
+            "c9".into(),
+            CombatTuning::default(),
+            Box::new(AliceCowersBobAttacks),
+        );
+
+        let r1 = combat.advance_round(&mut rng, &mut events);
+        assert!(!combat.is_over(), "cower is not terminal");
+        assert_eq!(
+            r1.beats.last().map(|b| &b.action),
+            Some(&CombatActionKind::Cower),
+            "round 1 ends with Alice's cower"
+        );
+        let r2 = combat.advance_round(&mut rng, &mut events);
+        assert!(combat.is_over());
+        assert_eq!(r2.beats.len(), 1, "only Bob's verdict beat in round 2");
+        assert_eq!(r2.beats[0].action, CombatActionKind::Spare);
+        let cower_beats = events
+            .iter()
+            .filter(|ev| {
+                matches!(&ev.payload, MessagePayload::CombatBeat(b)
+                    if b.action == CombatActionKind::Cower)
+            })
+            .count();
+        assert_eq!(cower_beats, 1, "never a repeat cower beat");
+    }
+
+    /// Across many seeds (initiative order can flip between rounds), a cowerer
+    /// never emits a second Cower beat before the verdict resolves.
+    #[test]
+    fn cowerer_never_recowers_across_seeds() {
+        struct AliceCowers;
+        impl CombatActionProvider for AliceCowers {
+            fn action(&mut self, a: &Character, _o: &Character) -> CombatActionKind {
+                if a.name == "Alice" {
+                    CombatActionKind::Cower
+                } else {
+                    CombatActionKind::Attack
+                }
+            }
+            fn verdict(&mut self, _a: &Character, _c: &Character) -> CombatActionKind {
+                CombatActionKind::Spare
+            }
+        }
+
+        for seed in 0..64 {
+            let mut a = char_named("Alice");
+            a.attributes.agility = 5;
+            a.attributes.strength = 0;
+            let mut b = char_named("Bob");
+            b.attributes.agility = 5;
+            b.attributes.strength = 0;
+
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let mut events = Vec::new();
+            let mut combat = CombatRoundLoop::with_provider(
+                &mut a,
+                &mut b,
+                format!("c10-{seed}"),
+                CombatTuning::default(),
+                Box::new(AliceCowers),
+            );
+
+            let mut beats = 0;
+            while !combat.is_over() {
+                beats += combat.advance_round(&mut rng, &mut events).beats.len();
+            }
+            assert!(
+                matches!(combat.result(), Some(CombatResult::Spared { .. })),
+                "seed {seed}: spared"
+            );
+            assert!(
+                beats <= 3,
+                "seed {seed}: attack? + cower + verdict, got {beats}"
+            );
+            let cowers = events
+                .iter()
+                .filter(|ev| {
+                    matches!(&ev.payload, MessagePayload::CombatBeat(b)
+                        if b.action == CombatActionKind::Cower)
+                })
+                .count();
+            let verdicts = events
+                .iter()
+                .filter(|ev| {
+                    matches!(&ev.payload, MessagePayload::CombatBeat(b)
+                        if b.action == CombatActionKind::Spare)
+                })
+                .count();
+            assert_eq!(cowers, 1, "seed {seed}: exactly one cower beat");
+            assert_eq!(verdicts, 1, "seed {seed}: exactly one verdict beat");
+        }
+    }
+
+    // --- Use Item / brain-driven flee ---
+
+    /// Wounded Alice with a health potion heals via the brain on her first
+    /// beat; the ItemUsed beat lands and her blood rises.
+    #[test]
+    fn use_item_beat_heals_via_brain() {
+        use crate::brains::combat::CombatBrain;
+        use world::items::{Item, ItemRarity, ItemType};
+
+        let mut a = char_named("Alice");
+        a.blood = 300;
+        a.attributes.agility = 100;
+        a.items.push(Item::new(
+            "potion",
+            ItemType::Consumable,
+            ItemRarity::Common,
+            10,
+            world::items::Attribute::Health,
+            200,
+        ));
+        let mut b = char_named("Bob");
+        b.attributes.agility = 0;
+        b.attributes.strength = 0; // no damage while Alice heals
+
+        let mut rng = SmallRng::seed_from_u64(29);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_provider(
+            &mut a,
+            &mut b,
+            "c11".into(),
+            CombatTuning::default(),
+            Box::new(CombatBrain::new(CombatTuning::default())),
+        );
+
+        let round = combat.advance_round(&mut rng, &mut events);
+        drop(combat);
+        assert!(
+            matches!(round.beats[0].action, CombatActionKind::UseItem { .. }),
+            "expected UseItem beat, got {:?}",
+            round.beats[0].action
+        );
+        assert_eq!(round.beats[0].outcome, BeatOutcome::ItemUsed);
+        assert!(a.blood > 300, "healed: {}", a.blood);
+    }
+
+    /// A wounded, exhausted goblin flees through the brain (not a scripted
+    /// provider) and, with the agility advantage, escapes.
+    #[test]
+    fn wounded_exhausted_brain_flees_and_escapes() {
+        use crate::brains::combat::CombatBrain;
+
+        let mut a = char_named("Alice");
+        a.blood = 300;
+        a.stamina = 10; // Exhausted
+        a.attributes.agility = 100;
+        let mut b = char_named("Bob");
+        b.attributes.agility = 0;
+        b.attributes.strength = 0; // can't land damage; Alice's flee decides
+        let (alice, bob) = (tref(&a), tref(&b));
+
+        let mut rng = SmallRng::seed_from_u64(31);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_provider(
+            &mut a,
+            &mut b,
+            "c12".into(),
+            CombatTuning::default(),
+            Box::new(CombatBrain::new(CombatTuning::default())),
+        );
+
+        let _ = combat.advance_round(&mut rng, &mut events);
+        let result = combat.result().cloned();
+        drop(combat);
+        assert_eq!(
+            result,
+            Some(CombatResult::Fled {
+                fled: alice,
+                remaining: bob,
+            })
+        );
     }
 }
