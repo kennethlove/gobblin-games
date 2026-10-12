@@ -90,7 +90,7 @@ fn message_kind_serde_roundtrip() {
         MessageKind::CharacterMoved,
         MessageKind::ItemFound,
         MessageKind::CharacterRested,
-        MessageKind::CombatSwing,
+        MessageKind::CombatBeat,
     ] {
         let s = serde_json::to_string(&kind).unwrap();
         let back: MessageKind = serde_json::from_str(&s).unwrap();
@@ -492,7 +492,7 @@ fn summarize_is_current_flag_set_correctly() {
 #[test]
 fn importance_tiers_match_decision() {
     use crate::afflictions::{DeathCause, Severity, TrapKind};
-    use crate::combat_beat::{CombatBeat, StressReport, SwingOutcome};
+    use crate::combat_beat::{BeatOutcome, CombatActionKind, CombatBeat, SwingOutcome};
     use Importance::{Persist, ServerLogOnly};
     use MessagePayload::*;
 
@@ -504,19 +504,22 @@ fn importance_tiers_match_decision() {
         identifier: "i".into(),
         name: "I".into(),
     };
-    let beat = |outcome| CombatBeat {
-        attacker: t("a"),
-        target: t("b"),
+    let beat = |swing| CombatBeat {
+        round: 1,
+        order: 0,
+        actor: t("a"),
+        action: CombatActionKind::Attack,
+        target: Some(t("b")),
         weapon: None,
         shield: None,
         wear: vec![],
-        outcome,
-        stress: StressReport {
-            stress_damage: 0,
-            stressed: None,
+        outcome: BeatOutcome::Swing {
+            outcome: swing,
+            stress: Default::default(),
+            actor_stamina_cost: 1,
+            target_stamina_cost: 1,
         },
-        attacker_stamina_cost: 1,
-        target_stamina_cost: 1,
+        significant: false,
     };
     let engagement = |outcome| CombatEngagement {
         attacker: t("a"),
@@ -555,9 +558,20 @@ fn importance_tiers_match_decision() {
         (Combat(engagement(CombatOutcome::TargetFled)), Persist),
         (Combat(engagement(CombatOutcome::AttackerFled)), Persist),
         (Combat(engagement(CombatOutcome::Stalemate)), ServerLogOnly),
-        (CombatSwing(beat(SwingOutcome::Miss)), ServerLogOnly),
+        (CombatBeat(beat(SwingOutcome::Miss)), ServerLogOnly),
+        (CombatBeat(beat(SwingOutcome::Wound { damage: 5 })), Persist),
         (
-            CombatSwing(beat(SwingOutcome::Wound { damage: 5 })),
+            CombatRoundStart {
+                combat_id: "c1".into(),
+                round: 1,
+            },
+            ServerLogOnly,
+        ),
+        (
+            CombatEnded {
+                combat_id: "c1".into(),
+                result: crate::combat_beat::CombatResult::Draw,
+            },
             Persist,
         ),
         (
@@ -1259,7 +1273,7 @@ fn importance_tiers_match_decision() {
     }
     assert_eq!(
         kinds.len(),
-        91,
+        93,
         "table must cover every MessagePayload variant"
     );
     assert!(cases.len() >= 90, "table rows: {}", cases.len());

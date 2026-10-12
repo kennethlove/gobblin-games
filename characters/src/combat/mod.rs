@@ -8,6 +8,7 @@
 
 pub mod inflict_table;
 pub mod resolve;
+pub mod round_loop;
 
 #[cfg(test)]
 mod tests;
@@ -142,7 +143,7 @@ impl Character {
                     ));
                     events.push(TaggedEvent::new(
                         String::new(),
-                        MessagePayload::CombatSwing(beat),
+                        MessagePayload::CombatBeat(beat),
                     ));
                     return AttackOutcome::Kill(target.clone(), self.clone());
                 }
@@ -157,7 +158,7 @@ impl Character {
                 ));
                 events.push(TaggedEvent::new(
                     String::new(),
-                    MessagePayload::CombatSwing(beat),
+                    MessagePayload::CombatBeat(beat),
                 ));
                 return AttackOutcome::Wound(self.clone(), target.clone());
             }
@@ -266,7 +267,7 @@ impl Character {
                 ));
                 events.push(TaggedEvent::new(
                     String::new(),
-                    MessagePayload::CombatSwing(beat),
+                    MessagePayload::CombatBeat(beat),
                 ));
 
                 return AttackOutcome::Miss(self.clone(), target.clone());
@@ -365,7 +366,7 @@ impl Character {
 
         events.push(TaggedEvent::new(
             String::new(),
-            MessagePayload::CombatSwing(beat),
+            MessagePayload::CombatBeat(beat),
         ));
 
         attack_outcome

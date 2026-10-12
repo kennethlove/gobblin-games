@@ -546,11 +546,11 @@ mod tests {
         );
 
         // AfflictionAcquired events are emitted in Phase 3, which runs
-        // BEFORE the final CombatSwing event is emitted (Phase 3 runs
+        // BEFORE the final CombatBeat event is emitted (Phase 3 runs
         // after damage resolution but before the final swing beat).
         let swing_idx = events
             .iter()
-            .position(|e| matches!(e.payload, MessagePayload::CombatSwing(_)));
+            .position(|e| matches!(e.payload, MessagePayload::CombatBeat(_)));
         let affliction_idx = events
             .iter()
             .position(|e| matches!(e.payload, MessagePayload::AfflictionAcquired { .. }));
@@ -558,7 +558,7 @@ mod tests {
         if let (Some(ai), Some(si)) = (affliction_idx, swing_idx) {
             assert!(
                 ai <= si,
-                "AfflictionAcquired should come at or before final CombatSwing"
+                "AfflictionAcquired should come at or before final CombatBeat"
             );
         }
     }

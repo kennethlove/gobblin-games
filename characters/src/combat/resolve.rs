@@ -52,8 +52,11 @@ pub(super) fn new_beat(
     tuning: &crate::combat_tuning::CombatTuning,
 ) -> CombatBeat {
     CombatBeat {
-        attacker: tref(attacker),
-        target: tref(target),
+        round: 1,
+        order: 0,
+        actor: tref(attacker),
+        action: shared::combat_beat::CombatActionKind::Attack,
+        target: Some(tref(target)),
         weapon: attacker
             .items
             .iter()
@@ -65,10 +68,13 @@ pub(super) fn new_beat(
             .rfind(|i| i.is_defensive() && i.current_durability > 0)
             .map(iref),
         wear: Vec::new(),
-        outcome,
-        stress: StressReport::default(),
-        attacker_stamina_cost: tuning.stamina_cost_attacker,
-        target_stamina_cost: tuning.stamina_cost_target,
+        outcome: shared::combat_beat::BeatOutcome::Swing {
+            outcome,
+            stress: StressReport::default(),
+            actor_stamina_cost: tuning.stamina_cost_attacker,
+            target_stamina_cost: tuning.stamina_cost_target,
+        },
+        significant: false,
     }
 }
 
@@ -526,18 +532,24 @@ pub fn resolve(
     };
 
     let beat = CombatBeat {
-        attacker: tref(attacker),
-        target: tref(defender),
+        round: 1,
+        order: 0,
+        actor: tref(attacker),
+        action: shared::combat_beat::CombatActionKind::Attack,
+        target: Some(tref(defender)),
         weapon,
         shield,
         wear: contest.wear.clone(),
-        outcome: swing_outcome,
-        stress: StressReport {
-            stress_damage,
-            stressed,
+        outcome: shared::combat_beat::BeatOutcome::Swing {
+            outcome: swing_outcome,
+            stress: StressReport {
+                stress_damage,
+                stressed,
+            },
+            actor_stamina_cost: tuning.stamina_cost_attacker,
+            target_stamina_cost: tuning.stamina_cost_target,
         },
-        attacker_stamina_cost: tuning.stamina_cost_attacker,
-        target_stamina_cost: tuning.stamina_cost_target,
+        significant: false,
     };
 
     let mut contest = contest;
@@ -893,14 +905,21 @@ impl Character {
                 SwingOutcome::SelfAttackWound { damage },
                 tuning,
             );
-            beat.target_stamina_cost = 0;
-            beat.stress.stress_damage = stress_damage;
-            if stress_damage > 0 {
-                beat.stress.stressed = Some(tref(self));
+            if let shared::combat_beat::BeatOutcome::Swing {
+                ref mut target_stamina_cost,
+                ref mut stress,
+                ..
+            } = beat.outcome
+            {
+                *target_stamina_cost = 0;
+                stress.stress_damage = stress_damage;
+                if stress_damage > 0 {
+                    stress.stressed = Some(tref(self));
+                }
             }
             events.push(TaggedEvent::new(
                 String::new(),
-                MessagePayload::CombatSwing(beat),
+                MessagePayload::CombatBeat(beat),
             ));
             AttackOutcome::Wound(self.clone(), target.clone())
         } else {
@@ -914,14 +933,21 @@ impl Character {
                 },
             ));
             let mut beat = new_beat(self, target, SwingOutcome::Suicide { damage }, tuning);
-            beat.target_stamina_cost = 0;
-            beat.stress.stress_damage = stress_damage;
-            if stress_damage > 0 {
-                beat.stress.stressed = Some(tref(self));
+            if let shared::combat_beat::BeatOutcome::Swing {
+                ref mut target_stamina_cost,
+                ref mut stress,
+                ..
+            } = beat.outcome
+            {
+                *target_stamina_cost = 0;
+                stress.stress_damage = stress_damage;
+                if stress_damage > 0 {
+                    stress.stressed = Some(tref(self));
+                }
             }
             events.push(TaggedEvent::new(
                 String::new(),
-                MessagePayload::CombatSwing(beat),
+                MessagePayload::CombatBeat(beat),
             ));
             AttackOutcome::Kill(self.clone(), target.clone())
         }

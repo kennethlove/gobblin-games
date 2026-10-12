@@ -1,9 +1,15 @@
-//! Typed payload describing one combat swing.
+//! Typed payloads describing one multi-round combat.
 //!
-//! One `CombatBeat` is produced per `Character::attacks()` call. The data lives
-//! in `shared` so it can ride `MessagePayload::CombatSwing(CombatBeat)`. The
-//! narration `to_log_lines()` lives in the `game` crate, since it depends on
-//! `GameOutput` rendering.
+//! A fight is a [`Combat`] — a sequence of [`CombatRound`]s, each holding up
+//! to two [`CombatBeat`]s (one per combatant). A beat records a single
+//! combatant's chosen action and its outcome. The data lives in `shared` so it
+//! can ride `MessagePayload::CombatRoundStart` / `CombatBeat` / `CombatEnded`.
+//! The narration `to_log_lines()` lives in the `game` crate, since it depends
+//! on `GameOutput` rendering.
+//!
+//! These types supersede the single-swing `CombatBeat` that rode
+//! `MessagePayload::CombatSwing` (now removed). `SwingOutcome`, `WearReport`,
+//! and `StressReport` are reused verbatim inside the per-action [`BeatOutcome`].
 
 use crate::messages::{CharacterRef, ItemRef};
 use serde::{Deserialize, Serialize};
@@ -31,11 +37,10 @@ pub struct WearReport {
     pub mid_action_penalty: Option<i32>,
 }
 
-/// High-level outcome of one swing.
+/// High-level outcome of one swing (the `Attack` action's resolution).
 ///
-/// Mirrors the post-resolution branches in the legacy `attacks()`. New variant
-/// `FumbleDeath` covers the previously implicit "fumble killed the attacker"
-/// path that the old code hid inside `AttackOutcome::Kill(target.clone(), self)`.
+/// Mirrors the post-resolution branches in the legacy `attacks()`. `FumbleDeath`
+/// covers the previously implicit "fumble killed the attacker" path.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SwingOutcome {
     /// Attack missed entirely.
@@ -48,7 +53,7 @@ pub enum SwingOutcome {
     BlockWound { damage: u32 },
     /// Target was killed by the attacker.
     Kill { damage: u32 },
-    /// Attacker was killed by the target's counter (PerfectBlock or DefenderWins killed self).
+    /// Attacker was killed by the target's counter.
     AttackerDied { damage: u32 },
     /// Attacker fumbled (nat-1) and survived self-damage.
     FumbleSurvive { self_damage: u32 },
@@ -71,28 +76,122 @@ pub struct StressReport {
     pub stressed: Option<CharacterRef>,
 }
 
-/// Full record of one swing.
+/// One character's chosen action within a round.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CombatActionKind {
+    /// Swing at the opponent. Resolves via `attack_contest`.
+    Attack,
+    /// Consume/use an item on self.
+    UseItem { item: ItemRef },
+    /// Attempt to flee the fight (contested speed roll).
+    Flee,
+    /// Stop fighting and beg for mercy.
+    Cower,
+    /// Winner's verdict after a cower: let them live.
+    Spare,
+    /// Winner's verdict after a cower: kill them.
+    Execute,
+}
+
+/// Per-action outcome of one beat.
+///
+/// `Attack` reuses [`SwingOutcome`]; the other actions carry their own results.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BeatOutcome {
+    /// An `Attack` beat — full swing resolution.
+    Swing {
+        outcome: SwingOutcome,
+        stress: StressReport,
+        /// Stamina deducted from the actor for this swing.
+        #[serde(default)]
+        actor_stamina_cost: u32,
+        /// Stamina deducted from the target for this swing.
+        #[serde(default)]
+        target_stamina_cost: u32,
+    },
+    /// A `UseItem` beat — the item was consumed.
+    ItemUsed,
+    /// A `Flee` beat — escaped the fight.
+    Fled,
+    /// A `Flee` beat — the chaser caught up; stay in the fight.
+    FailedFlee,
+    /// A `Cower` beat — the character surrendered and awaits a verdict.
+    Cowered,
+    /// A `Spare` beat — the cowerer lives.
+    Spared,
+    /// An `Execute` beat — the cowerer was killed.
+    Executed { damage: u32 },
+}
+
+/// Full record of one combatant's action within a round.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CombatBeat {
-    pub attacker: CharacterRef,
-    pub target: CharacterRef,
-    /// Weapon equipped by attacker at swing start (None if unarmed).
+    /// Round number this beat belongs to (1-based).
+    pub round: u32,
+    /// Position within the round (0 = initiative winner, 1 = second actor).
+    pub order: u8,
+    /// Who acted.
+    pub actor: CharacterRef,
+    /// What they chose to do.
+    pub action: CombatActionKind,
+    /// Who they acted against. `None` for actions with no target (e.g. Flee).
+    pub target: Option<CharacterRef>,
+    /// Weapon equipped by the actor at swing start (None if unarmed).
     pub weapon: Option<ItemRef>,
-    /// Shield equipped by target at swing start (None if unshielded).
+    /// Shield equipped by the target at swing start (None if unshielded).
     pub shield: Option<ItemRef>,
     /// Wear/break records emitted in attack-roll order: weapon first, then shield.
     pub wear: Vec<WearReport>,
-    /// Final outcome of the swing.
-    pub outcome: SwingOutcome,
-    /// Stress applied to attacker after the resolution (may be 0).
-    pub stress: StressReport,
-    /// Stamina deducted from the attacker for this swing. `#[serde(default)]`
-    /// for back-compat with persisted beats from before stamina-as-resource.
+    /// The action's outcome.
+    pub outcome: BeatOutcome,
+    /// Whether this beat is "significant" for persistence/UI down-ranking
+    /// (kills, cower, spare/execute, successful flee, equipment breaks).
     #[serde(default)]
-    pub attacker_stamina_cost: u32,
-    /// Stamina deducted from the target for this swing.
-    #[serde(default)]
-    pub target_stamina_cost: u32,
+    pub significant: bool,
+}
+
+/// One round of a fight: at most two beats, in initiative order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CombatRound {
+    /// 1-based round number.
+    pub number: u32,
+    /// Beats in the order they resolved. May be shorter than two when the
+    /// fight terminated mid-round (kill or successful flee skips the rest).
+    pub beats: Vec<CombatBeat>,
+}
+
+/// The terminal result of a whole fight.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CombatResult {
+    /// One combatant killed the other.
+    Winner { character: CharacterRef },
+    /// One combatant fled successfully; `remaining` is the one left standing.
+    Fled {
+        fled: CharacterRef,
+        remaining: CharacterRef,
+    },
+    /// A cowerer was spared; both survive.
+    Spared {
+        winner: CharacterRef,
+        spared: CharacterRef,
+    },
+    /// Neither could continue (e.g. both stamina-empty); both disengage alive.
+    Draw,
+}
+
+/// The whole fight: combatants, every round, and the terminal result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Combat {
+    /// Stable identifier so the UI can group this fight's beats into one card.
+    pub combat_id: String,
+    /// The two combatants, in stable (deterministic) order.
+    pub combatants: [CharacterRef; 2],
+    /// Every round that resolved, in order.
+    pub rounds: Vec<CombatRound>,
+    /// The terminal result. `None` while the fight is still running.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<CombatResult>,
 }
 
 #[cfg(test)]
@@ -107,14 +206,18 @@ mod tests {
         }
     }
 
+    fn item(name: &str) -> ItemRef {
+        ItemRef {
+            identifier: "sword-1".into(),
+            name: name.into(),
+        }
+    }
+
     #[test]
     fn wear_report_roundtrips_with_break_penalty_fields() {
         let report = WearReport {
             owner: t("A"),
-            item: ItemRef {
-                identifier: "sword-1".into(),
-                name: "Iron Sword".into(),
-            },
+            item: item("Iron Sword"),
             outcome: WearOutcomeReport::Broken,
             forfeited_effect: Some(3),
             mid_action_penalty: Some(2),
@@ -127,20 +230,85 @@ mod tests {
     }
 
     #[test]
-    fn beat_roundtrips_via_serde() {
+    fn combat_beat_attack_roundtrips_via_serde() {
         let beat = CombatBeat {
-            attacker: t("A"),
-            target: t("B"),
-            weapon: None,
+            round: 1,
+            order: 0,
+            actor: t("A"),
+            action: CombatActionKind::Attack,
+            target: Some(t("B")),
+            weapon: Some(item("Iron Sword")),
             shield: None,
             wear: vec![],
-            outcome: SwingOutcome::Miss,
-            stress: StressReport::default(),
-            attacker_stamina_cost: 0,
-            target_stamina_cost: 0,
+            outcome: BeatOutcome::Swing {
+                outcome: SwingOutcome::Miss,
+                stress: StressReport::default(),
+                actor_stamina_cost: 25,
+                target_stamina_cost: 10,
+            },
+            significant: false,
         };
         let json = serde_json::to_string(&beat).unwrap();
         let back: CombatBeat = serde_json::from_str(&json).unwrap();
         assert_eq!(beat, back);
+    }
+
+    #[test]
+    fn combat_beat_flee_roundtrips_with_no_target() {
+        let beat = CombatBeat {
+            round: 2,
+            order: 1,
+            actor: t("B"),
+            action: CombatActionKind::Flee,
+            target: None,
+            weapon: None,
+            shield: None,
+            wear: vec![],
+            outcome: BeatOutcome::Fled,
+            significant: true,
+        };
+        let json = serde_json::to_string(&beat).unwrap();
+        let back: CombatBeat = serde_json::from_str(&json).unwrap();
+        assert_eq!(beat, back);
+        assert!(back.target.is_none());
+    }
+
+    #[test]
+    fn combat_round_and_result_roundtrip() {
+        let round = CombatRound {
+            number: 1,
+            beats: vec![],
+        };
+        let combat = Combat {
+            combat_id: "combat-1".into(),
+            combatants: [t("A"), t("B")],
+            rounds: vec![round.clone()],
+            result: Some(CombatResult::Winner { character: t("A") }),
+        };
+        let json = serde_json::to_string(&combat).unwrap();
+        let back: Combat = serde_json::from_str(&json).unwrap();
+        assert_eq!(combat, back);
+        assert_eq!(back.rounds[0], round);
+    }
+
+    #[test]
+    fn combat_result_all_variants_roundtrip() {
+        let results = [
+            CombatResult::Winner { character: t("A") },
+            CombatResult::Fled {
+                fled: t("A"),
+                remaining: t("B"),
+            },
+            CombatResult::Spared {
+                winner: t("A"),
+                spared: t("B"),
+            },
+            CombatResult::Draw,
+        ];
+        for r in results {
+            let json = serde_json::to_string(&r).unwrap();
+            let back: CombatResult = serde_json::from_str(&json).unwrap();
+            assert_eq!(r, back);
+        }
     }
 }

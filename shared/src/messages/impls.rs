@@ -41,12 +41,17 @@ impl MessagePayload {
                 Importance::ServerLogOnly
             }
             Combat(_) => Importance::Persist, // Killed/Wounded/flees
-            CombatSwing(b)
+            CombatBeat(b)
                 if matches!(
                     b.outcome,
-                    crate::combat_beat::SwingOutcome::Miss
+                    crate::combat_beat::BeatOutcome::Swing {
+                        outcome: crate::combat_beat::SwingOutcome::Miss,
+                        ..
+                    }
                 ) => Importance::ServerLogOnly,
-            CombatSwing(_) => Importance::Persist,
+            CombatBeat(_) => Importance::Persist,
+            CombatRoundStart { .. } => Importance::ServerLogOnly,
+            CombatEnded { .. } => Importance::Persist,
             CycleStart { phase, .. }
                 if phase.hour() == Phase::DAY_START_HOUR
                     || phase.hour() == Phase::NIGHTFALL_HOUR =>
@@ -182,10 +187,25 @@ impl MessagePayload {
                 refs.push(&e.attacker);
                 refs.push(&e.target);
             }
-            CombatSwing(b) => {
-                refs.push(&b.attacker);
-                refs.push(&b.target);
+            CombatBeat(b) => {
+                refs.push(&b.actor);
+                if let Some(t) = &b.target {
+                    refs.push(t);
+                }
             }
+            CombatEnded { result, .. } => match result {
+                crate::combat_beat::CombatResult::Winner { character } => refs.push(character),
+                crate::combat_beat::CombatResult::Fled { fled, remaining } => {
+                    refs.push(fled);
+                    refs.push(remaining);
+                }
+                crate::combat_beat::CombatResult::Spared { winner, spared } => {
+                    refs.push(winner);
+                    refs.push(spared);
+                }
+                crate::combat_beat::CombatResult::Draw => {}
+            },
+            CombatRoundStart { .. } => {}
             AllianceFormed { members } | AllianceDissolved { members, .. } => refs.extend(members),
             AllianceProposed { proposer, target } => {
                 refs.push(proposer);

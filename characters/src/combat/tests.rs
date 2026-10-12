@@ -318,13 +318,21 @@ fn combat_beat_carries_stamina_costs(mut small_rng: SmallRng) {
     let beats: Vec<_> = events
         .iter()
         .filter_map(|e| match &e.payload {
-            MessagePayload::CombatSwing(b) => Some(b),
+            MessagePayload::CombatBeat(b) => Some(b),
             _ => None,
         })
         .collect();
     assert_eq!(beats.len(), 1);
-    assert_eq!(beats[0].attacker_stamina_cost, tuning.stamina_cost_attacker);
-    assert_eq!(beats[0].target_stamina_cost, tuning.stamina_cost_target);
+    let shared::combat_beat::BeatOutcome::Swing {
+        actor_stamina_cost,
+        target_stamina_cost,
+        ..
+    } = &beats[0].outcome
+    else {
+        panic!("expected a Swing beat outcome");
+    };
+    assert_eq!(*actor_stamina_cost, tuning.stamina_cost_attacker);
+    assert_eq!(*target_stamina_cost, tuning.stamina_cost_target);
 }
 
 #[rstest]
@@ -657,7 +665,7 @@ fn attacks_emits_one_combat_taggedevent(mut small_rng: SmallRng) {
 
 #[rstest]
 fn attacks_emits_one_combat_swing_per_call(small_rng: SmallRng) {
-    // Every call to attacks() produces exactly one MessagePayload::CombatSwing,
+    // Every call to attacks() produces exactly one MessagePayload::CombatBeat,
     // regardless of which branch (miss / wound / kill / fumble / self-attack).
     for seed in 0..16u64 {
         let mut events: Vec<TaggedEvent> = Vec::new();
@@ -674,18 +682,18 @@ fn attacks_emits_one_combat_swing_per_call(small_rng: SmallRng) {
 
         let swings: Vec<_> = events
             .iter()
-            .filter(|e| matches!(e.payload, MessagePayload::CombatSwing(_)))
+            .filter(|e| matches!(e.payload, MessagePayload::CombatBeat(_)))
             .collect();
         assert_eq!(
             swings.len(),
             1,
-            "seed {seed}: expected exactly one CombatSwing payload, got {}",
+            "seed {seed}: expected exactly one CombatBeat payload, got {}",
             swings.len()
         );
 
-        if let MessagePayload::CombatSwing(beat) = &swings[0].payload {
-            assert_eq!(beat.attacker.name, attacker.name);
-            assert_eq!(beat.target.name, target.name);
+        if let MessagePayload::CombatBeat(beat) = &swings[0].payload {
+            assert_eq!(beat.actor.name, attacker.name);
+            assert_eq!(beat.target.as_ref().unwrap().name, target.name);
         }
     }
     // Touch the rstest fixture to silence unused warnings.
@@ -706,9 +714,9 @@ fn self_attack_emits_one_combat_swing(mut small_rng: SmallRng) {
     );
     let swings: usize = events
         .iter()
-        .filter(|e| matches!(e.payload, MessagePayload::CombatSwing(_)))
+        .filter(|e| matches!(e.payload, MessagePayload::CombatBeat(_)))
         .count();
-    assert_eq!(swings, 1, "self-attack must emit exactly one CombatSwing");
+    assert_eq!(swings, 1, "self-attack must emit exactly one CombatBeat");
 }
 
 /// Construct a weapon with the given effect and durability=1 so a single
@@ -759,14 +767,14 @@ fn weapon_break_records_forfeit_and_penalty_on_beat() {
     let beat = events
         .iter()
         .find_map(|e| match &e.payload {
-            MessagePayload::CombatSwing(b) => Some(b),
+            MessagePayload::CombatBeat(b) => Some(b),
             _ => None,
         })
-        .expect("expected one CombatSwing emission");
+        .expect("expected one CombatBeat emission");
     let weapon_wear = beat
         .wear
         .iter()
-        .find(|w| w.owner.identifier == beat.attacker.identifier)
+        .find(|w| w.owner.identifier == beat.actor.identifier)
         .expect("expected a wear report for the attacker's weapon");
 
     assert_eq!(
@@ -805,14 +813,14 @@ fn shield_break_records_forfeit_and_penalty_on_beat() {
     let beat = events
         .iter()
         .find_map(|e| match &e.payload {
-            MessagePayload::CombatSwing(b) => Some(b),
+            MessagePayload::CombatBeat(b) => Some(b),
             _ => None,
         })
-        .expect("expected one CombatSwing emission");
+        .expect("expected one CombatBeat emission");
     let shield_wear = beat
         .wear
         .iter()
-        .find(|w| w.owner.identifier == beat.target.identifier)
+        .find(|w| w.owner.identifier == beat.target.as_ref().unwrap().identifier)
         .expect("expected a wear report for the target's shield");
 
     assert_eq!(
@@ -849,7 +857,7 @@ fn fumble_clears_attacker_break_penalty_on_beat() {
         );
 
         let beat = match events.iter().find_map(|e| match &e.payload {
-            MessagePayload::CombatSwing(b) => Some(b),
+            MessagePayload::CombatBeat(b) => Some(b),
             _ => None,
         }) {
             Some(b) => b,
@@ -858,13 +866,16 @@ fn fumble_clears_attacker_break_penalty_on_beat() {
 
         let is_fumble = matches!(
             beat.outcome,
-            shared::combat_beat::SwingOutcome::FumbleSurvive { .. }
-                | shared::combat_beat::SwingOutcome::FumbleDeath { .. }
+            shared::combat_beat::BeatOutcome::Swing {
+                outcome: shared::combat_beat::SwingOutcome::FumbleSurvive { .. }
+                    | shared::combat_beat::SwingOutcome::FumbleDeath { .. },
+                ..
+            }
         );
         let weapon_wear = beat
             .wear
             .iter()
-            .find(|w| w.owner.identifier == beat.attacker.identifier);
+            .find(|w| w.owner.identifier == beat.actor.identifier);
 
         if is_fumble
             && weapon_wear
@@ -906,10 +917,10 @@ fn unarmed_unshielded_emits_no_break_penalty() {
     let beat = events
         .iter()
         .find_map(|e| match &e.payload {
-            MessagePayload::CombatSwing(b) => Some(b),
+            MessagePayload::CombatBeat(b) => Some(b),
             _ => None,
         })
-        .expect("expected one CombatSwing emission");
+        .expect("expected one CombatBeat emission");
     for w in &beat.wear {
         assert_eq!(w.forfeited_effect, None);
         assert_eq!(w.mid_action_penalty, None);
@@ -956,10 +967,10 @@ fn combat_beat_wear_matches_engagement_detail_wear_lines() {
         let beat = events
             .iter()
             .find_map(|e| match &e.payload {
-                MessagePayload::CombatSwing(b) => Some(b),
+                MessagePayload::CombatBeat(b) => Some(b),
                 _ => None,
             })
-            .expect("expected one CombatSwing per attacks() call");
+            .expect("expected one CombatBeat per attacks() call");
 
         // Wear-related substrings we want to track.
         let is_wear_line = |s: &str| {
@@ -1014,14 +1025,17 @@ fn combat_swing_records_stress_damage() {
     let beat = events
         .iter()
         .find_map(|e| match &e.payload {
-            MessagePayload::CombatSwing(b) => Some(b),
+            MessagePayload::CombatBeat(b) => Some(b),
             _ => None,
         })
-        .expect("expected one CombatSwing emission");
+        .expect("expected one CombatBeat emission");
+    let shared::combat_beat::BeatOutcome::Swing { stress, .. } = &beat.outcome else {
+        panic!("expected a Swing beat outcome");
+    };
     assert!(
-        beat.stress.stress_damage > 0,
+        stress.stress_damage > 0,
         "expected non-zero stress on the beat; got {}",
-        beat.stress.stress_damage
+        stress.stress_damage
     );
 }
 
@@ -1061,10 +1075,10 @@ fn combat_beat_stress_matches_engagement_horrified_line() {
         let beat = events
             .iter()
             .find_map(|e| match &e.payload {
-                MessagePayload::CombatSwing(b) => Some(b),
+                MessagePayload::CombatBeat(b) => Some(b),
                 _ => None,
             })
-            .expect("expected one CombatSwing per attacks() call");
+            .expect("expected one CombatBeat per attacks() call");
 
         let beat_horrified: Vec<String> = beat
             .to_log_lines()

@@ -1,5 +1,6 @@
 use super::*;
 use areas::{Area, AreaDetails};
+use characters::combat::round_loop::CombatRoundLoop;
 use characters::events::CharacterEvent;
 use characters::incidents::{SleepIncident, SleepShelter, apply_sleep_incident};
 use characters::statuses::CharacterStatus;
@@ -822,6 +823,9 @@ impl Game {
 
         // --- Phase 2: Execute actions with liveness checks ---
         let mut pending_thefts: Vec<(usize, Uuid)> = Vec::new();
+        // Real two-character fights deferred by act_attack; resolved after the
+        // loop with split_at_mut so both combatants take multi-round damage.
+        let mut pending_attacks: Vec<(usize, Uuid)> = Vec::new();
         for idx in characters_to_act {
             // Build sleeping_nearby BEFORE the mutable character borrow so
             // the self.characters.iter() doesn't conflict (ls5a).
@@ -967,6 +971,12 @@ impl Game {
             if let Some(sleeper_uuid) = character.pending_theft_target.take() {
                 pending_thefts.push((idx, sleeper_uuid));
             }
+
+            // Collect a deferred real fight (set by act_attack). Resolved after
+            // this loop releases the character borrow.
+            if let Some(target_uuid) = character.pending_attack_target.take() {
+                pending_attacks.push((idx, target_uuid));
+            }
         }
 
         // ── Process pending sleep theft (ls5a) ──
@@ -1024,6 +1034,133 @@ impl Game {
                 }),
                 None,
             ));
+        }
+
+        // ── Resolve deferred multi-round fights ──
+        // act_attack deferred real two-character fights here so we can drive
+        // them with split_at_mut access to both combatants. Each fight runs to
+        // completion (all rounds live inside this phase, per spec §2), emitting
+        // round/beat/end messages. Deterministic order: the order act_attack
+        // surfaced them.
+        for (attacker_idx, target_uuid) in &pending_attacks {
+            let target_idx = match self.characters.iter().position(|t| t.id == *target_uuid) {
+                Some(i) => i,
+                None => continue, // target died or vanished
+            };
+            if target_idx == *attacker_idx {
+                continue; // shouldn't happen; self-fights resolve inline
+            }
+            // Both must still be alive to fight.
+            if !self.characters[*attacker_idx].is_alive() || !self.characters[target_idx].is_alive()
+            {
+                continue;
+            }
+
+            // Capture identity up front: once CombatRoundLoop borrows both
+            // combatants via split_at_mut we cannot read self.characters again
+            // until the loop drops.
+            let (attacker_ident, attacker_name, target_name) = {
+                let a = &self.characters[*attacker_idx];
+                let t = &self.characters[target_idx];
+                (a.identifier.clone(), a.name.clone(), t.name.clone())
+            };
+            let combat_id = format!("combat-{}-{}", attacker_ident, target_uuid);
+
+            // Announce the fight start.
+            collected_events.push((
+                attacker_ident.clone(),
+                attacker_name.clone(),
+                format!("{attacker_name} engages {target_name}!"),
+                Some(MessagePayload::CombatRoundStart {
+                    combat_id: combat_id.clone(),
+                    round: 0,
+                }),
+                None,
+            ));
+
+            // split_at_mut for simultaneous mutable access to both combatants.
+            let (attacker, target) = if *attacker_idx < target_idx {
+                let (left, right) = self.characters.split_at_mut(target_idx);
+                (&mut left[*attacker_idx], &mut right[0])
+            } else {
+                let (left, right) = self.characters.split_at_mut(*attacker_idx);
+                (&mut right[0], &mut left[target_idx])
+            };
+
+            let mut fight_events: Vec<world::messages::TaggedEvent> = Vec::new();
+            let fight_result = {
+                let mut combat = CombatRoundLoop::new(
+                    attacker,
+                    target,
+                    combat_id.clone(),
+                    combat_tuning_snapshot.clone(),
+                );
+
+                while !combat.is_over() {
+                    let round = combat.advance_round(rng, &mut fight_events);
+                    collected_events.push((
+                        attacker_ident.clone(),
+                        attacker_name.clone(),
+                        format!("⚔️ round {}", round.number),
+                        Some(MessagePayload::CombatRoundStart {
+                            combat_id: combat_id.clone(),
+                            round: round.number,
+                        }),
+                        None,
+                    ));
+                    for ev in fight_events.drain(..) {
+                        collected_events.push((
+                            attacker_ident.clone(),
+                            attacker_name.clone(),
+                            ev.content,
+                            Some(ev.payload),
+                            None,
+                        ));
+                    }
+                }
+                combat.result().cloned()
+            };
+            // `combat` (and the split_at_mut borrows) dropped here.
+
+            // Bookkeeping: winner gains a kill (attacks() already set
+            // RecentlyDead/recently_killed_by on the real target).
+            if let Some(winner) = fight_result.as_ref().and_then(|result| match result {
+                shared::combat_beat::CombatResult::Winner { character } => self
+                    .characters
+                    .iter_mut()
+                    .find(|c| character.identifier == c.identifier),
+                _ => None,
+            }) {
+                winner.statistics.kills += 1;
+            }
+
+            // Emit the terminal result.
+            if let Some(result) = fight_result {
+                let summary = match &result {
+                    shared::combat_beat::CombatResult::Winner { character } => {
+                        format!("{} wins the fight!", character.name)
+                    }
+                    shared::combat_beat::CombatResult::Fled { fled, .. } => {
+                        format!("{} flees the fight!", fled.name)
+                    }
+                    shared::combat_beat::CombatResult::Spared { winner, spared } => {
+                        format!("{} spares {}!", winner.name, spared.name)
+                    }
+                    shared::combat_beat::CombatResult::Draw => {
+                        "The fight ends in a draw.".to_string()
+                    }
+                };
+                collected_events.push((
+                    attacker_ident,
+                    attacker_name,
+                    summary,
+                    Some(MessagePayload::CombatEnded {
+                        combat_id: combat_id.clone(),
+                        result,
+                    }),
+                    None,
+                ));
+            }
         }
 
         // ── Fixation processing ──

@@ -732,7 +732,9 @@ pub async fn timeline_handler(
                 let kind_str = match kind {
                     shared::messages::MessageKind::CharacterKilled => "death",
                     shared::messages::MessageKind::Combat
-                    | shared::messages::MessageKind::CombatSwing
+                    | shared::messages::MessageKind::CombatBeat
+                    | shared::messages::MessageKind::CombatRoundStart
+                    | shared::messages::MessageKind::CombatEnded
                     | shared::messages::MessageKind::CharacterAttacked
                     | shared::messages::MessageKind::CharacterWounded => "combat",
                     shared::messages::MessageKind::AllianceFormed

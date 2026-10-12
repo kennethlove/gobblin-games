@@ -362,6 +362,13 @@ pub struct Character {
     /// `process_turn_phase`. Transient — never persisted.
     #[serde(default, skip)]
     pub pending_theft_target: Option<Uuid>,
+    /// UUID of a real opponent this character chose to attack this phase.
+    /// Set by `act_attack` when the brain picks a two-character fight; the
+    /// game cycle resolves it to real indices and drives multi-round combat
+    /// via `CombatRoundLoop`. Self-attack/suicide resolves inline instead.
+    /// Transient — never persisted.
+    #[serde(default, skip)]
+    pub pending_attack_target: Option<Uuid>,
     /// Active mental conditions (pain, horror, panic, etc.).
     /// Recalculated each period based on wounds and stress.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -435,6 +442,7 @@ impl Character {
             hangover_cycles_remaining: 0,
             was_ambushed: false,
             pending_theft_target: None,
+            pending_attack_target: None,
             mental_conditions: Vec::new(),
         }
     }
@@ -483,6 +491,7 @@ impl Character {
         self.hangover_cycles_remaining = 0;
         self.was_ambushed = false;
         self.pending_theft_target = None;
+        self.pending_attack_target = None;
         self.mental_conditions.clear();
         self.statistics.day_killed = None;
         self.statistics.killed_by = None;
@@ -554,6 +563,7 @@ impl Character {
             hangover_cycles_remaining: 0,
             was_ambushed: false,
             pending_theft_target: None,
+            pending_attack_target: None,
             mental_conditions: Vec::new(),
         }
     }
@@ -1167,13 +1177,24 @@ impl Character {
     ) {
         let target = self.pick_target(potential_targets, total_living_characters, events);
         if let Some(mut target) = target {
-            let outcome = self.attacks(&mut target, rng, events, phase, combat_tuning);
-            match outcome {
-                AttackOutcome::Kill(_, mut target) => {
-                    self.statistics.kills += 1;
-                    target.statistics.day_killed = Some(self.statistics.game.parse().unwrap_or(1));
+            // Self-attack / suicide only mutates `self` (the real character);
+            // resolve it inline exactly as before. A real two-character fight
+            // is deferred to the game cycle, which has `split_at_mut` access to
+            // both combatants and drives multi-round combat via
+            // `CombatRoundLoop` — the target clone here would otherwise discard
+            // the opponent's damage (see cycle.rs pending-attack resolution).
+            if target.id == self.id {
+                let outcome = self.attacks(&mut target, rng, events, phase, combat_tuning);
+                match outcome {
+                    AttackOutcome::Kill(_, mut target) => {
+                        self.statistics.kills += 1;
+                        target.statistics.day_killed =
+                            Some(self.statistics.game.parse().unwrap_or(1));
+                    }
+                    AttackOutcome::Wound(_, _) | AttackOutcome::Miss(_, _) => {}
                 }
-                AttackOutcome::Wound(_, _) | AttackOutcome::Miss(_, _) => {}
+            } else {
+                self.pending_attack_target = Some(target.id);
             }
         }
     }
