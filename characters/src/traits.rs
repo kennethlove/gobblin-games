@@ -462,6 +462,64 @@ pub fn behavior_sum(traits: &[Trait], axis: BehaviorAxis) -> i32 {
     traits.iter().map(|t| t.behavior_weight(axis)).sum()
 }
 
+/// Why a trait could not be gained (spec §3: one API enforces conflicts).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TraitError {
+    /// The character already carries this trait.
+    Duplicate(Trait),
+    /// Flavor-pair incompatibility from [`CONFLICTS`].
+    FlavorConflict { candidate: Trait, held: Trait },
+    /// Two curse-shaped negative percent modifiers on the same attribute
+    /// (spec §3 effect-level rule; vacuous until scar traits land).
+    NegativeAttrModCollision { candidate: Trait, held: Trait },
+}
+
+/// Effect-level conflict rule: at most one negative-percent `AttrMod` per
+/// attribute across the held set, regardless of which traits carry it.
+fn negative_attrmod_conflict(held: &[Effect], candidate: &[Effect]) -> bool {
+    let held_attrs: Vec<CharacterAttribute> = held
+        .iter()
+        .filter_map(|e| match e {
+            Effect::AttrMod { attr, percent, .. } if *percent < 0 => Some(*attr),
+            _ => None,
+        })
+        .collect();
+    candidate.iter().any(|e| match e {
+        Effect::AttrMod { attr, percent, .. } if *percent < 0 => held_attrs.contains(attr),
+        _ => false,
+    })
+}
+
+/// The eligibility check behind every trait mutation: no duplicates, no
+/// flavor-pair conflicts, no stacked negative attribute modifiers. Used by
+/// `Character::gain_trait`, creation generation, and revival's picker.
+pub fn can_gain(current: &[Trait], candidate: Trait) -> Result<(), TraitError> {
+    if current.contains(&candidate) {
+        return Err(TraitError::Duplicate(candidate));
+    }
+    if let Some(held) = current
+        .iter()
+        .find(|held| conflicts_with(candidate, **held))
+    {
+        return Err(TraitError::FlavorConflict {
+            candidate,
+            held: *held,
+        });
+    }
+    let held_effects: Vec<Effect> = current.iter().flat_map(|t| t.effects()).copied().collect();
+    if negative_attrmod_conflict(&held_effects, candidate.effects()) {
+        return Err(TraitError::NegativeAttrModCollision {
+            candidate,
+            held: current
+                .iter()
+                .copied()
+                .find(|held| negative_attrmod_conflict(held.effects(), candidate.effects()))
+                .unwrap_or(candidate),
+        });
+    }
+    Ok(())
+}
+
 pub const REFUSERS: &[Trait] = &[Trait::Paranoid, Trait::LoneWolf];
 
 /// Every variant of [`Trait`]. Used by golden-capture tests and (per spec
@@ -572,7 +630,8 @@ pub fn generate_traits(rng: &mut impl Rng) -> Vec<Trait> {
         let idx = picked_idx.expect("weighted pick must succeed when total > 0");
         let (candidate, _) = remaining.remove(idx);
 
-        if chosen.iter().any(|t| conflicts_with(*t, candidate)) {
+        // One eligibility check for every mutation path (spec §3).
+        if can_gain(&chosen, candidate).is_err() {
             continue;
         }
         chosen.push(candidate);
@@ -851,5 +910,65 @@ mod tests {
         assert_eq!(behavior_sum(&set, BehaviorAxis::FleeCowardice), 1);
         assert_eq!(behavior_sum(&set, BehaviorAxis::SeverityTier), -1);
         assert_eq!(behavior_sum(&set, BehaviorAxis::BetrayalCadence), 0);
+    }
+
+    // ---- gain_trait/lose_trait eligibility (spec §3) ----
+
+    #[test]
+    fn can_gain_rejects_duplicates_and_flavor_conflicts() {
+        assert_eq!(
+            can_gain(&[Trait::Friendly], Trait::Friendly),
+            Err(TraitError::Duplicate(Trait::Friendly))
+        );
+        assert!(matches!(
+            can_gain(&[Trait::Friendly], Trait::Paranoid),
+            Err(TraitError::FlavorConflict { .. })
+        ));
+        assert!(can_gain(&[Trait::Friendly], Trait::Tough).is_ok());
+    }
+
+    #[test]
+    fn negative_attrmod_rule_is_per_attribute_across_held_traits() {
+        use CharacterAttribute::*;
+        let held = vec![Effect::AttrMod {
+            attr: Movement,
+            flat: 0,
+            percent: -25,
+        }];
+        // Same attribute, another negative percent -> collision.
+        let collide = vec![Effect::AttrMod {
+            attr: Movement,
+            flat: -2,
+            percent: -10,
+        }];
+        assert!(negative_attrmod_conflict(&held, &collide));
+        // Different attribute -> fine.
+        let other_attr = vec![Effect::AttrMod {
+            attr: Strength,
+            flat: 0,
+            percent: -10,
+        }];
+        assert!(!negative_attrmod_conflict(&held, &other_attr));
+        // Positive modifiers never collide.
+        let boon = vec![Effect::AttrMod {
+            attr: Movement,
+            flat: 0,
+            percent: 10,
+        }];
+        assert!(!negative_attrmod_conflict(&held, &boon));
+    }
+
+    #[test]
+    fn generation_still_rejects_conflicts_via_can_gain() {
+        // Behavior parity: generation routes through can_gain now; every
+        // rolled set must satisfy it end-to-end.
+        for seed in 0..32u64 {
+            let mut rng = StdRng::seed_from_u64(seed);
+            let rolled = generate_traits(&mut rng);
+            for t in &rolled {
+                let others: Vec<Trait> = rolled.iter().copied().filter(|x| x != t).collect();
+                assert!(can_gain(&others, *t).is_ok(), "seed {seed} set {rolled:?}");
+            }
+        }
     }
 }
