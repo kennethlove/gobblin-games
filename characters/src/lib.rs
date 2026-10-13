@@ -408,17 +408,19 @@ impl Character {
     /// Creates a new Character with full health, sanity, and movement.
     pub fn new(name: String, team: Option<u32>, avatar: Option<String>) -> Self {
         let team = team.unwrap_or(0);
-        let attributes = Attributes::new();
         let statistics = Statistics::default();
 
         let id_uuid: Uuid = Uuid::new_v4();
         let id: String = id_uuid.to_string();
 
-        // Traits, brain, and terrain affinity roll from this goblin's own
-        // RNG — team no longer seeds them.
+        // One coherent pass from this goblin's own RNG — team no longer
+        // seeds anything. Traits roll first so the attribute set is bent by
+        // them (`from_rng_with_traits`): Tough trends tough, and a future
+        // limp-style trait drags its axis down at creation.
         let mut rng = SmallRng::from_rng(&mut rand::rng());
-        let terrain_affinity = world::clans::roll_terrain_affinity(&mut rng);
         let traits = traits::generate_traits(&mut rng);
+        let attributes = Attributes::from_rng_with_traits(&mut rng, &traits);
+        let terrain_affinity = world::clans::roll_terrain_affinity(&mut rng);
         let brain = Brain::from_traits(&traits, &mut rng);
 
         Self {
@@ -584,18 +586,17 @@ impl Character {
         rng: &mut SmallRng,
     ) -> Self {
         let team = team.unwrap_or(0);
-        // Attributes roll from the provided RNG too, so seeded fixtures are
-        // deterministic end-to-end (traits, brain, AND stats).
-        let attributes = Attributes::from_rng(rng);
         let statistics = Statistics::default();
 
         let id_uuid: Uuid = Uuid::new_v4();
         let id: String = id_uuid.to_string();
 
-        // Traits, brain, and terrain affinity roll from the provided RNG —
-        // team no longer seeds them.
-        let terrain_affinity = world::clans::roll_terrain_affinity(rng);
+        // One coherent pass from the provided RNG, so seeded fixtures are
+        // deterministic end-to-end AND trait-coherent: traits roll first,
+        // attributes bend around them (`from_rng_with_traits`).
         let traits = traits::generate_traits(rng);
+        let attributes = Attributes::from_rng_with_traits(rng, &traits);
+        let terrain_affinity = world::clans::roll_terrain_affinity(rng);
         let brain = Brain::from_traits(&traits, rng);
 
         Self {
@@ -1871,9 +1872,15 @@ pub struct Attributes {
     #[serde(alias = "agility")]
     pub speed: u32,
     /// How sharp are their senses? Sight range, ambush detection, spotting.
+    ///  so pre-rename persisted rows (no perception key) hydrate.
+    #[serde(default = "default_perception")]
     pub perception: u32,
     /// Can other characters see them?
     pub is_hidden: bool,
+}
+
+fn default_perception() -> u32 {
+    100
 }
 
 impl Default for Attributes {
@@ -1937,6 +1944,91 @@ impl Attributes {
             perception: rng.random_range(1..=config.max_perception),
             is_hidden: false,
         }
+    }
+
+    /// One coherent generation pass: roll attributes from the RNG, then bend
+    /// each axis by the rolled traits' `AttrMod` percentages — a goblin who
+    /// rolled `Tough` trends tough before any effective-value math runs.
+    ///
+    /// This is *character coherence*, not a mechanic: the bias lands in the
+    /// base values, so `effective_attribute` still stacks trait modifiers on
+    /// top. Bias clamps at the config max.
+    pub fn from_rng_with_traits(rng: &mut SmallRng, rolled: &[crate::traits::Trait]) -> Self {
+        use crate::traits::CharacterAttribute;
+        let mut attrs = Self::from_rng(rng);
+        let config = world::config::GameConfig::default();
+
+        let axes: [(CharacterAttribute, u32, u32); 9] = [
+            (
+                CharacterAttribute::Movement,
+                attrs.movement,
+                config.max_movement,
+            ),
+            (
+                CharacterAttribute::Strength,
+                attrs.strength,
+                config.max_strength,
+            ),
+            (
+                CharacterAttribute::Toughness,
+                attrs.toughness,
+                config.max_toughness,
+            ),
+            (
+                CharacterAttribute::Bravery,
+                attrs.bravery,
+                config.max_bravery,
+            ),
+            (
+                CharacterAttribute::Intelligence,
+                attrs.intelligence,
+                config.max_intelligence,
+            ),
+            (
+                CharacterAttribute::Persuasion,
+                attrs.persuasion,
+                config.max_persuasion,
+            ),
+            (CharacterAttribute::Luck, attrs.luck, config.max_luck),
+            (CharacterAttribute::Speed, attrs.speed, config.max_speed),
+            (
+                CharacterAttribute::Perception,
+                attrs.perception,
+                config.max_perception,
+            ),
+        ];
+
+        for (attr, base, max) in axes {
+            let bias: i32 = rolled
+                .iter()
+                .flat_map(|t| t.def().effects)
+                .filter_map(|e| match e {
+                    crate::traits::Effect::AttrMod {
+                        attr: a,
+                        flat,
+                        percent,
+                    } if *a == attr => Some(flat + percent),
+                    _ => None,
+                })
+                .sum();
+            if bias == 0 {
+                continue;
+            }
+            let bent = ((base as f64) * (1.0 + f64::from(bias) / 100.0)).round() as u32;
+            let bent = bent.clamp(1, max);
+            match attr {
+                CharacterAttribute::Movement => attrs.movement = bent,
+                CharacterAttribute::Strength => attrs.strength = bent,
+                CharacterAttribute::Toughness => attrs.toughness = bent,
+                CharacterAttribute::Bravery => attrs.bravery = bent,
+                CharacterAttribute::Intelligence => attrs.intelligence = bent,
+                CharacterAttribute::Persuasion => attrs.persuasion = bent,
+                CharacterAttribute::Luck => attrs.luck = bent,
+                CharacterAttribute::Speed => attrs.speed = bent,
+                CharacterAttribute::Perception => attrs.perception = bent,
+            }
+        }
+        attrs
     }
 }
 
@@ -2890,5 +2982,146 @@ mod tests {
             resolution,
             AcquireResolution::Reject(RejectReason::NotStrictlyHigherSeverity)
         );
+    }
+
+    // ---------- attribute renames, perception, creation coherence ----------
+
+    #[test]
+    fn legacy_attribute_columns_load_via_serde_aliases() {
+        // A pre-rename persisted row: defense/agility keys, no perception.
+        let legacy = r#"{"movement":100,"strength":25,"defense":30,"bravery":40,"intelligence":50,"persuasion":10,"luck":5,"agility":60,"is_hidden":false}"#;
+        let attrs: crate::Attributes = serde_json::from_str(legacy).unwrap();
+        assert_eq!(attrs.toughness, 30);
+        assert_eq!(attrs.speed, 60);
+        // New axis hydrates via its serde default, not a deserialize error.
+        assert_eq!(attrs.perception, 100);
+
+        // New writes use the new keys.
+        let json = serde_json::to_string(&attrs).unwrap();
+        assert!(json.contains("toughness"), "serialize new key: {json}");
+        assert!(json.contains("speed"), "serialize new key: {json}");
+        assert!(json.contains("perception"), "serialize new key: {json}");
+        assert!(!json.contains("defense"), "old key gone: {json}");
+        assert!(!json.contains("agility"), "old key gone: {json}");
+    }
+
+    #[test]
+    fn legacy_character_attribute_enum_keys_load_via_aliases() {
+        use crate::traits::CharacterAttribute as A;
+        let old: A = serde_json::from_str("\"Defense\"").unwrap();
+        assert_eq!(old, A::Toughness);
+        let old: A = serde_json::from_str("\"Agility\"").unwrap();
+        assert_eq!(old, A::Speed);
+        // New keys round-trip.
+        assert_eq!(
+            serde_json::to_string(&A::Toughness).unwrap(),
+            "\"Toughness\""
+        );
+        assert_eq!(serde_json::to_string(&A::Speed).unwrap(), "\"Speed\"");
+        assert_eq!(
+            serde_json::to_string(&A::Perception).unwrap(),
+            "\"Perception\""
+        );
+    }
+
+    #[test]
+    fn legacy_trait_def_arrays_with_old_axis_keys_load() {
+        // A trait-effect JSON written before the rename (AttrMod on Defense).
+        let legacy = r#"{"AttrMod":{"attr":"Defense","flat":0,"percent":-10}}"#;
+        let effect: crate::traits::Effect = serde_json::from_str(legacy).unwrap();
+        assert_eq!(
+            effect,
+            crate::traits::Effect::AttrMod {
+                attr: crate::traits::CharacterAttribute::Toughness,
+                flat: 0,
+                percent: -10,
+            }
+        );
+    }
+
+    #[test]
+    fn perception_rolls_within_bounds() {
+        use rand::SeedableRng;
+        let mut rng = SmallRng::seed_from_u64(7);
+        for _ in 0..200 {
+            let attrs = crate::Attributes::from_rng(&mut rng);
+            assert!(
+                (1..=100).contains(&attrs.perception),
+                "perception out of bounds: {}",
+                attrs.perception
+            );
+        }
+    }
+
+    #[test]
+    fn nearsighted_gets_perception_penalty_through_accessors() {
+        let mut c = Character::new("Stinky".to_string(), None, None);
+        c.traits.clear();
+        c.attributes.perception = 100;
+        let plain = c.effective_attribute(crate::traits::CharacterAttribute::Perception);
+        assert_eq!(plain, 100);
+
+        c.traits.push(crate::traits::Trait::Nearsighted);
+        let seen = c.effective_attribute(crate::traits::CharacterAttribute::Perception);
+        assert_eq!(seen, 75, "-25% from Nearsighted at reference max");
+    }
+
+    #[test]
+    fn generation_is_trait_coherent_tough_trends_tough() {
+        use rand::SeedableRng;
+        // Same seed, same rolls: the Tough-bent pass must land at or above
+        // the unbiased pass for toughness (x1.2), never below.
+        for seed in 0..64u64 {
+            let mut plain_rng = SmallRng::seed_from_u64(seed);
+            let mut tough_rng = SmallRng::seed_from_u64(seed);
+            let plain = crate::Attributes::from_rng(&mut plain_rng);
+            let tough = crate::Attributes::from_rng_with_traits(
+                &mut tough_rng,
+                &[crate::traits::Trait::Tough],
+            );
+            assert!(
+                tough.toughness >= plain.toughness,
+                "seed {seed}: Tough bent toughness DOWN ({} < {})",
+                tough.toughness,
+                plain.toughness
+            );
+        }
+        // And the bias is real, not a no-op: pick a seed where the raw roll
+        // is low enough for the +20% to move it.
+        let mut rng = SmallRng::seed_from_u64(3);
+        let raw = crate::Attributes::from_rng(&mut rng).toughness;
+        let mut rng = SmallRng::seed_from_u64(3);
+        let bent =
+            crate::Attributes::from_rng_with_traits(&mut rng, &[crate::traits::Trait::Tough])
+                .toughness;
+        assert!(bent >= raw, "bend must not decrease: {bent} < {raw}");
+    }
+
+    #[test]
+    fn new_with_rng_generates_coherent_characters() {
+        // The full constructor path: traits roll first, attributes bend
+        // around them, everything deterministic per seed.
+        let a = Character::new_with_rng(
+            "Stinky".into(),
+            None,
+            None,
+            &mut SmallRng::seed_from_u64(11),
+        );
+        let b = Character::new_with_rng(
+            "Stinky".into(),
+            None,
+            None,
+            &mut SmallRng::seed_from_u64(11),
+        );
+        assert_eq!(a.traits, b.traits);
+        assert_eq!(a.attributes, b.attributes);
+        if a.traits.contains(&crate::traits::Trait::Tough) {
+            // Tough's +20% bent the base; effective stacks on top (x1.2 again).
+            let max = world::config::GameConfig::default().max_toughness;
+            assert!(
+                a.effective_attribute(crate::traits::CharacterAttribute::Toughness)
+                    >= a.attributes.toughness.min(max),
+            );
+        }
     }
 }

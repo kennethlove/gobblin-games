@@ -351,4 +351,27 @@ mod tests {
         character.drain_blood_from_wounds();
         assert_eq!(character.blood, 0, "blood should be 0 after critical bleed");
     }
+
+    #[test]
+    fn perception_wound_model_scales_with_severity_and_head() {
+        use crate::traits::CharacterAttribute as A;
+        // Flat table of reference max (100).
+        let cases = [
+            (WoundSeverity::Minor, 0.0),
+            (WoundSeverity::Moderate, -2.0),
+            (WoundSeverity::Severe, -5.0),
+            (WoundSeverity::Critical, -10.0),
+        ];
+        for (severity, expected) in cases {
+            assert_eq!(
+                perception_penalty_percent(severity),
+                expected,
+                "{severity:?} perception table"
+            );
+            let limb = attr_mod_percent(severity, BodyPart::LeftArm, A::Perception);
+            assert_eq!(limb, expected, "limb multiplier is 1.0");
+            let head = attr_mod_percent(severity, BodyPart::Head, A::Perception);
+            assert_eq!(head, expected * 1.5, "head amplifies perception loss");
+        }
+    }
 }
