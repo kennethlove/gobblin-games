@@ -1,6 +1,7 @@
 pub mod actions;
 pub mod afflictions;
 pub mod alliances;
+pub mod baseline;
 pub mod brains;
 pub mod combat;
 pub mod combat_beat;
@@ -373,6 +374,15 @@ pub struct Character {
     /// Recalculated each period based on wounds and stress.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mental_conditions: Vec<shared::conditions::MentalCondition>,
+    /// Durable state captured at game entry, used to settle advancements
+    /// (trait gains, attribute high-water deltas, lifetime record
+    /// increments) at the next entry. See `baseline::GameBaseline` for the
+    /// carry rules. Persisted, because reset runs at API join time rather
+    /// than in-memory game end; a mid-game save/load must not lose it.
+    /// `None` for characters created before this field existed — the next
+    /// reset captures a baseline from their current state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub game_baseline: Option<baseline::GameBaseline>,
 }
 
 impl Default for Character {
@@ -444,6 +454,7 @@ impl Character {
             pending_theft_target: None,
             pending_attack_target: None,
             mental_conditions: Vec::new(),
+            game_baseline: None,
         }
     }
 
@@ -458,8 +469,21 @@ impl Character {
     /// attributes, lifetime statistics (kills, wins, defeats, draws), and
     /// `ever_addicted_to` — the latter intentionally, so the addiction
     /// relapse short-circuit (see that field's doc) carries across games.
+    ///
+    /// Before any clearing, the previous game's durable state is settled
+    /// against the baseline captured at its entry: the snapshot is
+    /// restored and only advancements earned since then (trait gains,
+    /// attribute high-water deltas, lifetime record increments) are kept
+    /// — so a goblin resets to how it was before the game, plus what it
+    /// earned, not to zero. A fresh baseline is then captured for this
+    /// game. Traits are settled before the brain re-derivation below, so
+    /// the brain always reflects the final trait set.
     pub fn reset_for_new_game(&mut self) {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
+        if let Some(baseline) = self.game_baseline.take() {
+            baseline.settle_into(self);
+        }
+        self.game_baseline = Some(baseline::GameBaseline::capture(self));
         self.brain = Brain::from_traits(&self.traits, &mut rng);
         self.set_status(CharacterStatus::default());
         self.blood = default_blood();
@@ -567,6 +591,7 @@ impl Character {
             pending_theft_target: None,
             pending_attack_target: None,
             mental_conditions: Vec::new(),
+            game_baseline: None,
         }
     }
 
@@ -2272,6 +2297,69 @@ mod tests {
         // Intentional progression: addiction history survives (relapse
         // short-circuit, spec §5.1). See the field's doc comment.
         assert!(me.ever_addicted_to.contains(&Substance::Alcohol));
+    }
+
+    /// End-to-end advancement scenario from the bead: Boblin starts clean,
+    /// dies once, wins once, gains a limp-like and a sharpshooter-like
+    /// trait mid-game, resets to baseline-plus-advancements (not zero),
+    /// and the advancements survive into the second game.
+    #[test]
+    fn boblin_advancements_persist_across_resets() {
+        use crate::statuses::CharacterStatus;
+        let mut boblin = Character::new("Boblin".to_string(), None, None);
+        boblin.traits.clear();
+        boblin.attributes.movement = 36;
+        let base_movement = boblin.attributes.movement;
+        let base_strength = boblin.attributes.strength;
+
+        // Game 1 entry: baseline captured.
+        boblin.reset_for_new_game();
+        assert!(boblin.game_baseline.is_some());
+
+        // The game: Boblin dies once...
+        boblin.set_status(CharacterStatus::Dead);
+        boblin.statistics.day_killed = Some(2);
+        boblin.statistics.killed_by = Some("Billy Slick".to_string());
+        // ...wins a fight...
+        boblin.statistics.wins += 1;
+        boblin.statistics.kills += 1;
+        // ...suffers a wound debuff that lingers past game end...
+        boblin.attributes.strength = base_strength.saturating_sub(20);
+        // ...and is revived with a scar-like curse and a bonus trait.
+        boblin.traits.push(crate::traits::Trait::Fragile); // the "limp"
+        boblin.traits.push(crate::traits::Trait::Resilient); // the "sharpshooter"
+
+        // Game 2 entry: reset settles game 1's advancements.
+        boblin.reset_for_new_game();
+
+        assert_eq!(
+            boblin.traits,
+            vec![
+                crate::traits::Trait::Fragile,
+                crate::traits::Trait::Resilient
+            ]
+        );
+        assert_eq!(boblin.attributes.movement, base_movement);
+        assert_eq!(
+            boblin.attributes.strength, base_strength,
+            "wound debuff dropped"
+        );
+        assert_eq!(boblin.statistics.wins, 1);
+        assert_eq!(boblin.statistics.kills, 1);
+        assert_eq!(boblin.statistics.day_killed, None);
+        assert!(boblin.is_alive());
+
+        // Game 3 entry: nothing double-counts, nothing is lost.
+        boblin.reset_for_new_game();
+        assert_eq!(
+            boblin.traits,
+            vec![
+                crate::traits::Trait::Fragile,
+                crate::traits::Trait::Resilient
+            ]
+        );
+        assert_eq!(boblin.statistics.wins, 1);
+        assert_eq!(boblin.statistics.kills, 1);
     }
 
     #[rstest]
