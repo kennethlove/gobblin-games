@@ -718,3 +718,166 @@ async fn test_roster_ceiling() {
 
     test_db.cleanup().await;
 }
+
+/// Games are private by default: a create that doesn't opt into public
+/// listing stores `private = true`, and the game stays out of other players'
+/// lists until the creator publishes it (gobblin-games-ay4).
+#[tokio::test]
+async fn test_create_game_is_private_by_default() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let owner = create_authenticated_user(&test_db, &server, "priv_owner").await;
+    let stranger = create_authenticated_user(&test_db, &server, "priv_stranger").await;
+
+    // No privacy field in the payload → must default to private.
+    let create = server
+        .post("/api/games")
+        .add_header("Authorization", owner.auth_header())
+        .json(&json!({ "name": "Private By Default" }))
+        .await;
+    create.assert_status(axum::http::StatusCode::CREATED);
+    let created = create.json::<serde_json::Value>();
+    let game_id = created["identifier"].as_str().unwrap().to_string();
+    assert_eq!(
+        created["private"], true,
+        "a game created without opting into public must be private"
+    );
+
+    // … and it must not be listed for anyone but the creator.
+    let stranger_listing = server
+        .get("/api/games")
+        .add_header("Authorization", stranger.auth_header())
+        .await;
+    stranger_listing.assert_status_ok();
+    let listed = stranger_listing.json::<serde_json::Value>()["games"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        !listed.iter().any(|g| g["identifier"] == game_id),
+        "a default-private game must stay out of strangers' lists"
+    );
+
+    test_db.cleanup().await;
+}
+
+/// A persisted `game` row that omits `private` entirely hydrates to private
+/// via the schema default (`DEFINE FIELD private ... DEFAULT true`). This is
+/// the back-compat guarantee for pre-flag rows (gobblin-games-ay4).
+#[tokio::test]
+async fn test_missing_private_flag_hydrates_to_private() {
+    let test_db = TestDb::new().await;
+
+    // Create a raw game row that omits `private` entirely. The schema's
+    // `DEFINE FIELD private ... DEFAULT true` must materialize it as true.
+    // (The `created_by VALUE $auth` field evaluates to null in this
+    // root-scoped session, which is fine — we only assert `private`.)
+    test_db
+        .db
+        .query(
+            "CREATE game CONTENT {
+                identifier: 'hydrate-test',
+                name: 'Hydration',
+                status: 'NotStarted',
+                team_count: 8,
+                goblins_per_team: 3,
+                max_goblins_per_player: 1
+            }",
+        )
+        .await
+        .expect("failed to create raw game row");
+
+    let mut result = test_db
+        .db
+        .query("SELECT private FROM game WHERE identifier = 'hydrate-test'")
+        .await
+        .expect("failed to read raw game row");
+    let row: Option<serde_json::Value> = result.take(0).expect("failed to decode hydration row");
+    let private = row
+        .as_ref()
+        .and_then(|r| r.get("private"))
+        .expect("row should carry a private field");
+    assert_eq!(
+        private,
+        &serde_json::json!(true),
+        "a game row without an explicit private flag must hydrate to private"
+    );
+
+    test_db.cleanup().await;
+}
+
+/// Public means LISTABLE, not open-join: a private game is invisible until
+/// published; publishing only makes it appear in listings. Entering it still
+/// goes through the game's own join endpoint (the game URL IS the invite
+/// link) — there is no join shortcut from the list (gobblin-games-ay4).
+#[tokio::test]
+async fn test_public_game_is_listable_but_join_goes_through_the_link() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let owner = create_authenticated_user(&test_db, &server, "pub_owner").await;
+    let stranger = create_authenticated_user(&test_db, &server, "pub_stranger").await;
+
+    let owner_goblin = create_owned_goblin(&server, &owner, "Stinky").await;
+    let stranger_goblin = create_owned_goblin(&server, &stranger, "Billy Slick").await;
+
+    // Create (private by default).
+    let create = server
+        .post("/api/games")
+        .add_header("Authorization", owner.auth_header())
+        .json(&json!({ "name": "Public Game", "characters": [owner_goblin] }))
+        .await;
+    create.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = create.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Before publish: not listed for the stranger (private → link is secret).
+    let before = server
+        .get("/api/games")
+        .add_header("Authorization", stranger.auth_header())
+        .await;
+    let before_listed = before.json::<serde_json::Value>()["games"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        !before_listed.iter().any(|g| g["identifier"] == game_id),
+        "an unpublished game must stay out of strangers' lists"
+    );
+
+    // Publish → public = listable.
+    server
+        .put(&format!("/api/games/{}/publish", game_id))
+        .add_header("Authorization", owner.auth_header())
+        .await
+        .assert_status_ok();
+
+    let after = server
+        .get("/api/games")
+        .add_header("Authorization", stranger.auth_header())
+        .await;
+    let after_listed = after.json::<serde_json::Value>()["games"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        after_listed.iter().any(|g| g["identifier"] == game_id),
+        "a published (public) game must be listable to everyone"
+    );
+
+    // Entry still goes through the game's join endpoint — the link. There is
+    // no separate list-join affordance; the listing only surfaces the game.
+    server
+        .post(&format!("/api/games/{}/join", game_id))
+        .add_header("Authorization", stranger.auth_header())
+        .json(&json!({ "character_id": stranger_goblin }))
+        .await
+        .assert_status_ok();
+
+    test_db.cleanup().await;
+}
