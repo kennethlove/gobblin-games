@@ -195,6 +195,11 @@ mod tests {
 
     #[rstest]
     fn penalty_reduces_one_stat_but_never_below_one(mut character: Character) {
+        // Stats are RNG-rolled by the fixture; pin them so the seeded penalty
+        // always bites (previously flaky when the picked stat was already 1).
+        character.attributes.strength = 10;
+        character.attributes.defense = 10;
+        character.attributes.luck = 10;
         character.traits.clear();
         let before = character.attributes.strength
             + character.attributes.defense
@@ -280,6 +285,11 @@ mod tests {
 
     #[rstest]
     fn revive_applies_the_rolled_outcome(mut character: Character) {
+        // Pin RNG-rolled fixture stats so the seeded penalty always bites
+        // (same pre-existing flake class as penalty_reduces_one_stat...).
+        character.attributes.strength = 10;
+        character.attributes.defense = 10;
+        character.attributes.luck = 10;
         character.traits.clear();
         character.dies();
         // Find a seed whose first roll is Penalty (stat change), then check

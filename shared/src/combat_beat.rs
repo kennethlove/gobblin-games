@@ -311,4 +311,21 @@ mod tests {
             assert_eq!(r, back);
         }
     }
+
+    #[test]
+    fn beat_outcome_cower_and_verdict_variants_roundtrip() {
+        let outcomes = [
+            BeatOutcome::Cowered,
+            BeatOutcome::Spared,
+            BeatOutcome::Executed { damage: 42 },
+            BeatOutcome::ItemUsed,
+            BeatOutcome::Fled,
+            BeatOutcome::FailedFlee,
+        ];
+        for outcome in outcomes {
+            let json = serde_json::to_string(&outcome).unwrap();
+            let back: BeatOutcome = serde_json::from_str(&json).unwrap();
+            assert_eq!(outcome, back);
+        }
+    }
 }

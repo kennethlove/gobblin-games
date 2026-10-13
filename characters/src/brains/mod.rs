@@ -11,6 +11,7 @@ use world::terrain::{BaseTerrain, Harshness, TerrainType, Visibility};
 
 pub mod addiction_override;
 pub mod affliction_override;
+pub mod combat;
 pub mod fixation_override;
 pub mod phobia_override;
 pub mod trauma_override;

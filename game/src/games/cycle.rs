@@ -1,5 +1,6 @@
 use super::*;
 use areas::{Area, AreaDetails};
+use characters::brains::combat::CombatBrain;
 use characters::combat::round_loop::CombatRoundLoop;
 use characters::events::CharacterEvent;
 use characters::incidents::{SleepIncident, SleepShelter, apply_sleep_incident};
@@ -1089,11 +1090,12 @@ impl Game {
 
             let mut fight_events: Vec<world::messages::TaggedEvent> = Vec::new();
             let fight_result = {
-                let mut combat = CombatRoundLoop::new(
+                let mut combat = CombatRoundLoop::with_provider(
                     attacker,
                     target,
                     combat_id.clone(),
                     combat_tuning_snapshot.clone(),
+                    Box::new(CombatBrain::new(combat_tuning_snapshot.clone())),
                 );
 
                 while !combat.is_over() {
