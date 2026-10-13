@@ -32,43 +32,528 @@ pub enum Trait {
     ResourcefulForager,
 }
 
+/// Display/tuning classification (spec §3: display-only for now).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TraitKind {
+    Boon,
+    Curse,
+    Personality,
+}
+
+/// Character attribute axes referenced by [`Effect::AttrMod`]. Current names
+/// only — the rename/rethink (speed, toughness, perception) is bqs.2.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum CharacterAttribute {
+    Movement,
+    Strength,
+    Defense,
+    Bravery,
+    Intelligence,
+    Persuasion,
+    Luck,
+    Agility,
+}
+
+/// Actions a trait can unlock; the single variant is reserved for the v2
+/// Call Ally combat action (spec §3) and has no behavior yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ActionKind {
+    CallAlly,
+}
+
+/// One typed effect carried by a trait (spec §3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Effect {
+    /// Attribute modifier: applied as `(base + flat) × (1 + percent/100)`.
+    AttrMod {
+        attr: CharacterAttribute,
+        flat: i32,
+        percent: i32,
+    },
+    /// Behavior-axis weight read by alliance/threshold/betrayal/brain/
+    /// phobia consumers (see [`BehaviorAxis`]).
+    BehaviorWeight {
+        axis: BehaviorAxis,
+        delta: i32,
+    },
+    Unlock {
+        action: ActionKind,
+    },
+}
+
+/// Every trait-influenced behavior axis that used to live as a hard-coded
+/// `match` in a consumer (spec §3). Consumers read sums of these now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum BehaviorAxis {
+    // Alliances (decisions.rs, alliances.rs, brains/mod.rs)
+    /// Per-mille multiplier: 1500 = ×1.5 affinity (default 1000 when absent).
+    AllianceAffinity,
+    AllianceRefusal,
+    // Brain thresholds (brains/mod.rs PersonalityThresholds::from_traits)
+    LowHealthLimit,
+    MidHealthLimit,
+    LowSanityLimit,
+    MidSanityLimit,
+    HighSanityLimit,
+    MovementLimit,
+    LowIntelligenceLimit,
+    HighIntelligenceLimit,
+    PsychoticBreakThreshold,
+    // Betrayal (lib.rs process_turn_phase; interval = delta)
+    BetrayalCadence,
+    // Combat brain (brains/combat.rs)
+    AttackPosture,
+    FleeCowardice,
+    SpareInclination,
+    ExecuteFromTreachery,
+    ExecuteFromAggression,
+    // Phobia/fixation severity (afflictions/phobia/reaction.rs,
+    // brains/fixation_override.rs)
+    SeverityTier,
+    FixationCharacterTier,
+    FreezeImmunity,
+}
+
+/// Static definition for a trait variant (spec §3's `Trait` struct, split
+/// so the persisted unit enum stays the stable serde key).
+#[derive(Debug, Clone, Copy)]
+pub struct TraitDef {
+    pub label: &'static str,
+    pub kind: TraitKind,
+    pub effects: &'static [Effect],
+}
+
 impl Trait {
-    pub fn label(&self) -> &'static str {
+    /// Display/tuning classification (spec §3: display-only for now).
+    pub fn kind(&self) -> TraitKind {
+        self.def().kind
+    }
+
+    /// This trait's effect rows — the data behind every consumer that used
+    /// to hard-code a `match` on the variant (alliance, thresholds,
+    /// betrayal cadence, combat brain, phobia/fixation tiers).
+    pub fn effects(&self) -> &'static [Effect] {
+        self.def().effects
+    }
+
+    /// Static definition (label, kind, effects) for this variant.
+    pub fn def(&self) -> TraitDef {
+        use BehaviorAxis::*;
+        use Effect::BehaviorWeight as W;
+
+        const AGGRESSIVE: &[Effect] = &[
+            W {
+                axis: LowHealthLimit,
+                delta: -5,
+            },
+            W {
+                axis: MidHealthLimit,
+                delta: -10,
+            },
+            W {
+                axis: LowSanityLimit,
+                delta: -2,
+            },
+            W {
+                axis: PsychoticBreakThreshold,
+                delta: 2,
+            },
+            W {
+                axis: AttackPosture,
+                delta: 1,
+            },
+            W {
+                axis: ExecuteFromAggression,
+                delta: 1,
+            },
+        ];
+        const DEFENSIVE: &[Effect] = &[
+            W {
+                axis: LowHealthLimit,
+                delta: 10,
+            },
+            W {
+                axis: MidHealthLimit,
+                delta: 10,
+            },
+            W {
+                axis: PsychoticBreakThreshold,
+                delta: -2,
+            },
+        ];
+        const CAUTIOUS: &[Effect] = &[
+            W {
+                axis: LowHealthLimit,
+                delta: 15,
+            },
+            W {
+                axis: MidHealthLimit,
+                delta: 15,
+            },
+            W {
+                axis: LowSanityLimit,
+                delta: 10,
+            },
+            W {
+                axis: MidSanityLimit,
+                delta: 10,
+            },
+            W {
+                axis: PsychoticBreakThreshold,
+                delta: -3,
+            },
+            W {
+                axis: FleeCowardice,
+                delta: 1,
+            },
+        ];
+        const RECKLESS: &[Effect] = &[
+            W {
+                axis: LowHealthLimit,
+                delta: -10,
+            },
+            W {
+                axis: LowSanityLimit,
+                delta: -10,
+            },
+            W {
+                axis: PsychoticBreakThreshold,
+                delta: 4,
+            },
+            W {
+                axis: AttackPosture,
+                delta: 1,
+            },
+            W {
+                axis: FreezeImmunity,
+                delta: 1,
+            },
+        ];
+        const FRIENDLY: &[Effect] = &[
+            W {
+                axis: AllianceAffinity,
+                delta: 1500,
+            },
+            W {
+                axis: SpareInclination,
+                delta: 1,
+            },
+        ];
+        const LOYAL: &[Effect] = &[
+            W {
+                axis: AllianceAffinity,
+                delta: 1400,
+            },
+            W {
+                axis: SpareInclination,
+                delta: 1,
+            },
+            W {
+                axis: FixationCharacterTier,
+                delta: 1,
+            },
+        ];
+        const PARANOID: &[Effect] = &[
+            W {
+                axis: AllianceAffinity,
+                delta: 500,
+            },
+            W {
+                axis: AllianceRefusal,
+                delta: 1,
+            },
+        ];
+        const LONE_WOLF: &[Effect] = &[
+            W {
+                axis: AllianceAffinity,
+                delta: 600,
+            },
+            W {
+                axis: AllianceRefusal,
+                delta: 1,
+            },
+        ];
+        const TREACHEROUS: &[Effect] = &[
+            W {
+                axis: AllianceAffinity,
+                delta: 1200,
+            },
+            // Mirrors alliances::TREACHEROUS_BETRAYAL_INTERVAL (parity-tested).
+            W {
+                axis: BetrayalCadence,
+                delta: 5,
+            },
+            W {
+                axis: ExecuteFromTreachery,
+                delta: 1,
+            },
+        ];
+        const RESILIENT: &[Effect] = &[
+            W {
+                axis: PsychoticBreakThreshold,
+                delta: -3,
+            },
+            W {
+                axis: LowSanityLimit,
+                delta: -3,
+            },
+            W {
+                axis: SeverityTier,
+                delta: -1,
+            },
+        ];
+        const FRAGILE: &[Effect] = &[
+            W {
+                axis: PsychoticBreakThreshold,
+                delta: 3,
+            },
+            W {
+                axis: LowSanityLimit,
+                delta: 5,
+            },
+            W {
+                axis: SeverityTier,
+                delta: 1,
+            },
+        ];
+        const CUNNING: &[Effect] = &[
+            W {
+                axis: LowIntelligenceLimit,
+                delta: -5,
+            },
+            W {
+                axis: HighIntelligenceLimit,
+                delta: -5,
+            },
+        ];
+        const DIM: &[Effect] = &[
+            W {
+                axis: LowIntelligenceLimit,
+                delta: 10,
+            },
+            W {
+                axis: HighIntelligenceLimit,
+                delta: 5,
+            },
+        ];
+        const NONE: &[Effect] = &[];
+
         match self {
-            Trait::Aggressive => "aggressive",
-            Trait::Defensive => "defensive",
-            Trait::Cautious => "cautious",
-            Trait::Reckless => "reckless",
-            Trait::Friendly => "friendly",
-            Trait::Loyal => "loyal",
-            Trait::Paranoid => "paranoid",
-            Trait::LoneWolf => "a lone wolf",
-            Trait::Treacherous => "treacherous",
-            Trait::Resilient => "resilient",
-            Trait::Fragile => "fragile",
-            Trait::Cunning => "cunning",
-            Trait::Dim => "dim",
-            Trait::Asthmatic => "asthmatic",
-            Trait::Nearsighted => "nearsighted",
-            Trait::Tough => "tough",
-            Trait::Builder => "a builder",
-            Trait::ResourcefulForager => "a resourceful forager",
+            Trait::Aggressive => TraitDef {
+                label: "aggressive",
+                kind: TraitKind::Personality,
+                effects: AGGRESSIVE,
+            },
+            Trait::Defensive => TraitDef {
+                label: "defensive",
+                kind: TraitKind::Personality,
+                effects: DEFENSIVE,
+            },
+            Trait::Cautious => TraitDef {
+                label: "cautious",
+                kind: TraitKind::Personality,
+                effects: CAUTIOUS,
+            },
+            Trait::Reckless => TraitDef {
+                label: "reckless",
+                kind: TraitKind::Personality,
+                effects: RECKLESS,
+            },
+            Trait::Friendly => TraitDef {
+                label: "friendly",
+                kind: TraitKind::Personality,
+                effects: FRIENDLY,
+            },
+            Trait::Loyal => TraitDef {
+                label: "loyal",
+                kind: TraitKind::Personality,
+                effects: LOYAL,
+            },
+            Trait::Paranoid => TraitDef {
+                label: "paranoid",
+                kind: TraitKind::Personality,
+                effects: PARANOID,
+            },
+            Trait::LoneWolf => TraitDef {
+                label: "a lone wolf",
+                kind: TraitKind::Personality,
+                effects: LONE_WOLF,
+            },
+            Trait::Treacherous => TraitDef {
+                label: "treacherous",
+                kind: TraitKind::Personality,
+                effects: TREACHEROUS,
+            },
+            Trait::Resilient => TraitDef {
+                label: "resilient",
+                kind: TraitKind::Boon,
+                effects: RESILIENT,
+            },
+            Trait::Fragile => TraitDef {
+                label: "fragile",
+                kind: TraitKind::Curse,
+                effects: FRAGILE,
+            },
+            Trait::Cunning => TraitDef {
+                label: "cunning",
+                kind: TraitKind::Boon,
+                effects: CUNNING,
+            },
+            Trait::Dim => TraitDef {
+                label: "dim",
+                kind: TraitKind::Curse,
+                effects: DIM,
+            },
+            Trait::Asthmatic => TraitDef {
+                label: "asthmatic",
+                kind: TraitKind::Curse,
+                effects: NONE,
+            },
+            Trait::Nearsighted => TraitDef {
+                label: "nearsighted",
+                kind: TraitKind::Curse,
+                effects: NONE,
+            },
+            Trait::Tough => TraitDef {
+                label: "tough",
+                kind: TraitKind::Boon,
+                effects: NONE,
+            },
+            Trait::Builder => TraitDef {
+                label: "a builder",
+                kind: TraitKind::Boon,
+                effects: NONE,
+            },
+            Trait::ResourcefulForager => TraitDef {
+                label: "a resourceful forager",
+                kind: TraitKind::Boon,
+                effects: NONE,
+            },
         }
     }
 
+    /// Sum of this trait's weight on `axis` (0 when it carries none).
+    pub fn behavior_weight(&self, axis: BehaviorAxis) -> i32 {
+        self.effects()
+            .iter()
+            .filter_map(|e| match e {
+                Effect::BehaviorWeight { axis: a, delta } if *a == axis => Some(*delta),
+                _ => None,
+            })
+            .sum()
+    }
+
+    pub fn label(&self) -> &'static str {
+        self.def().label
+    }
+
     pub fn alliance_affinity(&self) -> f64 {
-        match self {
-            Trait::Friendly => 1.5,
-            Trait::Loyal => 1.4,
-            Trait::Treacherous => 1.2,
-            Trait::LoneWolf => 0.6,
-            Trait::Paranoid => 0.5,
-            _ => 1.0,
+        let per_mille = self.behavior_weight(BehaviorAxis::AllianceAffinity);
+        if per_mille == 0 {
+            1.0
+        } else {
+            per_mille as f64 / 1000.0
         }
     }
 }
 
+/// Sum of `axis` across a trait set (0 when nothing contributes).
+pub fn behavior_sum(traits: &[Trait], axis: BehaviorAxis) -> i32 {
+    traits.iter().map(|t| t.behavior_weight(axis)).sum()
+}
+
+/// Why a trait could not be gained (spec §3: one API enforces conflicts).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TraitError {
+    /// The character already carries this trait.
+    Duplicate(Trait),
+    /// Flavor-pair incompatibility from [`CONFLICTS`].
+    FlavorConflict { candidate: Trait, held: Trait },
+    /// Two curse-shaped negative percent modifiers on the same attribute
+    /// (spec §3 effect-level rule; vacuous until scar traits land).
+    NegativeAttrModCollision { candidate: Trait, held: Trait },
+}
+
+/// Effect-level conflict rule: at most one negative-percent `AttrMod` per
+/// attribute across the held set, regardless of which traits carry it.
+fn negative_attrmod_conflict(held: &[Effect], candidate: &[Effect]) -> bool {
+    let held_attrs: Vec<CharacterAttribute> = held
+        .iter()
+        .filter_map(|e| match e {
+            Effect::AttrMod { attr, percent, .. } if *percent < 0 => Some(*attr),
+            _ => None,
+        })
+        .collect();
+    candidate.iter().any(|e| match e {
+        Effect::AttrMod { attr, percent, .. } if *percent < 0 => held_attrs.contains(attr),
+        _ => false,
+    })
+}
+
+/// The eligibility check behind every trait mutation: no duplicates, no
+/// flavor-pair conflicts, no stacked negative attribute modifiers. Used by
+/// `Character::gain_trait`, creation generation, and revival's picker.
+pub fn can_gain(current: &[Trait], candidate: Trait) -> Result<(), TraitError> {
+    if current.contains(&candidate) {
+        return Err(TraitError::Duplicate(candidate));
+    }
+    if let Some(held) = current
+        .iter()
+        .find(|held| conflicts_with(candidate, **held))
+    {
+        return Err(TraitError::FlavorConflict {
+            candidate,
+            held: *held,
+        });
+    }
+    let held_effects: Vec<Effect> = current.iter().flat_map(|t| t.effects()).copied().collect();
+    if negative_attrmod_conflict(&held_effects, candidate.effects()) {
+        return Err(TraitError::NegativeAttrModCollision {
+            candidate,
+            held: current
+                .iter()
+                .copied()
+                .find(|held| negative_attrmod_conflict(held.effects(), candidate.effects()))
+                .unwrap_or(candidate),
+        });
+    }
+    Ok(())
+}
+
 pub const REFUSERS: &[Trait] = &[Trait::Paranoid, Trait::LoneWolf];
+
+/// Every variant of [`Trait`]. Used by golden-capture tests and (per spec
+/// §9) the pool-coverage invariant; append new variants here as they land.
+pub const ALL_TRAITS: &[Trait] = &[
+    Trait::Aggressive,
+    Trait::Defensive,
+    Trait::Cautious,
+    Trait::Reckless,
+    Trait::Friendly,
+    Trait::Loyal,
+    Trait::Paranoid,
+    Trait::LoneWolf,
+    Trait::Treacherous,
+    Trait::Resilient,
+    Trait::Fragile,
+    Trait::Cunning,
+    Trait::Dim,
+    Trait::Asthmatic,
+    Trait::Nearsighted,
+    Trait::Tough,
+    Trait::Builder,
+    Trait::ResourcefulForager,
+];
+
+/// Whether this trait refuses alliance offers outright.
+pub fn refuses_alliance(t: Trait) -> bool {
+    REFUSERS.contains(&t)
+}
+
+/// The trait's additive threshold deltas (alias kept for golden capture).
+pub fn threshold_of(t: Trait) -> ThresholdDelta {
+    t.threshold_modifiers()
+}
 
 /// Geometric mean of trait affinity values. Returns 1.0 for empty input.
 pub fn geometric_mean_affinity(traits: &[Trait]) -> f64 {
@@ -145,7 +630,8 @@ pub fn generate_traits(rng: &mut impl Rng) -> Vec<Trait> {
         let idx = picked_idx.expect("weighted pick must succeed when total > 0");
         let (candidate, _) = remaining.remove(idx);
 
-        if chosen.iter().any(|t| conflicts_with(*t, candidate)) {
+        // One eligibility check for every mutation path (spec §3).
+        if can_gain(&chosen, candidate).is_err() {
             continue;
         }
         chosen.push(candidate);
@@ -194,57 +680,21 @@ impl std::iter::Sum for ThresholdDelta {
 }
 
 impl Trait {
+    /// The trait's additive threshold deltas, read from its
+    /// [`BehaviorWeight`] effect rows (formerly a per-variant `match`).
     pub fn threshold_modifiers(&self) -> ThresholdDelta {
-        match self {
-            Trait::Aggressive => ThresholdDelta {
-                low_health_limit: -5,
-                mid_health_limit: -10,
-                low_sanity_limit: -2,
-                psychotic_break_threshold: 2,
-                ..Default::default()
-            },
-            Trait::Defensive => ThresholdDelta {
-                low_health_limit: 10,
-                mid_health_limit: 10,
-                psychotic_break_threshold: -2,
-                ..Default::default()
-            },
-            Trait::Cautious => ThresholdDelta {
-                low_health_limit: 15,
-                mid_health_limit: 15,
-                low_sanity_limit: 10,
-                mid_sanity_limit: 10,
-                psychotic_break_threshold: -3,
-                ..Default::default()
-            },
-            Trait::Reckless => ThresholdDelta {
-                low_health_limit: -10,
-                low_sanity_limit: -10,
-                psychotic_break_threshold: 4,
-                ..Default::default()
-            },
-            Trait::Resilient => ThresholdDelta {
-                psychotic_break_threshold: -3,
-                low_sanity_limit: -3,
-                ..Default::default()
-            },
-            Trait::Fragile => ThresholdDelta {
-                psychotic_break_threshold: 3,
-                low_sanity_limit: 5,
-                ..Default::default()
-            },
-            Trait::Cunning => ThresholdDelta {
-                low_intelligence_limit: -5,
-                high_intelligence_limit: -5,
-                ..Default::default()
-            },
-            Trait::Dim => ThresholdDelta {
-                low_intelligence_limit: 10,
-                high_intelligence_limit: 5,
-                ..Default::default()
-            },
-            // Social and physical traits leave thresholds untouched.
-            _ => ThresholdDelta::default(),
+        use BehaviorAxis::*;
+        let w = |axis| self.behavior_weight(axis);
+        ThresholdDelta {
+            low_health_limit: w(LowHealthLimit),
+            mid_health_limit: w(MidHealthLimit),
+            low_sanity_limit: w(LowSanityLimit),
+            mid_sanity_limit: w(MidSanityLimit),
+            high_sanity_limit: w(HighSanityLimit),
+            movement_limit: w(MovementLimit),
+            low_intelligence_limit: w(LowIntelligenceLimit),
+            high_intelligence_limit: w(HighIntelligenceLimit),
+            psychotic_break_threshold: w(PsychoticBreakThreshold),
         }
     }
 }
@@ -384,5 +834,141 @@ mod tests {
             Trait::ResourcefulForager,
             Trait::ResourcefulForager
         ));
+    }
+
+    // ---- Effect-data migration invariants (spec §8.1, §9) ----
+
+    #[test]
+    fn every_trait_has_a_def_and_def_matches_enum_count() {
+        for t in ALL_TRAITS {
+            let def = t.def();
+            assert!(!def.label.is_empty(), "{t:?} needs a label");
+        }
+        assert_eq!(ALL_TRAITS.len(), 18, "ALL_TRAITS must cover every variant");
+    }
+
+    #[test]
+    fn refusers_const_matches_alliance_refusal_effect_rows() {
+        let data: Vec<Trait> = ALL_TRAITS
+            .iter()
+            .copied()
+            .filter(|t| t.behavior_weight(BehaviorAxis::AllianceRefusal) > 0)
+            .collect();
+        let mut sorted = data.clone();
+        sorted.sort_by_key(|t| *t as u8);
+        let mut expected = REFUSERS.to_vec();
+        expected.sort_by_key(|t| *t as u8);
+        assert_eq!(sorted, expected, "REFUSERS must match the effect data");
+    }
+
+    #[test]
+    fn treacherous_cadence_row_matches_alliances_interval() {
+        assert_eq!(
+            Trait::Treacherous.behavior_weight(BehaviorAxis::BetrayalCadence) as u8,
+            crate::alliances::TREACHEROUS_BETRAYAL_INTERVAL,
+            "effect row and the alliances constant must stay in lockstep"
+        );
+    }
+
+    #[test]
+    fn effect_and_kind_serde_roundtrip() {
+        let json = serde_json::to_string(&Effect::BehaviorWeight {
+            axis: BehaviorAxis::FleeCowardice,
+            delta: 1,
+        })
+        .unwrap();
+        let back: Effect = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            back,
+            Effect::BehaviorWeight {
+                axis: BehaviorAxis::FleeCowardice,
+                delta: 1
+            }
+        );
+
+        let kind_json = serde_json::to_string(&TraitKind::Curse).unwrap();
+        assert_eq!(
+            serde_json::from_str::<TraitKind>(&kind_json).unwrap(),
+            TraitKind::Curse
+        );
+    }
+
+    #[test]
+    fn old_pascal_case_trait_arrays_still_deserialize() {
+        // Persisted rows store trait arrays as PascalCase variant names; the
+        // unit enum keeps that wire format untouched.
+        let json = r#"["Friendly","LoneWolf","Tough"]"#;
+        let traits: Vec<Trait> = serde_json::from_str(json).unwrap();
+        assert_eq!(traits, vec![Trait::Friendly, Trait::LoneWolf, Trait::Tough]);
+        let back = serde_json::to_string(&traits).unwrap();
+        assert_eq!(back, json);
+    }
+
+    #[test]
+    fn behavior_sum_only_counts_matching_axes() {
+        let set = vec![Trait::Cautious, Trait::Resilient];
+        assert_eq!(behavior_sum(&set, BehaviorAxis::FleeCowardice), 1);
+        assert_eq!(behavior_sum(&set, BehaviorAxis::SeverityTier), -1);
+        assert_eq!(behavior_sum(&set, BehaviorAxis::BetrayalCadence), 0);
+    }
+
+    // ---- gain_trait/lose_trait eligibility (spec §3) ----
+
+    #[test]
+    fn can_gain_rejects_duplicates_and_flavor_conflicts() {
+        assert_eq!(
+            can_gain(&[Trait::Friendly], Trait::Friendly),
+            Err(TraitError::Duplicate(Trait::Friendly))
+        );
+        assert!(matches!(
+            can_gain(&[Trait::Friendly], Trait::Paranoid),
+            Err(TraitError::FlavorConflict { .. })
+        ));
+        assert!(can_gain(&[Trait::Friendly], Trait::Tough).is_ok());
+    }
+
+    #[test]
+    fn negative_attrmod_rule_is_per_attribute_across_held_traits() {
+        use CharacterAttribute::*;
+        let held = vec![Effect::AttrMod {
+            attr: Movement,
+            flat: 0,
+            percent: -25,
+        }];
+        // Same attribute, another negative percent -> collision.
+        let collide = vec![Effect::AttrMod {
+            attr: Movement,
+            flat: -2,
+            percent: -10,
+        }];
+        assert!(negative_attrmod_conflict(&held, &collide));
+        // Different attribute -> fine.
+        let other_attr = vec![Effect::AttrMod {
+            attr: Strength,
+            flat: 0,
+            percent: -10,
+        }];
+        assert!(!negative_attrmod_conflict(&held, &other_attr));
+        // Positive modifiers never collide.
+        let boon = vec![Effect::AttrMod {
+            attr: Movement,
+            flat: 0,
+            percent: 10,
+        }];
+        assert!(!negative_attrmod_conflict(&held, &boon));
+    }
+
+    #[test]
+    fn generation_still_rejects_conflicts_via_can_gain() {
+        // Behavior parity: generation routes through can_gain now; every
+        // rolled set must satisfy it end-to-end.
+        for seed in 0..32u64 {
+            let mut rng = StdRng::seed_from_u64(seed);
+            let rolled = generate_traits(&mut rng);
+            for t in &rolled {
+                let others: Vec<Trait> = rolled.iter().copied().filter(|x| x != t).collect();
+                assert!(can_gain(&others, *t).is_ok(), "seed {seed} set {rolled:?}");
+            }
+        }
     }
 }

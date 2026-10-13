@@ -107,16 +107,11 @@ fn pick_eligible<R: Rng + ?Sized>(
     pool: &[Trait],
     rng: &mut R,
 ) -> Option<Trait> {
+    // Same eligibility check as creation and Character::gain_trait (spec §3).
     let eligible: Vec<Trait> = pool
         .iter()
         .copied()
-        .filter(|t| !character.traits.contains(t))
-        .filter(|t| {
-            !character
-                .traits
-                .iter()
-                .any(|held| traits::conflicts_with(*t, *held))
-        })
+        .filter(|t| traits::can_gain(&character.traits, *t).is_ok())
         .collect();
     eligible.choose(rng).copied()
 }

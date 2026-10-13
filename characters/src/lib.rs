@@ -21,6 +21,9 @@ pub mod survival;
 pub mod traits;
 pub mod wounds;
 
+#[cfg(test)]
+mod trait_golden;
+
 // Re-export key items from sub-modules
 pub use combat::attack_contest;
 pub use combat::inflict_table::{
@@ -478,6 +481,24 @@ impl Character {
     /// earned, not to zero. A fresh baseline is then captured for this
     /// game. Traits are settled before the brain re-derivation below, so
     /// the brain always reflects the final trait set.
+    /// Add a trait through the one sanctioned mutation path (spec §3):
+    /// rejects duplicates, flavor-pair conflicts, and stacked negative
+    /// attribute modifiers. Mid-game drift, creation rolls, revival scars,
+    /// and future event boons/curses all land here.
+    pub fn gain_trait(&mut self, trait_: traits::Trait) -> Result<(), traits::TraitError> {
+        traits::can_gain(&self.traits, trait_)?;
+        self.traits.push(trait_);
+        Ok(())
+    }
+
+    /// Remove a trait. Returns whether anything changed. Trait loss is not
+    /// an advancement (see baseline settle); callers decide intent.
+    pub fn lose_trait(&mut self, trait_: traits::Trait) -> bool {
+        let before = self.traits.len();
+        self.traits.retain(|t| *t != trait_);
+        self.traits.len() != before
+    }
+
     pub fn reset_for_new_game(&mut self) {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
         if let Some(baseline) = self.game_baseline.take() {
@@ -713,8 +734,9 @@ impl Character {
         // cleaned and `pending_trust_shock` flips on the next drain. The
         // timer resets unconditionally so a missed opportunity does not
         // stack (one chance per cadence).
-        if self.traits.contains(&traits::Trait::Treacherous)
-            && self.turns_since_last_betrayal >= alliances::TREACHEROUS_BETRAYAL_INTERVAL
+        if traits::behavior_sum(&self.traits, traits::BehaviorAxis::BetrayalCadence) > 0
+            && self.turns_since_last_betrayal
+                >= traits::behavior_sum(&self.traits, traits::BehaviorAxis::BetrayalCadence) as u8
         {
             let same_area_ally = encounter_context
                 .potential_targets
@@ -1890,6 +1912,31 @@ mod tests {
     fn default() {
         let character = Character::default();
         assert_eq!(character.name, "Default Character");
+    }
+
+    #[test]
+    fn gain_and_lose_trait_use_the_single_mutation_path() {
+        use crate::traits::{Trait, TraitError};
+
+        let mut c = Character::new("Stinky".to_string(), None, None);
+        c.traits.clear();
+
+        assert!(c.gain_trait(Trait::Friendly).is_ok());
+        // Duplicate rejected.
+        assert_eq!(
+            c.gain_trait(Trait::Friendly),
+            Err(TraitError::Duplicate(Trait::Friendly))
+        );
+        // Flavor conflict rejected (Friendly vs Paranoid).
+        assert!(matches!(
+            c.gain_trait(Trait::Paranoid),
+            Err(TraitError::FlavorConflict { .. })
+        ));
+        assert_eq!(c.traits, vec![Trait::Friendly]);
+
+        assert!(c.lose_trait(Trait::Friendly));
+        assert!(c.traits.is_empty());
+        assert!(!c.lose_trait(Trait::Friendly), "second loss is a no-op");
     }
 
     #[rstest]
