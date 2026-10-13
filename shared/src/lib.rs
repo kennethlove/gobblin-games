@@ -97,6 +97,10 @@ pub const DEFAULT_GOBLINS_PER_TEAM: u32 = 3;
 pub const DEFAULT_ROSTER_CAP: u32 = DEFAULT_TEAM_COUNT * DEFAULT_GOBLINS_PER_TEAM;
 /// How many goblins a joining (non-creator) player may bring by default.
 pub const DEFAULT_MAX_GOBINS_PER_PLAYER: u32 = 1;
+/// How many goblins one user may own at once, across all games — the
+/// lifetime creation cap, sized so a single user can still fill a
+/// MAX_ROSTER_CAP-sized draft. Server-configurable; this is the fallback.
+pub const DEFAULT_MAX_GOBLINS_PER_USER: u32 = 128;
 /// Hard ceiling on a game's roster: every goblin costs processing, rows,
 /// and storage. Set to the component bounds' own product (16 × 8) so any
 /// valid team/goblins combination fits; stress testing tracked separately.

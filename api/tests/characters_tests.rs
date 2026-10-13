@@ -912,3 +912,74 @@ async fn test_create_owned_character_validates_lengths() {
 
     test_db.cleanup().await;
 }
+
+/// Creation is capped per user: at the cap a POST is a 409 and writes
+/// nothing, and deleting a goblin frees a slot. The cap comes from state,
+/// so the test overrides it downward rather than minting a full quota.
+#[tokio::test]
+async fn test_create_owned_character_enforces_per_user_cap() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state_with_goblin_cap(2));
+    let server = TestServer::new(router);
+    let user = create_authenticated_user(&test_db, &server, "owned_cap_user").await;
+
+    create_standalone_character(&server, &user, json!({ "name": "Cap One" })).await;
+    create_standalone_character(&server, &user, json!({ "name": "Cap Two" })).await;
+
+    server
+        .post("/api/characters")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Cap Three" }))
+        .await
+        .assert_status(axum::http::StatusCode::CONFLICT);
+
+    let owned = list_owned_identifiers(&server, &user).await;
+    assert_eq!(owned.len(), 2, "over-cap creation must not persist");
+
+    // Deleting a goblin frees a slot (deletion is a hard delete).
+    let victim = owned.iter().next().expect("an owned character").clone();
+    server
+        .delete(&format!("/api/characters/{}", victim))
+        .add_header("Authorization", user.auth_header())
+        .await
+        .assert_status(axum::http::StatusCode::NO_CONTENT);
+
+    create_standalone_character(&server, &user, json!({ "name": "Cap Again" })).await;
+    assert_eq!(
+        list_owned_identifiers(&server, &user).await.len(),
+        2,
+        "freed slot should be usable again"
+    );
+
+    test_db.cleanup().await;
+}
+
+/// The cap is per user: one player's full stable consumes none of
+/// another player's allowance.
+#[tokio::test]
+async fn test_create_owned_character_cap_is_per_user() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state_with_goblin_cap(1));
+    let server = TestServer::new(router);
+    let alice = create_authenticated_user(&test_db, &server, "owned_cap_alice").await;
+    let bob = create_authenticated_user(&test_db, &server, "owned_cap_bob").await;
+
+    create_standalone_character(&server, &alice, json!({ "name": "Alice Stable" })).await;
+    server
+        .post("/api/characters")
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({ "name": "Alice Overflow" }))
+        .await
+        .assert_status(axum::http::StatusCode::CONFLICT);
+
+    create_standalone_character(&server, &bob, json!({ "name": "Bob Stable" })).await;
+
+    test_db.cleanup().await;
+}
+
+/// The cap defaults to the shared roster-sized constant; the server reads
+/// its override from the environment at startup.
+#[test]
+fn test_default_goblin_cap_is_roster_sized() {
+    assert_eq!(shared::DEFAULT_MAX_GOBLINS_PER_USER, 128);
+}

@@ -279,6 +279,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let broadcaster = Arc::new(GameBroadcaster::default());
     tracing::info!("WebSocket broadcaster initialized");
 
+    // Per-user goblin creation cap (server-level, not per-game).
+    let max_goblins_per_user = env::var("MAX_GOBLINS_PER_USER")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(shared::DEFAULT_MAX_GOBLINS_PER_USER);
+    tracing::info!(
+        "Goblin creation cap configured: {} per user",
+        max_goblins_per_user
+    );
+
     let app_state = AppState {
         db: db.clone(),
         storage,
@@ -288,6 +298,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ),
         namespace: surreal_namespace,
         database: surreal_database,
+        max_goblins_per_user,
     };
 
     // Start cleanup scheduler for refresh tokens
