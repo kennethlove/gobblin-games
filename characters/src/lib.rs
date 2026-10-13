@@ -1896,6 +1896,23 @@ impl Attributes {
         Self::from_rng(&mut rng)
     }
 
+    /// Read one attribute by its typed axis. Mechanics that need the raw
+    /// base read it here; everything that should see trait/wound modifiers
+    /// goes through `Character::effective_attribute` instead.
+    pub fn get(&self, attr: crate::traits::CharacterAttribute) -> u32 {
+        use crate::traits::CharacterAttribute as A;
+        match attr {
+            A::Movement => self.movement,
+            A::Strength => self.strength,
+            A::Defense => self.defense,
+            A::Bravery => self.bravery,
+            A::Intelligence => self.intelligence,
+            A::Persuasion => self.persuasion,
+            A::Luck => self.luck,
+            A::Agility => self.agility,
+        }
+    }
+
     /// Rolls a randomized set of Attributes from the provided RNG so callers
     /// that own their entropy (seeded generators, test fixtures) get
     /// deterministic attributes too.

@@ -19,47 +19,77 @@ pub const CRITICAL_INFECTION_CHANCE: f64 = 0.25;
 pub const REST_BLOOD_RESTORE: u32 = 20;
 
 /// --- Stat penalties per wound severity ---
+/// Wound penalties are **percentage-based** (spec §2/§10.1: wounds share the
+/// `(base + flat) × percent` formula with trait effects, so no consumer
+/// special-cases them). Each percentage is the old flat penalty expressed
+/// against the attribute's reference maximum (strength/defense 50,
+/// movement/bravery 100): a character at reference max takes exactly the
+/// old absolute hit, weaker characters take proportionally less.
+///
 /// Penalty to effective strength per wound severity tier.
-pub fn strength_penalty(severity: WoundSeverity) -> i32 {
+pub fn strength_penalty_percent(severity: WoundSeverity) -> f64 {
     match severity {
-        WoundSeverity::Minor => -1,
-        WoundSeverity::Moderate => -3,
-        WoundSeverity::Severe => -6,
-        WoundSeverity::Critical => -10,
+        WoundSeverity::Minor => -2.0,     // was -1 of 50
+        WoundSeverity::Moderate => -6.0,  // was -3 of 50
+        WoundSeverity::Severe => -12.0,   // was -6 of 50
+        WoundSeverity::Critical => -20.0, // was -10 of 50
     }
 }
 
 /// Penalty to effective movement per wound severity tier.
-pub fn movement_penalty(severity: WoundSeverity) -> i32 {
+pub fn movement_penalty_percent(severity: WoundSeverity) -> f64 {
     match severity {
-        WoundSeverity::Minor => -1,
-        WoundSeverity::Moderate => -2,
-        WoundSeverity::Severe => -5,
-        WoundSeverity::Critical => -10,
+        WoundSeverity::Minor => -1.0,     // was -1 of 100
+        WoundSeverity::Moderate => -2.0,  // was -2 of 100
+        WoundSeverity::Severe => -5.0,    // was -5 of 100
+        WoundSeverity::Critical => -10.0, // was -10 of 100
     }
 }
 
 /// Penalty to effective defense per wound severity tier.
-pub fn defense_penalty(severity: WoundSeverity) -> i32 {
+pub fn defense_penalty_percent(severity: WoundSeverity) -> f64 {
     match severity {
-        WoundSeverity::Minor => 0,
-        WoundSeverity::Moderate => -1,
-        WoundSeverity::Severe => -3,
-        WoundSeverity::Critical => -5,
+        WoundSeverity::Minor => 0.0,      // was 0
+        WoundSeverity::Moderate => -2.0,  // was -1 of 50
+        WoundSeverity::Severe => -6.0,    // was -3 of 50
+        WoundSeverity::Critical => -10.0, // was -5 of 50
     }
 }
 
 /// Penalty to effective bravery per wound severity tier.
-pub fn bravery_penalty(severity: WoundSeverity) -> i32 {
+pub fn bravery_penalty_percent(severity: WoundSeverity) -> f64 {
     match severity {
-        WoundSeverity::Minor => 0,
-        WoundSeverity::Moderate => -1,
-        WoundSeverity::Severe => -3,
-        WoundSeverity::Critical => -5,
+        WoundSeverity::Minor => 0.0,     // was 0
+        WoundSeverity::Moderate => -1.0, // was -1 of 100
+        WoundSeverity::Severe => -3.0,   // was -3 of 100
+        WoundSeverity::Critical => -5.0, // was -5 of 100
     }
 }
 
+/// Total percentage a wound of this severity/body part takes off one
+/// attribute. Attributes with no wound model (intelligence, persuasion,
+/// luck, agility) get `0.0`.
+pub fn attr_mod_percent(
+    severity: WoundSeverity,
+    part: BodyPart,
+    attr: crate::traits::CharacterAttribute,
+) -> f64 {
+    use crate::traits::CharacterAttribute as A;
+    let base = match attr {
+        A::Strength => strength_penalty_percent(severity),
+        A::Movement => movement_penalty_percent(severity),
+        A::Defense => defense_penalty_percent(severity),
+        A::Bravery => bravery_penalty_percent(severity),
+        A::Intelligence | A::Persuasion | A::Luck | A::Agility => 0.0,
+    };
+    base * body_part_penalty_multiplier(part)
+}
+
 /// Penalty to effective health per wound severity tier.
+///
+/// NOTE: unused — health is the blood pool now (`effective_health`). Kept as
+/// a flat (not percent) table because nothing consumes it; delete or convert
+/// when the blood system is revisited.
 pub fn health_penalty(severity: WoundSeverity) -> i32 {
     match severity {
         WoundSeverity::Minor => -2,
@@ -100,10 +130,11 @@ mod tests {
 
     #[test]
     fn penalty_increases_with_severity() {
-        let minor = strength_penalty(WoundSeverity::Minor);
-        let moderate = strength_penalty(WoundSeverity::Moderate);
-        let severe = strength_penalty(WoundSeverity::Severe);
-        let critical = strength_penalty(WoundSeverity::Critical);
+        let minor = strength_penalty_percent(WoundSeverity::Minor);
+        let moderate = strength_penalty_percent(WoundSeverity::Moderate);
+        let severe = strength_penalty_percent(WoundSeverity::Severe);
+        let critical = strength_penalty_percent(WoundSeverity::Critical);
+        // Percentages are negative; "more severe" means more negative.
         assert!(minor > moderate);
         assert!(moderate > severe);
         assert!(severe > critical);
@@ -119,8 +150,34 @@ mod tests {
     }
 
     #[test]
-    fn zero_severity_movement_penalty() {
-        assert_eq!(movement_penalty(WoundSeverity::Minor), -1);
+    fn minor_movement_penalty() {
+        assert_eq!(movement_penalty_percent(WoundSeverity::Minor), -1.0);
+    }
+
+    #[test]
+    fn attributes_without_a_wound_model_take_no_percent() {
+        use crate::traits::CharacterAttribute as A;
+        for attr in [A::Agility, A::Luck, A::Intelligence, A::Persuasion] {
+            assert_eq!(
+                attr_mod_percent(WoundSeverity::Critical, BodyPart::Head, attr),
+                0.0,
+                "{attr:?} has no wound model"
+            );
+        }
+    }
+
+    #[test]
+    fn limb_wound_keeps_severity_percentage_head_scales_it() {
+        use crate::traits::CharacterAttribute as A;
+        let crit = WoundSeverity::Critical;
+        assert_eq!(
+            attr_mod_percent(crit, BodyPart::LeftArm, A::Strength),
+            strength_penalty_percent(crit)
+        );
+        assert_eq!(
+            attr_mod_percent(crit, BodyPart::Head, A::Strength),
+            strength_penalty_percent(crit) * HEAD_WOUND_MULTIPLIER
+        );
     }
 
     #[test]

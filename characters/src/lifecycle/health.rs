@@ -1,4 +1,5 @@
 use crate::Character;
+use crate::traits::{CharacterAttribute, Effect};
 use crate::wounds;
 use rand::RngExt;
 use shared::messages::{CharacterRef, MessagePayload};
@@ -12,6 +13,37 @@ const MAX_BRAVERY: u32 = 100;
 /// Default healing amounts
 const DEFAULT_HEAL: u32 = 5;
 const DEFAULT_MENTAL_HEAL: u32 = 5;
+
+/// `(base + flat) × percent`, floored at 0 (spec §2, §4).
+///
+/// Flat modifiers sum under the multiply; percentages accumulate additively
+/// and apply to the flat-adjusted base. Exposed so the formula can be tested
+/// without constructing a whole character.
+pub fn apply_attribute_modifiers(base: u32, flat: i32, percent: f64) -> u32 {
+    let value = (base as f64 + flat as f64) * (1.0 + percent / 100.0);
+    value.max(0.0).round() as u32
+}
+
+/// Accumulate `(flat, percent)` from one effect list for one attribute.
+/// Both permanent (trait) and temporary (affliction) layers funnel through
+/// this, which is what makes them indistinguishable downstream (spec §4).
+pub(crate) fn sum_attr_mods(effects: &[Effect], attr: CharacterAttribute) -> (i32, f64) {
+    let mut flat = 0i32;
+    let mut percent = 0.0f64;
+    for e in effects {
+        if let Effect::AttrMod {
+            attr: effect_attr,
+            flat: effect_flat,
+            percent: effect_percent,
+        } = e
+            && *effect_attr == attr
+        {
+            flat += *effect_flat;
+            percent += *effect_percent as f64;
+        }
+    }
+    (flat, percent)
+}
 
 impl Character {
     /// Character is lonely/homesick/etc., loses some sanity.
@@ -198,42 +230,50 @@ impl Character {
             .retain(|w| w.bleeding || w.infected || w.severity != WoundSeverity::Minor);
     }
 
-    // --- Effective stats (base + wound penalties) ---
+    // --- Effective stats (single accessor path; spec §2/§4) ---
 
-    /// Effective strength after wound penalties.
+    /// Sum of every modifier carrying layer for one attribute: trait
+    /// `AttrMod` effects and wound percentages. Returns `(flat, percent)`
+    /// where percents accumulate additively (spec §4).
+    fn attribute_modifiers(&self, attr: CharacterAttribute) -> (i32, f64) {
+        let mut flat = 0i32;
+        let mut percent = 0.0f64;
+
+        for t in &self.traits {
+            let (f, p) = sum_attr_mods(t.effects(), attr);
+            flat += f;
+            percent += p;
+        }
+
+        for w in &self.wounds {
+            percent += wounds::attr_mod_percent(w.severity, w.body_part, attr);
+        }
+
+        (flat, percent)
+    }
+
+    /// `(base + flat) × percent`, floored at 0 (spec §2, §4). The one path
+    /// every mechanic reads attributes through, so a permanent limp and a
+    /// fresh sprain are indistinguishable to a consumer.
+    pub fn effective_attribute(&self, attr: CharacterAttribute) -> u32 {
+        let base = self.attributes.get(attr);
+        let (flat, percent) = self.attribute_modifiers(attr);
+        apply_attribute_modifiers(base, flat, percent)
+    }
+
+    /// Effective strength: wound penalties plus trait modifiers.
     pub fn effective_strength(&self) -> i32 {
-        let base = self.attributes.strength as i32;
-        let mut penalty = 0i32;
-        for wound in &self.wounds {
-            let mut p = wounds::strength_penalty(wound.severity);
-            p = (p as f64 * wounds::body_part_penalty_multiplier(wound.body_part)) as i32;
-            penalty += p;
-        }
-        (base + penalty).max(0)
+        self.effective_attribute(CharacterAttribute::Strength) as i32
     }
 
-    /// Effective movement after wound penalties.
+    /// Effective movement: wound penalties plus trait modifiers.
     pub fn effective_movement(&self) -> i32 {
-        let base = self.attributes.movement as i32;
-        let mut penalty = 0i32;
-        for wound in &self.wounds {
-            let mut p = wounds::movement_penalty(wound.severity);
-            p = (p as f64 * wounds::body_part_penalty_multiplier(wound.body_part)) as i32;
-            penalty += p;
-        }
-        (base + penalty).max(0)
+        self.effective_attribute(CharacterAttribute::Movement) as i32
     }
 
-    /// Effective defense after wound penalties.
+    /// Effective defense: wound penalties plus trait modifiers.
     pub fn effective_defense(&self) -> i32 {
-        let base = self.attributes.defense as i32;
-        let mut penalty = 0i32;
-        for wound in &self.wounds {
-            let mut p = wounds::defense_penalty(wound.severity);
-            p = (p as f64 * wounds::body_part_penalty_multiplier(wound.body_part)) as i32;
-            penalty += p;
-        }
-        (base + penalty).max(0)
+        self.effective_attribute(CharacterAttribute::Defense) as i32
     }
 
     /// Effective health derived from blood pool. Normalizes 0-1000 blood to 0-100 scale.
@@ -241,16 +281,9 @@ impl Character {
         (self.blood / 10).min(100)
     }
 
-    /// Effective bravery after wound penalties.
+    /// Effective bravery: wound penalties plus trait modifiers.
     pub fn effective_bravery(&self) -> i32 {
-        let base = self.attributes.bravery as i32;
-        let mut penalty = 0i32;
-        for wound in &self.wounds {
-            let mut p = wounds::bravery_penalty(wound.severity);
-            p = (p as f64 * wounds::body_part_penalty_multiplier(wound.body_part)) as i32;
-            penalty += p;
-        }
-        (base + penalty).max(0)
+        self.effective_attribute(CharacterAttribute::Bravery) as i32
     }
 
     /// Whether this character should trigger heroism (low blood bravery boost).
@@ -285,6 +318,7 @@ impl Character {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::Character;
     use rstest::*;
 
@@ -344,5 +378,91 @@ mod tests {
         assert!(character.mental_conditions.is_empty());
         character.misses_home();
         assert!(!character.mental_conditions.is_empty());
+    }
+
+    // --- Effective-value accessors (trait redesign §2/§4) ---
+
+    #[test]
+    fn modifiers_apply_as_base_plus_flat_times_percent() {
+        // (36 + 10) × 1.0 = 46, then × 0.75 = 34.5 → 35 (round)
+        assert_eq!(apply_attribute_modifiers(36, 10, -25.0), 35);
+        // Percent applies to the flat-adjusted base, not the raw base:
+        // 36 × 0.75 = 27 would be wrong if flat were applied after.
+        assert_eq!(apply_attribute_modifiers(36, 12, -25.0), 36);
+    }
+
+    #[test]
+    fn effective_value_floors_at_zero() {
+        assert_eq!(apply_attribute_modifiers(10, -30, 0.0), 0);
+        assert_eq!(apply_attribute_modifiers(10, 0, -150.0), 0);
+        assert_eq!(apply_attribute_modifiers(0, 0, 0.0), 0);
+    }
+
+    #[test]
+    fn percents_and_flats_accumulate_across_sources() {
+        // Two sources of −25% plus a flat −10 on base 100 → (90) × 0.5 = 45.
+        assert_eq!(apply_attribute_modifiers(100, -10, -50.0), 45);
+    }
+
+    #[test]
+    fn wounds_reach_the_accessors_as_percentages() {
+        let mut c = Character::new("Stinky".to_string(), None, None);
+        c.attributes.strength = 50;
+        assert_eq!(c.effective_strength(), 50, "no wounds, no modifiers");
+
+        c.wounds.push(Wound::new(
+            WoundType::Cut,
+            WoundSeverity::Critical,
+            BodyPart::LeftArm,
+        ));
+        // Critical −20% on a limb (×1.0) → 50 × 0.8 = 40.
+        assert_eq!(c.effective_strength(), 40);
+        assert_eq!(
+            c.effective_strength() as u32,
+            c.effective_attribute(CharacterAttribute::Strength)
+        );
+    }
+
+    #[test]
+    fn temporary_and_permanent_sources_are_indistinguishable() {
+        // A wound (temporary) and an effect list (how a trait or an
+        // affliction contributes) carrying the same percentage must land on
+        // the same effective value — no consumer special-cases either.
+        let mut wounded = Character::new("Billy Slick".to_string(), None, None);
+        wounded.attributes.strength = 50;
+        wounded.wounds.push(Wound::new(
+            WoundType::Cut,
+            WoundSeverity::Critical,
+            BodyPart::LeftArm,
+        ));
+
+        let base = 50u32;
+        let (flat, percent) = sum_attr_mods(
+            &[Effect::AttrMod {
+                attr: CharacterAttribute::Strength,
+                flat: 0,
+                percent: -20,
+            }],
+            CharacterAttribute::Strength,
+        );
+        let effect_sourced = apply_attribute_modifiers(base, flat, percent);
+
+        assert_eq!(wounded.effective_strength(), effect_sourced as i32);
+    }
+
+    #[test]
+    fn stack_of_wounds_can_floor_an_attribute() {
+        let mut c = Character::new("Stinky".to_string(), None, None);
+        c.attributes.strength = 10;
+        for _ in 0..6 {
+            c.wounds.push(Wound::new(
+                WoundType::Cut,
+                WoundSeverity::Critical,
+                BodyPart::LeftArm,
+            ));
+        }
+        // 6 × −20% = −120% → floored at 0, never negative.
+        assert_eq!(c.effective_strength(), 0);
+        assert_eq!(c.effective_attribute(CharacterAttribute::Strength), 0);
     }
 }
