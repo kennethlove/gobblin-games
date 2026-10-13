@@ -1,4 +1,5 @@
 pub mod actions;
+pub mod advancement;
 pub mod afflictions;
 pub mod alliances;
 pub mod baseline;
@@ -386,6 +387,15 @@ pub struct Character {
     /// reset captures a baseline from their current state.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub game_baseline: Option<baseline::GameBaseline>,
+    /// Pending advancement events for the game in progress — the *delta*
+    /// half of cross-game carry (the baseline snapshot is only the floor,
+    /// spec §7.3). Stamped by `gain_trait`/`lose_trait` as changes happen,
+    /// consumed by settle at the next entry, bounded by
+    /// `advancement::MAX_ADVANCEMENT_EVENTS`. Persisted because reset runs
+    /// at API join time — a mid-game save/load must not lose pending
+    /// events. Empty for characters created before this field existed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub advancement_log: Vec<advancement::AdvancementEvent>,
 }
 
 impl Default for Character {
@@ -458,6 +468,7 @@ impl Character {
             pending_attack_target: None,
             mental_conditions: Vec::new(),
             game_baseline: None,
+            advancement_log: Vec::new(),
         }
     }
 
@@ -484,25 +495,46 @@ impl Character {
     /// Add a trait through the one sanctioned mutation path (spec §3):
     /// rejects duplicates, flavor-pair conflicts, and stacked negative
     /// attribute modifiers. Mid-game drift, creation rolls, revival scars,
-    /// and future event boons/curses all land here.
+    /// and future event boons/curses all land here. On success the gain is
+    /// stamped into `advancement_log`, so settle keeps it (the log is the
+    /// delta; the baseline snapshot is only the floor).
     pub fn gain_trait(&mut self, trait_: traits::Trait) -> Result<(), traits::TraitError> {
         traits::can_gain(&self.traits, trait_)?;
         self.traits.push(trait_);
+        advancement::push_event(
+            &mut self.advancement_log,
+            advancement::AdvancementEvent::TraitGained { trait_ },
+        );
         Ok(())
     }
 
-    /// Remove a trait. Returns whether anything changed. Trait loss is not
-    /// an advancement (see baseline settle); callers decide intent.
+    /// Remove a trait — the durable, intentional form of trait loss. Stamped
+    /// into `advancement_log` so settle honors the loss instead of restoring
+    /// the baseline copy (snapshot-diffing can't tell intent from debuff;
+    /// the log can). Returns whether anything changed; a no-op loss is not
+    /// stamped.
     pub fn lose_trait(&mut self, trait_: traits::Trait) -> bool {
         let before = self.traits.len();
         self.traits.retain(|t| *t != trait_);
-        self.traits.len() != before
+        let changed = self.traits.len() != before;
+        if changed {
+            advancement::push_event(
+                &mut self.advancement_log,
+                advancement::AdvancementEvent::TraitLost { trait_ },
+            );
+        }
+        changed
     }
 
     pub fn reset_for_new_game(&mut self) {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
         if let Some(baseline) = self.game_baseline.take() {
+            // Settle consumes the pending advancement events; without a
+            // baseline (legacy rows) there is nothing to settle against,
+            // so start this game's event clock clean.
             baseline.settle_into(self);
+        } else {
+            self.advancement_log.clear();
         }
         self.game_baseline = Some(baseline::GameBaseline::capture(self));
         self.brain = Brain::from_traits(&self.traits, &mut rng);
@@ -613,6 +645,7 @@ impl Character {
             pending_attack_target: None,
             mental_conditions: Vec::new(),
             game_baseline: None,
+            advancement_log: Vec::new(),
         }
     }
 
@@ -1916,12 +1949,20 @@ mod tests {
 
     #[test]
     fn gain_and_lose_trait_use_the_single_mutation_path() {
+        use crate::advancement::AdvancementEvent;
         use crate::traits::{Trait, TraitError};
 
         let mut c = Character::new("Stinky".to_string(), None, None);
         c.traits.clear();
 
         assert!(c.gain_trait(Trait::Friendly).is_ok());
+        assert_eq!(
+            c.advancement_log,
+            vec![AdvancementEvent::TraitGained {
+                trait_: Trait::Friendly
+            }],
+            "a real gain stamps the log"
+        );
         // Duplicate rejected.
         assert_eq!(
             c.gain_trait(Trait::Friendly),
@@ -1933,10 +1974,26 @@ mod tests {
             Err(TraitError::FlavorConflict { .. })
         ));
         assert_eq!(c.traits, vec![Trait::Friendly]);
+        assert_eq!(c.advancement_log.len(), 1, "rejected gains do not stamp");
 
         assert!(c.lose_trait(Trait::Friendly));
         assert!(c.traits.is_empty());
+        assert!(
+            matches!(
+                c.advancement_log.first(),
+                Some(AdvancementEvent::TraitGained { .. })
+            ),
+            "gain stamped first"
+        );
+        assert!(
+            matches!(
+                c.advancement_log.get(1),
+                Some(AdvancementEvent::TraitLost { .. })
+            ),
+            "a real loss stamps after the gain"
+        );
         assert!(!c.lose_trait(Trait::Friendly), "second loss is a no-op");
+        assert_eq!(c.advancement_log.len(), 2, "no-op losses do not stamp");
     }
 
     #[rstest]
@@ -2359,9 +2416,17 @@ mod tests {
         let base_movement = boblin.attributes.movement;
         let base_strength = boblin.attributes.strength;
 
+        // Boblin enters the first game Friendly; creation-time gains stamp
+        // the log, and with no baseline yet the first reset folds them into
+        // the captured floor and starts the event clock clean.
+        boblin
+            .gain_trait(crate::traits::Trait::Friendly)
+            .expect("friendly");
+
         // Game 1 entry: baseline captured.
         boblin.reset_for_new_game();
         assert!(boblin.game_baseline.is_some());
+        assert!(boblin.advancement_log.is_empty(), "fresh event clock");
 
         // The game: Boblin dies once...
         boblin.set_status(CharacterStatus::Dead);
@@ -2372,9 +2437,17 @@ mod tests {
         boblin.statistics.kills += 1;
         // ...suffers a wound debuff that lingers past game end...
         boblin.attributes.strength = base_strength.saturating_sub(20);
-        // ...and is revived with a scar-like curse and a bonus trait.
-        boblin.traits.push(crate::traits::Trait::Fragile); // the "limp"
-        boblin.traits.push(crate::traits::Trait::Resilient); // the "sharpshooter"
+        // ...talks their way out of the old Friendly habit (intentional loss,
+        // stamped)...
+        assert!(boblin.lose_trait(crate::traits::Trait::Friendly));
+        // ...and is revived with a scar-like curse and a bonus trait
+        // (stamped gains; Fragile/Cautious don't conflict).
+        boblin
+            .gain_trait(crate::traits::Trait::Fragile)
+            .expect("fragile"); // the "limp"
+        boblin
+            .gain_trait(crate::traits::Trait::Cautious)
+            .expect("cautious"); // the "sharpshooter"
 
         // Game 2 entry: reset settles game 1's advancements.
         boblin.reset_for_new_game();
@@ -2383,9 +2456,11 @@ mod tests {
             boblin.traits,
             vec![
                 crate::traits::Trait::Fragile,
-                crate::traits::Trait::Resilient
-            ]
+                crate::traits::Trait::Cautious
+            ],
+            "gains persist, the intentional Friendly loss stays lost"
         );
+        assert!(boblin.advancement_log.is_empty(), "settle consumed the log");
         assert_eq!(boblin.attributes.movement, base_movement);
         assert_eq!(
             boblin.attributes.strength, base_strength,
@@ -2402,7 +2477,7 @@ mod tests {
             boblin.traits,
             vec![
                 crate::traits::Trait::Fragile,
-                crate::traits::Trait::Resilient
+                crate::traits::Trait::Cautious
             ]
         );
         assert_eq!(boblin.statistics.wins, 1);
