@@ -198,7 +198,9 @@ pub async fn quickstart(
         "name": &game_name,
         "status": "NotStarted",
         "day": null,
-        "private": false,
+        // Private by default, same as every other create path: a quickstart
+        // demo game with 24 auto-created goblins shouldn't broadcast publicly.
+        "private": true,
         "team_count": shared::DEFAULT_TEAM_COUNT,
         "goblins_per_team": shared::DEFAULT_GOBLINS_PER_TEAM,
         "max_goblins_per_player": shared::DEFAULT_MAX_GOBINS_PER_PLAYER,

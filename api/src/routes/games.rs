@@ -32,8 +32,10 @@ fn default_limit() -> u32 {
 pub struct CreateGameRequest {
     #[serde(default)]
     pub name: Option<String>,
+    /// Present + "true" when the creator opts the game into public listing.
+    /// Absent (the default) means the game stays private.
     #[serde(default)]
-    pub private: Option<String>,
+    pub public_game: Option<String>,
     #[serde(default)]
     pub csrf_token: String,
     /// Goblins checked in the roster picker; empty = bot fallback.
@@ -988,7 +990,10 @@ pub async fn create_game_post_handler(
     let game = Game::default();
     let game_identifier = uuid::Uuid::new_v4().to_string();
     let game_name = form.name.filter(|n| !n.is_empty()).unwrap_or(game.name);
-    let is_private = form.private.is_some_and(|v| v == "true");
+    // Private by default: a game is public only when the creator explicitly
+    // opts in via the `public_game` checkbox. Absent or any other value keeps
+    // it private.
+    let is_private = !form.public_game.is_some_and(|v| v == "true");
     let team_count = form
         .team_count
         .unwrap_or(shared::DEFAULT_TEAM_COUNT)
