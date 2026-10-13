@@ -5,6 +5,13 @@
 //! during a game carries on; whatever merely *happened* to it does not.
 //! Reset restores the pre-game baseline, then re-applies the earned deltas.
 //!
+//! The snapshot is only the **floor**. Trait intent comes from the
+//! [`crate::advancement`] log stamped as changes happen: gains are replayed
+//! onto the floor, logged losses stay lost, and unstamped trait changes fall
+//! back to gains-persist (spec §7.3, §10.8). Attribute high-water and
+//! record-increment rules still diff against the snapshot directly — the log
+//! supplements them, it does not replace them yet.
+//!
 //! `Character::reset_for_new_game` captures this snapshot at game entry and
 //! settles it at the next entry. See the module docs on `GameBaseline` for
 //! the exact carry rules.
@@ -29,9 +36,11 @@ pub struct AttributeDelta {
 /// next entry.
 ///
 /// Carry rules, per field family:
-/// - **Traits:** gains persist, losses do not. Traits only enter mid-game
-///   through advancement paths (revival scars and bonuses), so any trait
-///   present now but absent from the baseline is an advancement.
+/// - **Traits:** the baseline is the floor and the pending
+///   [`crate::advancement`] log is the delta: `TraitGained` events are
+///   replayed, `TraitLost` events stay removed (an intentional loss is no
+///   longer restored as if it were a debuff), and trait changes that never
+///   got stamped (legacy rows, pre-log direct pushes) still count as gains.
 /// - **Attributes:** the field-wise high-water mark persists. Positive
 ///   deltas are advancements (e.g. revival's `+1 luck` fallback); negative
 ///   deltas are per-game debuffs (wound penalties from
@@ -66,17 +75,18 @@ impl GameBaseline {
         }
     }
 
-    /// Advance `character`'s durable state to `baseline + earned`: restore
-    /// the baseline, then keep only the advancements earned since it was
-    /// captured (trait gains, attribute high-water deltas, record
-    /// increments).
+    /// Advance `character`'s durable state to `baseline + earned`, consuming
+    /// the pending advancement log: restore the baseline floor, replay the
+    /// log's explicit trait intent in order, keep attribute high-water
+    /// deltas and record increments as before. The log is taken (not
+    /// copied), so the events describe only the game just settled.
     pub fn settle_into(&self, character: &mut Character) {
-        let gained_traits: Vec<Trait> = character
-            .traits
-            .iter()
-            .filter(|t| !self.traits.contains(t))
-            .copied()
-            .collect();
+        use crate::advancement::AdvancementEvent;
+
+        // The delta for the game just played; consumed here.
+        let log = std::mem::take(&mut character.advancement_log);
+        // Ending trait state, before the floor overwrites it.
+        let ending_traits = std::mem::take(&mut character.traits);
 
         // Attributes: field-wise max — positive deltas persist, debuffs drop.
         let now = &character.attributes;
@@ -93,13 +103,37 @@ impl GameBaseline {
             is_hidden: base.is_hidden,
         };
 
-        // Traits: baseline plus whatever was gained mid-game.
-        character.traits = self.traits.clone();
-        for trait_ in gained_traits {
-            if !character.traits.contains(&trait_) {
-                character.traits.push(trait_);
+        // Traits: baseline floor, then explicit intent from the log, then
+        // the unstamped-gain fallback. Losses are log-driven ONLY — that is
+        // the fix: `lose_trait`'s stamp keeps an intentional loss gone,
+        // where snapshot-diffing used to restore it. A logged loss wins even
+        // over a direct push of the same trait (the sanctioned path for
+        // re-acquiring is `gain_trait`, which stamps its own gain after).
+        let mut traits = self.traits.clone();
+        for event in &log {
+            match event {
+                AdvancementEvent::TraitGained { trait_ } => {
+                    if !traits.contains(trait_) {
+                        traits.push(*trait_);
+                    }
+                }
+                AdvancementEvent::TraitLost { trait_ } => {
+                    traits.retain(|t| t != trait_);
+                }
+                // Recorded, consumed, NOT replayed: XP purchases apply
+                // their state effect at purchase time (spec §10.9); the
+                // durable effect rides the attribute high-water rule.
+                AdvancementEvent::XpPurchase { .. } => {}
             }
         }
+        for t in &ending_traits {
+            if !traits.contains(t) && !self.traits.contains(t) {
+                // Unstamped gain (legacy row or a pre-log direct push,
+                // e.g. revival's scar/bonus paths): still an advancement.
+                traits.push(*t);
+            }
+        }
+        character.traits = traits;
 
         // Lifetime fight record: baseline plus increments earned this game.
         character.statistics.kills = self
@@ -187,6 +221,134 @@ mod tests {
         baseline.settle_into(&mut restored);
         assert_eq!(restored.statistics.kills, baseline.kills + 1);
         assert_eq!(restored.statistics.wins, baseline.wins + 1);
+    }
+
+    #[test]
+    fn settle_honors_intentional_trait_loss() {
+        // The regression the log exists for: a trait lost on purpose mid-game
+        // used to be restored by snapshot-diffing, because a diff cannot tell
+        // "lost intentionally" from "was never there".
+        let mut c = clean_goblin("Boblin");
+        c.gain_trait(Trait::Friendly).expect("friendly");
+        let baseline = GameBaseline::capture(&c);
+
+        assert!(c.lose_trait(Trait::Friendly));
+        assert!(c.advancement_log.len() >= 2, "gain and loss both stamped");
+
+        let mut restored = c.clone();
+        baseline.settle_into(&mut restored);
+        assert!(
+            !restored.traits.contains(&Trait::Friendly),
+            "intentional loss must survive settle"
+        );
+    }
+
+    #[test]
+    fn settle_replays_logged_gain_events() {
+        // A logged gain replays even when the ending state no longer carries
+        // the trait (e.g. a legacy path removed it without stamping a loss):
+        // the log, not the diff, is the delta.
+        let mut c = clean_goblin("Boblin");
+        let baseline = GameBaseline::capture(&c);
+
+        c.gain_trait(Trait::Resilient).expect("resilient");
+        c.traits.retain(|t| *t != Trait::Resilient); // unstamped removal
+
+        let mut restored = c.clone();
+        baseline.settle_into(&mut restored);
+        assert!(restored.traits.contains(&Trait::Resilient));
+    }
+
+    #[test]
+    fn settle_consumes_the_advancement_log() {
+        let mut c = clean_goblin("Boblin");
+        let baseline = GameBaseline::capture(&c);
+
+        c.gain_trait(Trait::Resilient).expect("resilient");
+        assert!(!c.advancement_log.is_empty());
+
+        let mut restored = c.clone();
+        baseline.settle_into(&mut restored);
+        assert!(
+            restored.advancement_log.is_empty(),
+            "settle consumes the events — they described only the settled game"
+        );
+    }
+
+    #[test]
+    fn repeated_settles_do_not_double_count() {
+        let mut c = clean_goblin("Boblin");
+        c.gain_trait(Trait::Tough).expect("tough");
+        let baseline = GameBaseline::capture(&c);
+
+        c.gain_trait(Trait::Resilient).expect("resilient");
+        c.lose_trait(Trait::Tough);
+        c.statistics.kills += 1;
+
+        let mut restored = c.clone();
+        baseline.settle_into(&mut restored);
+        let after_first = restored.clone();
+
+        // Second game, no further advancements: settle again off the fresh
+        // floor — nothing may grow or resurrect.
+        let baseline2 = GameBaseline::capture(&after_first);
+        let mut settled = after_first.clone();
+        baseline2.settle_into(&mut settled);
+
+        assert_eq!(settled.traits, after_first.traits);
+        assert_eq!(settled.statistics.kills, after_first.statistics.kills);
+        assert!(settled.advancement_log.is_empty());
+    }
+
+    #[test]
+    fn xp_purchase_event_slot_is_recorded_and_consumed_without_replay() {
+        // Slot for the XP system (e1d): recorded for the durable-change
+        // record, consumed at settle, replays nothing — purchases apply
+        // immediately (spec §10.9), and the durable effect rides the
+        // attribute high-water rule below.
+        use crate::advancement::{AdvancementEvent, push_event};
+
+        let mut c = clean_goblin("Boblin");
+        let baseline = GameBaseline::capture(&c);
+
+        push_event(
+            &mut c.advancement_log,
+            AdvancementEvent::XpPurchase {
+                detail: "+1 luck".into(),
+                amount: 10,
+            },
+        );
+        c.attributes.luck = baseline.attributes.luck + 1; // applied at purchase
+
+        let mut restored = c.clone();
+        baseline.settle_into(&mut restored);
+
+        assert!(restored.advancement_log.is_empty());
+        assert_eq!(restored.attributes.luck, baseline.attributes.luck + 1);
+        assert!(restored.traits.is_empty(), "nothing to replay");
+    }
+
+    #[test]
+    fn advancement_log_serde_roundtrips_on_character() {
+        use crate::advancement::AdvancementEvent;
+
+        let mut c = clean_goblin("Boblin");
+        c.advancement_log.push(AdvancementEvent::TraitGained {
+            trait_: Trait::Resilient,
+        });
+
+        let json = serde_json::to_string(&c).expect("serialize");
+        let back: Character = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.advancement_log, c.advancement_log);
+
+        // Legacy rows without the field deserialize to an empty log.
+        let mut value: serde_json::Value = serde_json::from_str(&json).expect("value");
+        value
+            .as_object_mut()
+            .expect("object")
+            .remove("advancement_log");
+        let legacy: Character = serde_json::from_value(value).expect("legacy");
+        assert!(legacy.advancement_log.is_empty());
     }
 
     #[test]
