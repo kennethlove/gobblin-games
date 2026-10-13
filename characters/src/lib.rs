@@ -21,6 +21,9 @@ pub mod survival;
 pub mod traits;
 pub mod wounds;
 
+#[cfg(test)]
+mod trait_golden;
+
 // Re-export key items from sub-modules
 pub use combat::attack_contest;
 pub use combat::inflict_table::{

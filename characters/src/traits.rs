@@ -70,6 +70,39 @@ impl Trait {
 
 pub const REFUSERS: &[Trait] = &[Trait::Paranoid, Trait::LoneWolf];
 
+/// Every variant of [`Trait`]. Used by golden-capture tests and (per spec
+/// §9) the pool-coverage invariant; append new variants here as they land.
+pub const ALL_TRAITS: &[Trait] = &[
+    Trait::Aggressive,
+    Trait::Defensive,
+    Trait::Cautious,
+    Trait::Reckless,
+    Trait::Friendly,
+    Trait::Loyal,
+    Trait::Paranoid,
+    Trait::LoneWolf,
+    Trait::Treacherous,
+    Trait::Resilient,
+    Trait::Fragile,
+    Trait::Cunning,
+    Trait::Dim,
+    Trait::Asthmatic,
+    Trait::Nearsighted,
+    Trait::Tough,
+    Trait::Builder,
+    Trait::ResourcefulForager,
+];
+
+/// Whether this trait refuses alliance offers outright.
+pub fn refuses_alliance(t: Trait) -> bool {
+    REFUSERS.contains(&t)
+}
+
+/// The trait's additive threshold deltas (alias kept for golden capture).
+pub fn threshold_of(t: Trait) -> ThresholdDelta {
+    t.threshold_modifiers()
+}
+
 /// Geometric mean of trait affinity values. Returns 1.0 for empty input.
 pub fn geometric_mean_affinity(traits: &[Trait]) -> f64 {
     if traits.is_empty() {
