@@ -85,20 +85,6 @@ pub fn attr_mod_percent(
     base * body_part_penalty_multiplier(part)
 }
 
-/// Penalty to effective health per wound severity tier.
-///
-/// NOTE: unused — health is the blood pool now (`effective_health`). Kept as
-/// a flat (not percent) table because nothing consumes it; delete or convert
-/// when the blood system is revisited.
-pub fn health_penalty(severity: WoundSeverity) -> i32 {
-    match severity {
-        WoundSeverity::Minor => -2,
-        WoundSeverity::Moderate => -5,
-        WoundSeverity::Severe => -10,
-        WoundSeverity::Critical => -20,
-    }
-}
-
 /// Additional penalty multiplier for Head wounds (applied on top of severity).
 pub const HEAD_WOUND_MULTIPLIER: f64 = 1.5;
 
