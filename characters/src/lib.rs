@@ -507,7 +507,9 @@ impl Character {
         rng: &mut SmallRng,
     ) -> Self {
         let team = team.unwrap_or(0);
-        let attributes = Attributes::new();
+        // Attributes roll from the provided RNG too, so seeded fixtures are
+        // deterministic end-to-end (traits, brain, AND stats).
+        let attributes = Attributes::from_rng(rng);
         let statistics = Statistics::default();
 
         let id_uuid: Uuid = Uuid::new_v4();
@@ -1811,6 +1813,13 @@ impl Attributes {
     /// Provides a randomized set of Attributes using default config values
     pub fn new() -> Self {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
+        Self::from_rng(&mut rng)
+    }
+
+    /// Rolls a randomized set of Attributes from the provided RNG so callers
+    /// that own their entropy (seeded generators, test fixtures) get
+    /// deterministic attributes too.
+    pub fn from_rng(rng: &mut SmallRng) -> Self {
         let config = world::config::GameConfig::default();
 
         Self {
