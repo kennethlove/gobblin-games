@@ -235,9 +235,9 @@ impl<'a> CombatRoundLoop<'a> {
                 // the opponent answers with Spare/Execute.
                 self.cowering = Some(actor_is_first);
                 let actor_ref = if actor_is_first {
-                    tref(&self.first)
+                    tref(self.first)
                 } else {
-                    tref(&self.second)
+                    tref(self.second)
                 };
                 let beat = CombatBeat {
                     round: round_no,
@@ -386,9 +386,9 @@ impl<'a> CombatRoundLoop<'a> {
 
         if matches!(verdict, CombatActionKind::Spare) {
             let (winner, spared) = if actor_is_first {
-                (tref(&self.first), tref(&self.second))
+                (tref(self.first), tref(self.second))
             } else {
-                (tref(&self.second), tref(&self.first))
+                (tref(self.second), tref(self.first))
             };
             let beat = CombatBeat {
                 round: round_no,
@@ -696,8 +696,10 @@ mod tests {
         b.stamina = 100;
         b.max_stamina = 1000;
 
-        let mut tuning = CombatTuning::default();
-        tuning.max_rounds = 3;
+        let tuning = CombatTuning {
+            max_rounds: 3,
+            ..CombatTuning::default()
+        };
 
         let mut rng = SmallRng::seed_from_u64(9);
         let mut events = Vec::new();

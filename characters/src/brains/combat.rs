@@ -96,11 +96,11 @@ impl CombatBrain {
 
         let mut best_kind = CombatActionKind::Attack;
         let mut best_score = attack;
-        if let Some(item) = heal_item {
-            if use_item > best_score {
-                best_kind = CombatActionKind::UseItem { item };
-                best_score = use_item;
-            }
+        if let Some(item) = heal_item
+            && use_item > best_score
+        {
+            best_kind = CombatActionKind::UseItem { item };
+            best_score = use_item;
         }
         if flee > best_score {
             best_kind = CombatActionKind::Flee;
