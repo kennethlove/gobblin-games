@@ -254,6 +254,46 @@ async fn test_join_before_start_and_gates() {
     let teams = team_counts(&characters);
     assert_eq!(teams.keys().copied().collect::<Vec<_>>(), vec![1, 2]);
 
+    // A joined participant keeps the private game in their own list …
+    let joined_listing = server
+        .get("/api/games")
+        .add_header("Authorization", bob.auth_header())
+        .await;
+    joined_listing.assert_status_ok();
+    let joined_listed = joined_listing.json::<serde_json::Value>()["games"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        joined_listed.iter().any(|g| g["identifier"] == game_id),
+        "a joined player must see the private game in their own list"
+    );
+
+    // … and reaches every participation surface for it.
+    let bob_roster = fetch_characters(&server, &bob, &game_id).await;
+    assert_eq!(bob_roster.len(), 2, "joined player reads the roster");
+    server
+        .get(&format!("/api/games/{}/log", game_id))
+        .add_header("Authorization", bob.auth_header())
+        .await
+        .assert_status_ok();
+
+    // … but it stays invisible to a player who never joined.
+    let stranger = create_authenticated_user(&test_db, &server, "nosy").await;
+    let stranger_listing = server
+        .get("/api/games")
+        .add_header("Authorization", stranger.auth_header())
+        .await;
+    stranger_listing.assert_status_ok();
+    let stranger_listed = stranger_listing.json::<serde_json::Value>()["games"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        !stranger_listed.iter().any(|g| g["identifier"] == game_id),
+        "joined private games must stay out of non-participants' lists"
+    );
+
     // One goblin per player per game.
     server
         .post(&format!("/api/games/{}/join", game_id))

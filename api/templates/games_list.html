@@ -97,6 +97,7 @@
                   </div>
                 </div>
                 <div class="game-status">
+                {% if game.private %}<span class="status-pill" style="background:var(--muted);color:var(--bg);">Private</span>{% endif %}
                   <span class="status-pill running">Running</span>
                 </div>
               </div>
@@ -131,6 +132,7 @@
                   </div>
                 </div>
                 <div class="game-status">
+                {% if game.private %}<span class="status-pill" style="background:var(--muted);color:var(--bg);">Private</span>{% endif %}
                   <span class="status-pill running">Running</span>
                 </div>
               </div>
@@ -150,6 +152,7 @@
                 </div>
               </div>
               <div class="game-status">
+                {% if game.private %}<span class="status-pill" style="background:var(--muted);color:var(--bg);">Private</span>{% endif %}
                 <span class="status-pill waiting">Waiting</span>
               </div>
             </div>
@@ -184,6 +187,7 @@
                 </div>
               </div>
               <div class="game-status">
+                {% if game.private %}<span class="status-pill" style="background:var(--muted);color:var(--bg);">Private</span>{% endif %}
                 <span class="status-pill finished">Finished</span>
               </div>
             </div>

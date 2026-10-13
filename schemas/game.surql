@@ -110,7 +110,15 @@ DEFINE FUNCTION OVERWRITE fn::get_list_games($limit: int, $offset: int) {
     count(array::distinct(<-playing_in<-character.team)) == team_count
     AS ready
     FROM game
-    WHERE private = false OR created_by.id = $auth.id
+    WHERE private = false
+        OR created_by.id = $auth.id
+        -- Joined via the shared invite URL: the participant keeps the game
+        -- in their own lists. The URL grants *access*; the roster edge
+        -- grants *listing*. Unjoined private games stay invisible to
+        -- everyone but the creator.
+        OR id IN (
+            SELECT VALUE out FROM playing_in WHERE in.created_by = $auth.id
+        )
     LIMIT $limit START $offset
 };
 

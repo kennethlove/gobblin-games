@@ -850,7 +850,11 @@ pub(crate) async fn timeline_summary(
     }))
 }
 
-/// Publish a game (set private = false).
+/// Publish a game (set private = false): it becomes listable for every
+/// signed-in player. Publishing only controls *list* visibility — a player
+/// who joined via the shared invite URL already sees the game in their own
+/// lists (see `fn::get_list_games`), and unpublishing does not take it away
+/// from them.
 pub(crate) async fn publish_game(
     Path(game_identifier): Path<Uuid>,
     Extension(AuthDb(db)): Extension<AuthDb>,
@@ -869,7 +873,9 @@ pub(crate) async fn publish_game(
     }
 }
 
-/// Unpublish a game (set private = true).
+/// Unpublish a game (set private = true): it drops out of everyone else's
+/// lists. The creator and any player already on the roster keep it in their
+/// own lists — publishing no longer gates join visibility.
 pub(crate) async fn unpublish_game(
     Path(game_identifier): Path<Uuid>,
     Extension(AuthDb(db)): Extension<AuthDb>,
