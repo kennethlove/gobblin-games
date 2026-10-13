@@ -50,7 +50,7 @@ impl Character {
     /// Sanity is now derived from mental conditions; this pushes a Despondent
     /// condition whose severity scales with bravery.
     pub(crate) fn misses_home(&mut self) {
-        let loneliness = self.attributes.bravery as f64 / 100.0;
+        let loneliness = self.effective_attribute(CharacterAttribute::Bravery) as f64 / 100.0;
 
         if loneliness.round() < 0.25 {
             let severity = if self.effective_sanity() < 25 {

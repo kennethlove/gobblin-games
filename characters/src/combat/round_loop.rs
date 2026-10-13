@@ -22,6 +22,7 @@ use shared::messages::{CharacterRef, MessagePayload};
 use world::messages::TaggedEvent;
 
 use super::resolve::tref;
+use crate::traits::CharacterAttribute;
 
 /// Chooses a combatant's action for a round. The combat brain implements this
 /// later; the loop only needs the chosen [`CombatActionKind`].
@@ -55,7 +56,7 @@ impl CombatActionProvider for AttackOnlyProvider {
 fn initiative_roll(c: &Character, tuning: &CombatTuning, rng: &mut impl Rng) -> i32 {
     let d20: i32 = rng.random_range(1..=tuning.initiative_die as i32);
     // `agility` is the speed proxy (there is no dedicated `speed` attribute).
-    let speed_mod = (c.attributes.agility as i32 - 10) / 5;
+    let speed_mod = (c.effective_attribute(CharacterAttribute::Agility) as i32 - 10) / 5;
     let band_mod = match stamina_band(c.stamina, c.max_stamina, tuning) {
         shared::messages::StaminaBand::Fresh => tuning.initiative_fresh_bonus,
         shared::messages::StaminaBand::Winded => tuning.initiative_winded_bonus,

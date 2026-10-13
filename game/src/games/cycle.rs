@@ -5,6 +5,7 @@ use characters::combat::round_loop::CombatRoundLoop;
 use characters::events::CharacterEvent;
 use characters::incidents::{SleepIncident, SleepShelter, apply_sleep_incident};
 use characters::statuses::CharacterStatus;
+use characters::traits::CharacterAttribute;
 use characters::{
     ActionSuggestion, Character, EncounterContext, EnvironmentContext, calculate_stamina_cost,
 };
@@ -137,7 +138,9 @@ impl Game {
                 continue;
             }
 
-            if !rng.random_bool(character.attributes.luck as f64 / 100.0) {
+            if !rng
+                .random_bool(character.effective_attribute(CharacterAttribute::Luck) as f64 / 100.0)
+            {
                 character.events.push(CharacterEvent::random());
             }
 
@@ -818,7 +821,7 @@ impl Game {
 
         // Sort by initiative so faster characters act first (tm6a).
         characters_to_act.sort_by_cached_key(|&idx| {
-            let agility = self.characters[idx].attributes.agility;
+            let agility = self.characters[idx].effective_attribute(CharacterAttribute::Agility);
             std::cmp::Reverse(initiative_score(agility, rng))
         });
 

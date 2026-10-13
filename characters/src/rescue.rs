@@ -3,6 +3,7 @@
 //! See `docs/superpowers/specs/2026-05-04-trapped-afflictions-design.md` §10.
 
 use crate::Character;
+use crate::traits::CharacterAttribute;
 use areas::AreaDetails;
 use rand::Rng;
 use rand::RngExt;
@@ -74,7 +75,8 @@ pub fn resolve_rescue(
     };
 
     // 3. Compute rescuer bonus
-    let bonus = compute_rescue_bonus(rescuer.attributes.strength as f32);
+    let bonus =
+        compute_rescue_bonus(rescuer.effective_attribute(CharacterAttribute::Strength) as f32);
 
     // 4. Severe + first rescuer this cycle → partial rescue progress
     if severity == Severity::Severe {

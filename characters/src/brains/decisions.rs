@@ -3,7 +3,7 @@ use crate::Character;
 use crate::actions::Action;
 use crate::brains::scoring::action_score;
 use crate::brains::{Brain, LOW_ENEMY_LIMIT};
-use crate::traits::{REFUSERS, geometric_mean_affinity};
+use crate::traits::{CharacterAttribute, REFUSERS, geometric_mean_affinity};
 use rand::Rng;
 use rand::RngExt;
 
@@ -46,7 +46,11 @@ impl Brain {
 
     fn decide_action_few_enemies_low_health_with_terrain(&self, t: &Character, concealed: bool) -> Action {
         let lm = self.thresholds.low_movement; let ms = self.thresholds.mid_sanity; let es = self.thresholds.extreme_low_sanity;
-        let s = (t.attributes.movement, t.effective_sanity(), t.attributes.is_hidden);
+        let s = (
+            t.effective_attribute(CharacterAttribute::Movement),
+            t.effective_sanity(),
+            t.attributes.is_hidden,
+        );
         match s {
             (m, sa, false) if m < lm && sa >= ms && concealed => Action::Hide,
             (m, sa, false) if m < lm && sa >= ms => Action::Hide,
@@ -60,7 +64,9 @@ impl Brain {
 
     fn decide_action_many_enemies_with_terrain(&self, t: &Character, _concealed: bool) -> Action {
         let hi = self.thresholds.high_intelligence; let li = self.thresholds.low_intelligence;
-        let r = 100u32.saturating_sub(t.attributes.intelligence).saturating_sub(t.effective_sanity());
+        let r = 100u32
+            .saturating_sub(t.effective_attribute(CharacterAttribute::Intelligence))
+            .saturating_sub(t.effective_sanity());
         match r {
             r if r < hi => Action::Move(None), r if r >= li => Action::Attack,
             _ => Action::Hide,
@@ -74,7 +80,13 @@ impl Brain {
             h if h >= lh && h <= mh => {
                 if t.effective_sanity() > ls && t.is_visible() { Action::Hide } else { Action::Move(None) }
             }
-            _ => if t.attributes.movement == 0 { Action::Rest } else { Action::Move(None) },
+            _ => {
+                if t.effective_attribute(CharacterAttribute::Movement) == 0 {
+                    Action::Rest
+                } else {
+                    Action::Move(None)
+                }
+            }
         }
     }
 
@@ -91,7 +103,11 @@ impl Brain {
 
     fn decide_action_few_enemies_low_health(&self, t: &Character) -> Action {
         let lm = self.thresholds.low_movement; let ms = self.thresholds.mid_sanity; let es = self.thresholds.extreme_low_sanity;
-        let s = (t.attributes.movement, t.effective_sanity(), t.attributes.is_hidden);
+        let s = (
+            t.effective_attribute(CharacterAttribute::Movement),
+            t.effective_sanity(),
+            t.attributes.is_hidden,
+        );
         match s {
             (m, sa, false) if m < lm && sa >= ms => Action::Hide,
             (m, sa, _) if m < lm && sa >= es && sa < ms => Action::Attack,
@@ -104,7 +120,9 @@ impl Brain {
 
     pub(crate) fn decide_action_many_enemies(&self, t: &Character) -> Action {
         let hi = self.thresholds.high_intelligence; let li = self.thresholds.low_intelligence;
-        let r = 100u32.saturating_sub(t.attributes.intelligence).saturating_sub(t.effective_sanity());
+        let r = 100u32
+            .saturating_sub(t.effective_attribute(CharacterAttribute::Intelligence))
+            .saturating_sub(t.effective_sanity());
         match r { r if r < hi => Action::Move(None), r if r >= li => Action::Attack, _ => Action::Hide }
     }
 

@@ -2,6 +2,7 @@
 //!
 //! See `docs/superpowers/specs/2026-05-04-trapped-afflictions-design.md`.
 
+use crate::traits::CharacterAttribute;
 use areas::events::AreaEvent;
 use shared::afflictions::{Severity, TrapKind};
 
@@ -176,12 +177,12 @@ pub fn get_escape_stat(character: &crate::Character, kind: TrapKind) -> f32 {
     let tuning = trap_tuning_for(kind);
     match tuning.escape_stat {
         EscapeStat::Strength => {
-            let val = character.attributes.strength as f32;
+            let val = character.effective_attribute(CharacterAttribute::Strength) as f32;
             let max = world::config::GameConfig::default().max_strength as f32;
             (val / max).clamp(0.0, 1.0)
         }
         EscapeStat::Intelligence => {
-            let val = character.attributes.intelligence as f32;
+            let val = character.effective_attribute(CharacterAttribute::Intelligence) as f32;
             let max = world::config::GameConfig::default().max_intelligence as f32;
             (val / max).clamp(0.0, 1.0)
         }
