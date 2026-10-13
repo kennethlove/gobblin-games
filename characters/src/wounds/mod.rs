@@ -127,6 +127,7 @@ pub const HEROISM_BRAVERY_BOOST: u32 = 20;
 mod tests {
     use super::*;
     use crate::Character;
+    use shared::wounds::WoundType;
 
     #[test]
     fn penalty_increases_with_severity() {
@@ -245,6 +246,76 @@ mod tests {
 
         let wounded = character.effective_strength();
         assert!(wounded < base, "wounds should reduce effective strength");
+    }
+
+    /// The percent tables were derived from the old flat penalty tables
+    /// (spec §10.1). At each attribute's reference maximum the absolute hit
+    /// must match the old flat value exactly — that is the parity contract
+    /// the conversion was built on.
+    #[test]
+    fn percent_tables_match_old_flat_penalties_at_reference_max() {
+        use crate::traits::CharacterAttribute as A;
+        // (attr, reference max, old flat penalty per severity)
+        let cases: [(A, u32, [f64; 4]); 4] = [
+            // strength: -1/-3/-6/-10 on 50
+            (A::Strength, 50, [-1.0, -3.0, -6.0, -10.0]),
+            // movement: -1/-2/-5/-10 on 100
+            (A::Movement, 100, [-1.0, -2.0, -5.0, -10.0]),
+            // defense: 0/-1/-3/-5 on 50
+            (A::Defense, 50, [0.0, -1.0, -3.0, -5.0]),
+            // bravery: 0/-1/-3/-5 on 100
+            (A::Bravery, 100, [0.0, -1.0, -3.0, -5.0]),
+        ];
+        let severities = [
+            WoundSeverity::Minor,
+            WoundSeverity::Moderate,
+            WoundSeverity::Severe,
+            WoundSeverity::Critical,
+        ];
+
+        for (attr, reference, old_flat) in cases {
+            for (severity, old) in severities.iter().zip(old_flat) {
+                let mut c = Character::new("Stinky".to_string(), None, None);
+                match attr {
+                    A::Strength => c.attributes.strength = reference,
+                    A::Movement => c.attributes.movement = reference,
+                    A::Defense => c.attributes.defense = reference,
+                    A::Bravery => c.attributes.bravery = reference,
+                    // No wound model; skipped here.
+                    _ => c.attributes.strength = reference,
+                }
+                c.wounds.push(shared::wounds::Wound::new(
+                    WoundType::Cut,
+                    *severity,
+                    BodyPart::LeftArm,
+                ));
+
+                let effective = c.effective_attribute(attr) as f64;
+                let expected = reference as f64 + old; // old flat table at max
+                assert_eq!(
+                    effective, expected,
+                    "{attr:?} {severity:?}: percent table must match old flat penalty at reference max"
+                );
+            }
+        }
+    }
+
+    /// Below reference max a percentage costs a weaker character less in
+    /// absolute terms than the old flat table did. That is the one
+    /// deliberate behavior change of the conversion; pin it so a future
+    /// "retune" doesn't silently reintroduce flat scaling.
+    #[test]
+    fn below_reference_max_percentage_costs_less_than_the_old_flat_table() {
+        let mut c = Character::new("Stinky".to_string(), None, None);
+        c.attributes.strength = 20; // well under the 50 reference max
+        c.wounds.push(shared::wounds::Wound::new(
+            WoundType::Cut,
+            WoundSeverity::Critical,
+            BodyPart::LeftArm,
+        ));
+
+        // Old flat table: 20 - 10 = 10. Percent: 20 x 0.8 = 16.
+        assert_eq!(c.effective_strength(), 16);
     }
 
     #[test]
