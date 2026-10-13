@@ -1127,6 +1127,12 @@ mod tests {
             a.items.clear();
             b.traits.clear();
             b.items.clear();
+            // Roll per-fight attributes from this seed so the distribution
+            // samples a population of fighters, not one fixed name-hash
+            // matchup (char_named seeds are deterministic per name).
+            use crate::Attributes;
+            a.attributes = Attributes::from_rng(&mut rng);
+            b.attributes = Attributes::from_rng(&mut rng);
 
             struct Brain(CombatBrain);
             impl CombatActionProvider for Brain {
