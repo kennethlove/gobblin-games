@@ -289,6 +289,77 @@ fn test_prepare_cycle() {
 #[test]
 fn test_trigger_cycle_events() {}
 
+/// The event driver must take the night band and the dawn/dusk anchors
+/// from the game config: hour 18 is a plain night phase under shifted
+/// hours (day 08 / night 18) but the silent dusk anchor under the
+/// defaults (06/20), and the anchors move with the configured hours.
+#[test]
+fn smoke_night_event_frequency_uses_configured_hours() {
+    use shared::messages::Phase;
+
+    let game_with_hours = |day_start_hour: u8, nightfall_hour: u8| {
+        let mut game = Game::new("Test Game");
+        game.status = GameStatus::InProgress;
+        game.day = Some(2);
+        game.config.day_start_hour = day_start_hour;
+        game.config.nightfall_hour = nightfall_hour;
+        // Many areas make "some area fires" deterministic in practice at
+        // the night rate (a silent result is a ~3e-8 fluke; the seed
+        // fixes the outcome outright).
+        for i in 0..128 {
+            game.areas
+                .push(AreaDetails::new(Some(format!("Lake{i}")), Area::Sector1));
+        }
+        game
+    };
+    let areas_that_fired = |game: &Game| game.areas.iter().filter(|a| !a.events.is_empty()).count();
+    let mut rng = SmallRng::seed_from_u64(0);
+
+    // Default hours: 18 is the dusk anchor — the substrate stays silent.
+    let mut default_dusk = game_with_hours(6, 20);
+    default_dusk
+        .trigger_cycle_events(Phase::from_hour(18).unwrap(), &mut rng)
+        .unwrap();
+    assert_eq!(
+        areas_that_fired(&default_dusk),
+        0,
+        "default dusk anchor stays silent"
+    );
+
+    // Shifted hours: the same hour 18 is a plain night phase, so the
+    // night band fires.
+    let mut shifted_night = game_with_hours(8, 18);
+    shifted_night
+        .trigger_cycle_events(Phase::from_hour(18).unwrap(), &mut rng)
+        .unwrap();
+    assert!(
+        areas_that_fired(&shifted_night) > 0,
+        "shifted night hour fires at the night rate"
+    );
+
+    // Shifted hours: the dawn anchor moves to hour 8 — silent there …
+    let mut shifted_dawn = game_with_hours(8, 18);
+    shifted_dawn
+        .trigger_cycle_events(Phase::from_hour(8).unwrap(), &mut rng)
+        .unwrap();
+    assert_eq!(
+        areas_that_fired(&shifted_dawn),
+        0,
+        "shifted dawn anchor stays silent"
+    );
+
+    // … while hour 8 is an ordinary day phase under the defaults (day 2
+    // day hours fire at the day rate).
+    let mut default_day = game_with_hours(6, 20);
+    default_day
+        .trigger_cycle_events(Phase::from_hour(8).unwrap(), &mut rng)
+        .unwrap();
+    assert!(
+        areas_that_fired(&default_day) > 0,
+        "default day hour fires at the day rate"
+    );
+}
+
 #[test]
 fn test_constrain_areas() {
     let mut game = Game::new("Test Game");

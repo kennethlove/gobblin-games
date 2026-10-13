@@ -427,6 +427,26 @@ async fn test_entry_resets_per_game_state_and_items() {
         .bind(("ally", uuid::Uuid::new_v4().to_string()))
         .await
         .unwrap();
+    // A stale psychotic break in the brain must not survive the join.
+    test_db
+        .db
+        .query(
+            "UPDATE character SET brain.psychotic_break = 'Berserk' \
+             WHERE identifier = $id",
+        )
+        .bind(("id", goblin.clone()))
+        .await
+        .unwrap();
+    let dirty = server
+        .get(&format!("/api/characters/{}", goblin))
+        .add_header("Authorization", user.auth_header())
+        .await;
+    dirty.assert_status_ok();
+    assert_eq!(
+        dirty.json::<serde_json::Value>()["brain"]["psychotic_break"],
+        json!("Berserk"),
+        "sanity check: the dirty brain state loads through the api"
+    );
 
     // Entry: creating the game with this goblin runs the join path.
     let response = server
@@ -458,6 +478,11 @@ async fn test_entry_resets_per_game_state_and_items() {
     );
     assert_eq!(body["statistics"]["day_killed"], serde_json::Value::Null);
     assert_eq!(body["statistics"]["game"], json!(game_id));
+    assert_eq!(
+        body["brain"]["psychotic_break"],
+        serde_json::Value::Null,
+        "entry must clear a stale psychotic break"
+    );
     assert_eq!(body["team"], json!(1));
     // Fresh items per game: exactly the new starter, stale one gone.
     let items = body["items"].as_array().expect("items array");

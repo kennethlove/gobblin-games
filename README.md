@@ -124,6 +124,7 @@ just dev          # Start SurrealDB, API, Mailpit, and Tailwind watcher
 just api          # Run API server only (serves both UI and REST)
 just build-css    # Build Tailwind CSS
 just test         # Run game crate tests (60+ unit tests)
+just smoke        # Fast smoke gate: compile all tests + run lib tests
 just fmt          # Format all code
 just quality      # Run all quality checks (format, check, clippy, test)
 just seed         # Seed dev database with test user and game
@@ -134,10 +135,14 @@ just clean        # Clean all build artifacts
 ### Running Tests
 
 ```bash
-# Run game crate tests only (recommended)
+# Smoke gate: compile all test targets + run all lib tests.
+# Fast steady state; use this for the per-change verification loop.
+just smoke
+
+# Run game crate tests only
 just test
 
-# Run all workspace tests (WARNING: may be slow)
+# Run all workspace tests (slow: links every integration binary)
 just test-all
 ```
 
@@ -221,10 +226,15 @@ Services:
 The game crate has 60+ unit tests using `rstest` for parameterized testing:
 
 ```bash
-# Run game crate tests only (recommended)
+# Smoke gate: compile all test targets + run all lib tests (~7s steady
+# state). This is the default per-change verification command.
+just smoke
+
+# Run game crate tests only
 just test
 
-# Run all workspace tests (WARNING: may hang)
+# Run all workspace tests (slow: links every integration binary; use for
+# pre-push/CI)
 just test-all
 ```
 

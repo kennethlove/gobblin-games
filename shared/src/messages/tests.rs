@@ -81,6 +81,34 @@ fn phase_is_night_defaults() {
     assert!(!Phase(18).is_night_default());
 }
 
+/// Configured day/night hours (per-game since the day/night persistence
+/// work) must move the night band on both boundary branches of
+/// [`Phase::is_night`].
+#[test]
+fn smoke_phase_is_night_honors_shifted_hours() {
+    // Day 08 -> 18: night wraps midnight on both sides of the day band.
+    for hour in [18u8, 20, 22, 0, 2, 4, 6] {
+        assert!(Phase(hour).is_night(8, 18), "hour {hour} is night at 8/18");
+    }
+    for hour in [8u8, 10, 12, 14, 16] {
+        assert!(!Phase(hour).is_night(8, 18), "hour {hour} is day at 8/18");
+    }
+    // The same phases flip relative to the default 06/20 boundaries.
+    assert!(Phase(18).is_night(8, 18));
+    assert!(!Phase(18).is_night_default());
+    assert!(Phase(6).is_night(8, 18));
+    assert!(!Phase(6).is_night_default());
+
+    // Inverted band (day starts after nightfall): night is a middle run
+    // of raw hours instead of wrapping midnight.
+    for hour in [8u8, 10, 12, 14, 16] {
+        assert!(Phase(hour).is_night(18, 8), "hour {hour} is night at 18/8");
+    }
+    for hour in [18u8, 20, 22, 0, 6] {
+        assert!(!Phase(hour).is_night(18, 8), "hour {hour} is day at 18/8");
+    }
+}
+
 #[test]
 fn message_kind_serde_roundtrip() {
     for kind in [
@@ -1283,6 +1311,831 @@ fn importance_tiers_match_decision() {
             payload.importance(),
             want,
             "tier mismatch for {:?}",
+            payload.kind()
+        );
+    }
+}
+
+/// `involves()` decision table: every `MessagePayload` variant, the
+/// character identifiers it must report as involved, and (implicitly) a
+/// stranger ("stranger") it must reject. Modeled on
+/// `importance_tiers_match_decision` because the `_ => false` catchall in
+/// `impls.rs` would otherwise let new variants silently vanish from
+/// per-character message feeds (the api timeline filter relies on this).
+///
+/// Expected sets pin *current* routing: the wound/condition detail
+/// variants and the fixation `target` carry character identifiers but are
+/// deliberately not routed to per-character feeds today; change those
+/// rows consciously if the routing decision changes.
+#[test]
+fn smoke_involves_matches_character_refs_for_all_variants() {
+    use crate::afflictions::{DeathCause, Severity, TrapKind};
+    use crate::combat_beat::{
+        BeatOutcome, CombatActionKind, CombatBeat, CombatResult, SwingOutcome,
+    };
+    use MessagePayload::*;
+
+    let area = AreaRef {
+        identifier: "a".into(),
+        name: "A".into(),
+    };
+    let item = ItemRef {
+        identifier: "i".into(),
+        name: "I".into(),
+    };
+    let beat = CombatBeat {
+        round: 1,
+        order: 0,
+        actor: t("a"),
+        action: CombatActionKind::Attack,
+        target: Some(t("b")),
+        weapon: None,
+        shield: None,
+        wear: vec![],
+        outcome: BeatOutcome::Swing {
+            outcome: SwingOutcome::Miss,
+            stress: Default::default(),
+            actor_stamina_cost: 1,
+            target_stamina_cost: 1,
+        },
+        significant: false,
+    };
+    let engagement = CombatEngagement {
+        attacker: t("a"),
+        target: t("b"),
+        outcome: CombatOutcome::Stalemate,
+        detail_lines: vec![],
+    };
+
+    // Payload -> every identifier it involves. `t()` yields `id-*`
+    // identifiers; the affliction family stores raw string ids ("c",
+    // "o"/"s", "r"/"t"); arena/clock lines involve nobody.
+    let cases: Vec<(MessagePayload, Vec<&str>)> = vec![
+        (Generic, vec![]),
+        (
+            CharacterKilled {
+                victim: t("v"),
+                killer: None,
+                cause: DeathCause::Combat,
+            },
+            vec!["id-v"],
+        ),
+        (
+            CharacterKilled {
+                victim: t("v"),
+                killer: Some(t("k")),
+                cause: DeathCause::Combat,
+            },
+            vec!["id-v", "id-k"],
+        ),
+        (
+            CharacterWounded {
+                victim: t("v"),
+                attacker: None,
+                hp_lost: 10,
+            },
+            vec!["id-v"],
+        ),
+        (
+            CharacterWounded {
+                victim: t("v"),
+                attacker: Some(t("w")),
+                hp_lost: 10,
+            },
+            vec!["id-v", "id-w"],
+        ),
+        (
+            CharacterAttacked {
+                victim: t("v"),
+                attacker: None,
+            },
+            vec!["id-v"],
+        ),
+        (Combat(engagement), vec!["id-a", "id-b"]),
+        (CombatBeat(beat), vec!["id-a", "id-b"]),
+        (
+            CombatRoundStart {
+                combat_id: "fight-1".into(),
+                round: 1,
+            },
+            vec![],
+        ),
+        (
+            CombatEnded {
+                combat_id: "fight-1".into(),
+                result: CombatResult::Winner { character: t("w") },
+            },
+            vec!["id-w"],
+        ),
+        (
+            CombatEnded {
+                combat_id: "fight-1".into(),
+                result: CombatResult::Draw,
+            },
+            vec![],
+        ),
+        (
+            AllianceFormed {
+                members: vec![t("a"), t("b")],
+            },
+            vec!["id-a", "id-b"],
+        ),
+        (
+            AllianceProposed {
+                proposer: t("a"),
+                target: t("b"),
+            },
+            vec!["id-a", "id-b"],
+        ),
+        (
+            AllianceDissolved {
+                members: vec![t("a"), t("b")],
+                reason: "r".into(),
+            },
+            vec!["id-a", "id-b"],
+        ),
+        (
+            BetrayalTriggered {
+                betrayer: t("a"),
+                victim: t("b"),
+            },
+            vec!["id-a", "id-b"],
+        ),
+        (
+            TrustShockBreak {
+                character: t("a"),
+                partner: t("b"),
+            },
+            vec!["id-a", "id-b"],
+        ),
+        (
+            CharacterMoved {
+                character: t("c"),
+                from: area.clone(),
+                to: area.clone(),
+            },
+            vec!["id-c"],
+        ),
+        (
+            CharacterHidden {
+                character: t("c"),
+                area: area.clone(),
+            },
+            vec!["id-c"],
+        ),
+        (AreaClosed { area: area.clone() }, vec![]),
+        (
+            AreaEvent {
+                area: area.clone(),
+                kind: AreaEventKind::Hazard,
+                description: "d".into(),
+            },
+            vec![],
+        ),
+        (
+            ItemFound {
+                character: t("c"),
+                item: item.clone(),
+                area: area.clone(),
+            },
+            vec!["id-c"],
+        ),
+        (
+            ItemUsed {
+                character: t("c"),
+                item: item.clone(),
+            },
+            vec!["id-c"],
+        ),
+        (
+            ItemDropped {
+                character: t("c"),
+                item: item.clone(),
+                area: area.clone(),
+            },
+            vec!["id-c"],
+        ),
+        (
+            PatronGift {
+                recipient: t("c"),
+                item: item.clone(),
+                donor: "donor".into(),
+            },
+            vec!["id-c"],
+        ),
+        (
+            CharacterRested {
+                character: t("c"),
+                hp_restored: 5,
+            },
+            vec!["id-c"],
+        ),
+        (
+            CharacterStarved {
+                character: t("c"),
+                hp_lost: 20,
+            },
+            vec!["id-c"],
+        ),
+        (
+            CharacterDehydrated {
+                character: t("c"),
+                hp_lost: 20,
+            },
+            vec!["id-c"],
+        ),
+        (SanityBreak { character: t("c") }, vec!["id-c"]),
+        (CharacterBledOut { character: t("c") }, vec!["id-c"]),
+        (
+            WoundInfected {
+                character: t("c"),
+                body_part: "arm".into(),
+            },
+            vec!["id-c"],
+        ),
+        (
+            WoundHealed {
+                character: t("c"),
+                body_part: "arm".into(),
+            },
+            vec!["id-c"],
+        ),
+        // Wound/condition detail lines carry a `character` ref but the
+        // current routing keeps them out of per-character feeds (see the
+        // doc comment above).
+        (
+            WoundInflicted {
+                character: t("c"),
+                wound_type: "cut".into(),
+                severity: "Mild".into(),
+                body_part: "arm".into(),
+            },
+            vec![],
+        ),
+        (
+            WoundBled {
+                character: t("c"),
+                blood_lost: 10,
+            },
+            vec![],
+        ),
+        (
+            WoundTreated {
+                character: t("c"),
+                body_part: "arm".into(),
+            },
+            vec![],
+        ),
+        (
+            WoundAmputated {
+                character: t("c"),
+                body_part: "arm".into(),
+            },
+            vec![],
+        ),
+        (
+            ConditionAcquired {
+                character: t("c"),
+                condition: "x".into(),
+                severity: "Mild".into(),
+            },
+            vec![],
+        ),
+        (
+            ConditionResolved {
+                character: t("c"),
+                condition: "x".into(),
+            },
+            vec![],
+        ),
+        (
+            CharacterDesperate {
+                character: t("c"),
+                reason: "low hp".into(),
+            },
+            vec![],
+        ),
+        (
+            HungerBandChanged {
+                character: t("c"),
+                from: HungerBand::Sated,
+                to: HungerBand::Starving,
+            },
+            vec!["id-c"],
+        ),
+        (
+            ThirstBandChanged {
+                character: t("c"),
+                from: ThirstBand::Sated,
+                to: ThirstBand::Dehydrated,
+            },
+            vec!["id-c"],
+        ),
+        (
+            StaminaBandChanged {
+                character: t("c"),
+                from: StaminaBand::Fresh,
+                to: StaminaBand::Exhausted,
+            },
+            vec!["id-c"],
+        ),
+        (
+            ShelterSought {
+                character: t("c"),
+                area: area.clone(),
+                success: true,
+                roll: 10,
+            },
+            vec!["id-c"],
+        ),
+        (
+            Foraged {
+                character: t("c"),
+                area: area.clone(),
+                success: true,
+                debt_recovered: 1,
+            },
+            vec!["id-c"],
+        ),
+        (
+            Drank {
+                character: t("c"),
+                source: DrinkSource::Terrain { area: area.clone() },
+                debt_recovered: 1,
+            },
+            vec!["id-c"],
+        ),
+        (
+            Ate {
+                character: t("c"),
+                item: item.clone(),
+                debt_recovered: 1,
+            },
+            vec!["id-c"],
+        ),
+        (
+            CycleStart {
+                day: 1,
+                phase: Phase::DAY_START,
+            },
+            vec![],
+        ),
+        (
+            CycleEnd {
+                day: 1,
+                phase: Phase::DAY,
+            },
+            vec![],
+        ),
+        (
+            PhaseStarted {
+                day: 1,
+                phase: Phase::DAY,
+                weather_summary: None,
+            },
+            vec![],
+        ),
+        (
+            PhaseEnded {
+                day: 1,
+                phase: Phase::DAY,
+            },
+            vec![],
+        ),
+        (
+            CharacterSlept {
+                character: t("c"),
+                phase: Phase::NIGHT,
+                restored_stamina: 1,
+                restored_hp: 0,
+            },
+            vec!["id-c"],
+        ),
+        (
+            CharacterWoke {
+                character: t("c"),
+                phase: Phase::NIGHT,
+                reason: WakeReason::Rested,
+            },
+            vec!["id-c"],
+        ),
+        (
+            SleepIncident {
+                character: t("c"),
+                kind: SleepIncidentKind::Annoying,
+                description: "d".into(),
+            },
+            vec!["id-c"],
+        ),
+        (
+            GameEnded {
+                winner: None,
+                winning_team: None,
+            },
+            vec![],
+        ),
+        (
+            GameEnded {
+                winner: Some(t("w")),
+                winning_team: None,
+            },
+            vec!["id-w"],
+        ),
+        (
+            AfflictionAcquired {
+                character_id: "c".into(),
+                affliction: "flu".into(),
+                severity: "Mild".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            AfflictionProgressed {
+                character_id: "c".into(),
+                affliction: "flu".into(),
+                from_severity: "Mild".into(),
+                to_severity: "Severe".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            AfflictionHealed {
+                character_id: "c".into(),
+                affliction: "flu".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            AfflictionCascaded {
+                character_id: "c".into(),
+                from_affliction: "wound".into(),
+                to_affliction: "infection".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            TraumaAcquired {
+                character: "c".into(),
+                severity: "Mild".into(),
+                source: "death".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            TraumaReinforced {
+                character: "c".into(),
+                from_severity: "Mild".into(),
+                to_severity: "Moderate".into(),
+                floor_bumped: true,
+            },
+            vec!["c"],
+        ),
+        (
+            PhobiaAcquired {
+                character: "c".into(),
+                trigger: "fire".into(),
+                severity: "Mild".into(),
+                origin: "trauma".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            PhobiaTriggered {
+                character: "c".into(),
+                trigger: "fire".into(),
+                severity: "Mild".into(),
+                effect: PhobiaEffect::Penalty,
+            },
+            vec!["c"],
+        ),
+        (
+            PhobiaEscalated {
+                character: "c".into(),
+                trigger: "fire".into(),
+                from_severity: "Mild".into(),
+                to_severity: "Severe".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            PhobiaHabituated {
+                character: "c".into(),
+                trigger: "fire".into(),
+                from_severity: "Severe".into(),
+                to_severity: None,
+            },
+            vec!["c"],
+        ),
+        (
+            PhobiaObserved {
+                observer: "o".into(),
+                subject: "s".into(),
+                trigger: "fire".into(),
+            },
+            vec!["o", "s"],
+        ),
+        (
+            PhobiaForgotten {
+                observer: "o".into(),
+                subject: "s".into(),
+                trigger: "fire".into(),
+            },
+            vec!["o", "s"],
+        ),
+        (
+            TraumaEscalated {
+                character: "c".into(),
+                from_severity: "Mild".into(),
+                to_severity: "Moderate".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            TraumaFlashback {
+                character: "c".into(),
+                severity: "Severe".into(),
+                source: "death".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            TraumaAvoidance {
+                character: "c".into(),
+                source: "fire".into(),
+                prevented_action: "move".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            TraumaObserved {
+                observer: "o".into(),
+                subject: "s".into(),
+                source: "death".into(),
+            },
+            vec!["o", "s"],
+        ),
+        (
+            TraumaForgotten {
+                observer: "o".into(),
+                subject: "s".into(),
+                source: "death".into(),
+            },
+            vec!["o", "s"],
+        ),
+        (
+            TraumaHabituated {
+                character: "c".into(),
+                from_severity: "Severe".into(),
+                to_severity: None,
+            },
+            vec!["c"],
+        ),
+        // Fixations: only the obsessed character is routed, not the
+        // fixation target (current routing decision, pinned above).
+        (
+            FixationAcquired {
+                character_id: "c".into(),
+                target: "t".into(),
+                severity: "Mild".into(),
+                origin: "x".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            FixationEscalated {
+                character_id: "c".into(),
+                target: "t".into(),
+                old_severity: "Mild".into(),
+                new_severity: "Moderate".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            FixationFired {
+                character_id: "c".into(),
+                target: "t".into(),
+                severity: "Mild".into(),
+                action: "move".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            FixationConsummated {
+                character_id: "c".into(),
+                target: "t".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            FixationThwarted {
+                character_id: "c".into(),
+                target: "t".into(),
+                reason: "gone".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            FixationFaded {
+                character_id: "c".into(),
+                target: "t".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            SubstanceUsed {
+                character: "c".into(),
+                item: "i".into(),
+                substance: "s".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            AddictionAcquired {
+                character: "c".into(),
+                substance: "s".into(),
+                severity: "Mild".into(),
+                use_count: 1,
+            },
+            vec!["c"],
+        ),
+        (
+            AddictionReinforced {
+                character: "c".into(),
+                substance: "s".into(),
+                severity: "Mild".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            AddictionEscalated {
+                character: "c".into(),
+                substance: "s".into(),
+                from_severity: "Mild".into(),
+                to_severity: "Moderate".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            AddictionResisted {
+                character: "c".into(),
+                substance: "s".into(),
+                reason: "cap".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            AddictionRelapse {
+                character: "c".into(),
+                substance: "s".into(),
+                prior_uses: 3,
+            },
+            vec!["c"],
+        ),
+        (
+            AddictionCraving {
+                character: "c".into(),
+                substance: "s".into(),
+                severity: "Mild".into(),
+            },
+            vec!["c"],
+        ),
+        (
+            AddictionObserved {
+                observer: "o".into(),
+                subject: "s".into(),
+                substance: "x".into(),
+            },
+            vec!["o", "s"],
+        ),
+        (
+            AddictionForgotten {
+                observer: "o".into(),
+                subject: "s".into(),
+                substance: "x".into(),
+            },
+            vec!["o", "s"],
+        ),
+        (
+            AddictionHabituated {
+                character: "c".into(),
+                substance: "s".into(),
+                from_severity: "Severe".into(),
+                to_severity: None,
+            },
+            vec!["c"],
+        ),
+        (
+            CharacterTrapped {
+                character: "c".into(),
+                kind: TrapKind::Drowning,
+                severity: Severity::Severe,
+            },
+            vec!["c"],
+        ),
+        (
+            Struggling {
+                character: "c".into(),
+                kind: TrapKind::Drowning,
+                severity: Severity::Severe,
+                cycles_trapped: 1,
+            },
+            vec!["c"],
+        ),
+        (
+            TrappedEscaped {
+                character: "c".into(),
+                kind: TrapKind::Drowning,
+                cycles_trapped: 2,
+                rescued_by: vec![],
+            },
+            vec!["c"],
+        ),
+        (
+            CharacterDiedWhileTrapped {
+                character: "c".into(),
+                kind: TrapKind::Drowning,
+            },
+            vec!["c"],
+        ),
+        (
+            TrapSet {
+                character: t("c"),
+                trap_kind: "pit".into(),
+            },
+            vec!["id-c"],
+        ),
+        (
+            TrapTriggered {
+                victim: t("c"),
+                trap_kind: "pit".into(),
+            },
+            vec!["id-c"],
+        ),
+        (
+            RescueAttempted {
+                rescuer: "r".into(),
+                target: "t".into(),
+                kind: TrapKind::Drowning,
+                severity: Severity::Severe,
+                bonus: 1.0,
+            },
+            vec!["r", "t"],
+        ),
+        (
+            PartialRescueProgress {
+                rescuer: "r".into(),
+                target: "t".into(),
+                kind: TrapKind::Drowning,
+                severity: Severity::Severe,
+                bonus: 1.0,
+                progress: 1,
+                threshold: 2,
+            },
+            vec!["r", "t"],
+        ),
+        (
+            DaySummary {
+                day: 1,
+                rollup: DayRollup {
+                    deaths: 0,
+                    kill_leaders: vec![],
+                    alliances_formed: 0,
+                    alliances_dissolved: 0,
+                    betrayals: 0,
+                    items_found: 0,
+                    items_used: 0,
+                    survivors: 0,
+                    fallen: 0,
+                },
+                goblins: vec![],
+            },
+            vec![],
+        ),
+    ];
+
+    // Every payload variant appears in the table (extra rows allowed for
+    // optional-field shapes; distinct kinds must cover the enum).
+    let mut kinds: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (payload, _) in &cases {
+        kinds.insert(format!("{:?}", payload.kind()));
+    }
+    assert_eq!(
+        kinds.len(),
+        93,
+        "table must cover every MessagePayload variant"
+    );
+
+    for (payload, ids) in cases {
+        for id in ids {
+            assert!(
+                payload.involves(id),
+                "{:?} must involve {id}",
+                payload.kind()
+            );
+        }
+        assert!(
+            !payload.involves("stranger"),
+            "{:?} must not involve stranger",
             payload.kind()
         );
     }
