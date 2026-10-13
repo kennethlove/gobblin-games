@@ -371,9 +371,13 @@ pub fn render_event_cards(msgs: &[shared::messages::GameMessage]) -> String {
     html
 }
 
-/// One grouped fight card. Beats are grouped by round number; rounds render
-/// inside `<details>` blocks (expanded when the round carries a significant
-/// beat, collapsed otherwise) — replay = open them all.
+/// One grouped fight card, rendered through the `combat_card.html` /
+/// `combat_round.html` Tera partials (Tera autoescapes `.html`, so names
+/// and message content below are plain text — never HTML). All grouping,
+/// slicing, and significance decisions stay here in Rust: beats group by
+/// round, rounds render inside `<details>` (open when the round carries a
+/// significant beat), significant beats prominent and ordinary swings
+/// compact — replay = open every round.
 fn render_combat_card(
     beats: &[&shared::messages::GameMessage],
     result: Option<(&String, &shared::combat_beat::CombatResult)>,
@@ -393,15 +397,12 @@ fn render_combat_card(
         .unwrap_or_default();
 
     // Combatants: first beat's actor and (first) target.
-    let (combatants, _first_actor) = match beats.first().map(|m| &m.payload) {
-        Some(shared::messages::MessagePayload::CombatBeat(first)) => {
-            let names = match &first.target {
-                Some(t) => format!("{} vs {}", first.actor.name, t.name),
-                None => first.actor.name.clone(),
-            };
-            (names, Some(first.actor.name.clone()))
-        }
-        _ => ("Combat".to_string(), None),
+    let combatants = match beats.first().map(|m| &m.payload) {
+        Some(shared::messages::MessagePayload::CombatBeat(first)) => match &first.target {
+            Some(t) => format!("{} vs {}", first.actor.name, t.name),
+            None => first.actor.name.clone(),
+        },
+        _ => "Combat".to_string(),
     };
     // Fallback title from the result when the fight has no beats (shouldn't
     // happen, but keeps the card titled).
@@ -420,29 +421,18 @@ fn render_combat_card(
         combatants
     };
 
-    // Result line for the header.
-    let result_line = match result.map(|(_, r)| r) {
-        Some(CombatResult::Winner { character }) => {
-            format!(
-                "<span class=\"combat-result\">{} wins the fight</span>",
-                html_escape(&character.name)
-            )
+    // Result line for the header (plain text; the template escapes it).
+    let result_text = match result.map(|(_, r)| r) {
+        Some(CombatResult::Winner { character }) => format!("{} wins the fight", character.name),
+        Some(CombatResult::Fled { fled, .. }) => format!("{} flees — fight over", fled.name),
+        Some(CombatResult::Spared { winner, spared }) => {
+            format!("{} spares {}", winner.name, spared.name)
         }
-        Some(CombatResult::Fled { fled, .. }) => format!(
-            "<span class=\"combat-result\">{} flees — fight over</span>",
-            html_escape(&fled.name)
-        ),
-        Some(CombatResult::Spared { winner, spared }) => format!(
-            "<span class=\"combat-result\">{} spares {}</span>",
-            html_escape(&winner.name),
-            html_escape(&spared.name)
-        ),
-        Some(CombatResult::Draw) => {
-            "<span class=\"combat-result\">A draw — both break off</span>".to_string()
-        }
-        None => "<span class=\"combat-result\">fight in progress…</span>".to_string(),
+        Some(CombatResult::Draw) => "A draw — both break off".to_string(),
+        None => "fight in progress…".to_string(),
     };
 
+    // Group beats into rounds (algorithm unchanged; feeds template data).
     let mut rounds: Vec<(
         u32,
         Vec<(
@@ -459,63 +449,44 @@ fn render_combat_card(
         }
     }
 
-    let mut rounds_html = String::new();
-    for (round_no, list) in &rounds {
-        let round_significant = list.iter().any(|(_, b)| b.significant);
-        let mut significant_lines = String::new();
-        let mut ordinary_lines = String::new();
-        for (msg, beat) in list {
-            let line = beat_line(beat, &msg.content);
-            if beat.significant {
-                significant_lines.push_str(&format!(
-                    "<div class=\"beat beat-significant\">{line}</div>"
-                ));
-            } else {
-                ordinary_lines.push_str(&format!("<li>{}</li>", line));
+    let rounds_ctx: Vec<serde_json::Value> = rounds
+        .iter()
+        .map(|(round_no, list)| {
+            let mut significant = Vec::new();
+            let mut ordinary = Vec::new();
+            for (msg, beat) in list {
+                let (text, prominent) = beat_line(beat, &msg.content);
+                let entry = serde_json::json!({ "text": text, "prominent": prominent });
+                if beat.significant {
+                    significant.push(entry);
+                } else {
+                    ordinary.push(entry);
+                }
             }
-        }
-        let ordinary_block = if ordinary_lines.is_empty() {
-            String::new()
-        } else {
-            format!("<ul class=\"beats-ordinary\">{ordinary_lines}</ul>")
-        };
-        let open = if round_significant { " open" } else { "" };
-        rounds_html.push_str(&format!(
-            "<details class=\"combat-rounds\"{open}>
-               <summary>Round {round_no}</summary>
-               {significant_lines}{ordinary_block}
-             </details>"
-        ));
-    }
+            serde_json::json!({
+                "number": round_no,
+                "open": list.iter().any(|(_, b)| b.significant),
+                "significant": significant,
+                "ordinary": ordinary,
+            })
+        })
+        .collect();
 
-    let color = "var(--waiting)";
-    format!(
-        r#"<div class="event-card combat combat-card" data-archetype="combat" style="border-left-color:{color};">
-          <div class="card-head">
-            <span class="card-badge" style="background:{color};">COMBAT</span>
-            <span class="card-timestamp">{ts}</span>
-          </div>
-          <div class="card-body">
-            <span style="font-weight:600;">{title}</span> — {result_line}
-          </div>
-          <div class="combat-rounds-list">{rounds_html}</div>
-        </div>"#,
-        ts = ts,
-        title = html_escape(&title),
-        result_line = result_line,
-        rounds_html = rounds_html,
-        color = color,
-    )
+    let mut ctx = tera::Context::new();
+    ctx.insert("color", "var(--waiting)");
+    ctx.insert("ts", &ts);
+    ctx.insert("title", &title);
+    ctx.insert("result_text", &result_text);
+    ctx.insert("rounds", &rounds_ctx);
+    crate::templates::tera_engine::render("combat_card.html", &ctx)
 }
 
-/// One beat's narrative line. Uses the engine's own message content when
-/// present (it already reads well); falls back to a synthesized line from
-/// the typed beat when content is a generic round marker.
-fn beat_line(beat: &shared::combat_beat::CombatBeat, content: &str) -> String {
+/// One beat's narrative line: engine content plus whether it renders
+/// prominent (bold). Pure data — no HTML, no escaping (Tera autoescapes).
+fn beat_line(beat: &shared::combat_beat::CombatBeat, content: &str) -> (String, bool) {
     use shared::combat_beat::{BeatOutcome, CombatActionKind, SwingOutcome};
 
-    let content = html_escape(content);
-    match (&beat.action, &beat.outcome) {
+    let prominent = match (&beat.action, &beat.outcome) {
         // Engine content already narrates swings; only deaths go bold.
         (
             CombatActionKind::Attack,
@@ -527,15 +498,14 @@ fn beat_line(beat: &shared::combat_beat::CombatBeat, content: &str) -> String {
                     | SwingOutcome::Suicide { .. },
                 ..
             },
-        ) => format!("<strong>{content}</strong>"),
-        (CombatActionKind::Attack, BeatOutcome::Swing { .. }) => content,
-        (CombatActionKind::Flee, BeatOutcome::Fled) => format!("<strong>{content}</strong>"),
-        (CombatActionKind::Cower, BeatOutcome::Cowered) => format!("<strong>{content}</strong>"),
-        (CombatActionKind::Spare, _) | (CombatActionKind::Execute, _) => {
-            format!("<strong>{content}</strong>")
-        }
-        _ => content,
-    }
+        ) => true,
+        (CombatActionKind::Attack, BeatOutcome::Swing { .. }) => false,
+        (CombatActionKind::Flee, BeatOutcome::Fled) => true,
+        (CombatActionKind::Cower, BeatOutcome::Cowered) => true,
+        (CombatActionKind::Spare, _) | (CombatActionKind::Execute, _) => true,
+        _ => false,
+    };
+    (content.to_string(), prominent)
 }
 
 pub fn render_commentary_card(seg: &announcers::CommentarySegment) -> String {

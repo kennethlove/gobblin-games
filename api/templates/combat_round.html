@@ -1,0 +1,13 @@
+<details class="combat-rounds"{% if round.open %} open{% endif %}>
+  <summary>Round {{ round.number }}</summary>
+  {% for beat in round.significant %}
+  <div class="beat beat-significant">{% if beat.prominent %}<strong>{{ beat.text }}</strong>{% else %}{{ beat.text }}{% endif %}</div>
+  {% endfor %}
+  {% if round.ordinary %}
+  <ul class="beats-ordinary">
+    {% for beat in round.ordinary %}
+    <li>{% if beat.prominent %}<strong>{{ beat.text }}</strong>{% else %}{{ beat.text }}{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</details>

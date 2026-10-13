@@ -1,0 +1,14 @@
+<div class="event-card combat combat-card" data-archetype="combat" style="border-left-color:{{ color }};">
+  <div class="card-head">
+    <span class="card-badge" style="background:{{ color }};">COMBAT</span>
+    <span class="card-timestamp">{{ ts }}</span>
+  </div>
+  <div class="card-body">
+    <span style="font-weight:600;">{{ title }}</span> — <span class="combat-result">{{ result_text }}</span>
+  </div>
+  <div class="combat-rounds-list">
+    {% for round in rounds %}
+    {% include "combat_round.html" %}
+    {% endfor %}
+  </div>
+</div>
