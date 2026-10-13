@@ -165,6 +165,9 @@ pub struct DayQuery {
 #[derive(serde::Deserialize)]
 pub struct GameJoinForm {
     pub character_id: String,
+    /// SPIKE (dww.11): optional team pin (empty/absent = fewest-team).
+    #[serde(default)]
+    pub team: Option<String>,
     pub csrf_token: String,
 }
 
@@ -187,7 +190,10 @@ pub async fn game_join_post_handler(
         Ok(db) => db,
         Err(redirect) => return redirect.into_response(),
     };
-    match api::characters::join_game(&user_db, &game_identifier, &form.character_id).await {
+    let pinned_team = form.team.as_deref().and_then(|t| t.parse::<u32>().ok());
+    match api::characters::join_game(&user_db, &game_identifier, &form.character_id, pinned_team)
+        .await
+    {
         Ok(()) => Redirect::to(&format!("/games/{game_identifier}")).into_response(),
         Err(error) => {
             let query = url::form_urlencoded::Serializer::new(String::new())
@@ -1052,7 +1058,7 @@ pub async fn create_game_post_handler(
         }
     } else {
         for character_id in &chosen {
-            if api::characters::join_game(&user_db, &game_identifier, character_id)
+            if api::characters::join_game(&user_db, &game_identifier, character_id, None)
                 .await
                 .is_err()
             {

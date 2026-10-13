@@ -23,6 +23,10 @@ use world::items::Item;
 #[derive(serde::Deserialize)]
 pub struct JoinGame {
     pub character_id: String,
+    /// SPIKE (dww.11): pin the goblin to a specific team instead of
+    /// fewest-team balancing.
+    #[serde(default)]
+    pub team: Option<u32>,
 }
 
 pub async fn create_game(
@@ -122,8 +126,13 @@ pub async fn create_game(
         }
     } else {
         for character_id in &payload.characters {
-            if let Err(err) =
-                crate::characters::join_game(&db, &game_identifier, character_id).await
+            if let Err(err) = crate::characters::join_game(
+                &db,
+                &game_identifier,
+                character_id,
+                None,
+            )
+            .await
             {
                 // Best-effort cleanup so a rejected selection leaves no row.
                 let _ = db
@@ -176,7 +185,8 @@ pub async fn join_game_handler(
     Extension(AuthDb(db)): Extension<AuthDb>,
     Json(payload): Json<JoinGame>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    crate::characters::join_game(&db, &identifier.to_string(), &payload.character_id).await?;
+    crate::characters::join_game(&db, &identifier.to_string(), &payload.character_id, payload.team)
+        .await?;
     Ok(Json(
         serde_json::json!({ "joined": true, "game": identifier.to_string() }),
     ))

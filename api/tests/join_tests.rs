@@ -678,3 +678,80 @@ async fn test_roster_ceiling() {
 
     test_db.cleanup().await;
 }
+
+// ---------- SPIKE (dww.11): team-pinned join ----------
+
+#[tokio::test]
+async fn test_pinned_team_fields_one_players_whole_team() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let alice = create_authenticated_user(&test_db, &server, "spike_alice").await;
+    let bob = create_authenticated_user(&test_db, &server, "spike_bob").await;
+
+    let alice_goblin = create_owned_goblin(&server, &alice, "Spike Ref").await;
+    let g1 = create_owned_goblin(&server, &bob, "Spike One").await;
+    let g2 = create_owned_goblin(&server, &bob, "Spike Two").await;
+    let g3 = create_owned_goblin(&server, &bob, "Spike Three").await;
+    let g4 = create_owned_goblin(&server, &bob, "Spike Four").await;
+
+    // Creator allows four goblins per joining player; 2 teams x 3 slots.
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({
+            "name": "Spike Teams",
+            "team_count": 2,
+            "goblins_per_team": 3,
+            "max_goblins_per_player": 4,
+            "characters": [alice_goblin],
+        }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Bob pins all three goblins to team 2 — one player, one team.
+    for goblin in [&g1, &g2, &g3] {
+        server
+            .post(&format!("/api/games/{}/join", game_id))
+            .add_header("Authorization", bob.auth_header())
+            .json(&json!({ "character_id": goblin, "team": 2 }))
+            .await
+            .assert_status_ok();
+    }
+
+    // Fourth pinned to the full team: rejected.
+    server
+        .post(&format!("/api/games/{}/join", game_id))
+        .add_header("Authorization", bob.auth_header())
+        .json(&json!({ "character_id": g4, "team": 2 }))
+        .await
+        .assert_status(axum::http::StatusCode::CONFLICT);
+
+    // Out-of-range pin: bad request.
+    server
+        .post(&format!("/api/games/{}/join", game_id))
+        .add_header("Authorization", bob.auth_header())
+        .json(&json!({ "character_id": g4, "team": 9 }))
+        .await
+        .assert_status(axum::http::StatusCode::BAD_REQUEST);
+
+    let characters = fetch_characters(&server, &alice, &game_id).await;
+    assert_eq!(characters.len(), 4, "creator ref + Bob's pinned three");
+    for character in &characters {
+        if character["name"].as_str() == Some("Spike Ref") {
+            continue;
+        }
+        assert_eq!(
+            character["team"].as_u64(),
+            Some(2),
+            "every joined goblin is on the pinned team"
+        );
+    }
+
+    test_db.cleanup().await;
+}

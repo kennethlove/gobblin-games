@@ -258,6 +258,7 @@ pub async fn join_game(
     db: &Surreal<Any>,
     game_identifier: &str,
     character_identifier: &str,
+    pinned_team: Option<u32>,
 ) -> Result<(), AppError> {
     let mut status_response = db
         .query(
@@ -351,7 +352,39 @@ pub async fn join_game(
         return Err(AppError::GameFull("Game is full".to_string()));
     }
 
-    let team = fewest_team(db, game_identifier, team_count).await?;
+    // SPIKE (dww.11): an optional pinned team lets one player field a
+    // whole team instead of scattering across fewest-team slots. Real
+    // implementation would also revisit the per-player limit default.
+    let team = match pinned_team {
+        Some(t) => {
+            if t < 1 || t > team_count {
+                return Err(AppError::BadRequest(format!(
+                    "Team must be between 1 and {team_count}"
+                )));
+            }
+            let mut members_response = db
+                .query(
+                    "RETURN count(SELECT id FROM playing_in WHERE out.identifier = $game AND in.team = $team)",
+                )
+                .bind(("game", game_identifier.to_owned()))
+                .bind(("team", t))
+                .await
+                .map_err(|e| AppError::InternalServerError(format!("Failed to count team: {e}")))?;
+            let members: u32 = members_response
+                .take::<Option<u32>>(0)
+                .map_err(|e| {
+                    AppError::InternalServerError(format!("Failed to count team: {e}"))
+                })?
+                .unwrap_or(0);
+            if members >= goblins_per_team {
+                return Err(AppError::Conflict(format!(
+                    "Team {t} is already full"
+                )));
+            }
+            t
+        }
+        None => fewest_team(db, game_identifier, team_count).await?,
+    };
 
     // Entry: fresh per-game state, the assigned team, and the game
     // pointer. UPSERT CONTENT re-stamps created_by = $auth through the
