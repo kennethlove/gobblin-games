@@ -390,11 +390,8 @@ SELECT (
         vec![]
     };
 
-    // Pre-render event cards
-    let mut event_cards = String::new();
-    for msg in &messages {
-        event_cards.push_str(&game_detail::render_event_card(msg));
-    }
+    // Pre-render event cards (combat runs collapse into grouped fight cards)
+    let mut event_cards = game_detail::render_event_cards(&messages);
     for seg in &segments {
         event_cards.push_str(&game_detail::render_commentary_card(seg));
     }
@@ -594,11 +591,8 @@ pub async fn game_log_handler(
         Err(_) => vec![],
     };
 
-    // Pre-render event cards
-    let mut event_cards = String::new();
-    for msg in &messages {
-        event_cards.push_str(&game_detail::render_event_card(msg));
-    }
+    // Pre-render event cards (combat runs collapse into grouped fight cards)
+    let mut event_cards = game_detail::render_event_cards(&messages);
     for seg in &segments {
         event_cards.push_str(&game_detail::render_commentary_card(seg));
     }
@@ -775,10 +769,8 @@ pub async fn timeline_handler(
         .collect();
 
     // ── Pre-render event cards ─────────────────────────────────────
-    let rendered_events: Vec<String> = filtered_events
-        .iter()
-        .map(game_detail::render_event_card)
-        .collect();
+    // Grouped rendering: combat beats collapse into one card per fight.
+    let rendered_events: Vec<String> = vec![game_detail::render_event_cards(&filtered_events)];
 
     // ── Build template context ─────────────────────────────────────
     let mut ctx = tera_engine::base_context(&format!("Timeline — {}", game.name), &auth);

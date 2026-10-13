@@ -325,6 +325,189 @@ fn render_plain_event_card(msg: &shared::messages::GameMessage) -> String {
     )
 }
 
+/// Render a whole message slice for the timeline: contiguous runs of
+/// combat messages (`CombatBeat` / `CombatEnded`; `CombatRoundStart` is
+/// server-log-only and never reaches persisted timelines) collapse into one
+/// grouped fight card keyed by `combat_id`, everything else renders as a
+/// plain event card. Beats carry `round`/`order`/`significant`, so the
+/// grouped card is also the replay surface — the persisted beat stream is
+/// the full fight, round by round (§10). Significance down-ranking: significant
+/// beats (kills, cower, verdicts, fled, equipment breaks) render as full
+/// narrative lines; ordinary swings/misses collapse into a compact muted
+/// list per round.
+pub fn render_event_cards(msgs: &[shared::messages::GameMessage]) -> String {
+    use shared::messages::MessagePayload;
+
+    let mut html = String::new();
+    let mut fight_beats: Vec<&shared::messages::GameMessage> = Vec::new();
+    let mut fight_result: Option<(&String, &shared::combat_beat::CombatResult)> = None;
+
+    let flush_fight = |beats: &mut Vec<&shared::messages::GameMessage>,
+                       result: &mut Option<(&String, &shared::combat_beat::CombatResult)>,
+                       html: &mut String| {
+        if beats.is_empty() && result.is_none() {
+            return;
+        }
+        html.push_str(&render_combat_card(beats, result.take()));
+        beats.clear();
+    };
+
+    for msg in msgs {
+        match &msg.payload {
+            MessagePayload::CombatBeat(_) => fight_beats.push(msg),
+            MessagePayload::CombatEnded { combat_id, result } => {
+                fight_result = Some((combat_id, result));
+            }
+            MessagePayload::CombatRoundStart { .. } => {
+                // Server-log-only; skip if it ever reaches a persisted slice.
+            }
+            _ => {
+                flush_fight(&mut fight_beats, &mut fight_result, &mut html);
+                html.push_str(&render_event_card(msg));
+            }
+        }
+    }
+    flush_fight(&mut fight_beats, &mut fight_result, &mut html);
+    html
+}
+
+/// One grouped fight card, rendered through the `combat_card.html` /
+/// `combat_round.html` Tera partials (Tera autoescapes `.html`, so names
+/// and message content below are plain text — never HTML). All grouping,
+/// slicing, and significance decisions stay here in Rust: beats group by
+/// round, rounds render inside `<details>` (open when the round carries a
+/// significant beat), significant beats prominent and ordinary swings
+/// compact — replay = open every round.
+fn render_combat_card(
+    beats: &[&shared::messages::GameMessage],
+    result: Option<(&String, &shared::combat_beat::CombatResult)>,
+) -> String {
+    use shared::combat_beat::CombatResult;
+
+    let ts = beats
+        .first()
+        .map(|m| {
+            format!(
+                "D{} {} T{}",
+                m.game_day,
+                format!("{:?}", m.phase).to_uppercase(),
+                m.tick
+            )
+        })
+        .unwrap_or_default();
+
+    // Combatants: first beat's actor and (first) target.
+    let combatants = match beats.first().map(|m| &m.payload) {
+        Some(shared::messages::MessagePayload::CombatBeat(first)) => match &first.target {
+            Some(t) => format!("{} vs {}", first.actor.name, t.name),
+            None => first.actor.name.clone(),
+        },
+        _ => "Combat".to_string(),
+    };
+    // Fallback title from the result when the fight has no beats (shouldn't
+    // happen, but keeps the card titled).
+    let title = if combatants == "Combat" {
+        match result.map(|(_, r)| r) {
+            Some(CombatResult::Winner { character }) => format!("{} wins", character.name),
+            Some(CombatResult::Fled { fled, remaining }) => {
+                format!("{} vs {}", remaining.name, fled.name)
+            }
+            Some(CombatResult::Spared { winner, spared }) => {
+                format!("{} vs {}", winner.name, spared.name)
+            }
+            Some(CombatResult::Draw) | None => combatants,
+        }
+    } else {
+        combatants
+    };
+
+    // Result line for the header (plain text; the template escapes it).
+    let result_text = match result.map(|(_, r)| r) {
+        Some(CombatResult::Winner { character }) => format!("{} wins the fight", character.name),
+        Some(CombatResult::Fled { fled, .. }) => format!("{} flees — fight over", fled.name),
+        Some(CombatResult::Spared { winner, spared }) => {
+            format!("{} spares {}", winner.name, spared.name)
+        }
+        Some(CombatResult::Draw) => "A draw — both break off".to_string(),
+        None => "fight in progress…".to_string(),
+    };
+
+    // Group beats into rounds (algorithm unchanged; feeds template data).
+    let mut rounds: Vec<(
+        u32,
+        Vec<(
+            &shared::messages::GameMessage,
+            &shared::combat_beat::CombatBeat,
+        )>,
+    )> = Vec::new();
+    for msg in beats {
+        if let shared::messages::MessagePayload::CombatBeat(beat) = &msg.payload {
+            match rounds.last_mut() {
+                Some((n, list)) if *n == beat.round => list.push((msg, beat)),
+                _ => rounds.push((beat.round, vec![(msg, beat)])),
+            }
+        }
+    }
+
+    let rounds_ctx: Vec<serde_json::Value> = rounds
+        .iter()
+        .map(|(round_no, list)| {
+            let mut significant = Vec::new();
+            let mut ordinary = Vec::new();
+            for (msg, beat) in list {
+                let (text, prominent) = beat_line(beat, &msg.content);
+                let entry = serde_json::json!({ "text": text, "prominent": prominent });
+                if beat.significant {
+                    significant.push(entry);
+                } else {
+                    ordinary.push(entry);
+                }
+            }
+            serde_json::json!({
+                "number": round_no,
+                "open": list.iter().any(|(_, b)| b.significant),
+                "significant": significant,
+                "ordinary": ordinary,
+            })
+        })
+        .collect();
+
+    let mut ctx = tera::Context::new();
+    ctx.insert("color", "var(--waiting)");
+    ctx.insert("ts", &ts);
+    ctx.insert("title", &title);
+    ctx.insert("result_text", &result_text);
+    ctx.insert("rounds", &rounds_ctx);
+    crate::templates::tera_engine::render("combat_card.html", &ctx)
+}
+
+/// One beat's narrative line: engine content plus whether it renders
+/// prominent (bold). Pure data — no HTML, no escaping (Tera autoescapes).
+fn beat_line(beat: &shared::combat_beat::CombatBeat, content: &str) -> (String, bool) {
+    use shared::combat_beat::{BeatOutcome, CombatActionKind, SwingOutcome};
+
+    let prominent = match (&beat.action, &beat.outcome) {
+        // Engine content already narrates swings; only deaths go bold.
+        (
+            CombatActionKind::Attack,
+            BeatOutcome::Swing {
+                outcome:
+                    SwingOutcome::Kill { .. }
+                    | SwingOutcome::AttackerDied { .. }
+                    | SwingOutcome::FumbleDeath { .. }
+                    | SwingOutcome::Suicide { .. },
+                ..
+            },
+        ) => true,
+        (CombatActionKind::Attack, BeatOutcome::Swing { .. }) => false,
+        (CombatActionKind::Flee, BeatOutcome::Fled) => true,
+        (CombatActionKind::Cower, BeatOutcome::Cowered) => true,
+        (CombatActionKind::Spare, _) | (CombatActionKind::Execute, _) => true,
+        _ => false,
+    };
+    (content.to_string(), prominent)
+}
+
 pub fn render_commentary_card(seg: &announcers::CommentarySegment) -> String {
     let speaker = seg
         .lines
@@ -990,5 +1173,209 @@ mod day_summary_card_tests {
         assert!(html.contains("1 fallen, 23 standing"), "rollup missing");
         assert!(html.contains("<tbody>"), "goblin rows missing");
         assert!(html.contains("Ash &lt;Bane&gt;"), "goblin row missing");
+    }
+
+    // ---- Multi-round combat cards ----
+
+    use shared::combat_beat::{
+        BeatOutcome, CombatActionKind, CombatBeat, CombatResult, StressReport, SwingOutcome,
+    };
+    fn cref(name: &str) -> CharacterRef {
+        CharacterRef {
+            identifier: format!("id-{name}").into(),
+            name: name.to_string(),
+        }
+    }
+
+    fn beat(
+        round: u32,
+        actor: &str,
+        target: &str,
+        outcome: BeatOutcome,
+        significant: bool,
+    ) -> GameMessage {
+        let action = match &outcome {
+            BeatOutcome::Swing { .. } => CombatActionKind::Attack,
+            BeatOutcome::Fled | BeatOutcome::FailedFlee => CombatActionKind::Flee,
+            BeatOutcome::Cowered => CombatActionKind::Cower,
+            BeatOutcome::Spared => CombatActionKind::Spare,
+            BeatOutcome::Executed { .. } => CombatActionKind::Execute,
+            BeatOutcome::ItemUsed => CombatActionKind::UseItem {
+                item: shared::messages::ItemRef {
+                    identifier: "i1".into(),
+                    name: "Potion".into(),
+                },
+            },
+        };
+        let msg = format!("{actor} beat content");
+        GameMessage::new(
+            MessageSource::Game("g".into()),
+            2,
+            Phase::DAY_START,
+            5,
+            round,
+            "game:g".into(),
+            msg,
+            MessagePayload::CombatBeat(CombatBeat {
+                round,
+                order: 0,
+                actor: cref(actor),
+                action,
+                target: Some(cref(target)),
+                weapon: None,
+                shield: None,
+                wear: vec![],
+                outcome,
+                significant,
+            }),
+        )
+    }
+
+    fn swing_miss() -> BeatOutcome {
+        BeatOutcome::Swing {
+            outcome: SwingOutcome::Miss,
+            stress: StressReport::default(),
+            actor_stamina_cost: 0,
+            target_stamina_cost: 0,
+        }
+    }
+
+    fn swing_kill() -> BeatOutcome {
+        BeatOutcome::Swing {
+            outcome: SwingOutcome::Kill { damage: 40 },
+            stress: StressReport::default(),
+            actor_stamina_cost: 5,
+            target_stamina_cost: 2,
+        }
+    }
+
+    fn ended(result: CombatResult) -> GameMessage {
+        GameMessage::new(
+            MessageSource::Game("g".into()),
+            2,
+            Phase::DAY_START,
+            5,
+            9,
+            "game:g".into(),
+            "fight over".into(),
+            MessagePayload::CombatEnded {
+                combat_id: "c1".into(),
+                result,
+            },
+        )
+    }
+
+    #[test]
+    fn combat_beats_collapse_into_one_grouped_card() {
+        let msgs = vec![
+            beat(1, "Boblin", "Stinky", swing_miss(), false),
+            beat(1, "Stinky", "Boblin", swing_miss(), false),
+            beat(2, "Boblin", "Stinky", swing_kill(), true),
+            ended(CombatResult::Winner {
+                character: cref("Boblin"),
+            }),
+        ];
+        let html = render_event_cards(&msgs);
+        // One card, titled, with the result in the header.
+        assert_eq!(
+            html.matches("event-card combat").count(),
+            1,
+            "single card: {html}"
+        );
+        assert!(html.contains("Boblin vs Stinky"), "title: {html}");
+        assert!(html.contains("Boblin wins the fight"), "result: {html}");
+        assert!(html.contains("Round 1"), "round 1: {html}");
+        assert!(html.contains("Round 2"), "round 2: {html}");
+        // Ordinary round collapsed, significant round expanded.
+        assert!(
+            html.contains(r#"<details class="combat-rounds">"#),
+            "closed: {html}"
+        );
+        assert!(
+            html.contains(r#"<details class="combat-rounds" open>"#),
+            "open: {html}"
+        );
+        // Kill beat renders prominent (bold), miss beats in the ordinary list.
+        assert!(
+            html.contains("<strong>Boblin beat content</strong>"),
+            "kill bold: {html}"
+        );
+        assert!(
+            html.contains(r#"<ul class="beats-ordinary">"#),
+            "ordinary: {html}"
+        );
+    }
+
+    #[test]
+    fn combat_card_interleaves_with_plain_cards() {
+        let plain = GameMessage::new(
+            MessageSource::Game("g".into()),
+            2,
+            Phase::DAY_START,
+            4,
+            0,
+            "game:g".into(),
+            "someone foraged".into(),
+            MessagePayload::Foraged {
+                character: cref("Boblin"),
+                area: shared::messages::AreaRef {
+                    identifier: "a1".into(),
+                    name: "Woods".into(),
+                },
+                success: true,
+                debt_recovered: 0,
+            },
+        );
+        let msgs = vec![
+            plain,
+            beat(1, "Boblin", "Stinky", swing_kill(), true),
+            ended(CombatResult::Winner {
+                character: cref("Boblin"),
+            }),
+        ];
+        let html = render_event_cards(&msgs);
+        assert!(html.contains("someone foraged"), "plain card: {html}");
+        assert!(html.contains("event-card combat"), "combat card: {html}");
+        // Plain card comes first.
+        assert!(html.find("someone foraged").unwrap() < html.find("Boblin vs Stinky").unwrap());
+    }
+
+    #[test]
+    fn combat_result_variants_render() {
+        for (result, expected) in [
+            (
+                CombatResult::Fled {
+                    fled: cref("Boblin"),
+                    remaining: cref("Stinky"),
+                },
+                "Boblin flees",
+            ),
+            (
+                CombatResult::Spared {
+                    winner: cref("Boblin"),
+                    spared: cref("Stinky"),
+                },
+                "Boblin spares Stinky",
+            ),
+            (CombatResult::Draw, "A draw"),
+        ] {
+            let html = render_event_cards(&[ended(result)]);
+            assert!(html.contains(expected), "expected {expected:?} in {html}");
+        }
+    }
+
+    #[test]
+    fn combat_ongoing_fight_renders_placeholder_result() {
+        let html = render_event_cards(&[beat(1, "Boblin", "Stinky", swing_miss(), false)]);
+        assert!(html.contains("fight in progress"), "{html}");
+    }
+
+    #[test]
+    fn combat_names_are_escaped_in_card() {
+        let evil = "<script>".to_string();
+        let b = beat(1, &evil, "Stinky", swing_kill(), true);
+        let html = render_event_cards(&[b]);
+        assert!(!html.contains("<script>"), "unescaped: {html}");
+        assert!(html.contains("&lt;script&gt;"), "escaped: {html}");
     }
 }

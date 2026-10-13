@@ -540,8 +540,19 @@ mod tests {
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
 
+    /// Deterministic character for combat tests. `Character::new` rolls
+    /// traits/brain from the global entropy RNG, which made round-loop
+    /// tests flaky under the full workspace run — seed from the name so
+    /// every construction is reproducible.
     fn char_named(name: &str) -> Character {
-        Character::new(name.to_string(), None, None)
+        use std::hash::{Hash, Hasher};
+        let seed = {
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            name.hash(&mut h);
+            h.finish()
+        };
+        let mut rng = SmallRng::seed_from_u64(seed);
+        Character::new_with_rng(name.to_string(), None, None, &mut rng)
     }
 
     /// Strong attacker vs near-dead target: the first attack kills, so the fight
@@ -651,6 +662,10 @@ mod tests {
 
         let mut b = char_named("Bob");
         b.attributes.agility = 100;
+        // `Attributes::new()` (inside `new_with_rng`) still rolls from the
+        // global entropy RNG; pin strength so Bob can't randomly one-shot
+        // Alice and end the fight before the flee assertion.
+        b.attributes.strength = 0;
 
         // Only Alice flees (and loses); Bob keeps fighting so the fight runs on.
         struct AliceFlees;
