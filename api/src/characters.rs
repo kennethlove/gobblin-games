@@ -674,7 +674,12 @@ async fn store_character_avatar(
 /// Standalone by design: traits, brain, and terrain affinity are rolled
 /// by [`Character::new`], but no team, game relation, or items attach —
 /// those arrive on game entry. `team` stays 0 until a game assigns one.
+///
+/// Creation is capped per user (state.max_goblins_per_user): the count
+/// is of the caller's owned characters (indexed on `created_by`), so
+/// deleting a goblin frees a slot.
 pub async fn create_owned_character(
+    State(state): State<AppState>,
     Extension(AuthDb(db)): Extension<AuthDb>,
     Json(payload): Json<CreateOwnedCharacter>,
 ) -> Result<(StatusCode, Json<Character>), AppError> {
@@ -684,6 +689,24 @@ pub async fn create_owned_character(
     };
     if let Err(e) = validator::Validate::validate(&payload) {
         return Err(AppError::ValidationError(format!("{}", e)));
+    }
+
+    // Lifetime cap: count this user's own characters before writing.
+    // Deletion hard-deletes the row, so freed slots return immediately.
+    let mut count_response = db
+        .query("RETURN count(SELECT id FROM character WHERE created_by = $auth)")
+        .await
+        .map_err(|e| {
+            AppError::InternalServerError(format!("Failed to count owned characters: {e}"))
+        })?;
+    let owned_count: Option<u64> = count_response.take(0).map_err(|e| {
+        AppError::InternalServerError(format!("Failed to read owned character count: {e}"))
+    })?;
+    if owned_count.unwrap_or(0) >= state.max_goblins_per_user as u64 {
+        return Err(AppError::Conflict(format!(
+            "You already own the maximum of {} goblins",
+            state.max_goblins_per_user
+        )));
     }
 
     // Generation happens before any await, so the RNG is never held

@@ -265,7 +265,7 @@ pub async fn my_goblins_create_handler(
         name: form.name,
         clan_name: form.clan_name,
     };
-    match create_owned_character(Extension(AuthDb(user_db)), Json(payload)).await {
+    match create_owned_character(State(state), Extension(AuthDb(user_db)), Json(payload)).await {
         Ok(_) => Redirect::to("/my-goblins").into_response(),
         Err(error) => goblins_error_redirect(error),
     }

@@ -116,6 +116,11 @@ impl TestDb {
 
     /// Get the AppState for testing
     pub fn app_state(&self) -> AppState {
+        self.app_state_with_goblin_cap(shared::DEFAULT_MAX_GOBLINS_PER_USER)
+    }
+
+    /// AppState with a custom per-user goblin creation cap, for cap tests.
+    pub fn app_state_with_goblin_cap(&self, max_goblins_per_user: u32) -> AppState {
         use api::storage::LocalStorage;
         use api::websocket::GameBroadcaster;
 
@@ -126,6 +131,7 @@ impl TestDb {
             commentator: None,
             namespace: self.namespace.clone(),
             database: self.database.clone(),
+            max_goblins_per_user,
         }
     }
 
@@ -144,6 +150,7 @@ impl TestDb {
             commentator: Some(commentator),
             namespace: self.namespace.clone(),
             database: self.database.clone(),
+            max_goblins_per_user: shared::DEFAULT_MAX_GOBLINS_PER_USER,
         }
     }
 

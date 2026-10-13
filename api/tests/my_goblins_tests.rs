@@ -297,3 +297,62 @@ async fn test_my_goblins_avatar_upload_action() {
 
     test_db.cleanup().await;
 }
+
+/// The page's create form enforces the same per-user cap as the API: the
+/// first post lands, the over-cap post redirects back with the error in
+/// the query string and writes nothing.
+#[tokio::test]
+async fn test_my_goblins_create_form_enforces_cap() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state_with_goblin_cap(1));
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "goblins_cap_user").await;
+    let csrf = api::cookies::generate_csrf_token();
+    let cookie = session_cookie(&user, &csrf);
+
+    server
+        .post("/my-goblins")
+        .add_header("Cookie", cookie.clone())
+        .form(&json!({
+            "name": "Cap Gob One",
+            "csrf_token": csrf,
+        }))
+        .await
+        .assert_status_see_other()
+        .assert_header("location", "/my-goblins");
+
+    let blocked = server
+        .post("/my-goblins")
+        .add_header("Cookie", cookie.clone())
+        .form(&json!({
+            "name": "Cap Gob Two",
+            "csrf_token": csrf,
+        }))
+        .await;
+    blocked.assert_status_see_other();
+    let location = blocked
+        .headers()
+        .get("location")
+        .expect("redirect location")
+        .to_str()
+        .expect("location is utf-8")
+        .to_string();
+    assert!(
+        location.starts_with("/my-goblins?error="),
+        "over-cap form post should redirect with the error, got {location}"
+    );
+
+    let list = server
+        .get("/api/characters")
+        .add_header("Authorization", user.auth_header())
+        .await;
+    list.assert_status_ok();
+    let characters = list.json::<serde_json::Value>()["characters"]
+        .as_array()
+        .cloned()
+        .unwrap();
+    assert_eq!(characters.len(), 1, "over-cap form create must not persist");
+
+    test_db.cleanup().await;
+}

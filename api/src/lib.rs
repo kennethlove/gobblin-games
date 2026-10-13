@@ -40,6 +40,12 @@ pub struct AppState {
     pub commentator: Option<Arc<dyn announcers::Commentator>>,
     pub namespace: String,
     pub database: String,
+    /// Lifetime cap on how many goblins one user may own (enforced at
+    /// creation, `POST /api/characters` and its page form). Server-level
+    /// knob — read from the environment at startup in `main`, overridable
+    /// per-state in tests — not a per-game setting: it applies before any
+    /// game exists. Distinct from a game's `max_goblins_per_player`.
+    pub max_goblins_per_user: u32,
 }
 
 /// Per-request, JWT-authenticated SurrealDB session injected by the
