@@ -74,10 +74,12 @@ impl Game {
         if matches!(self.config.day_slot(phase), DaySlot::Dawn | DaySlot::Dusk) {
             return Ok(());
         }
+        // Per-area per-cycle probability from the game config (persisted
+        // per game; old rows without the fields hydrate to the defaults).
         let frequency = if self.config.is_night_phase(phase) {
-            NIGHT_EVENT_FREQUENCY
+            self.config.night_event_frequency
         } else {
-            DAY_EVENT_FREQUENCY
+            self.config.day_event_frequency
         };
         let day = !self.config.is_night_phase(phase);
 
