@@ -716,8 +716,9 @@ impl Character {
         // cleaned and `pending_trust_shock` flips on the next drain. The
         // timer resets unconditionally so a missed opportunity does not
         // stack (one chance per cadence).
-        if self.traits.contains(&traits::Trait::Treacherous)
-            && self.turns_since_last_betrayal >= alliances::TREACHEROUS_BETRAYAL_INTERVAL
+        if traits::behavior_sum(&self.traits, traits::BehaviorAxis::BetrayalCadence) > 0
+            && self.turns_since_last_betrayal
+                >= traits::behavior_sum(&self.traits, traits::BehaviorAxis::BetrayalCadence) as u8
         {
             let same_area_ally = encounter_context
                 .potential_targets

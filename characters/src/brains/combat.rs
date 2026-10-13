@@ -16,7 +16,7 @@ use crate::Character;
 use crate::combat::round_loop::CombatActionProvider;
 use crate::combat_tuning::CombatTuning;
 use crate::stamina_band::stamina_band;
-use crate::traits::Trait;
+use crate::traits::{BehaviorAxis, behavior_sum};
 use shared::combat_beat::CombatActionKind;
 use shared::messages::{ItemRef, StaminaBand};
 use world::items::Attribute;
@@ -46,7 +46,7 @@ impl CombatBrain {
 
         // Attack — the default posture.
         let mut attack = t.brain_attack_base;
-        if actor.traits.contains(&Trait::Aggressive) || actor.traits.contains(&Trait::Reckless) {
+        if behavior_sum(&actor.traits, BehaviorAxis::AttackPosture) > 0 {
             attack += t.brain_attack_aggressive_bonus;
         }
         if wounded {
@@ -81,7 +81,7 @@ impl CombatBrain {
         if exhausted {
             flee += t.brain_flee_exhausted_bonus;
         }
-        if actor.traits.contains(&Trait::Cautious) {
+        if behavior_sum(&actor.traits, BehaviorAxis::FleeCowardice) > 0 {
             flee += t.brain_flee_cautious_bonus;
         }
         if opponent.attributes.strength > actor.attributes.strength {
@@ -127,17 +127,15 @@ impl CombatBrain {
         if actor.team > 0 && actor.team == cowerer.team {
             spare += t.brain_spare_team_bonus;
         }
-        if actor.traits.contains(&Trait::Loyal) || actor.traits.contains(&Trait::Friendly) {
+        if behavior_sum(&actor.traits, BehaviorAxis::SpareInclination) > 0 {
             spare += t.brain_spare_trait_bonus;
         }
 
         let mut execute = 0;
-        if actor.traits.contains(&Trait::Treacherous) {
-            execute += t.brain_execute_treacherous_bonus;
-        }
-        if actor.traits.contains(&Trait::Aggressive) {
-            execute += t.brain_execute_aggressive_bonus;
-        }
+        execute += behavior_sum(&actor.traits, BehaviorAxis::ExecuteFromTreachery)
+            * t.brain_execute_treacherous_bonus;
+        execute += behavior_sum(&actor.traits, BehaviorAxis::ExecuteFromAggression)
+            * t.brain_execute_aggressive_bonus;
 
         if spare > execute {
             CombatActionKind::Spare
@@ -160,6 +158,7 @@ impl CombatActionProvider for CombatBrain {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::traits::Trait;
     use world::items::{Item, ItemRarity, ItemType};
 
     /// RNG-rolled traits/items would make scoring assertions non-deterministic;

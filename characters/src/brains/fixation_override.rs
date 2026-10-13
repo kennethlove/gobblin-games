@@ -14,7 +14,7 @@ use shared::afflictions::{AfflictionKind, FixationTarget, Severity};
 
 use crate::Character;
 use crate::actions::Action;
-use crate::traits::Trait;
+use crate::traits::{BehaviorAxis, Trait, behavior_sum};
 
 /// Context available to the fixation override layer.
 #[derive(Clone, Debug)]
@@ -31,19 +31,11 @@ pub struct FixationOverrideContext {
 /// - Loyal: +1 tier when target is a Character (ally fixation stronger)
 pub fn effective_tier(severity: Severity, traits: &[Trait], kind: &AfflictionKind) -> Severity {
     let tier = severity.ordinal() as i32;
-    let mut modifier = 0i32;
+    let mut modifier = behavior_sum(traits, BehaviorAxis::SeverityTier);
 
-    for t in traits {
-        match t {
-            Trait::Resilient => modifier -= 1,
-            Trait::Fragile => modifier += 1,
-            Trait::Loyal => {
-                if matches!(kind, AfflictionKind::Fixation(FixationTarget::Character(_))) {
-                    modifier += 1;
-                }
-            }
-            _ => {}
-        }
+    // Loyal's stronger-alley-fixation bump only applies to Character targets.
+    if matches!(kind, AfflictionKind::Fixation(FixationTarget::Character(_))) {
+        modifier += behavior_sum(traits, BehaviorAxis::FixationCharacterTier);
     }
 
     let adjusted = (tier + modifier).clamp(0, Severity::Severe.ordinal() as i32);

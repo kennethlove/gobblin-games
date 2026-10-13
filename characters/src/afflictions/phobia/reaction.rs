@@ -17,7 +17,7 @@ use rand::RngExt;
 use shared::afflictions::{AfflictionKind, PhobiaTrigger, Severity};
 
 use crate::Character;
-use crate::traits::Trait;
+use crate::traits::{BehaviorAxis, Trait, behavior_sum};
 
 /// The raw effect category a phobia produces at a given severity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,18 +76,10 @@ pub fn effective_severity(base: Severity, traits: &[Trait]) -> Severity {
     }
 }
 
-/// Returns the tier modifier from a character's traits.
-/// Resilient = -1, Fragile = +1, others = 0.
+/// Returns the tier modifier from a character's traits, read from
+/// [`BehaviorAxis::SeverityTier`] effect rows (Resilient -1, Fragile +1).
 fn trait_tier_modifier(traits: &[Trait]) -> i32 {
-    let mut modifier = 0i32;
-    for t in traits {
-        match t {
-            Trait::Resilient => modifier -= 1,
-            Trait::Fragile => modifier += 1,
-            _ => {}
-        }
-    }
-    modifier
+    behavior_sum(traits, BehaviorAxis::SeverityTier)
 }
 
 /// Determine the reaction for a given severity, applying trait modifiers.
@@ -96,7 +88,7 @@ fn trait_tier_modifier(traits: &[Trait]) -> i32 {
 /// Reckless characters never freeze — they get AutoFlee instead.
 pub fn reaction_for(severity: Severity, traits: &[Trait], rng: &mut impl Rng) -> Reaction {
     let effective = effective_severity(severity, traits);
-    let is_reckless = traits.contains(&Trait::Reckless);
+    let is_reckless = behavior_sum(traits, BehaviorAxis::FreezeImmunity) > 0;
 
     match effective {
         Severity::Mild => Reaction::Penalty,
