@@ -1856,8 +1856,9 @@ pub struct Attributes {
     pub movement: u32,
     /// How hard do they hit?
     pub strength: u32,
-    /// How hard of a hit can they take?
-    pub defense: u32,
+    /// How much of a hit can they take?
+    #[serde(alias = "defense")]
+    pub toughness: u32,
     /// Will they jump into dangerous situations?
     pub bravery: u32,
     /// How well do they avoid traps?
@@ -1867,7 +1868,10 @@ pub struct Attributes {
     /// Are they likely to get gifts or come out slightly ahead?
     pub luck: u32,
     /// How quickly they react in a turn.
-    pub agility: u32,
+    #[serde(alias = "agility")]
+    pub speed: u32,
+    /// How sharp are their senses? Sight range, ambush detection, spotting.
+    pub perception: u32,
     /// Can other characters see them?
     pub is_hidden: bool,
 }
@@ -1878,12 +1882,13 @@ impl Default for Attributes {
         Self {
             movement: 100,
             strength: 50,
-            defense: 50,
+            toughness: 50,
             bravery: 100,
             intelligence: 100,
             persuasion: 100,
             luck: 100,
-            agility: 50,
+            speed: 50,
+            perception: 100,
             is_hidden: false,
         }
     }
@@ -1904,12 +1909,13 @@ impl Attributes {
         match attr {
             A::Movement => self.movement,
             A::Strength => self.strength,
-            A::Defense => self.defense,
+            A::Toughness => self.toughness,
             A::Bravery => self.bravery,
             A::Intelligence => self.intelligence,
             A::Persuasion => self.persuasion,
             A::Luck => self.luck,
-            A::Agility => self.agility,
+            A::Speed => self.speed,
+            A::Perception => self.perception,
         }
     }
 
@@ -1922,12 +1928,13 @@ impl Attributes {
         Self {
             movement: config.max_movement,
             strength: rng.random_range(1..=config.max_strength),
-            defense: rng.random_range(1..=config.max_defense),
+            toughness: rng.random_range(1..=config.max_toughness),
             bravery: rng.random_range(1..=config.max_bravery),
             intelligence: rng.random_range(1..=config.max_intelligence),
             persuasion: rng.random_range(1..=config.max_persuasion),
             luck: rng.random_range(1..=config.max_luck),
-            agility: rng.random_range(1..=config.max_agility),
+            speed: rng.random_range(1..=config.max_speed),
+            perception: rng.random_range(1..=config.max_perception),
             is_hidden: false,
         }
     }

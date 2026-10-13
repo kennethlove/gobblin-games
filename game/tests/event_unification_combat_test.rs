@@ -39,7 +39,7 @@ fn combat_events_reach_game_messages_with_character_source() {
     defender.name = "Defender".to_string();
     defender.area = area;
     defender.blood = 50;
-    defender.attributes.defense = 0;
+    defender.attributes.toughness = 0;
     defender.statistics.game = game.identifier.clone();
     // Different team so attacker classifies them as an enemy.
     defender.team = (attacker.team % 8) + 1;

@@ -70,7 +70,7 @@ pub fn roll<R: Rng + ?Sized>(rng: &mut R) -> RevivalOutcome {
 pub fn apply_penalty<R: Rng + ?Sized>(character: &mut Character, rng: &mut R) {
     let stat = match rng.random_range(0..3u8) {
         0 => &mut character.attributes.strength,
-        1 => &mut character.attributes.defense,
+        1 => &mut character.attributes.toughness,
         _ => &mut character.attributes.luck,
     };
     if *stat > 1 {
@@ -193,23 +193,23 @@ mod tests {
         // Stats are RNG-rolled by the fixture; pin them so the seeded penalty
         // always bites (previously flaky when the picked stat was already 1).
         character.attributes.strength = 10;
-        character.attributes.defense = 10;
+        character.attributes.toughness = 10;
         character.attributes.luck = 10;
         character.traits.clear();
         let before = character.attributes.strength
-            + character.attributes.defense
+            + character.attributes.toughness
             + character.attributes.luck;
         let mut rng = SmallRng::seed_from_u64(3);
         apply_penalty(&mut character, &mut rng);
         let after = character.attributes.strength
-            + character.attributes.defense
+            + character.attributes.toughness
             + character.attributes.luck;
         assert!(
             after < before || before <= 3,
             "penalty should bite: {before} -> {after}"
         );
         assert!(character.attributes.strength >= 1);
-        assert!(character.attributes.defense >= 1);
+        assert!(character.attributes.toughness >= 1);
         assert!(character.attributes.luck >= 1);
     }
 
@@ -283,7 +283,7 @@ mod tests {
         // Pin RNG-rolled fixture stats so the seeded penalty always bites
         // (same pre-existing flake class as penalty_reduces_one_stat...).
         character.attributes.strength = 10;
-        character.attributes.defense = 10;
+        character.attributes.toughness = 10;
         character.attributes.luck = 10;
         character.traits.clear();
         character.dies();
@@ -300,12 +300,12 @@ mod tests {
         let seed = seeded.expect("Penalty is in the odds table, a seed must exist");
         let mut rng = SmallRng::seed_from_u64(seed);
         let before = character.attributes.strength
-            + character.attributes.defense
+            + character.attributes.toughness
             + character.attributes.luck;
         let outcome = revive(&mut character, &mut rng);
         assert_eq!(outcome, RevivalOutcome::Penalty);
         let after = character.attributes.strength
-            + character.attributes.defense
+            + character.attributes.toughness
             + character.attributes.luck;
         assert!(
             after < before || before <= 3,

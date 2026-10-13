@@ -821,7 +821,7 @@ impl Game {
 
         // Sort by initiative so faster characters act first (tm6a).
         characters_to_act.sort_by_cached_key(|&idx| {
-            let agility = self.characters[idx].effective_attribute(CharacterAttribute::Agility);
+            let agility = self.characters[idx].effective_attribute(CharacterAttribute::Speed);
             std::cmp::Reverse(initiative_score(agility, rng))
         });
 

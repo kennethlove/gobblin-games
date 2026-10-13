@@ -47,7 +47,7 @@ pub fn movement_penalty_percent(severity: WoundSeverity) -> f64 {
 }
 
 /// Penalty to effective defense per wound severity tier.
-pub fn defense_penalty_percent(severity: WoundSeverity) -> f64 {
+pub fn toughness_penalty_percent(severity: WoundSeverity) -> f64 {
     match severity {
         WoundSeverity::Minor => 0.0,      // was 0
         WoundSeverity::Moderate => -2.0,  // was -1 of 50
@@ -66,9 +66,21 @@ pub fn bravery_penalty_percent(severity: WoundSeverity) -> f64 {
     }
 }
 
+/// Penalty to effective perception per wound severity tier (reference max
+/// 100, shaped like the movement table — modest early, steep at Critical).
+/// Head wounds amplify this further via the body-part multiplier.
+pub fn perception_penalty_percent(severity: WoundSeverity) -> f64 {
+    match severity {
+        WoundSeverity::Minor => 0.0,
+        WoundSeverity::Moderate => -2.0,
+        WoundSeverity::Severe => -5.0,
+        WoundSeverity::Critical => -10.0,
+    }
+}
+
 /// Total percentage a wound of this severity/body part takes off one
 /// attribute. Attributes with no wound model (intelligence, persuasion,
-/// luck, agility) get `0.0`.
+/// luck, speed) get `0.0`.
 pub fn attr_mod_percent(
     severity: WoundSeverity,
     part: BodyPart,
@@ -78,9 +90,10 @@ pub fn attr_mod_percent(
     let base = match attr {
         A::Strength => strength_penalty_percent(severity),
         A::Movement => movement_penalty_percent(severity),
-        A::Defense => defense_penalty_percent(severity),
+        A::Toughness => toughness_penalty_percent(severity),
         A::Bravery => bravery_penalty_percent(severity),
-        A::Intelligence | A::Persuasion | A::Luck | A::Agility => 0.0,
+        A::Perception => perception_penalty_percent(severity),
+        A::Intelligence | A::Persuasion | A::Luck | A::Speed => 0.0,
     };
     base * body_part_penalty_multiplier(part)
 }
@@ -144,7 +157,7 @@ mod tests {
     #[test]
     fn attributes_without_a_wound_model_take_no_percent() {
         use crate::traits::CharacterAttribute as A;
-        for attr in [A::Agility, A::Luck, A::Intelligence, A::Persuasion] {
+        for attr in [A::Speed, A::Luck, A::Intelligence, A::Persuasion] {
             assert_eq!(
                 attr_mod_percent(WoundSeverity::Critical, BodyPart::Head, attr),
                 0.0,
@@ -248,7 +261,7 @@ mod tests {
             // movement: -1/-2/-5/-10 on 100
             (A::Movement, 100, [-1.0, -2.0, -5.0, -10.0]),
             // defense: 0/-1/-3/-5 on 50
-            (A::Defense, 50, [0.0, -1.0, -3.0, -5.0]),
+            (A::Toughness, 50, [0.0, -1.0, -3.0, -5.0]),
             // bravery: 0/-1/-3/-5 on 100
             (A::Bravery, 100, [0.0, -1.0, -3.0, -5.0]),
         ];
@@ -262,10 +275,13 @@ mod tests {
         for (attr, reference, old_flat) in cases {
             for (severity, old) in severities.iter().zip(old_flat) {
                 let mut c = Character::new("Stinky".to_string(), None, None);
+                // Isolate the wound tables: rolled traits (Tough's +20%
+                // toughness, etc.) must not pollute parity assertions.
+                c.traits.clear();
                 match attr {
                     A::Strength => c.attributes.strength = reference,
                     A::Movement => c.attributes.movement = reference,
-                    A::Defense => c.attributes.defense = reference,
+                    A::Toughness => c.attributes.toughness = reference,
                     A::Bravery => c.attributes.bravery = reference,
                     // No wound model; skipped here.
                     _ => c.attributes.strength = reference,

@@ -81,12 +81,15 @@ pub struct GameConfig {
     pub max_sanity: u32,
     pub max_movement: u32,
     pub max_strength: u32,
-    pub max_defense: u32,
+    #[serde(alias = "max_defense")]
+    pub max_toughness: u32,
     pub max_bravery: u32,
     pub max_intelligence: u32,
     pub max_persuasion: u32,
     pub max_luck: u32,
-    pub max_agility: u32,
+    #[serde(alias = "max_agility")]
+    pub max_speed: u32,
+    pub max_perception: u32,
 }
 
 impl Default for GameConfig {
@@ -134,12 +137,13 @@ impl Default for GameConfig {
             max_sanity: 100,
             max_movement: 100,
             max_strength: 50,
-            max_defense: 50,
+            max_toughness: 50,
             max_bravery: 100,
             max_intelligence: 100,
             max_persuasion: 100,
             max_luck: 100,
-            max_agility: 100,
+            max_speed: 100,
+            max_perception: 100,
         }
     }
 }

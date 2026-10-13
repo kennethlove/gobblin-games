@@ -56,7 +56,7 @@ impl CombatActionProvider for AttackOnlyProvider {
 fn initiative_roll(c: &Character, tuning: &CombatTuning, rng: &mut impl Rng) -> i32 {
     let d20: i32 = rng.random_range(1..=tuning.initiative_die as i32);
     // `agility` is the speed proxy (there is no dedicated `speed` attribute).
-    let speed_mod = (c.effective_attribute(CharacterAttribute::Agility) as i32 - 10) / 5;
+    let speed_mod = (c.effective_attribute(CharacterAttribute::Speed) as i32 - 10) / 5;
     let band_mod = match stamina_band(c.stamina, c.max_stamina, tuning) {
         shared::messages::StaminaBand::Fresh => tuning.initiative_fresh_bonus,
         shared::messages::StaminaBand::Winded => tuning.initiative_winded_bonus,
@@ -562,13 +562,13 @@ mod tests {
     fn kill_ends_fight_mid_round_and_skips_second_beat() {
         let mut a = char_named("Alice");
         a.attributes.strength = 100;
-        a.attributes.agility = 100;
+        a.attributes.speed = 100;
 
         let mut b = char_named("Bob");
         b.blood = 1;
         // Pin initiative: Alice must act first so the kill skips beat 2.
         // (Default agility left this test flaky on d20 variance.)
-        b.attributes.agility = 0;
+        b.attributes.speed = 0;
         b.stamina = 1; // Exhausted band → initiative −2, always behind Alice
 
         let mut rng = SmallRng::seed_from_u64(7);
@@ -618,10 +618,10 @@ mod tests {
     #[test]
     fn successful_flee_ends_fight_with_fled_result() {
         let mut a = char_named("Alice");
-        a.attributes.agility = 100; // wins the contested flee roll
+        a.attributes.speed = 100; // wins the contested flee roll
 
         let mut b = char_named("Bob");
-        b.attributes.agility = 0;
+        b.attributes.speed = 0;
 
         struct FleeProvider;
         impl CombatActionProvider for FleeProvider {
@@ -659,10 +659,10 @@ mod tests {
     #[test]
     fn failed_flee_does_not_end_fight() {
         let mut a = char_named("Alice");
-        a.attributes.agility = 0; // loses the contested flee roll
+        a.attributes.speed = 0; // loses the contested flee roll
 
         let mut b = char_named("Bob");
-        b.attributes.agility = 100;
+        b.attributes.speed = 100;
         // `Attributes::new()` (inside `new_with_rng`) still rolls from the
         // global entropy RNG; pin strength so Bob can't randomly one-shot
         // Alice and end the fight before the flee assertion.
@@ -737,11 +737,11 @@ mod tests {
     fn seeded_fight_runs_to_completion_with_ordered_rounds() {
         let mut a = char_named("Alice");
         a.attributes.strength = 30;
-        a.attributes.agility = 40;
+        a.attributes.speed = 40;
 
         let mut b = char_named("Bob");
         b.attributes.strength = 30;
-        b.attributes.agility = 20;
+        b.attributes.speed = 20;
         b.blood = 60;
 
         let mut rng = SmallRng::seed_from_u64(4242);
@@ -799,9 +799,9 @@ mod tests {
         }
 
         let mut a = char_named("Alice");
-        a.attributes.agility = 100;
+        a.attributes.speed = 100;
         let mut b = char_named("Bob");
-        b.attributes.agility = 0;
+        b.attributes.speed = 0;
         let (alice, bob) = (tref(&a), tref(&b));
 
         let mut rng = SmallRng::seed_from_u64(13);
@@ -850,9 +850,9 @@ mod tests {
         }
 
         let mut a = char_named("Alice");
-        a.attributes.agility = 100;
+        a.attributes.speed = 100;
         let mut b = char_named("Bob");
-        b.attributes.agility = 0;
+        b.attributes.speed = 0;
         let bob = tref(&b);
 
         let mut rng = SmallRng::seed_from_u64(17);
@@ -906,10 +906,10 @@ mod tests {
         }
 
         let mut a = char_named("Alice");
-        a.attributes.agility = 0;
+        a.attributes.speed = 0;
         a.attributes.strength = 0;
         let mut b = char_named("Bob");
-        b.attributes.agility = 100;
+        b.attributes.speed = 100;
         b.attributes.strength = 0;
 
         let mut rng = SmallRng::seed_from_u64(23);
@@ -963,10 +963,10 @@ mod tests {
 
         for seed in 0..64 {
             let mut a = char_named("Alice");
-            a.attributes.agility = 5;
+            a.attributes.speed = 5;
             a.attributes.strength = 0;
             let mut b = char_named("Bob");
-            b.attributes.agility = 5;
+            b.attributes.speed = 5;
             b.attributes.strength = 0;
 
             let mut rng = SmallRng::seed_from_u64(seed);
@@ -1021,7 +1021,7 @@ mod tests {
 
         let mut a = char_named("Alice");
         a.blood = 300;
-        a.attributes.agility = 100;
+        a.attributes.speed = 100;
         a.items.push(Item::new(
             "potion",
             ItemType::Consumable,
@@ -1031,7 +1031,7 @@ mod tests {
             200,
         ));
         let mut b = char_named("Bob");
-        b.attributes.agility = 0;
+        b.attributes.speed = 0;
         b.attributes.strength = 0; // no damage while Alice heals
 
         let mut rng = SmallRng::seed_from_u64(29);
@@ -1064,9 +1064,9 @@ mod tests {
         let mut a = char_named("Alice");
         a.blood = 300;
         a.stamina = 10; // Exhausted
-        a.attributes.agility = 100;
+        a.attributes.speed = 100;
         let mut b = char_named("Bob");
-        b.attributes.agility = 0;
+        b.attributes.speed = 0;
         b.attributes.strength = 0; // can't land damage; Alice's flee decides
         let (alice, bob) = (tref(&a), tref(&b));
 

@@ -40,18 +40,25 @@ pub enum TraitKind {
     Personality,
 }
 
-/// Character attribute axes referenced by [`Effect::AttrMod`]. Current names
-/// only — the rename/rethink (speed, toughness, perception) is bqs.2.
+/// Character attribute axes referenced by [`Effect::AttrMod`].
+///
+/// Persistence-stable keys: old serialized `Defense`/`Agility` keep loading
+/// via serde aliases. Adding an axis (e.g. `Swim`) is additive — append a
+/// variant, add the `Attributes` field + `get` arm + config max, and every
+/// exhaustive `match` here will point at the sites to update.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CharacterAttribute {
     Movement,
     Strength,
-    Defense,
+    #[serde(alias = "Defense")]
+    Toughness,
     Bravery,
     Intelligence,
     Persuasion,
     Luck,
-    Agility,
+    #[serde(alias = "Agility")]
+    Speed,
+    Perception,
 }
 
 /// Actions a trait can unlock; the single variant is reserved for the v2
@@ -412,12 +419,20 @@ impl Trait {
             Trait::Nearsighted => TraitDef {
                 label: "nearsighted",
                 kind: TraitKind::Curse,
-                effects: NONE,
+                effects: &[Effect::AttrMod {
+                    attr: CharacterAttribute::Perception,
+                    flat: 0,
+                    percent: -25,
+                }],
             },
             Trait::Tough => TraitDef {
                 label: "tough",
                 kind: TraitKind::Boon,
-                effects: NONE,
+                effects: &[Effect::AttrMod {
+                    attr: CharacterAttribute::Toughness,
+                    flat: 0,
+                    percent: 20,
+                }],
             },
             Trait::Builder => TraitDef {
                 label: "a builder",

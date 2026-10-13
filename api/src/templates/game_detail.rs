@@ -631,7 +631,7 @@ pub fn render_character_card(character: &characters::Character) -> String {
         </div>"#,
         name = html_escape(&character.name),
         strength = character.attributes.strength,
-        defense = character.attributes.defense,
+        defense = character.attributes.toughness,
         intelligence = character.attributes.intelligence,
     )
 }
@@ -732,7 +732,7 @@ pub fn render_character_detail(character: &characters::Character, _game_id: &str
         team_label = team_label,
         clan_name_line = clan_name_line,
         strength = character.attributes.strength,
-        defense = character.attributes.defense,
+        defense = character.attributes.toughness,
         intelligence = character.attributes.intelligence,
         items = items_html,
         afflictions = afflictions_html,

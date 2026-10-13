@@ -24,12 +24,13 @@ use serde::{Deserialize, Serialize};
 pub struct AttributeDelta {
     pub movement: i64,
     pub strength: i64,
-    pub defense: i64,
+    pub toughness: i64,
     pub bravery: i64,
     pub intelligence: i64,
     pub persuasion: i64,
     pub luck: i64,
-    pub agility: i64,
+    pub speed: i64,
+    pub perception: i64,
 }
 
 /// Durable state captured at game entry, used to settle advancements at the
@@ -94,12 +95,13 @@ impl GameBaseline {
         character.attributes = Attributes {
             movement: base.movement.max(now.movement),
             strength: base.strength.max(now.strength),
-            defense: base.defense.max(now.defense),
+            toughness: base.toughness.max(now.toughness),
             bravery: base.bravery.max(now.bravery),
             intelligence: base.intelligence.max(now.intelligence),
             persuasion: base.persuasion.max(now.persuasion),
             luck: base.luck.max(now.luck),
-            agility: base.agility.max(now.agility),
+            speed: base.speed.max(now.speed),
+            perception: base.perception.max(now.perception),
             is_hidden: base.is_hidden,
         };
 

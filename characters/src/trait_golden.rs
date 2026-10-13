@@ -19,12 +19,12 @@ fn fixture(name: &str) -> crate::Character {
     let mut c = crate::Character::new(name.to_string(), None, None);
     c.attributes.movement = 50;
     c.attributes.strength = 30;
-    c.attributes.defense = 50;
+    c.attributes.toughness = 50;
     c.attributes.bravery = 50;
     c.attributes.intelligence = 50;
     c.attributes.persuasion = 50;
     c.attributes.luck = 50;
-    c.attributes.agility = 50;
+    c.attributes.speed = 50;
     c.stamina = 100;
     c.max_stamina = 100;
     c
