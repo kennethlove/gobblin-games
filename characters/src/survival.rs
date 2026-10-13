@@ -1,4 +1,5 @@
 use crate::Character;
+use crate::traits::CharacterAttribute;
 use areas::weather::Weather;
 
 // Wire-visible band enums live in the `shared` crate (they are serialised
@@ -74,7 +75,7 @@ pub fn tick_survival(
     sheltered: bool,
     tick_index: usize,
 ) {
-    let strength = character.attributes.strength;
+    let strength = character.effective_attribute(CharacterAttribute::Strength);
     // Stamina lives on Character, not Attributes; project the current stamina
     // onto a 0..=100 scale relative to max_stamina so the same thresholds
     // can be compared.

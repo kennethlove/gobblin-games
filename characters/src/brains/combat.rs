@@ -16,7 +16,7 @@ use crate::Character;
 use crate::combat::round_loop::CombatActionProvider;
 use crate::combat_tuning::CombatTuning;
 use crate::stamina_band::stamina_band;
-use crate::traits::{BehaviorAxis, behavior_sum};
+use crate::traits::{BehaviorAxis, CharacterAttribute, behavior_sum};
 use shared::combat_beat::CombatActionKind;
 use shared::messages::{ItemRef, StaminaBand};
 use world::items::Attribute;
@@ -84,7 +84,9 @@ impl CombatBrain {
         if behavior_sum(&actor.traits, BehaviorAxis::FleeCowardice) > 0 {
             flee += t.brain_flee_cautious_bonus;
         }
-        if opponent.attributes.strength > actor.attributes.strength {
+        if opponent.effective_attribute(CharacterAttribute::Strength)
+            > actor.effective_attribute(CharacterAttribute::Strength)
+        {
             flee += t.brain_flee_outmatched_bonus;
         }
 

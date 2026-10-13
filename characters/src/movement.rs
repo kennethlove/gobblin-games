@@ -6,6 +6,7 @@
 //! - Area selection logic
 
 use crate::Character;
+use crate::traits::CharacterAttribute;
 use areas::Area;
 use rand::prelude::*;
 use rand::rngs::SmallRng;
@@ -48,7 +49,7 @@ impl Character {
         };
 
         // 1. Can the character move at all?
-        if self.attributes.movement == 0 {
+        if self.effective_attribute(CharacterAttribute::Movement) == 0 {
             let current_area_name = self.area.to_string();
             let line =
                 GameOutput::CharacterTravelTooTired(self.name.as_str(), current_area_name.as_str())
@@ -88,7 +89,7 @@ impl Character {
         }
 
         // 3. Handle movement based on character's movement attribute.
-        match self.attributes.movement {
+        match self.effective_attribute(CharacterAttribute::Movement) {
             // Low movement: can only move to suggested_area if it's valid and set.
             1..=10 => {
                 if let Some(new_area) = target_area {

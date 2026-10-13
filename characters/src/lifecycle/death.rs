@@ -1,5 +1,6 @@
 use crate::Character;
 use crate::statuses::CharacterStatus;
+use crate::traits::CharacterAttribute;
 use rand::RngExt;
 use rand::prelude::*;
 use rand::rngs::SmallRng;
@@ -23,7 +24,8 @@ impl Character {
     /// Hides the character from view.
     pub(crate) fn hides(&mut self) -> bool {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
-        let hidden = rng.random_bool(self.attributes.intelligence as f64 / 100.0);
+        let hidden = rng
+            .random_bool(self.effective_attribute(CharacterAttribute::Intelligence) as f64 / 100.0);
         self.attributes.is_hidden = hidden;
         hidden
     }

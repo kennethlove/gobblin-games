@@ -1,7 +1,7 @@
 use crate::Character;
 use crate::actions::Action;
 use crate::alliances::MAX_ALLIES;
-use crate::traits::{REFUSERS, ThresholdDelta, Trait, geometric_mean_affinity};
+use crate::traits::{CharacterAttribute, REFUSERS, ThresholdDelta, Trait, geometric_mean_affinity};
 use areas::{Area, AreaDetails};
 use rand::Rng;
 use rand::RngExt;
@@ -765,7 +765,7 @@ impl Brain {
         let extreme_low_sanity = self.thresholds.extreme_low_sanity;
 
         let stats = (
-            character.attributes.movement,
+            character.effective_attribute(CharacterAttribute::Movement),
             character.effective_sanity(),
             character.attributes.is_hidden,
         );
@@ -792,7 +792,7 @@ impl Brain {
         let low_intelligence = self.thresholds.low_intelligence;
 
         let recklessness: u32 = 100_u32
-            .saturating_sub(character.attributes.intelligence)
+            .saturating_sub(character.effective_attribute(CharacterAttribute::Intelligence))
             .saturating_sub(character.effective_sanity());
         match recklessness {
             r if r < high_intelligence => Action::Move(None),
@@ -877,13 +877,15 @@ impl Brain {
                     .bytes()
                     .map(|b| b as u32)
                     .sum();
-                if character.attributes.movement > 0 && hash.is_multiple_of(7) {
+                if character.effective_attribute(CharacterAttribute::Movement) > 0
+                    && hash.is_multiple_of(7)
+                {
                     Action::SetTrap {
                         trap_kind: None,
                         severity: None,
                     }
                 } else {
-                    match character.attributes.movement {
+                    match character.effective_attribute(CharacterAttribute::Movement) {
                         0 => Action::Rest,
                         _ => Action::Move(None),
                     }
@@ -898,7 +900,7 @@ impl Brain {
         let extreme_low_sanity = self.thresholds.extreme_low_sanity;
 
         let stats = (
-            character.attributes.movement,
+            character.effective_attribute(CharacterAttribute::Movement),
             character.effective_sanity(),
             character.attributes.is_hidden,
         );
@@ -942,7 +944,7 @@ impl Brain {
         let low_intelligence = self.thresholds.low_intelligence;
 
         let recklessness: u32 = 100_u32
-            .saturating_sub(character.attributes.intelligence)
+            .saturating_sub(character.effective_attribute(CharacterAttribute::Intelligence))
             .saturating_sub(character.effective_sanity());
         match recklessness {
             // Smart enough to know better, moves

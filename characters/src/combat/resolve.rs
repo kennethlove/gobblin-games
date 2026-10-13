@@ -12,6 +12,7 @@ use crate::combat::inflict_table::{
     HitSeverity, WeaponKind, lookup_break_mid_swing_inflict, lookup_inflicts,
 };
 use crate::stamina_band::stamina_band;
+use crate::traits::CharacterAttribute;
 use rand::RngExt;
 use rand::prelude::*;
 use shared::combat_beat::{CombatBeat, StressReport, SwingOutcome, WearOutcomeReport, WearReport};
@@ -122,7 +123,7 @@ pub fn attack_contest(
     // Get attack roll and strength modifier
     let base_attack_roll: i32 = rng.random_range(1..=20); // Base roll
     let mut attack_roll = base_attack_roll;
-    attack_roll += attacker.attributes.strength as i32; // Add strength
+    attack_roll += attacker.effective_attribute(CharacterAttribute::Strength) as i32; // Add strength
     {
         let band = stamina_band(attacker.stamina, attacker.max_stamina, tuning);
         let penalty = match band {
@@ -223,7 +224,7 @@ pub fn attack_contest(
     // Get defense roll and defense modifier
     let base_defense_roll: i32 = rng.random_range(1..=20); // Base roll
     let mut defense_roll = base_defense_roll;
-    defense_roll += target.attributes.defense as i32; // Add defense
+    defense_roll += target.effective_attribute(CharacterAttribute::Defense) as i32; // Add defense
     {
         let band = stamina_band(target.stamina, target.max_stamina, tuning);
         let penalty = match band {
@@ -451,13 +452,15 @@ pub fn resolve(
 
     // Compute damage based on result (strength scale 0-50, result multipliers up to 3x).
     // Scale to blood system: multiply by 10 so damage is in the 0-1000 blood range.
+    let attack_strength = attacker.effective_attribute(CharacterAttribute::Strength);
+    let defend_strength = defender.effective_attribute(CharacterAttribute::Strength);
     let damage: u32 = match result {
-        AttackResult::CriticalHit => attacker.attributes.strength * 3,
-        AttackResult::AttackerWins => attacker.attributes.strength,
-        AttackResult::AttackerWinsDecisively => attacker.attributes.strength * 2,
-        AttackResult::PerfectBlock => defender.attributes.strength * 2,
-        AttackResult::DefenderWins => defender.attributes.strength,
-        AttackResult::DefenderWinsDecisively => defender.attributes.strength * 2,
+        AttackResult::CriticalHit => attack_strength * 3,
+        AttackResult::AttackerWins => attack_strength,
+        AttackResult::AttackerWinsDecisively => attack_strength * 2,
+        AttackResult::PerfectBlock => defend_strength * 2,
+        AttackResult::DefenderWins => defend_strength,
+        AttackResult::DefenderWinsDecisively => defend_strength * 2,
         AttackResult::CriticalFumble | AttackResult::Miss => 0,
     } * 10;
 
@@ -883,7 +886,7 @@ impl Character {
         events: &mut Vec<TaggedEvent>,
         tuning: &crate::combat_tuning::CombatTuning,
     ) -> AttackOutcome {
-        let damage = self.attributes.strength * 10;
+        let damage = self.effective_attribute(CharacterAttribute::Strength) * 10;
         self.blood = self.blood.saturating_sub(damage);
         let mut stress_events: Vec<TaggedEvent> = Vec::new();
         let stress_damage = self.apply_violence_stress(&mut stress_events, tuning);
