@@ -12,7 +12,6 @@ use shared::{
     PaginationMetadata,
 };
 use std::collections::HashMap;
-use strum::IntoEnumIterator;
 use surrealdb_types::{RecordId, SerdeWrapper};
 use uuid::Uuid;
 use validator::Validate;
@@ -56,6 +55,12 @@ pub async fn create_game(
         .unwrap_or(shared::DEFAULT_MAX_GOBINS_PER_PLAYER)
         .clamp(1, roster_cap);
 
+    // Arena choice: a preset id from the in-repo registry. The resolved
+    // preset is snapshotted on the game row, and the areas below are
+    // instantiated from that snapshot. No choice = default preset.
+    let arena = areas::preset::resolve(payload.arena.as_deref())
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+
     // Build the UPSERT body BEFORE constructing the Game struct so we can
     // use game_name before it moves into `Game { name }`.
     //
@@ -81,6 +86,8 @@ pub async fn create_game(
         "max_goblins_per_player": max_goblins_per_player,
         "config": serde_json::to_value(&config)
             .map_err(|e| AppError::InternalServerError(format!("Failed to encode config: {e}")))?,
+        "arena": serde_json::to_value(&arena)
+            .map_err(|e| AppError::InternalServerError(format!("Failed to encode arena: {e}")))?,
     });
 
     // Construct Game with server-controlled fields
@@ -138,9 +145,9 @@ pub async fn create_game(
     // Apply game customization settings
     let base_item_count = payload.item_quantity.base_item_count();
 
-    // Create areas concurrently with customized item count
-    let area_names = areas::generate_area_names();
-    let area_futures = Area::iter().zip(area_names).map(|(area, name)| {
+    // Create areas concurrently from the arena snapshot with the
+    // customized item count.
+    let area_futures = arena.instantiate().into_iter().map(|(area, name)| {
         super::create_area(game_identifier.as_str(), area, name, base_item_count, &db)
     });
     let area_results = futures::future::join_all(area_futures).await;
@@ -193,6 +200,9 @@ pub async fn quickstart(
     let game_name = default_game.name;
 
     let game_rid = RecordId::new("game", game_identifier.as_str());
+    // Quickstart never offers an arena choice; it gets the default
+    // preset's snapshot, same as any game created without a choice.
+    let arena = areas::preset::default_preset();
     let body = serde_json::json!({
         "identifier": &game_identifier,
         "name": &game_name,
@@ -204,6 +214,7 @@ pub async fn quickstart(
         "team_count": shared::DEFAULT_TEAM_COUNT,
         "goblins_per_team": shared::DEFAULT_GOBLINS_PER_TEAM,
         "max_goblins_per_player": shared::DEFAULT_MAX_GOBINS_PER_PLAYER,
+        "arena": serde_json::to_value(&arena).unwrap_or(serde_json::Value::Null),
     });
 
     db.query("UPSERT $rid CONTENT $body")
@@ -228,10 +239,9 @@ pub async fn quickstart(
         )));
     }
 
-    // Create 7 areas
+    // Create 7 areas from the arena snapshot
     let base_item_count = shared::ItemQuantity::default().base_item_count();
-    let area_names = areas::generate_area_names();
-    let area_futures = Area::iter().zip(area_names).map(|(area, name)| {
+    let area_futures = arena.instantiate().into_iter().map(|(area, name)| {
         super::create_area(game_identifier.as_str(), area, name, base_item_count, &db)
     });
     let area_results = futures::future::join_all(area_futures).await;

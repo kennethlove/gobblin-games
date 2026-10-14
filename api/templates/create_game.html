@@ -55,6 +55,16 @@
       </div>
     </div>
 
+    <div>
+      <label for="arena" class="block text-sm font-medium text-gray-300 mb-1">Arena</label>
+      <select id="arena" name="arena" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-amber-500">
+        {% for preset in arenas %}
+        <option value="{{ preset.id }}"{% if preset.id == default_arena_id %} selected{% endif %} title="{{ preset.description }}">{{ preset.name }}</option>
+        {% endfor %}
+      </select>
+      <p class="text-xs text-gray-500 mt-1">The map every goblin fights on.</p>
+    </div>
+
     {% if goblins %}
     <fieldset class="space-y-2">
       <legend class="text-sm font-medium text-gray-300">Bring your goblins</legend>

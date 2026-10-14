@@ -56,6 +56,9 @@ pub struct CreateGameRequest {
     /// Hour night falls (even, 00–22; default 20).
     #[serde(default)]
     pub nightfall_hour: Option<u8>,
+    /// Arena preset id from the in-repo registry; empty/absent = default.
+    #[serde(default)]
+    pub arena: Option<String>,
 }
 
 // ── HTMX page handlers ──────────────────────────────────────────────
@@ -963,6 +966,8 @@ pub async fn create_game_handler(
 
     let mut ctx = tera_engine::base_context("Create Game", &auth);
     ctx.insert("goblins", &goblins);
+    ctx.insert("arenas", &areas::preset::list_presets());
+    ctx.insert("default_arena_id", &areas::preset::DEFAULT_PRESET_ID);
     html_with_csrf(tera_engine::render("create_game.html", &ctx), &csrf)
 }
 
@@ -1021,6 +1026,15 @@ pub async fn create_game_post_handler(
         nightfall_hour: form.nightfall_hour.unwrap_or(20),
         ..Default::default()
     };
+    // Arena choice: resolved preset snapshot stored on the game row; the
+    // areas below instantiate from it. No choice = default preset.
+    let arena = match areas::preset::resolve(form.arena.as_deref()) {
+        Ok(preset) => preset,
+        Err(e) => {
+            tracing::warn!(error = %e, "invalid arena preset on game create");
+            return Redirect::to("/games/new").into_response();
+        }
+    };
     let body = serde_json::json!({
         "identifier": &game_identifier,
         "name": &game_name,
@@ -1032,6 +1046,7 @@ pub async fn create_game_post_handler(
         "max_goblins_per_player": max_goblins_per_player,
         // GameConfig is plain numeric fields — encoding can't fail in practice.
         "config": serde_json::to_value(&config).unwrap_or(serde_json::Value::Null),
+        "arena": serde_json::to_value(&arena).unwrap_or(serde_json::Value::Null),
     });
 
     if user_db
@@ -1067,11 +1082,8 @@ pub async fn create_game_post_handler(
         }
     }
 
-    use areas::Area;
-    use strum::IntoEnumIterator;
     let base_item_count = shared::ItemQuantity::default().base_item_count();
-    let area_names = areas::generate_area_names();
-    let area_futures = Area::iter().zip(area_names).map(|(area, name)| {
+    let area_futures = arena.instantiate().into_iter().map(|(area, name)| {
         api::games::create_area(&game_identifier, area, name, base_item_count, &user_db)
     });
     let area_results = futures::future::join_all(area_futures).await;

@@ -15,4 +15,7 @@ Hex-graph arena with 7+ areas, item inventories, and dynamic closures.
 | `forage.rs` | 39 | Foraging mechanics, resource gathering |
 | `traps.rs` | 25 | `PlacedTrap` struct — lives on `AreaDetails::placed_traps` |
 | `weather.rs` | 34 | `Weather` enum (Clear, Rain, Storm, etc.) |
+| `preset.rs` | 420 | Arena presets: registry loader, `ArenaPreset` snapshot, validation |
+
+Arena preset files live in `areas/presets/` (format documented in `areas/presets/README.md`).
 

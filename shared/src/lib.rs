@@ -150,6 +150,11 @@ pub struct CreateGame {
     #[validate(range(min = 1, message = "Goblins per player must be at least 1"))]
     pub max_goblins_per_player: Option<u32>,
 
+    /// Arena preset id from the in-repo registry (`areas::preset`).
+    /// Absent or empty = the default preset.
+    #[serde(default)]
+    pub arena: Option<String>,
+
     /// First phase hour of every game day (even, 00–22; default 6).
     /// Paired with `nightfall_hour`; validated together.
     #[serde(default)]
