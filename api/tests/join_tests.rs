@@ -1,6 +1,6 @@
 //! Roster selection and join-game flow: create a game with chosen owned
 //! goblins, join before start (owner-only, one per player, 24 cap,
-//! fewest-team balance), bot-fill to 24 at start.
+//! per-team capacity, fewest-team balance), bot-fill to 24 at start.
 
 mod common;
 
@@ -878,6 +878,359 @@ async fn test_public_game_is_listable_but_join_goes_through_the_link() {
         .json(&json!({ "character_id": stranger_goblin }))
         .await
         .assert_status_ok();
+
+    test_db.cleanup().await;
+}
+
+/// Per-team capacity: a team already at `goblins_per_team` must not take
+/// another goblin even when the total roster still has room — otherwise
+/// the ready rule (full roster plus every team represented) can never
+/// fire. The roster is skewed directly to the shape a racing join used
+/// to produce: team 1 full, team 2 empty, total under the cap.
+#[tokio::test]
+async fn test_join_redirects_away_from_a_full_team() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let alice = create_authenticated_user(&test_db, &server, "team_cap_alice").await;
+    let bob = create_authenticated_user(&test_db, &server, "team_cap_bob").await;
+    let a1 = create_owned_goblin(&server, &alice, "Stinky").await;
+    let a2 = create_owned_goblin(&server, &alice, "Second").await;
+    let a3 = create_owned_goblin(&server, &alice, "Third").await;
+    let b1 = create_owned_goblin(&server, &bob, "Billy Slick").await;
+    let b2 = create_owned_goblin(&server, &bob, "Bob Spare").await;
+
+    // 2 teams × 2 goblins = 4 slots.
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({
+            "name": "Small Teams",
+            "team_count": 2,
+            "goblins_per_team": 2,
+            "characters": [a1.clone()],
+        }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Alice's second goblin joins and takes team 2 (fewest).
+    server
+        .post(&format!("/api/games/{}/join", game_id))
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({ "character_id": a2.clone() }))
+        .await
+        .assert_status_ok();
+
+    // Pin both onto team 1: full team, empty team 2, total 2 < 4.
+    for id in [&a1, &a2] {
+        test_db
+            .db
+            .query("UPDATE character SET team = 1 WHERE identifier = $id")
+            .bind(("id", id.clone()))
+            .await
+            .unwrap();
+    }
+
+    // Bob's join must land on the team with space, not overfill team 1.
+    server
+        .post(&format!("/api/games/{}/join", game_id))
+        .add_header("Authorization", bob.auth_header())
+        .json(&json!({ "character_id": b1.clone() }))
+        .await
+        .assert_status_ok();
+    let characters = fetch_characters(&server, &alice, &game_id).await;
+    let counts = team_counts(&characters);
+    assert_eq!(
+        counts.get(&1),
+        Some(&2),
+        "a full team must not gain members"
+    );
+    assert_eq!(
+        counts.get(&2),
+        Some(&1),
+        "the join lands on the team with space"
+    );
+
+    // Alice's third goblin (creator exemption) takes the last slot, so
+    // the roster is a true 2-per-team fill and the ready rule fires.
+    server
+        .post(&format!("/api/games/{}/join", game_id))
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({ "character_id": a3 }))
+        .await
+        .assert_status_ok();
+    let characters = fetch_characters(&server, &alice, &game_id).await;
+    let counts = team_counts(&characters);
+    assert_eq!(counts.get(&1), Some(&2));
+    assert_eq!(counts.get(&2), Some(&2));
+    let detail = server
+        .get(&format!("/api/games/{}", game_id))
+        .add_header("Authorization", alice.auth_header())
+        .await;
+    detail.assert_status_ok();
+    assert_eq!(
+        detail.json::<serde_json::Value>()["ready"],
+        json!(true),
+        "an even fill fires the ready rule"
+    );
+
+    // The total cap still rejects once every slot is taken.
+    server
+        .post(&format!("/api/games/{}/join", game_id))
+        .add_header("Authorization", bob.auth_header())
+        .json(&json!({ "character_id": b2 }))
+        .await
+        .assert_status(axum::http::StatusCode::CONFLICT);
+
+    test_db.cleanup().await;
+}
+
+/// The creator's per-player exemption must not bypass the per-team cap:
+/// a creator may field every slot with their own goblins, but each team
+/// still stops at `goblins_per_team`.
+#[tokio::test]
+async fn test_creator_join_exemption_is_still_capped_per_team() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let alice = create_authenticated_user(&test_db, &server, "creator_cap").await;
+    let g1 = create_owned_goblin(&server, &alice, "Stinky").await;
+    let g2 = create_owned_goblin(&server, &alice, "Second").await;
+    let g3 = create_owned_goblin(&server, &alice, "Third").await;
+    let g4 = create_owned_goblin(&server, &alice, "Fourth").await;
+    let g5 = create_owned_goblin(&server, &alice, "Fifth").await;
+
+    // 2 × 2 = 4 slots; the default one-per-player gate skips the
+    // creator, so all four joins are hers to make.
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({
+            "name": "Creator Fills",
+            "team_count": 2,
+            "goblins_per_team": 2,
+            "characters": [g1],
+        }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    for goblin in [&g2, &g3, &g4] {
+        server
+            .post(&format!("/api/games/{}/join", game_id))
+            .add_header("Authorization", alice.auth_header())
+            .json(&json!({ "character_id": goblin }))
+            .await
+            .assert_status_ok();
+    }
+
+    let characters = fetch_characters(&server, &alice, &game_id).await;
+    assert_eq!(characters.len(), 4);
+    let counts = team_counts(&characters);
+    for (team, count) in &counts {
+        assert_eq!(*count, 2, "team {team} must stop at goblins_per_team");
+    }
+
+    // Fifth goblin: every team full, every slot taken — the creator's
+    // exemption does not extend past the roster.
+    server
+        .post(&format!("/api/games/{}/join", game_id))
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({ "character_id": g5 }))
+        .await
+        .assert_status(axum::http::StatusCode::CONFLICT);
+
+    test_db.cleanup().await;
+}
+
+/// `create_character` (bot fill) trusts the caller's team index — the
+/// requested team must still have space. A full request redirects to
+/// the fewest team with room; once every team is full the roster is
+/// full.
+#[tokio::test]
+async fn test_bot_fill_team_request_redirects_when_team_is_full() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let alice = create_authenticated_user(&test_db, &server, "bot_team_cap").await;
+    let g1 = create_owned_goblin(&server, &alice, "Stinky").await;
+    let g2 = create_owned_goblin(&server, &alice, "Second").await;
+
+    // 2 × 2 game with both goblins in: team 1 and team 2 hold one each.
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({
+            "name": "Bot Capacity",
+            "team_count": 2,
+            "goblins_per_team": 2,
+            "characters": [g1.clone(), g2.clone()],
+        }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Pin both onto team 1: full team 1, empty team 2, total 2 < 4.
+    for id in [&g1, &g2] {
+        test_db
+            .db
+            .query("UPDATE character SET team = 1 WHERE identifier = $id")
+            .bind(("id", id.clone()))
+            .await
+            .unwrap();
+    }
+
+    // Requesting the full team 1 (index 0) must redirect to team 2.
+    let bot = api::characters::create_character(None, &game_id, &test_db.db, 0)
+        .await
+        .expect("bot fill into a full team must redirect");
+    assert_eq!(bot.team, 2, "full team must not take the bot");
+
+    // Requesting a team that still has room keeps it.
+    let bot = api::characters::create_character(None, &game_id, &test_db.db, 1)
+        .await
+        .expect("bot fill into a roomy team");
+    assert_eq!(bot.team, 2);
+
+    // Every team full: no room anywhere, the roster rejects the bot.
+    let err = api::characters::create_character(None, &game_id, &test_db.db, 0)
+        .await
+        .expect_err("a full roster must reject the bot");
+    assert!(matches!(err, api::AppError::GameFull(_)));
+
+    let characters = fetch_characters(&server, &alice, &game_id).await;
+    assert_eq!(characters.len(), 4, "no goblin beyond the roster cap");
+    let counts = team_counts(&characters);
+    assert_eq!(counts.get(&1), Some(&2), "team 1 stays exactly full");
+    assert_eq!(counts.get(&2), Some(&2), "team 2 takes the redirected bots");
+
+    test_db.cleanup().await;
+}
+
+/// The ready rule is the capacity contract's payoff: it must fire only
+/// on a true even fill (full roster AND every team represented), never
+/// on an overfilled spread.
+#[tokio::test]
+async fn test_ready_rule_requires_even_fill() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "ready_even").await;
+
+    // 3 × 2 = 6, bot-filled at creation: 2 per team, ready.
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Even Fill", "team_count": 3, "goblins_per_team": 2 }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let characters = fetch_characters(&server, &user, &game_id).await;
+    assert_eq!(characters.len(), 6);
+    let counts = team_counts(&characters);
+    assert_eq!(counts.len(), 3, "every team represented");
+    assert!(counts.values().all(|&c| c == 2), "{counts:?}");
+    let detail = server
+        .get(&format!("/api/games/{}", game_id))
+        .add_header("Authorization", user.auth_header())
+        .await;
+    detail.assert_status_ok();
+    assert_eq!(detail.json::<serde_json::Value>()["ready"], json!(true));
+
+    // Skew onto team 1 (the overfill shape): the roster is still full
+    // at 6, but team 2 is empty — uneven, so not ready.
+    let skew_ids: Vec<String> = characters
+        .iter()
+        .filter(|c| c["team"].as_u64() == Some(2))
+        .filter_map(|c| c["identifier"].as_str().map(str::to_owned))
+        .collect();
+    assert_eq!(skew_ids.len(), 2, "team 2 holds both skew donors");
+    for id in skew_ids {
+        test_db
+            .db
+            .query("UPDATE character SET team = 1 WHERE identifier = $id")
+            .bind(("id", id))
+            .await
+            .unwrap();
+    }
+    let detail = server
+        .get(&format!("/api/games/{}", game_id))
+        .add_header("Authorization", user.auth_header())
+        .await;
+    detail.assert_status_ok();
+    assert_eq!(
+        detail.json::<serde_json::Value>()["ready"],
+        json!(false),
+        "a full but uneven roster must not be ready"
+    );
+
+    test_db.cleanup().await;
+}
+
+/// `fewest_team_with_space` picks the fewest team with room and reports
+/// `GameFull` once every team is at `goblins_per_team`.
+#[tokio::test]
+async fn test_fewest_team_with_space_rejects_when_all_teams_are_full() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "with_space").await;
+
+    // Full 2 × 2 roster, bot-filled at creation.
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "All Full", "team_count": 2, "goblins_per_team": 2 }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let full_game = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let err = api::characters::fewest_team_with_space(&test_db.db, &full_game, 2, 2).await;
+    assert!(matches!(err, Err(api::AppError::GameFull(_))));
+
+    // A partial roster picks the fewest team with room.
+    let goblin = create_owned_goblin(&server, &user, "Stinky").await;
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({
+            "name": "Roomy",
+            "team_count": 3,
+            "goblins_per_team": 3,
+            "characters": [goblin],
+        }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let roomy_game = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let team = api::characters::fewest_team_with_space(&test_db.db, &roomy_game, 3, 3)
+        .await
+        .expect("roomy roster has space");
+    assert_eq!(team, 2, "fewest team with room, not the occupied team 1");
 
     test_db.cleanup().await;
 }
