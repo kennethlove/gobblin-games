@@ -1,4 +1,4 @@
-//! Cross-game baseline for per-game reset.
+//! Cross-game baseline for the new-game character rebuild.
 //!
 //! A goblin's durable state — attributes, traits, lifetime fight record —
 //! must survive game boundaries with one rule: whatever the goblin *earned*
@@ -12,7 +12,7 @@
 //! record-increment rules still diff against the snapshot directly — the log
 //! supplements them, it does not replace them yet.
 //!
-//! `Character::reset_for_new_game` captures this snapshot at game entry and
+//! `Character::into_new_game` captures this snapshot at game entry and
 //! settles it at the next entry. See the module docs on `GameBaseline` for
 //! the exact carry rules.
 
@@ -48,7 +48,8 @@ pub struct AttributeDelta {
 ///   `lifecycle::health`) and are dropped by the restore.
 /// - **Lifetime fight record** (`kills`/`wins`/`defeats`/`draws`):
 ///   increments persist; per-game record fields (`day_killed`,
-///   `killed_by`, `game`) are cleared by the reset itself.
+///   `killed_by`, `game`) are cleared when the character is rebuilt for
+///   the new game.
 ///
 /// Not captured: identity, name, team, clan, avatar, `brain` (re-derived
 /// from traits), `ever_addicted_to` (deliberate cross-game carry, see its
