@@ -1,11 +1,12 @@
 //! Item-based cure logic for afflictions.
 //!
-//! Maps cure items to affliction kinds and steps severity down by one tier.
-//! Mild afflictions are removed entirely.
+//! Cures are typed ([`CureKind`] on the item), so cure behavior never
+//! depends on an item's display name. Applying a cure steps severity down
+//! by one tier. Mild afflictions are removed entirely.
 //!
 //! See spec §7 Cure.
 
-use shared::afflictions::{Affliction, AfflictionKind, Severity};
+use shared::afflictions::{Affliction, AfflictionKind, CureKind, Severity};
 
 /// Outcome of applying a cure item to a character's afflictions.
 #[derive(Debug, Clone, PartialEq)]
@@ -32,39 +33,15 @@ pub fn recovery_cycles(kind: AfflictionKind) -> u32 {
     }
 }
 
-/// Map a cure item name to the affliction it treats.
+/// Apply a cure to a character's afflictions.
 ///
-/// Returns `None` if the item is not a cure item.
-pub fn cure_item_to_affliction(item_name: &str) -> Option<AfflictionKind> {
-    let lower = item_name.to_lowercase();
-    if lower.contains("bandage") {
-        return Some(AfflictionKind::Wounded);
-    }
-    if lower.contains("splint") {
-        return Some(AfflictionKind::BrokenBone);
-    }
-    if lower.contains("antibiotic") || lower.contains("antibiotics") {
-        return Some(AfflictionKind::Infected);
-    }
-    None
-}
-
-/// Apply a cure item to a character's afflictions.
-///
-/// Finds the matching affliction and steps severity down by one tier.
-/// If the affliction was Mild, it is removed entirely.
+/// Finds the affliction the cure treats ([`CureKind::affliction_kind`]) and
+/// steps severity down by one tier. If the affliction was Mild, it is
+/// removed entirely.
 ///
 /// Returns `CureOutcome::Cured` on success, `NoEffect` if no matching affliction.
-pub fn apply_cure(afflictions: &mut Vec<Affliction>, item_name: &str) -> CureOutcome {
-    let target_kind = match cure_item_to_affliction(item_name) {
-        Some(k) => k,
-        None => {
-            return CureOutcome::NoEffect {
-                reason: format!("'{item_name}' is not a cure item"),
-            };
-        }
-    };
-
+pub fn apply_cure(afflictions: &mut Vec<Affliction>, cure: CureKind) -> CureOutcome {
+    let target_kind = cure.affliction_kind();
     // Find the highest-severity matching affliction to treat.
     let mut best_idx: Option<usize> = None;
     let mut best_severity: Option<Severity> = None;
@@ -147,47 +124,22 @@ mod tests {
     }
 
     #[test]
-    fn cure_item_mapping_bandage() {
+    fn cure_kind_maps_to_affliction_kind() {
+        assert_eq!(CureKind::Wounded.affliction_kind(), AfflictionKind::Wounded);
         assert_eq!(
-            cure_item_to_affliction("bandage"),
-            Some(AfflictionKind::Wounded)
+            CureKind::Infected.affliction_kind(),
+            AfflictionKind::Infected
         );
         assert_eq!(
-            cure_item_to_affliction("Medical Bandage"),
-            Some(AfflictionKind::Wounded)
+            CureKind::BrokenBone.affliction_kind(),
+            AfflictionKind::BrokenBone
         );
-    }
-
-    #[test]
-    fn cure_item_mapping_splint() {
-        assert_eq!(
-            cure_item_to_affliction("splint"),
-            Some(AfflictionKind::BrokenBone)
-        );
-    }
-
-    #[test]
-    fn cure_item_mapping_antibiotic() {
-        assert_eq!(
-            cure_item_to_affliction("antibiotic"),
-            Some(AfflictionKind::Infected)
-        );
-        assert_eq!(
-            cure_item_to_affliction("Antibiotics"),
-            Some(AfflictionKind::Infected)
-        );
-    }
-
-    #[test]
-    fn cure_item_mapping_unknown() {
-        assert_eq!(cure_item_to_affliction("health kit"), None);
-        assert_eq!(cure_item_to_affliction("food"), None);
     }
 
     #[test]
     fn apply_cure_severe_to_moderate() {
         let mut affs = vec![make_affliction(AfflictionKind::Wounded, Severity::Severe)];
-        let result = apply_cure(&mut affs, "bandage");
+        let result = apply_cure(&mut affs, CureKind::Wounded);
         assert_eq!(
             result,
             CureOutcome::Cured {
@@ -202,7 +154,7 @@ mod tests {
     #[test]
     fn apply_cure_moderate_to_mild() {
         let mut affs = vec![make_affliction(AfflictionKind::Wounded, Severity::Moderate)];
-        let result = apply_cure(&mut affs, "bandage");
+        let result = apply_cure(&mut affs, CureKind::Wounded);
         assert_eq!(
             result,
             CureOutcome::Cured {
@@ -217,7 +169,7 @@ mod tests {
     #[test]
     fn apply_cure_mild_removes_affliction() {
         let mut affs = vec![make_affliction(AfflictionKind::Wounded, Severity::Mild)];
-        let result = apply_cure(&mut affs, "bandage");
+        let result = apply_cure(&mut affs, CureKind::Wounded);
         assert_eq!(
             result,
             CureOutcome::Cured {
@@ -235,18 +187,7 @@ mod tests {
             AfflictionKind::BrokenBone,
             Severity::Moderate,
         )];
-        let result = apply_cure(&mut affs, "bandage");
-        assert!(
-            matches!(result, CureOutcome::NoEffect { .. }),
-            "expected NoEffect, got {:?}",
-            result
-        );
-    }
-
-    #[test]
-    fn apply_cure_non_cure_item() {
-        let mut affs = vec![make_affliction(AfflictionKind::Wounded, Severity::Moderate)];
-        let result = apply_cure(&mut affs, "health kit");
+        let result = apply_cure(&mut affs, CureKind::Wounded);
         assert!(
             matches!(result, CureOutcome::NoEffect { .. }),
             "expected NoEffect, got {:?}",
@@ -261,7 +202,7 @@ mod tests {
             make_affliction(AfflictionKind::Wounded, Severity::Severe),
             make_affliction(AfflictionKind::Wounded, Severity::Moderate),
         ];
-        let result = apply_cure(&mut affs, "bandage");
+        let result = apply_cure(&mut affs, CureKind::Wounded);
         assert_eq!(
             result,
             CureOutcome::Cured {
@@ -283,7 +224,7 @@ mod tests {
             AfflictionKind::BrokenBone,
             Severity::Severe,
         )];
-        let result = apply_cure(&mut affs, "splint");
+        let result = apply_cure(&mut affs, CureKind::BrokenBone);
         assert_eq!(
             result,
             CureOutcome::Cured {
@@ -300,7 +241,7 @@ mod tests {
             AfflictionKind::Infected,
             Severity::Moderate,
         )];
-        let result = apply_cure(&mut affs, "antibiotic");
+        let result = apply_cure(&mut affs, CureKind::Infected);
         assert_eq!(
             result,
             CureOutcome::Cured {
@@ -338,7 +279,7 @@ mod tests {
             addiction_metadata: None,
             trapped_metadata: None,
         }];
-        let result = apply_cure(&mut affs, "bandage");
+        let result = apply_cure(&mut affs, CureKind::Wounded);
         assert!(matches!(result, CureOutcome::Cured { .. }));
         assert_eq!(affs[0].severity, Severity::Mild);
         assert_eq!(affs[0].body_part, Some(BodyPart::Arm));

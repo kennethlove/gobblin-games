@@ -28,6 +28,7 @@ mod tests {
             max_durability: 5,
             attribute: Attribute::Health,
             effect: 7,
+            cures: None,
         }
     }
 

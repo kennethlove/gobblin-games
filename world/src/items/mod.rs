@@ -5,7 +5,7 @@ pub mod name_generator;
 mod tests;
 
 use serde::{Deserialize, Serialize};
-use shared::afflictions::Substance;
+use shared::afflictions::{CureKind, Substance};
 use std::fmt::Display;
 use std::str::FromStr;
 use strum::EnumIter;
@@ -111,6 +111,11 @@ pub struct Item {
     pub max_durability: u32,
     pub attribute: Attribute,
     pub effect: i32,
+    /// Which affliction this item cures, if any. Persisted items written
+    /// before this field existed predate typed cures; the default keeps
+    /// them loading as non-cure items (a migration backfills legacy cures).
+    #[serde(default)]
+    pub cures: Option<CureKind>,
 }
 
 fn default_rarity() -> ItemRarity {
@@ -135,6 +140,7 @@ impl Default for Item {
             max_durability: 1,
             attribute: Attribute::Health,
             effect: 0,
+            cures: None,
         }
     }
 }
@@ -158,6 +164,7 @@ impl Item {
             max_durability,
             attribute,
             effect,
+            cures: None,
         }
     }
 

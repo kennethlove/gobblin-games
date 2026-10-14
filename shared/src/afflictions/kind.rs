@@ -247,6 +247,28 @@ impl FromStr for AfflictionKind {
     }
 }
 
+/// Typed cure an item carries: the affliction it treats. Items expose this
+/// as data (`Item::cures`) so cure behavior never depends on an item's
+/// display name — renaming a bandage keeps it curing wounds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CureKind {
+    Wounded,
+    Infected,
+    BrokenBone,
+}
+
+impl CureKind {
+    /// The affliction kind this cure steps down.
+    pub fn affliction_kind(self) -> AfflictionKind {
+        match self {
+            CureKind::Wounded => AfflictionKind::Wounded,
+            CureKind::Infected => AfflictionKind::Infected,
+            CureKind::BrokenBone => AfflictionKind::BrokenBone,
+        }
+    }
+}
+
 /// Anatomical attachment points for body-part-specific afflictions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

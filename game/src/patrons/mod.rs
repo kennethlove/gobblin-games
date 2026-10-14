@@ -1,4 +1,4 @@
-use shared::afflictions::AfflictionKind;
+use shared::afflictions::{AfflictionKind, CureKind};
 use shared::audience::AudienceEvent;
 use shared::patrons::ArchetypeId;
 
@@ -398,9 +398,11 @@ fn gift_catalog() -> Vec<(Item, u32)> {
     catalog.push((Item::new_water(None, 3), 5));
     catalog.push((Item::new_water(None, 2), 5));
 
-    // Bandage (consumable healing)
+    // Bandage (consumable healing); typed cure so it keeps curing Wounded
+    // regardless of its display name.
     let mut bandage = Item::new_consumable("bandage");
     bandage.attribute = Attribute::Health;
+    bandage.cures = Some(CureKind::Wounded);
     catalog.push((bandage, 10));
 
     // Antidote

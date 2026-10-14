@@ -20,7 +20,7 @@ pub mod tuning;
 pub use addiction::{AddictionAcquisition, acquisition_probability, high_duration};
 pub use anatomy::{AcquireResolution, RejectReason, can_acquire};
 pub use cascade::{CascadeOutcome, CascadeResult, apply_cascade, tick_cascade};
-pub use cure::{CureOutcome, apply_cure, cure_item_to_affliction, recovery_cycles};
+pub use cure::{CureOutcome, apply_cure, recovery_cycles};
 pub use effects::{BrainBias, StatModifiers, compute_brain_bias, compute_stat_modifiers};
 pub use trauma::TraumaAcquisition;
 pub use tuning::AfflictionTuning;
