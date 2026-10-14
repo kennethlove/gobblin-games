@@ -271,8 +271,8 @@ impl Character {
         self.effective_attribute(CharacterAttribute::Movement) as i32
     }
 
-    /// Effective defense: wound penalties plus trait modifiers.
-    pub fn effective_defense(&self) -> i32 {
+    /// Effective toughness: wound penalties plus trait modifiers.
+    pub fn effective_toughness(&self) -> i32 {
         self.effective_attribute(CharacterAttribute::Toughness) as i32
     }
 

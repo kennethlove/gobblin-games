@@ -421,6 +421,29 @@ pub fn attack_contest(
 // resolve — pure combat resolution
 // ---------------------------------------------------------------------------
 
+/// Cap on how much of an incoming hit effective toughness can absorb:
+/// toughness N mitigates N% of the damage, at most 50%.
+pub(crate) const TOUGHNESS_MITIGATION_CAP: i32 = 50;
+
+/// A hit that lands always costs at least this much blood, so mitigation
+/// can never turn a damaging swing into a scratch that cannot kill.
+pub(crate) const MIN_MITIGATED_DAMAGE: u32 = 1;
+
+/// Toughness damage mitigation: the character taking the hit absorbs part
+/// of it through effective toughness (base minus wound penalties). Wounded
+/// characters mitigate less, so the same swing draws strictly more blood.
+/// Zero damage (miss/fumble, or an attacker whose effective strength is 0)
+/// passes through unchanged, matching the pre-mitigation zero-damage edge.
+///
+/// Exposed so the formula can be tested without a full combat roll.
+pub(crate) fn mitigate_damage(raw_damage: u32, effective_toughness: i32) -> u32 {
+    if raw_damage == 0 {
+        return 0;
+    }
+    let pct = effective_toughness.clamp(0, TOUGHNESS_MITIGATION_CAP) as u32;
+    (raw_damage * (100 - pct) / 100).max(MIN_MITIGATED_DAMAGE)
+}
+
 /// Pure combat resolution. Calls `attack_contest()` and builds the
 /// `CombatBeat` from the result. Does NOT apply damage, stress, events,
 /// or afflictions — the caller handles those side effects.
@@ -454,7 +477,7 @@ pub fn resolve(
     // Scale to blood system: multiply by 10 so damage is in the 0-1000 blood range.
     let attack_strength = attacker.effective_attribute(CharacterAttribute::Strength);
     let defend_strength = defender.effective_attribute(CharacterAttribute::Strength);
-    let damage: u32 = match result {
+    let raw_damage: u32 = match result {
         AttackResult::CriticalHit => attack_strength * 3,
         AttackResult::AttackerWins => attack_strength,
         AttackResult::AttackerWinsDecisively => attack_strength * 2,
@@ -463,6 +486,20 @@ pub fn resolve(
         AttackResult::DefenderWinsDecisively => defend_strength * 2,
         AttackResult::CriticalFumble | AttackResult::Miss => 0,
     } * 10;
+
+    // Toughness mitigation: the character taking the hit absorbs part of it
+    // through effective toughness (wound penalties included). The dodge roll
+    // above already rewards high toughness; the double-dip is accepted.
+    let victim_toughness = match result {
+        AttackResult::CriticalHit
+        | AttackResult::AttackerWins
+        | AttackResult::AttackerWinsDecisively => defender.effective_toughness(),
+        AttackResult::PerfectBlock
+        | AttackResult::DefenderWins
+        | AttackResult::DefenderWinsDecisively => attacker.effective_toughness(),
+        AttackResult::CriticalFumble | AttackResult::Miss => 0,
+    };
+    let damage = mitigate_damage(raw_damage, victim_toughness);
 
     // Determine SwingOutcome from result and pre-damage health.
     let swing_outcome = match result {
