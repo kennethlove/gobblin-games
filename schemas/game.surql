@@ -64,13 +64,13 @@ DEFINE FUNCTION OVERWRITE fn::get_display_game($game_id: string) {
         SELECT  in.id,
                 in.name,
                 in.team,
-                in.attributes.health
+                in.blood
         FROM playing_in
         WHERE out.identifier = $game_id
     );
 
     LET $living_characters = (
-        SELECT * FROM $characters.in WHERE attributes.health > 0
+        SELECT * FROM $characters.in WHERE blood > 0
     );
 
     LET $winner = IF count($living_characters) == 1 THEN
@@ -90,7 +90,7 @@ DEFINE FUNCTION OVERWRITE fn::get_display_game($game_id: string) {
         config,
         $characters.in AS characters,
         count($characters.in) as character_count,
-        count(SELECT * FROM $characters.in WHERE attributes.health > 0) AS living_count,
+        count(SELECT * FROM $characters.in WHERE blood > 0) AS living_count,
         count($characters.in) == team_count * goblins_per_team AND
             count(array::distinct(<-playing_in<-character.team)) == team_count AS ready,
         $winner AS winner
@@ -104,7 +104,7 @@ DEFINE FUNCTION OVERWRITE fn::get_list_games($limit: int, $offset: int) {
     created_by.id == $auth.id AS is_mine,
     created_by.username,
     count(SELECT id FROM <-playing_in<-character) AS character_count,
-    count(SELECT id FROM <-playing_in<-character WHERE attributes.health > 0) AS living_count,
+    count(SELECT id FROM <-playing_in<-character WHERE blood > 0) AS living_count,
     count(<-playing_in<-character.id) == team_count * goblins_per_team
     AND
     count(array::distinct(<-playing_in<-character.team)) == team_count
