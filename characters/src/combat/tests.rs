@@ -244,6 +244,77 @@ fn attacks_miss(mut small_rng: SmallRng) {
     assert_eq!(result, AttackOutcome::Miss(attacker, target));
 }
 
+/// Wound penalties must reach the damage pipeline: at the same seed and the
+/// same rolls, the only difference between the two targets is blood and
+/// wounds, and the wounded one has to draw strictly more blood per hit.
+#[rstest]
+fn wounded_target_takes_more_damage_from_same_swing() {
+    use shared::wounds::{BodyPart, Wound, WoundSeverity, WoundType};
+
+    let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    attacker.traits.clear();
+    attacker.attributes.strength = 50;
+
+    let mut healthy = Character::new("Grubworm".to_string(), None, None);
+    healthy.traits.clear();
+    healthy.attributes.toughness = 5;
+
+    let mut wounded = healthy.clone();
+    wounded.blood = 400;
+    wounded.wounds.push(Wound::new(
+        WoundType::Cut,
+        WoundSeverity::Critical,
+        BodyPart::Head,
+    ));
+    // Head Critical: -10% x 1.5 head multiplier -> 5 x 0.85 = 4.25 -> 4.
+    assert_eq!(wounded.effective_toughness(), 4);
+
+    // Strength 50 vs toughness <= 5: the attack roll (51-70) always beats
+    // 1.5x the defense roll (max 37.5), so both swings are the same decisive
+    // attacker win and carry identical raw damage.
+    let (healthy_contest, _) = resolve(
+        &mut attacker.clone(),
+        &mut healthy,
+        &mut SmallRng::seed_from_u64(0),
+        &mut Vec::new(),
+        &CombatTuning::default(),
+    );
+    let (wounded_contest, _) = resolve(
+        &mut attacker,
+        &mut wounded,
+        &mut SmallRng::seed_from_u64(0),
+        &mut Vec::new(),
+        &CombatTuning::default(),
+    );
+
+    assert_eq!(healthy_contest.result, AttackResult::AttackerWinsDecisively);
+    assert_eq!(wounded_contest.result, AttackResult::AttackerWinsDecisively);
+    assert!(
+        wounded_contest.damage > healthy_contest.damage,
+        "wounded target must take more damage: healthy {} vs wounded {}",
+        healthy_contest.damage,
+        wounded_contest.damage
+    );
+}
+
+/// Toughness N mitigates N% of an incoming hit, capped at 50%; a landed hit
+/// always draws at least 1 blood; zero damage is never floored up.
+#[test]
+fn mitigate_damage_scales_with_toughness_and_floors_at_one() {
+    use super::resolve::mitigate_damage;
+    assert_eq!(mitigate_damage(1000, 0), 1000, "no toughness: full damage");
+    assert_eq!(mitigate_damage(1000, 20), 800, "20 toughness: 20% off");
+    assert_eq!(mitigate_damage(1000, 50), 500, "cap: at most half");
+    assert_eq!(mitigate_damage(1000, 80), 500, "cap holds above 50");
+    assert_eq!(
+        mitigate_damage(1000, -3),
+        1000,
+        "negative: mitigates nothing"
+    );
+    assert_eq!(mitigate_damage(1, 50), 1, "landed hit: at least 1 blood");
+    assert_eq!(mitigate_damage(0, 50), 0, "no hit: nothing to mitigate");
+}
+
 #[rstest]
 fn attacks_deducts_stamina_costs(mut small_rng: SmallRng) {
     let tuning = CombatTuning::default();
