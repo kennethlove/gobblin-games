@@ -72,7 +72,7 @@ mod tests {
             attacker.attributes.strength = 30;
             attacker.blood = 1000;
             let mut target = Character::new("Target".to_string(), None, None);
-            target.attributes.defense = 10;
+            target.attributes.toughness = 10;
             target.blood = 1000;
 
             let mut events = Vec::new();
@@ -90,7 +90,7 @@ mod tests {
             attacker2.attributes.strength = 30;
             attacker2.blood = 1000;
             let mut target2 = Character::new("Target".to_string(), None, None);
-            target2.attributes.defense = 10;
+            target2.attributes.toughness = 10;
             target2.blood = 1000;
 
             let mut events2 = Vec::new();
@@ -131,7 +131,7 @@ mod tests {
             attacker.attributes.strength = 30;
             attacker.blood = 1000;
             let mut target = Character::new("T".to_string(), None, None);
-            target.attributes.defense = 10;
+            target.attributes.toughness = 10;
             target.blood = 1000;
 
             let mut events = Vec::new();
@@ -168,7 +168,7 @@ mod tests {
         attacker.attributes.strength = 30;
         attacker.blood = 1000;
         let mut target = Character::new("Clove".to_string(), None, None);
-        target.attributes.defense = 10;
+        target.attributes.toughness = 10;
         target.blood = 1000;
 
         let mut events = Vec::new();
@@ -197,7 +197,7 @@ mod tests {
         attacker.attributes.strength = 30;
         attacker.blood = 1000;
         let mut target = Character::new("Clove".to_string(), None, None);
-        target.attributes.defense = 10;
+        target.attributes.toughness = 10;
         target.blood = 1000;
 
         let mut events = Vec::new();
@@ -457,7 +457,7 @@ mod tests {
         attacker.attributes.strength = 30;
         attacker.blood = 1000;
         let mut target = Character::new("Clove".to_string(), None, None);
-        target.attributes.defense = 10;
+        target.attributes.toughness = 10;
         target.blood = 1000;
 
         let mut events = Vec::new();
@@ -507,7 +507,7 @@ mod tests {
         attacker.attributes.strength = 50;
         attacker.blood = 1000;
         let mut target = Character::new("Target".to_string(), None, None);
-        target.attributes.defense = 5;
+        target.attributes.toughness = 5;
         target.blood = 1000;
 
         let mut events = Vec::new();
@@ -533,7 +533,7 @@ mod tests {
         attacker.attributes.strength = 30;
         attacker.blood = 1000;
         let mut target = Character::new("T".to_string(), None, None);
-        target.attributes.defense = 10;
+        target.attributes.toughness = 10;
         target.blood = 1000;
 
         let mut events = Vec::new();
@@ -662,7 +662,7 @@ mod tests {
         attacker.attributes.strength = 40;
         attacker.blood = 1000;
         let mut target = Character::new("Clan12".to_string(), None, None);
-        target.attributes.defense = 5;
+        target.attributes.toughness = 5;
         target.blood = 1000;
 
         let mut events = Vec::new();

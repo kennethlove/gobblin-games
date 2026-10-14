@@ -14,7 +14,7 @@ fn make_character(name: &str) -> Character {
     let mut t = Character::new(name.into(), None, None);
     t.area = areas::Area::Hub;
     t.attributes.strength = 30;
-    t.attributes.defense = 15;
+    t.attributes.toughness = 15;
     t
 }
 
@@ -38,7 +38,7 @@ fn attack_while_trapped_defense_halved() {
     let mut attacker = make_character("Attacker");
     attacker.attributes.strength = 50;
     let mut target = make_character("Target");
-    target.attributes.defense = 20;
+    target.attributes.toughness = 20;
     add_buried(&mut target, Severity::Moderate);
 
     let mut rng = SmallRng::seed_from_u64(42);

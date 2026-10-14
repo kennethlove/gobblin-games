@@ -273,7 +273,7 @@ impl Character {
 
     /// Effective defense: wound penalties plus trait modifiers.
     pub fn effective_defense(&self) -> i32 {
-        self.effective_attribute(CharacterAttribute::Defense) as i32
+        self.effective_attribute(CharacterAttribute::Toughness) as i32
     }
 
     /// Effective health derived from blood pool. Normalizes 0-1000 blood to 0-100 scale.

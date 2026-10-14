@@ -81,12 +81,15 @@ pub struct GameConfig {
     pub max_sanity: u32,
     pub max_movement: u32,
     pub max_strength: u32,
-    pub max_defense: u32,
+    #[serde(alias = "max_defense")]
+    pub max_toughness: u32,
     pub max_bravery: u32,
     pub max_intelligence: u32,
     pub max_persuasion: u32,
     pub max_luck: u32,
-    pub max_agility: u32,
+    #[serde(alias = "max_agility")]
+    pub max_speed: u32,
+    pub max_perception: u32,
 }
 
 impl Default for GameConfig {
@@ -134,12 +137,13 @@ impl Default for GameConfig {
             max_sanity: 100,
             max_movement: 100,
             max_strength: 50,
-            max_defense: 50,
+            max_toughness: 50,
             max_bravery: 100,
             max_intelligence: 100,
             max_persuasion: 100,
             max_luck: 100,
-            max_agility: 100,
+            max_speed: 100,
+            max_perception: 100,
         }
     }
 }
@@ -323,5 +327,24 @@ mod day_night_tests {
             ..Default::default()
         };
         assert!(!out_of_range.day_night_hours_valid());
+    }
+
+    #[test]
+    fn legacy_config_max_keys_load_via_aliases() {
+        // A pre-rename persisted GameConfig object: max_defense/max_agility
+        // keys, no max_perception. Struct-level serde default covers the new
+        // field; aliases cover the renamed ones.
+        let cfg = GameConfig::default();
+        let mut json = serde_json::to_value(&cfg).unwrap();
+        let obj = json.as_object_mut().unwrap();
+        obj.insert("max_defense".into(), serde_json::json!(42));
+        obj.insert("max_agility".into(), serde_json::json!(43));
+        obj.remove("max_toughness");
+        obj.remove("max_speed");
+        obj.remove("max_perception");
+        let back: GameConfig = serde_json::from_value(json).unwrap();
+        assert_eq!(back.max_toughness, 42);
+        assert_eq!(back.max_speed, 43);
+        assert_eq!(back.max_perception, 100, "new field defaults");
     }
 }

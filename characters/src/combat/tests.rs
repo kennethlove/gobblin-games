@@ -16,10 +16,14 @@ fn small_rng() -> SmallRng {
 #[rstest]
 fn attack_contest_win(mut small_rng: SmallRng) {
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     let mut target = Character::new("Grubworm".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
 
     attacker.attributes.strength = 10;
-    target.attributes.defense = 5;
+    target.attributes.toughness = 5;
 
     let result = attack_contest(
         &mut attacker,
@@ -35,10 +39,14 @@ fn attack_contest_win(mut small_rng: SmallRng) {
 #[rstest]
 fn attack_contest_win_decisively(mut small_rng: SmallRng) {
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     let mut target = Character::new("Grubworm".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
 
     attacker.attributes.strength = 15;
-    target.attributes.defense = 0;
+    target.attributes.toughness = 0;
 
     let result = attack_contest(
         &mut attacker,
@@ -54,10 +62,14 @@ fn attack_contest_win_decisively(mut small_rng: SmallRng) {
 #[rstest]
 fn attack_contest_lose(mut small_rng: SmallRng) {
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     let mut target = Character::new("Grubworm".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
 
     attacker.attributes.strength = 15;
-    target.attributes.defense = 20;
+    target.attributes.toughness = 20;
 
     let result = attack_contest(
         &mut attacker,
@@ -73,10 +85,14 @@ fn attack_contest_lose(mut small_rng: SmallRng) {
 #[rstest]
 fn attack_contest_lose_decisively(mut small_rng: SmallRng) {
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     let mut target = Character::new("Grubworm".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
 
     attacker.attributes.strength = 1;
-    target.attributes.defense = 20;
+    target.attributes.toughness = 20;
 
     let result = attack_contest(
         &mut attacker,
@@ -92,10 +108,14 @@ fn attack_contest_lose_decisively(mut small_rng: SmallRng) {
 #[rstest]
 fn attack_contest_draw(mut small_rng: SmallRng) {
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     let mut target = Character::new("Grubworm".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
 
     attacker.attributes.strength = 21; // Magic number to make the final scores even
-    target.attributes.defense = 20;
+    target.attributes.toughness = 20;
 
     let result = attack_contest(
         &mut attacker,
@@ -111,6 +131,8 @@ fn attack_contest_draw(mut small_rng: SmallRng) {
 #[rstest]
 fn attacks_self(mut small_rng: SmallRng) {
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     attacker.attributes.strength = 25;
     // Sanity is now derived from mental_conditions; start at full sanity
     let sanity = attacker.effective_sanity();
@@ -130,6 +152,8 @@ fn attacks_self(mut small_rng: SmallRng) {
 #[rstest]
 fn attacks_self_suicide(mut small_rng: SmallRng) {
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     attacker.attributes.strength = 100;
     let mut target = attacker.clone();
 
@@ -146,11 +170,15 @@ fn attacks_self_suicide(mut small_rng: SmallRng) {
 #[rstest]
 fn attacks_wound(mut small_rng: SmallRng) {
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     let sanity = attacker.effective_sanity();
     let mut target = Character::new("Grubworm".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
 
     attacker.attributes.strength = 25;
-    target.attributes.defense = 20;
+    target.attributes.toughness = 20;
 
     let result = attacker.attacks(
         &mut target,
@@ -171,10 +199,14 @@ fn attacks_wound(mut small_rng: SmallRng) {
 #[rstest]
 fn attacks_kill(mut small_rng: SmallRng) {
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     let mut target = Character::new("Grubworm".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
 
     attacker.attributes.strength = 50;
-    target.attributes.defense = 0;
+    target.attributes.toughness = 0;
     target.blood = 100;
 
     let result = attacker.attacks(
@@ -193,10 +225,14 @@ fn attacks_kill(mut small_rng: SmallRng) {
 #[rstest]
 fn attacks_miss(mut small_rng: SmallRng) {
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     let mut target = Character::new("Grubworm".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
 
     attacker.attributes.strength = 21; // Magic number to make them draw
-    target.attributes.defense = 20;
+    target.attributes.toughness = 20;
 
     let result = attacker.attacks(
         &mut target,
@@ -212,9 +248,13 @@ fn attacks_miss(mut small_rng: SmallRng) {
 fn attacks_deducts_stamina_costs(mut small_rng: SmallRng) {
     let tuning = CombatTuning::default();
     let mut attacker = Character::new("A".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     attacker.stamina = 100;
     attacker.max_stamina = 100;
     let mut target = Character::new("B".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
     target.stamina = 100;
     target.max_stamina = 100;
     let _ = attacker.attacks(
@@ -232,9 +272,13 @@ fn attacks_deducts_stamina_costs(mut small_rng: SmallRng) {
 fn attacks_saturates_at_zero_when_below_cost(mut small_rng: SmallRng) {
     let tuning = CombatTuning::default();
     let mut attacker = Character::new("A".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     attacker.stamina = 5;
     attacker.max_stamina = 100;
     let mut target = Character::new("B".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
     target.stamina = 3;
     target.max_stamina = 100;
     let _ = attacker.attacks(
@@ -255,23 +299,31 @@ fn attacker_winded_takes_attack_roll_penalty() {
     let tuning = CombatTuning::default();
     for seed in 0..200u64 {
         let mut a_fresh = Character::new("AF".to_string(), None, None);
+        // Roll-independent: trait AttrMods must not shift exact math.
+        a_fresh.traits.clear();
         a_fresh.stamina = 100;
         a_fresh.max_stamina = 100;
         a_fresh.attributes.strength = 5;
         let mut a_winded = Character::new("AW".to_string(), None, None);
+        // Roll-independent: trait AttrMods must not shift exact math.
+        a_winded.traits.clear();
         a_winded.stamina = 70; // post-cost: 45 → Winded
         a_winded.max_stamina = 100;
         a_winded.attributes.strength = 5;
         let mut t1 = Character::new("T1".to_string(), None, None);
+        // Roll-independent: trait AttrMods must not shift exact math.
+        t1.traits.clear();
         t1.stamina = 100;
         t1.max_stamina = 100;
         t1.blood = 1000;
-        t1.attributes.defense = 10;
+        t1.attributes.toughness = 10;
         let mut t2 = Character::new("T2".to_string(), None, None);
+        // Roll-independent: trait AttrMods must not shift exact math.
+        t2.traits.clear();
         t2.stamina = 100;
         t2.max_stamina = 100;
         t2.blood = 1000;
-        t2.attributes.defense = 10;
+        t2.attributes.toughness = 10;
 
         let mut rng_a = SmallRng::seed_from_u64(seed);
         let mut rng_b = SmallRng::seed_from_u64(seed);
@@ -302,9 +354,13 @@ fn attacker_winded_takes_attack_roll_penalty() {
 fn combat_beat_carries_stamina_costs(mut small_rng: SmallRng) {
     let tuning = CombatTuning::default();
     let mut attacker = Character::new("A".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     attacker.stamina = 100;
     attacker.max_stamina = 100;
     let mut target = Character::new("B".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
     target.stamina = 100;
     target.max_stamina = 100;
     let mut events = Vec::new();
@@ -358,7 +414,11 @@ fn test_critical_hit() {
 
     let mut crit_rng = CritRng;
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     let mut target = Character::new("Grubworm".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
 
     attacker.attributes.strength = 10;
     target.blood = 1000;
@@ -396,7 +456,11 @@ fn test_critical_fumble() {
 
     let mut fumble_rng = FumbleRng;
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     let mut target = Character::new("Grubworm".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
 
     let result = attack_contest(
         &mut attacker,
@@ -443,7 +507,11 @@ fn test_perfect_block() {
 
     let mut block_rng = BlockRng::new();
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     let mut target = Character::new("Grubworm".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
 
     let result = attack_contest(
         &mut attacker,
@@ -459,7 +527,11 @@ fn test_perfect_block() {
 #[rstest]
 fn test_critical_hit_triple_damage(mut _small_rng: SmallRng) {
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     let mut target = Character::new("Grubworm".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
 
     attacker.attributes.strength = 20;
     let damage = attacker.attributes.strength * 3;
@@ -484,6 +556,8 @@ fn test_critical_hit_triple_damage(mut _small_rng: SmallRng) {
 #[rstest]
 fn test_fumble_self_damage(_small_rng: SmallRng) {
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     attacker.blood = 1000;
     let initial_blood = attacker.blood;
 
@@ -502,7 +576,13 @@ fn weapon_survives_multiple_combats(mut small_rng: SmallRng) {
     use world::items::{Attribute, Item, ItemRarity, ItemType};
 
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+
+    // Roll-independent: trait AttrMods must not shift exact math.
+
+    attacker.traits.clear();
     let mut target = Character::new("Grubworm".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
 
     let weapon = Item::new(
         "Test Bow",
@@ -542,11 +622,15 @@ fn attacks_target_killed_records_killer_id() {
     // When the attacker kills the target, target.recently_killed_by must
     // be set to the attacker's id so the cycle can attribute the death.
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     let mut target = Character::new("Grubworm".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
 
     attacker.attributes.strength = 100;
     target.blood = 10;
-    target.attributes.defense = 0;
+    target.attributes.toughness = 0;
     let attacker_id = attacker.id;
 
     // Use a deterministic RNG; with strength=100 vs defense=0 the
@@ -581,13 +665,17 @@ fn attacks_attacker_killed_records_target_id() {
     // When the target's counter kills the attacker (e.g. perfect block),
     // attacker.recently_killed_by must point to the target.
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     let mut target = Character::new("Grubworm".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
 
     attacker.blood = 10;
     attacker.attributes.strength = 0;
-    attacker.attributes.defense = 0;
+    attacker.attributes.toughness = 0;
     target.attributes.strength = 100;
-    target.attributes.defense = 100;
+    target.attributes.toughness = 100;
     let target_id = target.id;
 
     let mut rng = SmallRng::seed_from_u64(2);
@@ -622,10 +710,14 @@ fn attacks_attacker_killed_records_target_id() {
 #[rstest]
 fn attacks_emits_one_combat_taggedevent(mut small_rng: SmallRng) {
     let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     let mut target = Character::new("Grubworm".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
 
     attacker.attributes.strength = 50;
-    target.attributes.defense = 0;
+    target.attributes.toughness = 0;
     target.blood = 100;
 
     let mut events: Vec<TaggedEvent> = Vec::new();
@@ -670,7 +762,11 @@ fn attacks_emits_one_combat_swing_per_call(small_rng: SmallRng) {
     for seed in 0..16u64 {
         let mut events: Vec<TaggedEvent> = Vec::new();
         let mut attacker = Character::new(format!("A{seed}"), None, None);
+        // Roll-independent: trait AttrMods must not shift exact math.
+        attacker.traits.clear();
         let mut target = Character::new(format!("T{seed}"), None, None);
+        // Roll-independent: trait AttrMods must not shift exact math.
+        target.traits.clear();
         let mut rng = SmallRng::seed_from_u64(seed);
         let _ = attacker.attacks(
             &mut target,
@@ -703,6 +799,8 @@ fn attacks_emits_one_combat_swing_per_call(small_rng: SmallRng) {
 #[rstest]
 fn self_attack_emits_one_combat_swing(mut small_rng: SmallRng) {
     let mut character = Character::new("Solo".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    character.traits.clear();
     let mut clone = character.clone();
     let mut events: Vec<TaggedEvent> = Vec::new();
     let _ = character.attacks(
@@ -747,12 +845,18 @@ fn brittle_shield(effect: i32) -> world::items::Item {
 #[test]
 fn weapon_break_records_forfeit_and_penalty_on_beat() {
     let mut attacker = Character::new("Atk".into(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     attacker.attributes.strength = 10;
     let weapon = brittle_weapon(5);
     attacker.add_item(weapon.clone());
 
     let mut target = Character::new("Tgt".into(), None, None);
-    target.attributes.defense = 5;
+
+    // Roll-independent: trait AttrMods must not shift exact math.
+
+    target.traits.clear();
+    target.attributes.toughness = 5;
 
     let mut events: Vec<TaggedEvent> = Vec::new();
     let mut rng = SmallRng::seed_from_u64(42);
@@ -793,10 +897,16 @@ fn weapon_break_records_forfeit_and_penalty_on_beat() {
 #[test]
 fn shield_break_records_forfeit_and_penalty_on_beat() {
     let mut attacker = Character::new("Atk".into(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     attacker.attributes.strength = 10;
 
     let mut target = Character::new("Tgt".into(), None, None);
-    target.attributes.defense = 5;
+
+    // Roll-independent: trait AttrMods must not shift exact math.
+
+    target.traits.clear();
+    target.attributes.toughness = 5;
     let shield = brittle_shield(4);
     target.add_item(shield.clone());
 
@@ -839,12 +949,18 @@ fn fumble_clears_attacker_break_penalty_on_beat() {
     // fields must be cleared on fumble for clean narration.
     for seed in 0u64..2_000 {
         let mut attacker = Character::new("Atk".into(), None, None);
+        // Roll-independent: trait AttrMods must not shift exact math.
+        attacker.traits.clear();
         attacker.attributes.strength = 10;
         let weapon = brittle_weapon(5);
         attacker.add_item(weapon.clone());
 
         let mut target = Character::new("Tgt".into(), None, None);
-        target.attributes.defense = 5;
+
+        // Roll-independent: trait AttrMods must not shift exact math.
+
+        target.traits.clear();
+        target.attributes.toughness = 5;
 
         let mut events: Vec<TaggedEvent> = Vec::new();
         let mut rng = SmallRng::seed_from_u64(seed);
@@ -900,9 +1016,13 @@ fn fumble_clears_attacker_break_penalty_on_beat() {
 #[test]
 fn unarmed_unshielded_emits_no_break_penalty() {
     let mut attacker = Character::new("Atk".into(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     attacker.attributes.strength = 10;
     let mut target = Character::new("Tgt".into(), None, None);
-    target.attributes.defense = 5;
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
+    target.attributes.toughness = 5;
 
     let mut events: Vec<TaggedEvent> = Vec::new();
     let mut rng = SmallRng::seed_from_u64(123);
@@ -939,10 +1059,14 @@ fn combat_beat_wear_matches_engagement_detail_wear_lines() {
     // the full wear (Worn or Broken) emission paths in one swing.
     for seed in 0..32u64 {
         let mut attacker = Character::new(format!("Atk{seed}"), None, None);
+        // Roll-independent: trait AttrMods must not shift exact math.
+        attacker.traits.clear();
         attacker.attributes.strength = 10;
         attacker.add_item(brittle_weapon(5));
         let mut target = Character::new(format!("Tgt{seed}"), None, None);
-        target.attributes.defense = 5;
+        // Roll-independent: trait AttrMods must not shift exact math.
+        target.traits.clear();
+        target.attributes.toughness = 5;
         target.add_item(brittle_shield(4));
 
         let mut events: Vec<TaggedEvent> = Vec::new();
@@ -1004,12 +1128,18 @@ fn combat_beat_wear_matches_engagement_detail_wear_lines() {
 fn combat_swing_records_stress_damage() {
     // Arrange: attacker has prior wins+kills so violence-stress is non-zero.
     let mut attacker = Character::new("Atk".into(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     attacker.attributes.strength = 50;
     attacker.statistics.wins = 5;
     attacker.statistics.kills = 5;
 
     let mut target = Character::new("Tgt".into(), None, None);
-    target.attributes.defense = 0;
+
+    // Roll-independent: trait AttrMods must not shift exact math.
+
+    target.traits.clear();
+    target.attributes.toughness = 0;
     target.blood = 10;
 
     let mut events: Vec<TaggedEvent> = Vec::new();
@@ -1048,12 +1178,18 @@ fn combat_beat_stress_matches_engagement_horrified_line() {
     use crate::combat_beat::CombatBeatExt;
     for seed in 0..32u64 {
         let mut attacker = Character::new(format!("Atk{seed}"), None, None);
+        // Roll-independent: trait AttrMods must not shift exact math.
+        attacker.traits.clear();
         attacker.attributes.strength = 50;
         attacker.statistics.wins = 5;
         attacker.statistics.kills = 5;
 
         let mut target = Character::new(format!("Tgt{seed}"), None, None);
-        target.attributes.defense = 0;
+
+        // Roll-independent: trait AttrMods must not shift exact math.
+
+        target.traits.clear();
+        target.attributes.toughness = 0;
         target.blood = 1000;
 
         let mut events: Vec<TaggedEvent> = Vec::new();
@@ -1104,8 +1240,12 @@ fn attacking_sleeping_target_emits_ambush_wake(mut small_rng: SmallRng) {
     // resolution. The ambush still lands; we just verify the wake
     // event precedes any CharacterWounded / Killed event in `events`.
     let mut attacker = Character::new("Rendmaw".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    attacker.traits.clear();
     attacker.attributes.strength = 10;
     let mut target = Character::new("Nib".to_string(), None, None);
+    // Roll-independent: trait AttrMods must not shift exact math.
+    target.traits.clear();
     target.sleeping = true;
     target.sleep_remaining = 4;
     target.cycles_awake = 12;

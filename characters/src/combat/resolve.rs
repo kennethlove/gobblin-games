@@ -224,7 +224,7 @@ pub fn attack_contest(
     // Get defense roll and defense modifier
     let base_defense_roll: i32 = rng.random_range(1..=20); // Base roll
     let mut defense_roll = base_defense_roll;
-    defense_roll += target.effective_attribute(CharacterAttribute::Defense) as i32; // Add defense
+    defense_roll += target.effective_attribute(CharacterAttribute::Toughness) as i32; // Add defense
     {
         let band = stamina_band(target.stamina, target.max_stamina, tuning);
         let penalty = match band {

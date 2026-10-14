@@ -98,14 +98,14 @@ fn initiative_liveness_gate_still_works() {
     let mut killer = Character::new("Killer".to_string(), None, None);
     killer.blood = 1000;
     killer.attributes.strength = 50;
-    killer.attributes.agility = 100;
+    killer.attributes.speed = 100;
     killer.area = Area::Hub;
 
     let mut victim = Character::new("Victim".to_string(), None, None);
     victim.blood = 10;
     victim.attributes.strength = 1;
-    victim.attributes.defense = 1;
-    victim.attributes.agility = 1;
+    victim.attributes.toughness = 1;
+    victim.attributes.speed = 1;
     victim.area = Area::Hub;
 
     game.characters.clear();
@@ -113,8 +113,8 @@ fn initiative_liveness_gate_still_works() {
     game.characters.push(victim);
 
     let mut rng = SmallRng::seed_from_u64(42);
-    let agility_0 = game.characters[0].attributes.agility;
-    let agility_1 = game.characters[1].attributes.agility;
+    let agility_0 = game.characters[0].attributes.speed;
+    let agility_1 = game.characters[1].attributes.speed;
     let s0 = initiative_score(agility_0, &mut rng);
     let mut rng = SmallRng::seed_from_u64(42);
     let s1 = initiative_score(agility_1, &mut rng);
@@ -128,9 +128,9 @@ fn initiative_liveness_gate_still_works() {
 fn attributes_new_includes_agility() {
     let attrs = Attributes::new();
     assert!(
-        attrs.agility >= 1 && attrs.agility <= 100,
+        attrs.speed >= 1 && attrs.speed <= 100,
         "agility should be in 1..=100 range, got {}",
-        attrs.agility
+        attrs.speed
     );
 }
 
