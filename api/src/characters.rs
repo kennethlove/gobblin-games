@@ -338,7 +338,7 @@ pub async fn join_game(
 
     // A dead goblin cannot enter (revival runs at the end of the old
     // game — this only guards stale rows).
-    let mut character = fetch_full_character(db, character_identifier).await?;
+    let character = fetch_full_character(db, character_identifier).await?;
     if !character.is_alive() {
         return Err(AppError::Conflict("That goblin is dead".to_string()));
     }
@@ -400,7 +400,7 @@ pub async fn join_game(
     // pointer. UPSERT CONTENT re-stamps created_by = $auth through the
     // schema's VALUE clause on this authenticated connection, so
     // ownership survives the full-row write.
-    character.reset_for_new_game();
+    let mut character = character.into_new_game();
     character.team = team;
     character.statistics.game = game_identifier.to_owned();
     let starter = Item::new_random(None);

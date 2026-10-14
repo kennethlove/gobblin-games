@@ -198,7 +198,7 @@ pub struct Character {
     /// What is their current status?
     pub status: CharacterStatus,
     /// This is their thinker. Persisted so load restores the same brain as
-    /// the save; `reset_for_new_game` re-derives it from traits on entry, so
+    /// the save; `into_new_game` re-derives it from traits on entry, so
     /// runtime state (psychotic break, preferred-action overrides) never
     /// crosses a game boundary. `#[serde(default)]` lets pre-fix rows that
     /// omit the `brain` column hydrate via `Brain::default()`.
@@ -343,7 +343,7 @@ pub struct Character {
     pub addiction_use_count: BTreeMap<Substance, u32>,
     /// Substances the character has ever been addicted to (spec §5.1 step 5c).
     /// Populated on acquisition, never cleared — including by
-    /// `reset_for_new_game`. Carrying this across games is intentional
+    /// `into_new_game`. Carrying this across games is intentional
     /// progression: the relapse short-circuit depends on it, so a goblin who
     /// was addicted in a previous game auto-acquires at Mild on re-exposure
     /// in the next one. Do not "fix" this as a per-game leak.
@@ -381,18 +381,18 @@ pub struct Character {
     /// Durable state captured at game entry, used to settle advancements
     /// (trait gains, attribute high-water deltas, lifetime record
     /// increments) at the next entry. See `baseline::GameBaseline` for the
-    /// carry rules. Persisted, because reset runs at API join time rather
-    /// than in-memory game end; a mid-game save/load must not lose it.
-    /// `None` for characters created before this field existed — the next
-    /// reset captures a baseline from their current state.
+    /// carry rules. Persisted, because the rebuild runs at API join time
+    /// rather than in-memory game end; a mid-game save/load must not lose
+    /// it. `None` for characters created before this field existed — the
+    /// next entry captures a baseline from their current state.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub game_baseline: Option<baseline::GameBaseline>,
     /// Pending advancement events for the game in progress — the *delta*
     /// half of cross-game carry (the baseline snapshot is only the floor,
     /// spec §7.3). Stamped by `gain_trait`/`lose_trait` as changes happen,
     /// consumed by settle at the next entry, bounded by
-    /// `advancement::MAX_ADVANCEMENT_EVENTS`. Persisted because reset runs
-    /// at API join time — a mid-game save/load must not lose pending
+    /// `advancement::MAX_ADVANCEMENT_EVENTS`. Persisted because the rebuild
+    /// runs at API join time — a mid-game save/load must not lose pending
     /// events. Empty for characters created before this field existed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub advancement_log: Vec<advancement::AdvancementEvent>,
@@ -474,26 +474,6 @@ impl Character {
         }
     }
 
-    /// Reset everything that belongs to a single game when the goblin
-    /// enters a new one (the persistent-vs-per-game split): status and
-    /// health, stamina, area, hunger/thirst, shelter and drain steps,
-    /// allies and betrayals, afflictions, sleep and pending events,
-    /// per-game statistics, items, a fresh terrain-affinity roll from
-    /// the goblin's own RNG, and a brain re-derived from traits (clearing
-    /// psychotic breaks and preferred-action overrides left by the last
-    /// game). Untouched: identity, name, team, clan name, avatar, traits,
-    /// attributes, lifetime statistics (kills, wins, defeats, draws), and
-    /// `ever_addicted_to` — the latter intentionally, so the addiction
-    /// relapse short-circuit (see that field's doc) carries across games.
-    ///
-    /// Before any clearing, the previous game's durable state is settled
-    /// against the baseline captured at its entry: the snapshot is
-    /// restored and only advancements earned since then (trait gains,
-    /// attribute high-water deltas, lifetime record increments) are kept
-    /// — so a goblin resets to how it was before the game, plus what it
-    /// earned, not to zero. A fresh baseline is then captured for this
-    /// game. Traits are settled before the brain re-derivation below, so
-    /// the brain always reflects the final trait set.
     /// Add a trait through the one sanctioned mutation path (spec §3):
     /// rejects duplicates, flavor-pair conflicts, and stacked negative
     /// attribute modifiers. Mid-game drift, creation rolls, revival scars,
@@ -528,54 +508,119 @@ impl Character {
         changed
     }
 
-    pub fn reset_for_new_game(&mut self) {
+    /// Rebuild a goblin for a new game: the old character is consumed and
+    /// a fresh `Character` is constructed from the survivor's durable
+    /// data. Per-game state is zeroed *by construction* — every per-game
+    /// field is listed explicitly in the fresh literal below, so a newly
+    /// added per-game field cannot silently leak into the next game: the
+    /// literal stops compiling until the new field is classified and
+    /// given its entry-game value here.
+    ///
+    /// Carried over (persistent): identity (name, identifiers), ownership
+    /// (`human_player_name`), team slot, clan name, avatar, attributes,
+    /// traits, lifetime statistics (kills, wins, defeats, draws), and
+    /// `ever_addicted_to` — the latter intentionally, so the addiction
+    /// relapse short-circuit (see that field's doc) carries across games.
+    ///
+    /// Before the rebuild, the previous game's durable state is settled
+    /// against the baseline captured at its entry: the snapshot is
+    /// restored and only advancements earned since then (trait gains,
+    /// attribute high-water deltas, lifetime record increments) are kept
+    /// — so a goblin returns as it was before the game, plus what it
+    /// earned, not as zero. A fresh baseline is then captured for this
+    /// game. Traits are settled before the brain re-derivation, so the
+    /// brain always reflects the final trait set. Runtime brain state
+    /// (psychotic break, preferred-action overrides) dies with the old
+    /// character: the fresh brain is re-derived from the surviving traits.
+    pub fn into_new_game(mut self) -> Self {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
         if let Some(baseline) = self.game_baseline.take() {
             // Settle consumes the pending advancement events; without a
             // baseline (legacy rows) there is nothing to settle against,
             // so start this game's event clock clean.
-            baseline.settle_into(self);
+            baseline.settle_into(&mut self);
         } else {
             self.advancement_log.clear();
         }
-        self.game_baseline = Some(baseline::GameBaseline::capture(self));
-        self.brain = Brain::from_traits(&self.traits, &mut rng);
-        self.set_status(CharacterStatus::default());
-        self.blood = default_blood();
-        self.wounds.clear();
-        self.area = Area::Hub;
-        self.stamina = 100;
-        self.max_stamina = 100;
-        self.terrain_affinity = world::clans::roll_terrain_affinity(&mut rng);
-        self.items.clear();
-        self.events.clear();
-        self.allies.clear();
-        self.turns_since_last_betrayal = 0;
-        self.pending_trust_shock = false;
-        self.alliance_events.clear();
-        self.recently_killed_by = None;
-        self.hunger = 0;
-        self.thirst = 0;
-        self.sheltered_until = None;
-        self.starving_since_day = None;
-        self.dehydrated_since_day = None;
-        self.cycles_awake = 0;
-        self.sleeping = false;
-        self.sleep_remaining = 0;
-        self.pending_sleep_incident = None;
-        self.sleep_shelter = None;
-        self.afflictions.clear();
-        self.game_day = None;
-        self.addiction_use_count.clear();
-        self.hangover_cycles_remaining = 0;
-        self.was_ambushed = false;
-        self.pending_theft_target = None;
-        self.pending_attack_target = None;
-        self.mental_conditions.clear();
-        self.statistics.day_killed = None;
-        self.statistics.killed_by = None;
-        self.statistics.game = String::new();
-        self.editable = true;
+        let baseline = baseline::GameBaseline::capture(&self);
+        let Self {
+            identifier,
+            id,
+            name,
+            team,
+            clan_name,
+            avatar,
+            human_player_name,
+            attributes,
+            statistics,
+            traits,
+            ever_addicted_to,
+            advancement_log,
+            // Everything else is per-game and dies with the old character.
+            ..
+        } = self;
+        Self {
+            // Persistent: identity, ownership, progression.
+            identifier,
+            id,
+            name,
+            team,
+            clan_name,
+            avatar,
+            human_player_name,
+            attributes,
+            statistics: Statistics {
+                day_killed: None,
+                killed_by: None,
+                game: String::new(),
+                kills: statistics.kills,
+                wins: statistics.wins,
+                defeats: statistics.defeats,
+                draws: statistics.draws,
+            },
+            ever_addicted_to,
+            advancement_log,
+            game_baseline: Some(baseline),
+            // Re-derived from the surviving traits (clears psychotic
+            // breaks and preferred-action overrides from the last game).
+            brain: Brain::from_traits(&traits, &mut rng),
+            // Fresh roll for the new game, from this goblin's own RNG.
+            terrain_affinity: world::clans::roll_terrain_affinity(&mut rng),
+            traits,
+            // Per-game state: zeroed by construction.
+            area: Area::Hub,
+            status: CharacterStatus::default(),
+            editable: true,
+            stamina: 100,
+            max_stamina: 100,
+            blood: default_blood(),
+            wounds: Vec::new(),
+            items: Vec::new(),
+            events: Vec::new(),
+            allies: Vec::new(),
+            turns_since_last_betrayal: 0,
+            pending_trust_shock: false,
+            alliance_events: Vec::new(),
+            recently_killed_by: None,
+            hunger: 0,
+            thirst: 0,
+            sheltered_until: None,
+            starving_since_day: None,
+            dehydrated_since_day: None,
+            cycles_awake: 0,
+            sleeping: false,
+            sleep_remaining: 0,
+            pending_sleep_incident: None,
+            sleep_shelter: None,
+            afflictions: BTreeMap::new(),
+            game_day: None,
+            addiction_use_count: BTreeMap::new(),
+            hangover_cycles_remaining: 0,
+            was_ambushed: false,
+            pending_theft_target: None,
+            pending_attack_target: None,
+            mental_conditions: Vec::new(),
+        }
     }
 
     #[cfg(test)]
@@ -2439,7 +2484,7 @@ mod tests {
     }
 
     #[rstest]
-    fn reset_for_new_game_clears_per_game_state_keeps_identity() {
+    fn into_new_game_rebuilds_fresh_character_keeps_identity() {
         use crate::actions::Action;
         use crate::brains::PsychoticBreakType;
         use crate::statuses::CharacterStatus;
@@ -2476,7 +2521,7 @@ mod tests {
         me.brain.thresholds.low_health = u32::MAX; // stale sentinel
         me.ever_addicted_to.insert(Substance::Alcohol);
 
-        me.reset_for_new_game();
+        let me = me.into_new_game();
 
         // Per-game state is pristine.
         assert_eq!(me.status, CharacterStatus::default());
@@ -2511,7 +2556,7 @@ mod tests {
         assert_eq!(me.brain.preferred_action_percentage, 0.0);
         // Thresholds re-derive from the surviving traits (stale sentinel is
         // gone). A fresh derivation from empty traits would also clear it,
-        // but traits survive the reset, so the brain stays coherent with
+        // but traits survive the rebuild, so the brain stays coherent with
         // them — see the brain field's doc comment.
         assert_ne!(me.brain.thresholds.low_health, u32::MAX);
         // Intentional progression: addiction history survives (relapse
@@ -2524,7 +2569,7 @@ mod tests {
     /// trait mid-game, resets to baseline-plus-advancements (not zero),
     /// and the advancements survive into the second game.
     #[test]
-    fn boblin_advancements_persist_across_resets() {
+    fn boblin_advancements_persist_across_new_games() {
         use crate::statuses::CharacterStatus;
         let mut boblin = Character::new("Boblin".to_string(), None, None);
         boblin.traits.clear();
@@ -2533,14 +2578,14 @@ mod tests {
         let base_strength = boblin.attributes.strength;
 
         // Boblin enters the first game Friendly; creation-time gains stamp
-        // the log, and with no baseline yet the first reset folds them into
-        // the captured floor and starts the event clock clean.
+        // the log, and with no baseline yet the first rebuild folds them
+        // into the captured floor and starts the event clock clean.
         boblin
             .gain_trait(crate::traits::Trait::Friendly)
             .expect("friendly");
 
         // Game 1 entry: baseline captured.
-        boblin.reset_for_new_game();
+        boblin = boblin.into_new_game();
         assert!(boblin.game_baseline.is_some());
         assert!(boblin.advancement_log.is_empty(), "fresh event clock");
 
@@ -2565,8 +2610,8 @@ mod tests {
             .gain_trait(crate::traits::Trait::Cautious)
             .expect("cautious"); // the "sharpshooter"
 
-        // Game 2 entry: reset settles game 1's advancements.
-        boblin.reset_for_new_game();
+        // Game 2 entry: the rebuild settles game 1's advancements.
+        boblin = boblin.into_new_game();
 
         assert_eq!(
             boblin.traits,
@@ -2588,7 +2633,7 @@ mod tests {
         assert!(boblin.is_alive());
 
         // Game 3 entry: nothing double-counts, nothing is lost.
-        boblin.reset_for_new_game();
+        boblin = boblin.into_new_game();
         assert_eq!(
             boblin.traits,
             vec![
