@@ -184,15 +184,14 @@ pub struct CharacterItemEdge {
     pub item: RecordId,
 }
 
-/// Team (1..=team_count) with the fewest members in the game right now;
-/// ties go to the lowest slot, so joins and bot-fill together divide a
-/// full roster into exactly `goblins_per_team` per team (the ready rule
-/// in `schemas/game.surql`).
-pub async fn fewest_team(
+/// Per-team member counts for a game's roster, indexed by team number
+/// (index 0 unused). Rows with a missing or out-of-range team are
+/// ignored: only teams `1..=team_count` can hold members.
+async fn team_member_counts(
     db: &Surreal<Any>,
     game_identifier: &str,
     team_count: u32,
-) -> Result<u32, AppError> {
+) -> Result<Vec<u32>, AppError> {
     let mut response = db
         .query("SELECT in.team AS team FROM playing_in WHERE out.identifier = $game")
         .bind(("game", game_identifier.to_owned()))
@@ -210,9 +209,48 @@ pub async fn fewest_team(
             counts[team as usize] += 1;
         }
     }
+    Ok(counts)
+}
+
+/// Fewest-member team among those still under `goblins_per_team`; ties
+/// go to the lowest slot. `None` when every team is at capacity.
+fn team_with_space(counts: &[u32], team_count: u32, goblins_per_team: u32) -> Option<u32> {
+    (1..=team_count)
+        .filter(|&t| counts[t as usize] < goblins_per_team)
+        .min_by_key(|&t| counts[t as usize])
+}
+
+/// Team (1..=team_count) with the fewest members in the game right now;
+/// ties go to the lowest slot. No capacity check — callers that enter
+/// goblins use [`fewest_team_with_space`] so a full team never
+/// overfills (the ready rule in `schemas/game.surql` needs exactly
+/// `goblins_per_team` per team).
+pub async fn fewest_team(
+    db: &Surreal<Any>,
+    game_identifier: &str,
+    team_count: u32,
+) -> Result<u32, AppError> {
+    let counts = team_member_counts(db, game_identifier, team_count).await?;
     Ok((1..=team_count)
         .min_by_key(|&t| counts[t as usize])
         .unwrap_or(1))
+}
+
+/// Team (1..=team_count) with the fewest members among those that still
+/// have room (`< goblins_per_team`). Equivalent to [`fewest_team`] while
+/// any team has space — a full fewest team means every team is full —
+/// and `GameFull` when every team is at capacity, so a join can never
+/// overfill a team relative to `goblins_per_team` (a racing concurrent
+/// join can skew the spread below the total cap).
+pub async fn fewest_team_with_space(
+    db: &Surreal<Any>,
+    game_identifier: &str,
+    team_count: u32,
+    goblins_per_team: u32,
+) -> Result<u32, AppError> {
+    let counts = team_member_counts(db, game_identifier, team_count).await?;
+    team_with_space(&counts, team_count, goblins_per_team)
+        .ok_or_else(|| AppError::GameFull("Game is full".to_string()))
 }
 
 /// Owned goblins that have not entered any game yet — the roster picker
@@ -252,8 +290,9 @@ pub async fn list_joinable_goblins(db: &Surreal<Any>) -> Result<Vec<Character>, 
 /// Gates, in order: game exists and is `NotStarted`; caller owns the
 /// character (404 missing / 403 foreign); the character isn't in another
 /// game; the caller has no goblin in this game yet (bot fillers have no
-/// `created_by` and are exempt); roster under 24. Assigns the team with
-/// the fewest members and records the `playing_in` edge.
+/// `created_by` and are exempt); roster under 24; a team under
+/// `goblins_per_team`. Assigns the team with the fewest members that
+/// still has space and records the `playing_in` edge.
 pub async fn join_game(
     db: &Surreal<Any>,
     game_identifier: &str,
@@ -351,7 +390,11 @@ pub async fn join_game(
         return Err(AppError::GameFull("Game is full".to_string()));
     }
 
-    let team = fewest_team(db, game_identifier, team_count).await?;
+    // Per-team capacity: enter the fewest-member team that still has
+    // room. Every team at capacity is a full game even under the total
+    // cap, so reject rather than overfill — the ready rule counts on
+    // each team holding exactly `goblins_per_team`.
+    let team = fewest_team_with_space(db, game_identifier, team_count, goblins_per_team).await?;
 
     // Entry: fresh per-game state, the assigned team, and the game
     // pointer. UPSERT CONTENT re-stamps created_by = $auth through the
@@ -409,9 +452,13 @@ pub async fn create_character(
         .take(0)
         .map_err(|e| AppError::InternalServerError(format!("Failed to read game config: {e}")))?;
     let cfg = cfg_rows.first();
-    let roster_cap = cfg
-        .and_then(|row| Some(row["team_count"].as_u64()? * row["goblins_per_team"].as_u64()?))
-        .unwrap_or(shared::DEFAULT_ROSTER_CAP as u64) as u32;
+    let team_count = cfg
+        .and_then(|row| row["team_count"].as_u64())
+        .unwrap_or(shared::DEFAULT_TEAM_COUNT as u64) as u32;
+    let goblins_per_team = cfg
+        .and_then(|row| row["goblins_per_team"].as_u64())
+        .unwrap_or(shared::DEFAULT_GOBLINS_PER_TEAM as u64) as u32;
+    let roster_cap = team_count * goblins_per_team;
     let mut character_count_resp = db
         .query("RETURN count(SELECT id FROM playing_in WHERE out.identifier=$game)")
         .bind(("game", game_identifier.to_owned()))
@@ -425,7 +472,24 @@ pub async fn create_character(
     }
 
     let mut character = character.unwrap_or_else(Character::random);
-    character.team = team + 1;
+    // Per-team capacity: the requested team (0-indexed) takes the
+    // goblin only while it has room; a full or out-of-range request
+    // redirects to the fewest-member team with space, and no team with
+    // space means the roster is full. Bot-fill never overfills a team
+    // relative to `goblins_per_team`, so the ready rule's even fill
+    // stays reachable.
+    let counts = team_member_counts(db, game_identifier, team_count).await?;
+    let requested = team + 1;
+    character.team = if requested <= team_count
+        && counts
+            .get(requested as usize)
+            .is_some_and(|&count| count < goblins_per_team)
+    {
+        requested
+    } else {
+        team_with_space(&counts, team_count, goblins_per_team)
+            .ok_or_else(|| AppError::GameFull("Game is full".to_string()))?
+    };
     character.statistics.game = game_identifier.to_owned();
 
     let id = RecordId::new("character", character.identifier.as_str());
