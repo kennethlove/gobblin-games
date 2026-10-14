@@ -707,7 +707,7 @@ mod tests {
     use crate::afflictions::cascade::{CascadeOutcome, apply_cascade, tick_cascade};
     use crate::afflictions::cure::{CureOutcome, apply_cure};
     use crate::afflictions::tuning::AfflictionTuning;
-    use shared::afflictions::AfflictionKey;
+    use shared::afflictions::{AfflictionKey, CureKind};
 
     // ── 4.1 Untreated wound → infection → death ─────────────────────────
 
@@ -1124,7 +1124,7 @@ mod tests {
 
         // Apply cure: Severe → Moderate.
         let mut aff_vec: Vec<Affliction> = afflictions.values().cloned().collect();
-        let cure_result = apply_cure(&mut aff_vec, "bandage");
+        let cure_result = apply_cure(&mut aff_vec, CureKind::Wounded);
         assert!(
             matches!(
                 cure_result,
@@ -1446,7 +1446,7 @@ mod tests {
             {
                 let from = infected.severity;
                 let mut aff_vec: Vec<Affliction> = afflictions.values().cloned().collect();
-                let cure_result = apply_cure(&mut aff_vec, "antibiotic");
+                let cure_result = apply_cure(&mut aff_vec, CureKind::Infected);
                 if matches!(cure_result, CureOutcome::Cured { .. }) {
                     message_log.push(format!("  CureApplied: Infected {from} → cured"));
                     afflictions.clear();

@@ -133,19 +133,22 @@ impl Character {
             _ => return Err(ItemError::InvalidAttribute),
         }
 
-        // Apply cure effect if item is a cure item (bandage, splint, antibiotic).
-        let afflictions: Vec<_> = self.afflictions.values().cloned().collect();
-        let mut affliction_vec = afflictions;
-        let cure_result = apply_cure(&mut affliction_vec, &item.name);
-        // Update the character's affliction map with the cured state.
-        self.afflictions = affliction_vec.into_iter().map(|a| (a.key(), a)).collect();
+        // Apply the item's typed cure effect, if it carries one. Cure
+        // behavior comes from `Item::cures`, never from the item's name.
+        if let Some(cure) = item.cures {
+            let afflictions: Vec<_> = self.afflictions.values().cloned().collect();
+            let mut affliction_vec = afflictions;
+            let cure_result = apply_cure(&mut affliction_vec, cure);
+            // Update the character's affliction map with the cured state.
+            self.afflictions = affliction_vec.into_iter().map(|a| (a.key(), a)).collect();
 
-        match cure_result {
-            crate::afflictions::CureOutcome::Cured { .. } => {
-                // Cure applied successfully; afflictions map already updated.
-            }
-            crate::afflictions::CureOutcome::NoEffect { .. } => {
-                // No matching affliction; not an error, just no cure effect.
+            match cure_result {
+                crate::afflictions::CureOutcome::Cured { .. } => {
+                    // Cure applied successfully; afflictions map already updated.
+                }
+                crate::afflictions::CureOutcome::NoEffect { .. } => {
+                    // No matching affliction; not an error, just no cure effect.
+                }
             }
         }
 
@@ -397,5 +400,79 @@ mod tests {
         broken.max_durability = 5;
         character.add_item(broken);
         assert!(character.equipped_weapon_mut().is_none());
+    }
+
+    fn wounded_moderate() -> shared::afflictions::Affliction {
+        use shared::afflictions::{Affliction, AfflictionKind, AfflictionSource, Severity};
+        Affliction {
+            kind: AfflictionKind::Wounded,
+            body_part: None,
+            severity: Severity::Moderate,
+            source: AfflictionSource::Combat {
+                attacker_id: "characters:test".into(),
+            },
+            acquired_cycle: 1,
+            last_progressed_cycle: 1,
+            trauma_metadata: None,
+            phobia_metadata: None,
+            fixation_metadata: None,
+            addiction_metadata: None,
+            trapped_metadata: None,
+        }
+    }
+
+    /// Cure behavior comes from the typed `cures` attribute, so renaming a
+    /// cure item must not change what it cures.
+    #[rstest]
+    fn renamed_item_still_cures(mut character: Character) {
+        use shared::afflictions::{CureKind, Severity};
+
+        let mut item = Item::new_consumable("blood rag");
+        item.attribute = Attribute::Health;
+        item.cures = Some(CureKind::Wounded);
+
+        let wound = wounded_moderate();
+        character.afflictions.insert(wound.key(), wound);
+        character.add_item(item.clone());
+
+        let mut events: Vec<TaggedEvent> = Vec::new();
+        character
+            .try_use_consumable(&item, &mut events, Some(0))
+            .expect("consumable usable");
+
+        let remaining = character
+            .afflictions
+            .values()
+            .next()
+            .expect("affliction remains");
+        assert_eq!(remaining.severity, Severity::Mild);
+    }
+
+    /// The inverse guard: a cure-sounding name with no typed `cures`
+    /// attribute must not cure anything.
+    #[rstest]
+    fn item_name_grants_no_cure(mut character: Character) {
+        use shared::afflictions::{AfflictionKind, Severity};
+
+        let mut item = Item::new_consumable("bandage");
+        item.attribute = Attribute::Health;
+        assert_eq!(item.cures, None);
+
+        let wound = wounded_moderate();
+        character.afflictions.insert(wound.key(), wound);
+        character.add_item(item.clone());
+
+        let mut events: Vec<TaggedEvent> = Vec::new();
+        character
+            .try_use_consumable(&item, &mut events, Some(0))
+            .expect("consumable usable");
+
+        let remaining = character
+            .afflictions
+            .values()
+            .next()
+            .expect("affliction remains");
+        assert_eq!(remaining.kind, AfflictionKind::Wounded);
+        assert_eq!(remaining.severity, Severity::Moderate);
     }
 }

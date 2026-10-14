@@ -459,3 +459,32 @@ fn item_deserializes_when_rarity_field_missing() {
     let item: Item = serde_json::from_str(json).expect("legacy item must deserialize");
     assert_eq!(item.rarity, ItemRarity::Common);
 }
+
+/// Legacy `item` rows persisted before typed cures existed carry no
+/// `cures` field. `#[serde(default)]` keeps them loading as non-cure
+/// items instead of failing the whole `Vec<Item>` fetch.
+#[test]
+fn item_deserializes_when_cures_field_missing() {
+    let json = r#"{
+        "identifier": "x",
+        "name": "bandage",
+        "item_type": "Consumable",
+        "rarity": "Common",
+        "current_durability": 1,
+        "max_durability": 1,
+        "attribute": "Health",
+        "effect": 2
+    }"#;
+    let item: Item = serde_json::from_str(json).expect("legacy item must deserialize");
+    assert_eq!(item.cures, None);
+}
+
+#[test]
+fn item_cure_kind_serde_round_trip() {
+    let mut item = Item::new_consumable("bandage");
+    item.cures = Some(CureKind::Wounded);
+    let json = serde_json::to_string(&item).unwrap();
+    assert!(json.contains("\"cures\":\"wounded\""), "json: {json}");
+    let back: Item = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.cures, Some(CureKind::Wounded));
+}
