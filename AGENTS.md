@@ -33,6 +33,29 @@ Rules:
 - If a raw git commit already happened, reconcile: `jj status` to see the
   debris, then `jj abandon` the empty no-description commits.
 
+### PR merge cleanup
+
+After any PR merges, run this cleanup in order:
+
+1. **Fetch the new main.** Run `jj git fetch` so your local view includes
+   the merged commit.
+2. **Remove the merged PR's workspace.** Check the workspace is clean with
+   `jj status` inside it, then run `jj workspace forget <name>` and delete
+   the workspace directory.
+3. **Rebase all remaining open PR branches onto the new main.** Run
+   `jj git fetch`, then rebase each open branch with
+   `jj rebase -s <stack ROOT commit> -d main`. Never rebase with
+   `-s <bookmark>` alone on a stacked PR — that moves only the tip, and
+   the three-way merge silently drops the parent commits' changes.
+   Always rebase from the root commit of the stack so descendants follow.
+   Resolve conflicts, run `cargo check`, and push.
+4. **Close the beads issues the PR resolved.** Check the PR body for
+   `Closes` / `Fixes` lines and close each issue listed there.
+5. **Reconcile divergent change ids.** If a rebase created a divergent
+   change (jj shows `change/0`, `change/1`), keep the good head: run
+   `jj bookmark set <name> -r <good> --allow-backwards`, then
+   `jj abandon <bad head>`.
+
 ## Quick Reference
 
 ```bash
