@@ -159,8 +159,17 @@ fn test_stamina_restoration() {
     use characters::survival::{HungerBand, ThirstBand};
 
     let mut character = Character::default();
-    assert_eq!(character.stamina, 100, "Initial stamina should be 100");
-    assert_eq!(character.max_stamina, 100, "Max stamina should be 100");
+    // Pristine stamina is trait-coherent: a rolled curse like Asthmatic
+    // shrinks the fresh pool, so expect the rolled traits' value.
+    let fresh_max = characters::lifecycle::health::max_stamina_for_traits(&character.traits);
+    assert_eq!(
+        character.stamina, fresh_max,
+        "Initial stamina should fill the trait-bent fresh pool"
+    );
+    assert_eq!(
+        character.max_stamina, fresh_max,
+        "Max stamina should be the trait-bent fresh pool"
+    );
 
     // Deplete stamina, then recover sheltered + resting (max rate, default 60).
     character.stamina = 25;
@@ -258,13 +267,17 @@ fn test_negative_health_clamped() {
 fn test_character_new_initializes_stamina() {
     let character = Character::new("Test".to_string(), Some(5), None);
 
+    // Pristine stamina is trait-coherent: a rolled curse like Asthmatic
+    // shrinks the fresh pool, so expect the rolled traits' value.
+    let fresh_max = characters::lifecycle::health::max_stamina_for_traits(&character.traits);
+
     assert_eq!(
-        character.stamina, 100,
-        "New character should have 100 stamina"
+        character.stamina, fresh_max,
+        "New character stamina should fill the trait-bent fresh pool"
     );
     assert_eq!(
-        character.max_stamina, 100,
-        "New character should have 100 max stamina"
+        character.max_stamina, fresh_max,
+        "New character max stamina should be the trait-bent fresh pool"
     );
 }
 

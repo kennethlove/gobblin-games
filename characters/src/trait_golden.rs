@@ -5,6 +5,11 @@
 //! Recorded against UNMODIFIED main behavior (commit e40257d3). The trait
 //! effect-data migration must leave every line here byte-identical: run
 //! `GOLDEN_DUMP=1 cargo test -p characters trait_golden` and diff the dump.
+//!
+//! One intentional exception: the `gen:` lines were re-recorded when
+//! Reckless and LoneWolf joined `TRAIT_POOL` (they were unobtainable
+//! before, so generation output had to change for them to appear). Every
+//! other line class must stay byte-identical.
 
 use crate::brains::PersonalityThresholds;
 use crate::brains::combat::CombatBrain;
@@ -185,23 +190,25 @@ fn trait_effect_migration_golden() {
     );
 }
 
-/// Recorded from unmodified main (e40257d3) before the effect-data migration.
-const TRAIT_GOLDEN: &str = r#"gen:0 -> ["cautious", "resilient", "asthmatic", "loyal", "friendly", "cunning"]
-gen:1 -> ["dim", "asthmatic", "friendly", "aggressive", "loyal", "tough"]
+/// Recorded from unmodified main (e40257d3) before the effect-data
+/// migration; `gen:` lines re-recorded for the Reckless/LoneWolf pool
+/// addition (see module doc).
+const TRAIT_GOLDEN: &str = r#"gen:0 -> ["asthmatic", "defensive", "fragile", "reckless", "loyal", "friendly"]
+gen:1 -> ["dim", "fragile", "friendly", "aggressive", "tough", "loyal"]
 gen:2 -> ["tough", "paranoid"]
-gen:3 -> ["loyal", "cunning", "aggressive", "resilient", "asthmatic"]
-gen:4 -> ["resilient", "loyal", "cautious", "asthmatic", "defensive"]
-gen:5 -> ["tough", "aggressive"]
-gen:6 -> ["tough", "cautious"]
-gen:7 -> ["loyal", "aggressive", "resilient", "tough"]
-gen:8 -> ["tough", "paranoid", "cautious", "defensive", "treacherous"]
-gen:9 -> ["friendly", "fragile", "loyal", "asthmatic"]
-gen:10 -> ["loyal", "cunning", "tough"]
-gen:11 -> ["tough", "defensive", "asthmatic"]
-gen:12 -> ["resilient", "friendly", "defensive", "dim"]
-gen:13 -> ["resilient", "friendly", "aggressive", "tough"]
+gen:3 -> ["loyal", "resilient", "aggressive", "cunning", "friendly"]
+gen:4 -> ["defensive", "loyal", "asthmatic", "cautious", "friendly"]
+gen:5 -> ["cunning", "aggressive"]
+gen:6 -> ["tough", "asthmatic"]
+gen:7 -> ["loyal", "tough", "resilient", "aggressive"]
+gen:8 -> ["cunning", "paranoid", "asthmatic", "treacherous", "defensive"]
+gen:9 -> ["friendly", "reckless", "loyal", "fragile"]
+gen:10 -> ["loyal", "resilient", "tough"]
+gen:11 -> ["tough", "friendly", "fragile"]
+gen:12 -> ["resilient", "cautious", "friendly", "dim"]
+gen:13 -> ["defensive", "friendly", "cunning", "asthmatic"]
 gen:14 -> ["defensive", "tough", "nearsighted", "cautious", "loyal", "cunning"]
-gen:15 -> ["defensive", "fragile", "asthmatic", "friendly", "dim", "tough"]
+gen:15 -> ["friendly", "reckless", "aggressive", "fragile", "dim", "tough"]
 trait:Aggressive -> label=aggressive affinity=1 refusal=false delta=ThresholdDelta { low_health_limit: -5, mid_health_limit: -10, low_sanity_limit: -2, mid_sanity_limit: 0, high_sanity_limit: 0, movement_limit: 0, low_intelligence_limit: 0, high_intelligence_limit: 0, psychotic_break_threshold: 2 }
 trait:Defensive -> label=defensive affinity=1 refusal=false delta=ThresholdDelta { low_health_limit: 10, mid_health_limit: 10, low_sanity_limit: 0, mid_sanity_limit: 0, high_sanity_limit: 0, movement_limit: 0, low_intelligence_limit: 0, high_intelligence_limit: 0, psychotic_break_threshold: -2 }
 trait:Cautious -> label=cautious affinity=1 refusal=false delta=ThresholdDelta { low_health_limit: 15, mid_health_limit: 15, low_sanity_limit: 10, mid_sanity_limit: 10, high_sanity_limit: 0, movement_limit: 0, low_intelligence_limit: 0, high_intelligence_limit: 0, psychotic_break_threshold: -3 }

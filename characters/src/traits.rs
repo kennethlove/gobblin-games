@@ -77,6 +77,14 @@ pub enum Effect {
         flat: i32,
         percent: i32,
     },
+    /// Maximum-stamina percent modifier. Stamina predates the attribute
+    /// axes (`Character` carries `max_stamina` directly), so this is a
+    /// dedicated channel rather than a `CharacterAttribute` variant.
+    /// Percentages accumulate additively and are applied at character
+    /// creation via [`stamina_max_percent_sum`].
+    MaxStaminaPercent {
+        percent: i32,
+    },
     /// Behavior-axis weight read by alliance/threshold/betrayal/brain/
     /// phobia consumers (see [`BehaviorAxis`]).
     BehaviorWeight {
@@ -414,7 +422,7 @@ impl Trait {
             Trait::Asthmatic => TraitDef {
                 label: "asthmatic",
                 kind: TraitKind::Curse,
-                effects: NONE,
+                effects: &[Effect::MaxStaminaPercent { percent: -15 }],
             },
             Trait::Nearsighted => TraitDef {
                 label: "nearsighted",
@@ -475,6 +483,20 @@ impl Trait {
 /// Sum of `axis` across a trait set (0 when nothing contributes).
 pub fn behavior_sum(traits: &[Trait], axis: BehaviorAxis) -> i32 {
     traits.iter().map(|t| t.behavior_weight(axis)).sum()
+}
+
+/// Sum of `MaxStaminaPercent` effects across a trait set (0 when nothing
+/// contributes). Fed into the creation-time stamina roll by the
+/// `Character::new` family.
+pub fn stamina_max_percent_sum(traits: &[Trait]) -> i32 {
+    traits
+        .iter()
+        .flat_map(|t| t.effects())
+        .filter_map(|e| match e {
+            Effect::MaxStaminaPercent { percent } => Some(*percent),
+            _ => None,
+        })
+        .sum()
 }
 
 /// Why a trait could not be gained (spec §3: one API enforces conflicts).
@@ -598,9 +620,11 @@ pub fn conflicts_with(a: Trait, b: Trait) -> bool {
 }
 
 /// Weighted trait pool shared by every goblin. Weights sum the eight legacy
-/// clan-keyed pools, so the overall mix matches the old uniform-clan
-/// distribution without keying traits to any grouping. Traits roll per
-/// goblin from that goblin's own RNG.
+/// clan-keyed pools (90), so the overall mix matches the old uniform-clan
+/// distribution without keying traits to any grouping. Reckless and LoneWolf
+/// never belonged to a legacy clan pool; they join at modest weights below
+/// their flavor siblings (Cautious 6, Paranoid 3). Traits roll per goblin
+/// from that goblin's own RNG.
 pub const TRAIT_POOL: &[(Trait, u8)] = &[
     (Trait::Loyal, 13),
     (Trait::Aggressive, 11),
@@ -612,7 +636,9 @@ pub const TRAIT_POOL: &[(Trait, u8)] = &[
     (Trait::Cautious, 6),
     (Trait::Asthmatic, 5),
     (Trait::Fragile, 5),
+    (Trait::Reckless, 4),
     (Trait::Nearsighted, 4),
+    (Trait::LoneWolf, 3),
     (Trait::Paranoid, 3),
     (Trait::Dim, 2),
     (Trait::Treacherous, 2),
@@ -789,7 +815,69 @@ mod tests {
         assert!(TRAIT_POOL.iter().any(|(t, _)| *t == Trait::Loyal));
         assert!(TRAIT_POOL.iter().any(|(t, _)| *t == Trait::Friendly));
         let total: u32 = TRAIT_POOL.iter().map(|(_, w)| *w as u32).sum();
-        assert_eq!(total, 90, "weights sum the eight legacy pools");
+        assert_eq!(total, 97, "legacy pools (90) plus Reckless 4 + LoneWolf 3");
+    }
+
+    #[test]
+    fn every_variant_is_pool_event_only_or_pending() {
+        // The pool-coverage invariant (spec §9): every `Trait` variant must
+        // sit in exactly one acquisition bucket, so no variant can go dead
+        // (defined but unreachable) without a test failure.
+
+        // Traits gained only through explicit game events, never rolled:
+        // revival scar/bonus picks all draw from pool traits today.
+        const EVENT_ONLY: &[Trait] = &[];
+
+        // Pending systems: Builder and ResourcefulForager have no resolver
+        // systems yet (shelter/forage action execution is unimplemented).
+        // Do not pool or event-wire them until those land; move them to
+        // TRAIT_POOL or EVENT_ONLY then.
+        const PENDING: &[Trait] = &[Trait::Builder, Trait::ResourcefulForager];
+
+        let mut bucketed: Vec<Trait> = TRAIT_POOL.iter().map(|(t, _)| *t).collect();
+        bucketed.extend_from_slice(EVENT_ONLY);
+        bucketed.extend_from_slice(PENDING);
+
+        // Exactly once per bucket: no duplicates within or across sets.
+        let mut sorted = bucketed.clone();
+        sorted.sort_by_key(|t| *t as u8);
+        sorted.dedup();
+        assert_eq!(
+            sorted.len(),
+            bucketed.len(),
+            "each variant must be bucketed exactly once"
+        );
+
+        // Coverage: the union equals every variant.
+        let mut expected = ALL_TRAITS.to_vec();
+        expected.sort_by_key(|t| *t as u8);
+        assert_eq!(
+            sorted, expected,
+            "TRAIT_POOL ∪ event-only ∪ pending must cover ALL_TRAITS"
+        );
+    }
+
+    #[test]
+    fn asthmatic_carries_a_midrange_stamina_penalty() {
+        assert_eq!(stamina_max_percent_sum(&[Trait::Asthmatic]), -15);
+        for t in ALL_TRAITS {
+            for e in t.effects() {
+                if let Effect::MaxStaminaPercent { percent } = e {
+                    assert!(
+                        (-20..=-5).contains(percent),
+                        "{t:?} stamina penalty {percent} must stay in the 5-20% curse band"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn max_stamina_percent_serde_roundtrip() {
+        let json = serde_json::to_string(&Effect::MaxStaminaPercent { percent: -15 }).unwrap();
+        assert_eq!(json, r#"{"MaxStaminaPercent":{"percent":-15}}"#);
+        let back: Effect = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, Effect::MaxStaminaPercent { percent: -15 });
     }
 
     #[test]

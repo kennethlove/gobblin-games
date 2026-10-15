@@ -24,6 +24,17 @@ pub fn apply_attribute_modifiers(base: u32, flat: i32, percent: f64) -> u32 {
     value.max(0.0).round() as u32
 }
 
+/// Fresh stamina pool for a trait set: the base 100 bent by every
+/// `MaxStaminaPercent` effect (creation-time coherence, mirroring
+/// `Attributes::from_rng_with_traits` for the attribute axes).
+pub fn max_stamina_for_traits(traits: &[crate::traits::Trait]) -> u32 {
+    apply_attribute_modifiers(
+        100,
+        0,
+        f64::from(crate::traits::stamina_max_percent_sum(traits)),
+    )
+}
+
 /// Accumulate `(flat, percent)` from one effect list for one attribute.
 /// Both permanent (trait) and temporary (affliction) layers funnel through
 /// this, which is what makes them indistinguishable downstream (spec §4).
