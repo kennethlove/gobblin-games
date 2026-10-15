@@ -20,12 +20,50 @@
 //! are deterministic under a seed. The roll runs once per game at the
 //! finish seam — see `Game::post_game_recovery` and the comments in
 //! `api/src/games/{mod,handlers}.rs`.
+//!
+//! # Boundary conversion odds (spec §5; design A consume)
+//!
+//! Every affliction on a dead goblin is consumed when it revives — the
+//! affliction never crosses the game boundary, only a trait can (spec
+//! §3.2). Eligible mental kinds roll their per-kind odds and, on success,
+//! grant the permanent trait form; a failed roll and kinds with no
+//! permanent form are gone with nothing (spec §5's 0% row).
+//!
+//! | Affliction            | Permanent trait | Odds  |
+//! |-----------------------|-----------------|-------|
+//! | `Trauma`              | `Fragile`       | 60%   |
+//! | `Phobia(_)`           | `Paranoid`      | 50%   |
+//! | `Fixation(_)`         | `Loyal`         | 40%   |
+//! | `Addiction(_)`        | `Reckless`      | 40%   |
+//!
+//! All numbers are **placeholders**, tuned with observability like every
+//! other odds table (spec §10.6). Trait pairings are placeholder flavor
+//! mappings until dedicated permanent forms exist (e.g. a phobia-trait for
+//! Trauma). Non-mental kinds never convert.
+//!
+//! # Event boon/curse odds (spec §3 path 3)
+//!
+//! Boons and curses roll **independently** at revival — one revival can
+//! land both. A decided boon always sticks (no persistence roll); a
+//! curse is the scarring memory and only sticks if it passes its
+//! persistence roll.
+//!
+//! | Roll                   | Odds | Effect                                      |
+//! |------------------------|------|---------------------------------------------|
+//! | Boon trigger           | 30%  | Revival rolls a one-off boon. Always sticks.|
+//! | Curse trigger          | 30%  | Revival rolls a one-off curse.              |
+//! | Curse persistence      | 60%  | The curse sticks across games; a failed     |
+//! |                        |      | roll leaves nothing behind.                 |
+//!
+//! All numbers are **placeholders** (spec §10.6). See
+//! [`maybe_grant_event_traits`].
 
 use crate::Character;
 use crate::statuses::CharacterStatus;
 use crate::traits::{self, Trait};
 use rand::RngExt;
 use rand::prelude::*;
+use shared::afflictions::AfflictionKind;
 
 /// How the goblin came back from the dead.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -53,6 +91,48 @@ const ODDS: &[(RevivalOutcome, u8)] = &[
 const SCAR_TRAITS: &[Trait] = &[Trait::Fragile, Trait::Paranoid, Trait::Nearsighted];
 /// Upside traits a bonus can grant.
 const BONUS_TRAITS: &[Trait] = &[Trait::Tough, Trait::Resilient, Trait::Cunning];
+
+/// Per-kind affliction → trait conversion odds at revival (spec §5's
+/// table, one config struct of plain numbers). **Placeholder values** —
+/// tuned with observability like every other odds table (spec §10.6).
+/// Percent of a `0..100` draw: success when `draw < odds`.
+#[derive(Debug, Clone, Copy)]
+pub struct ConversionOdds {
+    pub trauma: u8,
+    pub phobia: u8,
+    pub fixation: u8,
+    pub addiction: u8,
+}
+
+/// The conversion odds table. Only the four mental kinds with metadata
+/// structs + brain overrides are eligible (spec §5: kinds without a
+/// permanent form convert at 0% and are not listed).
+pub const CONVERSION_ODDS: ConversionOdds = ConversionOdds {
+    // Spec §5 table: trauma hardens into a permanent scar-trait.
+    trauma: 60,
+    // Placeholder (spec §10.6).
+    phobia: 50,
+    // Placeholder (spec §10.6).
+    fixation: 40,
+    // Placeholder (spec §10.6).
+    addiction: 40,
+};
+
+/// Percent chance a revival rolls a one-off event BOON, and separately
+/// a one-off event CURSE (spec §3 path 3; the two rolls are
+/// independent, so one revival can land both). Placeholder (spec §10.6).
+pub const EVENT_ODDS: u8 = 30;
+/// Percent chance a rolled event CURSE sticks to the persistent
+/// character across games. Boons don't roll persistence — a decided
+/// boon always sticks. Placeholder (spec §10.6).
+pub const EVENT_CURSE_PERSIST_ODDS: u8 = 60;
+/// Boon candidates for the event roll (spec §3's "healed lungs"-style
+/// one-off boons; placeholder pool — existing effect-carrying variants
+/// only, no new variants).
+pub const EVENT_BOON_TRAITS: &[Trait] = &[Trait::Tough, Trait::Resilient, Trait::Cunning];
+/// Curse candidates for the event roll (spec §3's "sprained ankle"-style
+/// one-off curses; placeholder pool).
+pub const EVENT_CURSE_TRAITS: &[Trait] = &[Trait::Fragile, Trait::Nearsighted, Trait::Asthmatic];
 
 /// Roll one revival outcome using `rng` (injected so tests can seed it).
 pub fn roll<R: Rng + ?Sized>(rng: &mut R) -> RevivalOutcome {
@@ -116,6 +196,103 @@ fn pick_eligible<R: Rng + ?Sized>(
     eligible.choose(rng).copied()
 }
 
+/// Permanent trait form + per-kind odds for an affliction kind; `None`
+/// for kinds with no permanent form (they convert at 0%, spec §5 — only
+/// the four mental kinds are eligible). The trait pairings are
+/// placeholders until dedicated permanent forms land (see module docs).
+pub fn conversion_for(kind: &AfflictionKind) -> Option<(Trait, u8)> {
+    match kind {
+        AfflictionKind::Trauma => Some((Trait::Fragile, CONVERSION_ODDS.trauma)),
+        AfflictionKind::Phobia(_) => Some((Trait::Paranoid, CONVERSION_ODDS.phobia)),
+        AfflictionKind::Fixation(_) => Some((Trait::Loyal, CONVERSION_ODDS.fixation)),
+        AfflictionKind::Addiction(_) => Some((Trait::Reckless, CONVERSION_ODDS.addiction)),
+        _ => None,
+    }
+}
+
+/// Design A consume (spec §3.2): every affliction on `character` is
+/// removed — the map is taken whole, so a consumed affliction leaves no
+/// entry and no pending-conversion state. Eligible mental kinds roll
+/// [`CONVERSION_ODDS`]; a success grants the permanent trait through
+/// [`Character::gain_trait`] (stamped into the advancement log), a
+/// failure and ineligible kinds are gone with nothing. Never the
+/// affliction and the trait together: even when the grant is blocked
+/// (duplicate/conflict), the affliction stays consumed. Returns the
+/// conversion traits granted.
+pub fn convert_afflictions<R: Rng + ?Sized>(character: &mut Character, rng: &mut R) -> Vec<Trait> {
+    let afflictions = std::mem::take(&mut character.afflictions);
+    let mut granted = Vec::new();
+    for affliction in afflictions.into_values() {
+        let Some((trait_, odds)) = conversion_for(&affliction.kind) else {
+            // No permanent form: converts at 0% — gone with nothing.
+            continue;
+        };
+        if rng.random_range(0..100u8) >= odds {
+            continue;
+        }
+        if character.gain_trait(trait_).is_ok() {
+            granted.push(trait_);
+        }
+    }
+    granted
+}
+
+/// Whether this revival rolls a one-off event boon, and separately an
+/// event curse ([`EVENT_ODDS`] each, independent — one revival can land
+/// both). Placeholder.
+pub fn should_roll_event<R: Rng + ?Sized>(rng: &mut R) -> bool {
+    rng.random_range(0..100u8) < EVENT_ODDS
+}
+
+/// Whether a rolled event CURSE sticks to the persistent character
+/// across games ([`EVENT_CURSE_PERSIST_ODDS`], placeholder). Boons are
+/// not rolled here — a decided boon always sticks.
+pub fn curse_persists<R: Rng + ?Sized>(rng: &mut R) -> bool {
+    rng.random_range(0..100u8) < EVENT_CURSE_PERSIST_ODDS
+}
+
+/// Draw an eligible trait from the boon pool.
+fn event_boon_candidate<R: Rng + ?Sized>(character: &Character, rng: &mut R) -> Option<Trait> {
+    pick_eligible(character, EVENT_BOON_TRAITS, rng)
+}
+
+/// Draw an eligible trait from the curse pool.
+fn event_curse_candidate<R: Rng + ?Sized>(character: &Character, rng: &mut R) -> Option<Trait> {
+    pick_eligible(character, EVENT_CURSE_TRAITS, rng)
+}
+
+/// Roll the one-off event boon/curse at revival (spec §3 path 3).
+/// Independent rolls: the boon trigger ([`EVENT_ODDS`]) and the curse
+/// trigger ([`EVENT_ODDS`]) each fire, so one revival can land both. A
+/// boon that triggers always sticks — decided means granted. A curse
+/// only sticks if it passes [`curse_persists`]. Grants go through
+/// [`Character::gain_trait`], so they are stamped as advancements and
+/// cross the game boundary. Returns `(boon, curse)`, each `None` when
+/// untriggered, ineligible, or (curse) failed persistence — a failed
+/// roll leaves no trait and no state behind.
+pub fn maybe_grant_event_traits<R: Rng + ?Sized>(
+    character: &mut Character,
+    rng: &mut R,
+) -> (Option<Trait>, Option<Trait>) {
+    let boon = if should_roll_event(rng) {
+        event_boon_candidate(character, rng)
+            .and_then(|trait_| character.gain_trait(trait_).ok().map(|()| trait_))
+    } else {
+        None
+    };
+    let curse = if should_roll_event(rng) {
+        match event_curse_candidate(character, rng) {
+            Some(trait_) if curse_persists(rng) => {
+                character.gain_trait(trait_).ok().map(|()| trait_)
+            }
+            _ => None,
+        }
+    } else {
+        None
+    };
+    (boon, curse)
+}
+
 /// Restore a character to full playable health: healthy status, default
 /// blood, no wounds, no sleep. Applied to revived goblins after their roll
 /// and to every survivor at the game's finish seam.
@@ -127,9 +304,11 @@ pub fn restore(character: &mut Character) {
     character.sleep_remaining = 0;
 }
 
-/// Roll one revival for a dead goblin: apply the persistent outcome, then
-/// [`restore`] them so they are playable in future games. Returns the
-/// outcome that was applied.
+/// Roll one revival for a dead goblin: apply the persistent outcome,
+/// consume the character's afflictions at the boundary (design A —
+/// [`convert_afflictions`]), roll the independent event boon/curse
+/// ([`maybe_grant_event_traits`]), then [`restore`] them so they are
+/// playable in future games. Returns the outcome that was applied.
 pub fn revive<R: Rng + ?Sized>(character: &mut Character, rng: &mut R) -> RevivalOutcome {
     let outcome = roll(rng);
     match outcome {
@@ -138,6 +317,10 @@ pub fn revive<R: Rng + ?Sized>(character: &mut Character, rng: &mut R) -> Reviva
         RevivalOutcome::Scar => apply_scar(character, rng),
         RevivalOutcome::Bonus => apply_bonus(character, rng),
     }
+    // Boundary-only acquisition (spec §10.5): conversion and event
+    // boons/curses roll here, at the post-game boundary, nowhere else.
+    convert_afflictions(character, rng);
+    let _ = maybe_grant_event_traits(character, rng);
     restore(character);
     outcome
 }
@@ -312,5 +495,424 @@ mod tests {
             "penalty should mutate stats: {before} -> {after}"
         );
         assert!(character.is_alive());
+    }
+
+    // ---- Affliction → trait conversion at revival (spec §3.2 design A
+    // consume, §5 odds table, §10.5 boundary-only) ----
+
+    use shared::afflictions::{
+        Affliction, AfflictionKind, AfflictionSource, FixationTarget, PhobiaTrigger, Severity,
+        Substance, TrapKind,
+    };
+    use shared::conditions::{ConditionSeverity, MentalCondition};
+
+    fn affliction_of(kind: AfflictionKind) -> Affliction {
+        Affliction {
+            kind,
+            body_part: None,
+            severity: Severity::Moderate,
+            source: AfflictionSource::Combat {
+                attacker_id: "characters:test".to_string(),
+            },
+            acquired_cycle: 1,
+            last_progressed_cycle: 1,
+            trauma_metadata: None,
+            phobia_metadata: None,
+            fixation_metadata: None,
+            addiction_metadata: None,
+            trapped_metadata: None,
+        }
+    }
+
+    fn insert_affliction(character: &mut Character, kind: AfflictionKind) {
+        let affliction = affliction_of(kind);
+        character.afflictions.insert(affliction.key(), affliction);
+    }
+
+    /// Every mental affliction kind has a permanent form and nonzero odds;
+    /// every other kind has no permanent form (converts at 0%, spec §5).
+    #[test]
+    fn conversion_table_covers_exactly_the_four_mental_kinds() {
+        let mental = [
+            AfflictionKind::Trauma,
+            AfflictionKind::Phobia(PhobiaTrigger::Fire),
+            AfflictionKind::Fixation(FixationTarget::Area("hub".to_string())),
+            AfflictionKind::Addiction(Substance::Alcohol),
+        ];
+        for kind in mental {
+            let conversion = conversion_for(&kind);
+            assert!(
+                conversion.is_some(),
+                "{kind:?} is one of the four mental kinds and must convert"
+            );
+            let (_, odds) = conversion.unwrap();
+            assert!(odds > 0, "{kind:?} conversion odds must be nonzero");
+        }
+        let physical = [
+            AfflictionKind::Wounded,
+            AfflictionKind::Infected,
+            AfflictionKind::MissingArm,
+            AfflictionKind::MissingLeg,
+            AfflictionKind::Blind,
+            AfflictionKind::Deaf,
+            AfflictionKind::BrokenBone,
+            AfflictionKind::Poisoned,
+            AfflictionKind::Starving,
+            AfflictionKind::Dehydrated,
+            AfflictionKind::Frozen,
+            AfflictionKind::Overheated,
+            AfflictionKind::Burned,
+            AfflictionKind::Sick,
+            AfflictionKind::Electrocuted,
+            AfflictionKind::Trapped(TrapKind::Drowning),
+        ];
+        for kind in physical {
+            assert_eq!(
+                conversion_for(&kind),
+                None,
+                "{kind:?} has no permanent form and must never convert"
+            );
+        }
+    }
+
+    /// Seeded revival conversion rolls per eligible kind: the grant rate
+    /// conforms to the odds table (statistical sanity band, ±5 points over
+    /// 10k deterministic seeds), and every grant consumes its affliction.
+    #[test]
+    fn conversion_frequency_conforms_to_the_odds_table() {
+        let eligible = [
+            (
+                AfflictionKind::Trauma,
+                CONVERSION_ODDS.trauma,
+                Trait::Fragile,
+            ),
+            (
+                AfflictionKind::Phobia(PhobiaTrigger::Blood),
+                CONVERSION_ODDS.phobia,
+                Trait::Paranoid,
+            ),
+            (
+                AfflictionKind::Fixation(FixationTarget::Item("torch".to_string())),
+                CONVERSION_ODDS.fixation,
+                Trait::Loyal,
+            ),
+            (
+                AfflictionKind::Addiction(Substance::Stimulant),
+                CONVERSION_ODDS.addiction,
+                Trait::Reckless,
+            ),
+        ];
+        const SAMPLES: u64 = 10_000;
+        for (kind, odds, expected_trait) in eligible {
+            let (table_trait, table_odds) =
+                conversion_for(&kind).expect("eligible kind must have a conversion");
+            assert_eq!(table_odds, odds, "{kind:?} odds must come from the table");
+            assert_eq!(table_trait, expected_trait);
+
+            let mut converted = 0u32;
+            let mut character = Character::new("Snaggletooth".to_string(), None, None);
+            for seed in 0..SAMPLES {
+                // Pin the trait set so every success can land (fresh
+                // character per seed: no cross-seed trait buildup).
+                character.traits.clear();
+                character.advancement_log.clear();
+                character.afflictions.clear();
+                insert_affliction(&mut character, kind.clone());
+
+                let mut rng = SmallRng::seed_from_u64(seed);
+                let granted = convert_afflictions(&mut character, &mut rng);
+                assert!(
+                    character.afflictions.is_empty(),
+                    "consumed afflictions must leave no entry (seed {seed})"
+                );
+                if granted.is_empty() {
+                    // Design A: failure consumes with nothing.
+                    assert!(
+                        character.traits.is_empty(),
+                        "seed {seed}: no trait on failure"
+                    );
+                } else {
+                    converted += 1;
+                    assert_eq!(granted, vec![expected_trait], "seed {seed}");
+                    assert_eq!(character.traits, vec![expected_trait], "seed {seed}");
+                }
+            }
+            let got = converted as f64 / SAMPLES as f64 * 100.0;
+            assert!(
+                (got - odds as f64).abs() <= 5.0,
+                "{kind:?}: conversion rate {got}%, want {odds}% ±5"
+            );
+        }
+    }
+
+    /// Ineligible kinds never convert: over seeded revival rolls they never
+    /// grant a trait (they are consumed with nothing, spec §5's 0% row).
+    #[test]
+    fn ineligible_kinds_never_convert() {
+        let ineligible = [
+            AfflictionKind::Wounded,
+            AfflictionKind::Infected,
+            AfflictionKind::MissingArm,
+            AfflictionKind::MissingLeg,
+            AfflictionKind::Blind,
+            AfflictionKind::Deaf,
+            AfflictionKind::BrokenBone,
+            AfflictionKind::Poisoned,
+            AfflictionKind::Starving,
+            AfflictionKind::Dehydrated,
+            AfflictionKind::Frozen,
+            AfflictionKind::Overheated,
+            AfflictionKind::Burned,
+            AfflictionKind::Sick,
+            AfflictionKind::Electrocuted,
+            AfflictionKind::Trapped(TrapKind::Drowning),
+        ];
+        for kind in ineligible {
+            let mut character = Character::new("Stinky".to_string(), None, None);
+            for seed in 0..200u64 {
+                character.traits.clear();
+                character.advancement_log.clear();
+                character.afflictions.clear();
+                insert_affliction(&mut character, kind.clone());
+
+                let mut rng = SmallRng::seed_from_u64(seed);
+                let granted = convert_afflictions(&mut character, &mut rng);
+                assert!(
+                    granted.is_empty(),
+                    "{kind:?} must never convert (seed {seed})"
+                );
+                assert!(character.traits.is_empty(), "{kind:?} granted a trait");
+            }
+        }
+    }
+
+    /// Design A, serialized: a consumed affliction leaves no affliction
+    /// entry and no pending-conversion state, on both conversion paths
+    /// (success grants the trait, failure grants nothing — never both the
+    /// affliction and the trait), and `mental_conditions` stays untouched.
+    #[test]
+    fn consumed_afflictions_leave_no_trace() {
+        let mut rng = SmallRng::seed_from_u64(9);
+        let mut character = Character::new("Billy Slick".to_string(), None, None);
+        character.traits.clear();
+        character.mental_conditions = vec![MentalCondition::Pain {
+            severity: ConditionSeverity::Moderate,
+        }];
+        insert_affliction(&mut character, AfflictionKind::Trauma);
+        let before = serde_json::to_value(&character).unwrap();
+        assert!(
+            before.get("afflictions").is_some(),
+            "fixture must serialize its affliction before conversion"
+        );
+
+        let mut saw_grant = false;
+        let mut saw_no_grant = false;
+        for _ in 0..100 {
+            character.traits.clear();
+            character.advancement_log.clear();
+            character.afflictions.clear();
+            insert_affliction(&mut character, AfflictionKind::Trauma);
+
+            let granted = convert_afflictions(&mut character, &mut rng);
+            let after = serde_json::to_value(&character).unwrap();
+            // No affliction entry: the map serializes only when non-empty,
+            // so a clean conversion drops the key entirely. There is no
+            // pending-conversion state to serialize either (the design
+            // carries no such field).
+            assert!(
+                after.get("afflictions").is_none(),
+                "consumed affliction must not serialize: {after}"
+            );
+            // mental_conditions is per-game state the boundary does not own.
+            assert_eq!(
+                after["mental_conditions"], before["mental_conditions"],
+                "conversion must not touch mental_conditions"
+            );
+            // Never affliction + trait together: grant ⟺ trait present.
+            assert_eq!(
+                granted.is_empty(),
+                character.traits.is_empty(),
+                "design A: exactly one of {granted:?} / {:?}",
+                character.traits
+            );
+            saw_grant |= !granted.is_empty();
+            saw_no_grant |= granted.is_empty();
+        }
+        assert!(
+            saw_grant && saw_no_grant,
+            "seed range must exercise both conversion paths"
+        );
+    }
+
+    /// End-to-end through `revive()`: a dead goblin's afflictions are gone
+    /// from the persisted character when it wakes.
+    #[rstest]
+    fn revive_consumes_afflictions_at_the_boundary(mut character: Character) {
+        character.traits.clear();
+        insert_affliction(
+            &mut character,
+            AfflictionKind::Addiction(Substance::Alcohol),
+        );
+        character.dies();
+        assert!(!character.is_alive());
+
+        let mut rng = SmallRng::seed_from_u64(4);
+        let _ = revive(&mut character, &mut rng);
+
+        assert!(character.is_alive());
+        assert!(character.afflictions.is_empty());
+        let serialized = serde_json::to_value(&character).unwrap();
+        assert!(serialized.get("afflictions").is_none());
+    }
+
+    // ---- Event boons/curses at revival (spec §3 path 3) ----
+
+    /// Independent boon/curse rolls honored across a simulated second revival:
+    /// (a) `curse_persists` draws conform to `EVENT_CURSE_PERSIST_ODDS`,
+    /// (b) boon grant rate = `EVENT_ODDS` (a decided boon always sticks) and
+    ///     curse grant rate = `EVENT_ODDS × EVENT_CURSE_PERSIST_ODDS`; failed
+    ///     curse persistence leaves the curse off,
+    /// (c) landed traits stick across a second revival; presence after two
+    ///     revivals matches the combined-rate formula.
+    #[test]
+    fn event_boon_curse_persistence_honored_across_a_second_revival() {
+        const SAMPLES: u64 = 10_000;
+
+        // (a) Curse persistence odds alone.
+        let mut persisted = 0u32;
+        for seed in 0..SAMPLES {
+            let mut rng = SmallRng::seed_from_u64(seed.wrapping_add(1_000));
+            if curse_persists(&mut rng) {
+                persisted += 1;
+            }
+        }
+        let persisted_pct = persisted as f64 / SAMPLES as f64 * 100.0;
+        assert!(
+            (persisted_pct - EVENT_CURSE_PERSIST_ODDS as f64).abs() <= 5.0,
+            "curse persistence rate {persisted_pct}%, want {EVENT_CURSE_PERSIST_ODDS}% ±5"
+        );
+
+        // (b) Boon rate = trigger; curse rate = trigger × persistence.
+        let mut boon_count = 0u32;
+        let mut curse_count = 0u32;
+        let mut both_count = 0u32;
+        let mut character = Character::new("Snaggletooth".to_string(), None, None);
+        for seed in 0..SAMPLES {
+            character.traits.clear();
+            character.advancement_log.clear();
+            let mut rng = SmallRng::seed_from_u64(seed.wrapping_add(2_000));
+            let (boon, curse) = maybe_grant_event_traits(&mut character, &mut rng);
+            let mut expected = 0u32;
+            if let Some(granted) = boon {
+                boon_count += 1;
+                expected += 1;
+                assert!(
+                    EVENT_BOON_TRAITS.contains(&granted),
+                    "{granted:?} is not a boon trait"
+                );
+                assert!(
+                    character.traits.contains(&granted),
+                    "seed {seed}: boon must stick"
+                );
+            }
+            if let Some(granted) = curse {
+                curse_count += 1;
+                expected += 1;
+                assert!(
+                    EVENT_CURSE_TRAITS.contains(&granted),
+                    "{granted:?} is not a curse trait"
+                );
+                assert!(
+                    character.traits.contains(&granted),
+                    "seed {seed}: curse must stick"
+                );
+            }
+            if boon.is_some() && curse.is_some() {
+                both_count += 1;
+            }
+            assert_eq!(
+                character.traits.len() as u32,
+                expected,
+                "seed {seed}: exactly the granted traits, nothing else"
+            );
+        }
+        assert!(both_count > 0, "independent rolls must land both sometimes");
+        let boon_pct = boon_count as f64 / SAMPLES as f64 * 100.0;
+        assert!(
+            (boon_pct - EVENT_ODDS as f64).abs() <= 5.0,
+            "boon grant rate {boon_pct}%, want {EVENT_ODDS}% ±5 (boons always stick)"
+        );
+        let curse_pct = curse_count as f64 / SAMPLES as f64 * 100.0;
+        let want_curse_pct = EVENT_ODDS as f64 * EVENT_CURSE_PERSIST_ODDS as f64 / 100.0;
+        assert!(
+            (curse_pct - want_curse_pct).abs() <= 5.0,
+            "curse grant rate {curse_pct}%, want {want_curse_pct}% ±5"
+        );
+
+        // (c) Simulated second revival. Filter to outcome pairs that add no
+        // scar/bonus traits, so every trait observed comes from the event path.
+        let mut character = Character::new("Billy Slick".to_string(), None, None);
+        let mut filtered = 0u32;
+        let mut landed_after_first = 0u32;
+        let mut landed_after_second = 0u32;
+        for seed in 0..SAMPLES {
+            character.traits.clear();
+            character.advancement_log.clear();
+            character.afflictions.clear();
+            character.attributes.strength = 10;
+            character.attributes.toughness = 10;
+            character.attributes.luck = 10;
+
+            let mut rng = SmallRng::seed_from_u64(seed.wrapping_add(3_000));
+            character.dies();
+            let first_outcome = revive(&mut character, &mut rng);
+            let after_first: Vec<Trait> = character.traits.clone();
+
+            character.dies();
+            let second_outcome = revive(&mut character, &mut rng);
+
+            let adds_no_scar_or_bonus = matches!(
+                first_outcome,
+                RevivalOutcome::Clean | RevivalOutcome::Penalty
+            ) && matches!(
+                second_outcome,
+                RevivalOutcome::Clean | RevivalOutcome::Penalty
+            );
+            if !adds_no_scar_or_bonus {
+                continue;
+            }
+            filtered += 1;
+            if !after_first.is_empty() {
+                landed_after_first += 1;
+            }
+            if !character.traits.is_empty() {
+                landed_after_second += 1;
+            }
+            // Persistence: whatever landed at the first revival still sticks.
+            for trait_ in &after_first {
+                assert!(
+                    character.traits.contains(trait_),
+                    "seed {seed}: {trait_:?} lost across the second revival"
+                );
+            }
+        }
+        assert!(filtered > 0, "filtered sample must not be empty");
+        // Per-revival chance any event trait lands:
+        // 1 − (1 − boon)·(1 − boon·curse-persist).
+        let e = EVENT_ODDS as f64 / 100.0;
+        let ep = e * EVENT_CURSE_PERSIST_ODDS as f64 / 100.0;
+        let q = 1.0 - (1.0 - e) * (1.0 - ep);
+        let first_pct = landed_after_first as f64 / filtered as f64 * 100.0;
+        assert!(
+            (first_pct - q * 100.0).abs() <= 5.0,
+            "first-revival event rate {first_pct}%, want {}% ±5",
+            q * 100.0
+        );
+        let second_pct = landed_after_second as f64 / filtered as f64 * 100.0;
+        let want_second_pct = (1.0 - (1.0 - q) * (1.0 - q)) * 100.0;
+        assert!(
+            (second_pct - want_second_pct).abs() <= 5.0,
+            "two-revival event rate {second_pct}%, want {want_second_pct}% ±5"
+        );
     }
 }
