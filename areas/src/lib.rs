@@ -1,6 +1,7 @@
 pub mod events;
 pub mod forage;
 pub mod hex;
+pub mod location;
 pub mod preset;
 pub mod shelter;
 pub mod traps;
