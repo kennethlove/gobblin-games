@@ -34,7 +34,7 @@ fn movement_and_turn_phase_events_reach_game_messages() {
     // take-item / use-item / patron-gift / exhausted-travel paths.
     let mut lone = Character::random();
     lone.name = "Lone".to_string();
-    lone.area = Area::Hub;
+    lone.location.area = Area::Hub;
     lone.blood = 1000;
     lone.attributes.movement = 80; // high movement → travel branch
     lone.statistics.game = game.identifier.clone();

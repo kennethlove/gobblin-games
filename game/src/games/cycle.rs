@@ -54,7 +54,7 @@ impl Game {
         let mut characters_by_area: HashMap<Area, Vec<Character>> = HashMap::new();
         for character in living_characters {
             characters_by_area
-                .entry(character.area)
+                .entry(character.location.area)
                 .or_default()
                 .push(character);
         }
@@ -467,7 +467,7 @@ impl Game {
                 // `InterruptionKind::AreaEvent` and skip regen this phase
                 // — they didn't actually rest, they were jolted awake.
                 let area_event_kind = area_details_map
-                    .get(&character.area)
+                    .get(&character.location.area)
                     .and_then(|&idx| self.areas.get(idx))
                     .and_then(|a| a.events.first())
                     .map(area_event_to_kind);
@@ -500,7 +500,7 @@ impl Game {
                 // limb injury) interrupt sleep immediately. Flavor-only
                 // incidents (annoying) are remembered for the natural wake.
                 let biome = area_details_map
-                    .get(&character.area)
+                    .get(&character.location.area)
                     .and_then(|&idx| self.areas.get(idx))
                     .map(|a| a.terrain.base)
                     .unwrap_or(world::terrain::types::BaseTerrain::Clearing);
@@ -695,7 +695,7 @@ impl Game {
                 + phase.ord() as u32;
 
             for &idx in &characters_to_act {
-                let area = self.characters[idx].area;
+                let area = self.characters[idx].location.area;
                 let Some(area_details) = all_areas_snapshot.iter().find(|ad| ad.area == Some(area))
                 else {
                     continue;
@@ -740,7 +740,7 @@ impl Game {
                 + phase.ord() as u32;
 
             for &idx in &characters_to_act {
-                let area = self.characters[idx].area;
+                let area = self.characters[idx].location.area;
                 let other_characters: &[Character] = characters_by_area
                     .get(&area)
                     .map(|v| v.as_slice())
@@ -775,7 +775,7 @@ impl Game {
                 + phase.ord() as u32;
 
             for &idx in &characters_to_act {
-                let area = self.characters[idx].area;
+                let area = self.characters[idx].location.area;
                 let other_characters: &[Character] = characters_by_area
                     .get(&area)
                     .map(|v| v.as_slice())
@@ -834,12 +834,15 @@ impl Game {
             // Build sleeping_nearby BEFORE the mutable character borrow so
             // the self.characters.iter() doesn't conflict (ls5a).
             // Wasted work on dead characters (continue'd below) but harmless.
-            let character_area = self.characters[idx].area;
+            let character_area = self.characters[idx].location.area;
             let sleeping_nearby: Vec<(Uuid, String)> = self
                 .characters
                 .iter()
                 .filter(|t| {
-                    t.is_alive() && t.sleeping && t.area == character_area && !t.items.is_empty()
+                    t.is_alive()
+                        && t.sleeping
+                        && t.location.area == character_area
+                        && !t.items.is_empty()
                 })
                 .map(|t| (t.id, t.name.clone()))
                 .collect();
@@ -862,13 +865,14 @@ impl Game {
                 continue;
             }
 
-            let area_index = match area_details_map.get(&character.area) {
+            let area_index = match area_details_map.get(&character.location.area) {
                 Some(&old_area_idx) => old_area_idx,
                 None => continue,
             };
 
             // Build available destinations BEFORE taking mutable borrow of area_details
             let available_destinations = character
+                .location
                 .area
                 .neighbors()
                 .into_iter()
@@ -912,7 +916,7 @@ impl Game {
             // Get nearby characters using the pre-computed map
             let ev = Vec::new();
             let nearby_characters = {
-                match characters_by_area.get(&character.area) {
+                match characters_by_area.get(&character.location.area) {
                     Some(characters) => characters,
                     None => &ev,
                 }
@@ -1032,8 +1036,8 @@ impl Game {
                         name: item_name,
                     },
                     area: AreaRef {
-                        identifier: thief.area.to_string().into(),
-                        name: thief.area.to_string(),
+                        identifier: thief.location.area.to_string().into(),
+                        name: thief.location.area.to_string(),
                     },
                 }),
                 None,
@@ -1233,7 +1237,7 @@ impl Game {
                 let character_areas: HashMap<String, String> = self
                     .characters
                     .iter()
-                    .map(|t| (t.identifier.to_string(), t.area.to_string()))
+                    .map(|t| (t.identifier.to_string(), t.location.area.to_string()))
                     .collect();
 
                 let fix_ctx = FixationContext {
@@ -1451,7 +1455,7 @@ impl Game {
 
             if self.characters[i].status == CharacterStatus::RecentlyDead {
                 self.characters[i].statistics.day_killed = self.day;
-                let character_area = self.characters[i].area;
+                let character_area = self.characters[i].location.area;
 
                 if let Some(area) = self.get_area_details_mut(character_area) {
                     for item in character_items {

@@ -233,10 +233,10 @@ mod tests {
     #[test]
     fn severe_affliction_visible_from_different_area() {
         let mut observer = Character::new("Observer".to_string(), None, None);
-        observer.area = Area::Sector1;
+        observer.location.area = Area::Sector1;
         let mut target =
             make_ttribute_with_affliction("Target", AfflictionKind::Blind, Severity::Severe);
-        target.area = Area::Sector6;
+        target.location.area = Area::Sector6;
 
         let visible = visible_afflictions_to(&observer, &target);
         assert_eq!(visible.len(), 1, "Severe afflictions must be public");
@@ -246,17 +246,17 @@ mod tests {
     #[test]
     fn moderate_affliction_visible_only_in_same_area() {
         let mut observer = Character::new("Observer".to_string(), None, None);
-        observer.area = Area::Sector1;
+        observer.location.area = Area::Sector1;
         let mut target =
             make_ttribute_with_affliction("Target", AfflictionKind::BrokenBone, Severity::Moderate);
-        target.area = Area::Sector1;
+        target.location.area = Area::Sector1;
 
         // Same area → visible.
         let visible = visible_afflictions_to(&observer, &target);
         assert_eq!(visible.len(), 1);
 
         // Different area → hidden.
-        observer.area = Area::Sector2;
+        observer.location.area = Area::Sector2;
         let visible = visible_afflictions_to(&observer, &target);
         assert!(
             visible.is_empty(),
@@ -290,13 +290,13 @@ mod tests {
     #[test]
     fn moderate_same_area_vs_different_area() {
         let mut same_area_observer = Character::new("Nearby".to_string(), None, None);
-        same_area_observer.area = Area::Sector3;
+        same_area_observer.location.area = Area::Sector3;
         let mut far_observer = Character::new("Faraway".to_string(), None, None);
-        far_observer.area = Area::Sector5;
+        far_observer.location.area = Area::Sector5;
 
         let mut target =
             make_ttribute_with_affliction("Target", AfflictionKind::MissingArm, Severity::Moderate);
-        target.area = Area::Sector3;
+        target.location.area = Area::Sector3;
 
         assert!(
             !visible_afflictions_to(&same_area_observer, &target).is_empty(),

@@ -99,14 +99,14 @@ fn initiative_liveness_gate_still_works() {
     killer.blood = 1000;
     killer.attributes.strength = 50;
     killer.attributes.speed = 100;
-    killer.area = Area::Hub;
+    killer.location.area = Area::Hub;
 
     let mut victim = Character::new("Victim".to_string(), None, None);
     victim.blood = 10;
     victim.attributes.strength = 1;
     victim.attributes.toughness = 1;
     victim.attributes.speed = 1;
-    victim.area = Area::Hub;
+    victim.location.area = Area::Hub;
 
     game.characters.clear();
     game.characters.push(killer);

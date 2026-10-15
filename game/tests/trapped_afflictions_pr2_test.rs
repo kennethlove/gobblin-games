@@ -12,7 +12,7 @@ use shared::afflictions::{AfflictionKind, AfflictionSource, Severity, TrapKind, 
 
 fn make_character(name: &str) -> Character {
     let mut t = Character::new(name.into(), None, None);
-    t.area = areas::Area::Hub;
+    t.location.area = areas::Area::Hub;
     t.attributes.strength = 30;
     t.attributes.toughness = 15;
     t
@@ -69,10 +69,10 @@ fn rescue_bonus_applied_to_trapped_target() {
 
     let mut rescuer = make_character("Rescuer");
     rescuer.attributes.strength = 40;
-    rescuer.area = areas::Area::Hub;
+    rescuer.location.area = areas::Area::Hub;
 
     let mut target = make_character("Target");
-    target.area = areas::Area::Hub;
+    target.location.area = areas::Area::Hub;
     add_buried(&mut target, Severity::Mild);
 
     let area = AreaDetails {
