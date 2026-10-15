@@ -5,7 +5,7 @@ use rand::Rng;
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Trait {
     // Combat stance
     Aggressive,
@@ -161,11 +161,20 @@ pub struct TraitDef {
 /// name, a `Boon`/`Curse` tag when the kind is shown, and one plain phrase
 /// per visible effect. Personality traits carry no tag and no effect lines —
 /// that kind stays internal-only. Pure data: no HTML (Tera escapes it).
+/// A temporary trait (event boon/curse with an N-game duration, see
+/// `Character::temporary_traits`) additionally carries its games-left
+/// count; permanent traits keep the old payload shape (field skipped when
+/// `None`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TraitView {
     pub name: String,
     pub kind_tag: Option<String>,
     pub effect_lines: Vec<String>,
+    /// Games left before a temporary trait expires, `None` for permanent
+    /// traits. Serialized only when present so old payloads keep their
+    /// shape.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub games_remaining: Option<u32>,
 }
 
 /// One human phrase per effect for the trait-view surfaces. `Unlock` says
@@ -236,6 +245,17 @@ impl Trait {
             } else {
                 visible_effect_lines(def.effects)
             },
+            games_remaining: None,
+        }
+    }
+
+    /// This trait's view with the temporary-trait countdown attached (an
+    /// event boon/curse that lasts N games — see
+    /// `Character::temporary_traits`).
+    pub fn with_games_remaining(&self, games_remaining: u32) -> TraitView {
+        TraitView {
+            games_remaining: Some(games_remaining),
+            ..self.view()
         }
     }
 
@@ -1035,6 +1055,22 @@ mod tests {
         assert!(json.contains("-15% max stamina"), "{json}");
         let back: TraitView = serde_json::from_str(&json).unwrap();
         assert_eq!(back, view);
+    }
+
+    #[test]
+    fn view_games_remaining_only_on_request() {
+        assert_eq!(Trait::Tough.view().games_remaining, None);
+        let temporary = Trait::Tough.with_games_remaining(2);
+        assert_eq!(temporary.games_remaining, Some(2));
+        assert_eq!(temporary.name, "tough");
+
+        // The None case keeps the old payload shape (field omitted), and
+        // pre-field JSON still deserializes.
+        let json = serde_json::to_string(&Trait::Tough.view()).unwrap();
+        assert!(!json.contains("games_remaining"), "{json}");
+        let legacy = r#"{"name":"tough","kind_tag":"Boon","effect_lines":["+20% toughness"]}"#;
+        let view: TraitView = serde_json::from_str(legacy).unwrap();
+        assert_eq!(view.games_remaining, None);
     }
 
     #[test]

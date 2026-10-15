@@ -57,6 +57,22 @@
 //!
 //! All numbers are **placeholders** (spec §10.6). See
 //! [`maybe_grant_event_traits`].
+//!
+//! # Event-grant durations (temporary traits)
+//!
+//! Event boons/curses are the only grants that carry a duration: each
+//! granted trait gets `N` games from [`EVENT_DURATION_GAMES`], recorded
+//! beside the trait in [`Character::temporary_traits`]. Pool rolls,
+//! creation rolls, and affliction conversion ([`convert_afflictions`])
+//! stay permanent. The countdown ticks once per played game at the finish
+//! seam ([`Character::tick_temporary_traits`], run by
+//! `Game::post_game_recovery` before this module's revival roll), so a
+//! boon granted with `N = 2` covers the next two games and then vanishes
+//! with no trace. Boons and curses share one table: both are the same
+//! "one-off event" flavor (spec §3 path 3), and curse longevity already
+//! has its own lever ([`EVENT_CURSE_PERSIST_ODDS`] gates whether a curse
+//! sticks at all) — one shared placeholder table keeps the tuning
+//! surface small until observability shows they need to diverge.
 
 use crate::Character;
 use crate::statuses::CharacterStatus;
@@ -133,6 +149,17 @@ pub const EVENT_BOON_TRAITS: &[Trait] = &[Trait::Tough, Trait::Resilient, Trait:
 /// Curse candidates for the event roll (spec §3's "sprained ankle"-style
 /// one-off curses; placeholder pool).
 pub const EVENT_CURSE_TRAITS: &[Trait] = &[Trait::Fragile, Trait::Nearsighted, Trait::Asthmatic];
+/// Games an event-granted boon/curse lasts (placeholder table, rolled
+/// uniformly per grant — see the module docs for why boons and curses
+/// share it). Every event grant is temporary; conversion
+/// ([`convert_afflictions`]) and pool/creation traits stay permanent.
+pub const EVENT_DURATION_GAMES: &[u32] = &[1, 2, 3];
+
+/// Roll one grant's duration from [`EVENT_DURATION_GAMES`] (uniform,
+/// injected `Rng` so tests stay deterministic).
+pub fn event_duration_games<R: Rng + ?Sized>(rng: &mut R) -> u32 {
+    EVENT_DURATION_GAMES[rng.random_range(0..EVENT_DURATION_GAMES.len())]
+}
 
 /// Roll one revival outcome using `rng` (injected so tests can seed it).
 pub fn roll<R: Rng + ?Sized>(rng: &mut R) -> RevivalOutcome {
@@ -267,24 +294,38 @@ fn event_curse_candidate<R: Rng + ?Sized>(character: &Character, rng: &mut R) ->
 /// boon that triggers always sticks — decided means granted. A curse
 /// only sticks if it passes [`curse_persists`]. Grants go through
 /// [`Character::gain_trait`], so they are stamped as advancements and
-/// cross the game boundary. Returns `(boon, curse)`, each `None` when
-/// untriggered, ineligible, or (curse) failed persistence — a failed
-/// roll leaves no trait and no state behind.
+/// cross the game boundary; each landed grant then draws a duration
+/// from [`EVENT_DURATION_GAMES`] into [`Character::temporary_traits`],
+/// so it expires after that many games (boons and curses alike). A trait
+/// the character already holds permanently is rejected by
+/// `gain_trait` (duplicate) and gains no duration entry. Returns
+/// `(boon, curse)`, each `None` when untriggered, ineligible, or
+/// (curse) failed persistence — a failed roll leaves no trait and no
+/// state behind.
 pub fn maybe_grant_event_traits<R: Rng + ?Sized>(
     character: &mut Character,
     rng: &mut R,
 ) -> (Option<Trait>, Option<Trait>) {
     let boon = if should_roll_event(rng) {
-        event_boon_candidate(character, rng)
-            .and_then(|trait_| character.gain_trait(trait_).ok().map(|()| trait_))
+        event_boon_candidate(character, rng).and_then(|trait_| {
+            character.gain_trait(trait_).ok().map(|()| {
+                character
+                    .temporary_traits
+                    .insert(trait_, event_duration_games(rng));
+                trait_
+            })
+        })
     } else {
         None
     };
     let curse = if should_roll_event(rng) {
         match event_curse_candidate(character, rng) {
-            Some(trait_) if curse_persists(rng) => {
-                character.gain_trait(trait_).ok().map(|()| trait_)
-            }
+            Some(trait_) if curse_persists(rng) => character.gain_trait(trait_).ok().map(|()| {
+                character
+                    .temporary_traits
+                    .insert(trait_, event_duration_games(rng));
+                trait_
+            }),
             _ => None,
         }
     } else {
@@ -307,8 +348,11 @@ pub fn restore(character: &mut Character) {
 /// Roll one revival for a dead goblin: apply the persistent outcome,
 /// consume the character's afflictions at the boundary (design A —
 /// [`convert_afflictions`]), roll the independent event boon/curse
-/// ([`maybe_grant_event_traits`]), then [`restore`] them so they are
-/// playable in future games. Returns the outcome that was applied.
+/// ([`maybe_grant_event_traits`], each landed grant temporary —
+/// [`EVENT_DURATION_GAMES`]), then [`restore`] them so they are playable
+/// in future games. Returns the outcome that was applied. Expiry ticks
+/// happen in `Game::post_game_recovery` *before* this runs, so a fresh
+/// grant is never decremented in the boundary that granted it.
 pub fn revive<R: Rng + ?Sized>(character: &mut Character, rng: &mut R) -> RevivalOutcome {
     let outcome = roll(rng);
     match outcome {
@@ -744,6 +788,36 @@ mod tests {
         );
     }
 
+    /// Conversion results stay permanent: design-A grants never get a
+    /// duration entry, so boundary ticks never expire them.
+    #[test]
+    fn conversion_grants_stay_permanent() {
+        let mut character = Character::new("Stinky".to_string(), None, None);
+        for seed in 0..200u64 {
+            character.traits.clear();
+            character.advancement_log.clear();
+            character.temporary_traits.clear();
+            character.afflictions.clear();
+            insert_affliction(&mut character, AfflictionKind::Trauma);
+
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let granted = convert_afflictions(&mut character, &mut rng);
+            assert!(
+                character.temporary_traits.is_empty(),
+                "seed {seed}: conversion must never set a duration"
+            );
+            for _ in 0..5 {
+                character.tick_temporary_traits();
+            }
+            for trait_ in &granted {
+                assert!(
+                    character.traits.contains(trait_),
+                    "seed {seed}: conversion trait {trait_:?} must survive boundary ticks"
+                );
+            }
+        }
+    }
+
     /// End-to-end through `revive()`: a dead goblin's afflictions are gone
     /// from the persisted character when it wakes.
     #[rstest]
@@ -800,6 +874,7 @@ mod tests {
         for seed in 0..SAMPLES {
             character.traits.clear();
             character.advancement_log.clear();
+            character.temporary_traits.clear();
             let mut rng = SmallRng::seed_from_u64(seed.wrapping_add(2_000));
             let (boon, curse) = maybe_grant_event_traits(&mut character, &mut rng);
             let mut expected = 0u32;
@@ -814,6 +889,11 @@ mod tests {
                     character.traits.contains(&granted),
                     "seed {seed}: boon must stick"
                 );
+                let duration = character.temporary_traits.get(&granted).copied();
+                assert!(
+                    matches!(duration, Some(d) if EVENT_DURATION_GAMES.contains(&d)),
+                    "seed {seed}: boon {granted:?} must carry a duration from the table, got {duration:?}"
+                );
             }
             if let Some(granted) = curse {
                 curse_count += 1;
@@ -825,6 +905,11 @@ mod tests {
                 assert!(
                     character.traits.contains(&granted),
                     "seed {seed}: curse must stick"
+                );
+                let duration = character.temporary_traits.get(&granted).copied();
+                assert!(
+                    matches!(duration, Some(d) if EVENT_DURATION_GAMES.contains(&d)),
+                    "seed {seed}: curse {granted:?} must carry a duration from the table, got {duration:?}"
                 );
             }
             if boon.is_some() && curse.is_some() {
@@ -859,6 +944,7 @@ mod tests {
             character.traits.clear();
             character.advancement_log.clear();
             character.afflictions.clear();
+            character.temporary_traits.clear();
             character.attributes.strength = 10;
             character.attributes.toughness = 10;
             character.attributes.luck = 10;
