@@ -678,6 +678,17 @@ pub fn render_character_detail(character: &characters::Character, _game_id: &str
         ));
     }
 
+    // Trait rows render through the Tera partial (pure data in, escaped
+    // markup out); only the wrapper div lives in this format! string.
+    let traits_block = if character.traits.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "<div class=\"card-traits\">{}</div>",
+            render_trait_panel(&character.traits)
+        )
+    };
+
     format!(
         r#"<div class="detail-header">
           <div>
@@ -699,7 +710,8 @@ pub fn render_character_detail(character: &characters::Character, _game_id: &str
           <span style="color:{stamina_c}">{stamina}</span>
         </div>
         <div class="card-items">{items}</div>
-        <div class="card-afflictions">{afflictions}</div>"#,
+        <div class="card-afflictions">{afflictions}</div>
+        {traits_block}"#,
         name = html_escape(&character.name),
         team_hex = team_color.hex,
         team_label = team_label,
@@ -709,7 +721,30 @@ pub fn render_character_detail(character: &characters::Character, _game_id: &str
         intelligence = character.attributes.intelligence,
         items = items_html,
         afflictions = afflictions_html,
+        traits_block = traits_block,
     )
+}
+
+/// Trait rows for one character, rendered through the `trait_list.html`
+/// partial (spec §10.7: Boon/Curse tag + effect lines, Personality name
+/// only). Rust passes pure [`characters::traits::TraitView`] data; Tera
+/// owns the markup and escapes it.
+pub fn render_trait_panel(traits: &[characters::traits::Trait]) -> String {
+    let views: Vec<characters::traits::TraitView> = traits.iter().map(|t| t.view()).collect();
+    let mut ctx = tera::Context::new();
+    ctx.insert("traits", &views);
+    crate::templates::tera_engine::render("trait_list.html", &ctx)
+}
+
+/// Trait presentation data from a persisted character row: the `traits`
+/// field is an array of PascalCase variant names. A missing or unknown
+/// array degrades to no traits rather than failing the page.
+pub fn trait_views_from_row(row: &serde_json::Value) -> Vec<characters::traits::TraitView> {
+    row.get("traits")
+        .cloned()
+        .and_then(|v| serde_json::from_value::<Vec<characters::traits::Trait>>(v).ok())
+        .map(|traits| traits.iter().map(|t| t.view()).collect())
+        .unwrap_or_default()
 }
 
 const ALLIANCE_COLORS: &[&str] = &[
@@ -1350,5 +1385,117 @@ mod day_summary_card_tests {
         let html = render_event_cards(&[b]);
         assert!(!html.contains("<script>"), "unescaped: {html}");
         assert!(html.contains("&lt;script&gt;"), "escaped: {html}");
+    }
+}
+
+/// Trait display on the two surfaces (spec §10.7): the character sheet's
+/// trait panel and the timeline's per-character trait include.
+#[cfg(test)]
+mod trait_panel_tests {
+    use super::*;
+    use characters::traits::Trait;
+
+    fn sheet_character() -> characters::Character {
+        let mut character = characters::Character::new("Stinky".into(), None, None);
+        character.traits = vec![
+            Trait::Tough,
+            Trait::Asthmatic,
+            Trait::Nearsighted,
+            Trait::Friendly,
+        ];
+        character
+    }
+
+    #[test]
+    fn character_detail_shows_kind_tags_and_effect_lines() {
+        let html = render_character_detail(&sheet_character(), "g");
+        assert!(html.contains(">Boon<"), "tough tag missing: {html}");
+        assert!(
+            html.contains("+20% toughness"),
+            "tough effect missing: {html}"
+        );
+        assert!(html.contains(">Curse<"), "curse tag missing: {html}");
+        assert!(html.contains("-15% max stamina"), "asthmatic: {html}");
+        assert!(html.contains("-25% perception"), "nearsighted: {html}");
+        // Personality: name only — no kind tag, no effect lines.
+        assert!(html.contains("friendly"), "personality name: {html}");
+        assert!(!html.contains("Personality"), "kind leaked: {html}");
+        assert!(
+            !html.contains("steers decisions"),
+            "personality effects: {html}"
+        );
+    }
+
+    #[test]
+    fn trait_panel_escapes_hostile_names_and_phrases() {
+        // Trait names are enum labels today, but flavor text can arrive
+        // from elsewhere — the partial must rely on Tera autoescape.
+        let hostile = characters::traits::TraitView {
+            name: "<script>alert(1)</script>".into(),
+            kind_tag: Some("Curse".into()),
+            effect_lines: vec!["<b>−25% movement</b>".into()],
+        };
+        let mut ctx = tera::Context::new();
+        ctx.insert("traits", &[hostile]);
+        let html = crate::templates::tera_engine::render("trait_list.html", &ctx);
+        assert!(!html.contains("<script>"), "unescaped: {html}");
+        assert!(html.contains("&lt;script&gt;"), "escaped: {html}");
+        assert!(!html.contains("<b>"), "unescaped phrase: {html}");
+        assert!(html.contains("&lt;b&gt;"), "escaped phrase: {html}");
+    }
+
+    #[test]
+    fn trait_views_from_persisted_row_and_garbage() {
+        let row = serde_json::json!({ "name": "Stinky", "traits": ["Asthmatic", "Tough"] });
+        let views = trait_views_from_row(&row);
+        assert_eq!(views.len(), 2);
+        assert_eq!(views[0].name, "asthmatic");
+        assert_eq!(views[0].effect_lines, vec!["-15% max stamina"]);
+        assert_eq!(views[1].kind_tag.as_deref(), Some("Boon"));
+
+        // Missing or unknown fields degrade to no traits, no page failure.
+        assert!(trait_views_from_row(&serde_json::json!({"name": "x"})).is_empty());
+        assert!(
+            trait_views_from_row(&serde_json::json!({"traits": ["NotATrait"]})).is_empty(),
+            "unknown variant must degrade quietly"
+        );
+    }
+
+    /// The timeline include renders the selected character's panel and
+    /// disappears when nobody is selected (no traits in context).
+    #[test]
+    fn timeline_template_renders_selected_characters_traits() {
+        let auth = crate::templates::AuthState::Guest {
+            csrf_token: "csrf".into(),
+        };
+        let mut ctx = crate::templates::tera_engine::base_context("Timeline", &auth);
+        ctx.insert("game_id", "g");
+        ctx.insert("game_name", "Game");
+        ctx.insert("current_day", &1u32);
+        ctx.insert("current_phase", "06");
+        ctx.insert("periods", &Vec::<shared::messages::PeriodSummary>::new());
+        ctx.insert("filter", "");
+        ctx.insert("character_filter", "Stinky");
+        ctx.insert("characters", &Vec::<shared::messages::CharacterRef>::new());
+        ctx.insert("rendered_events", &Vec::<String>::new());
+        ctx.insert("selected_day", &Some(1u32));
+        ctx.insert("selected_phase", &Some("06".to_string()));
+        ctx.insert(
+            "filter_options",
+            &vec![serde_json::json!({"value": "", "label": "All", "icon_name": "list"})],
+        );
+        ctx.insert("traits", &[Trait::Asthmatic.view(), Trait::Friendly.view()]);
+
+        let html = crate::templates::tera_engine::render("timeline.html", &ctx);
+        assert!(html.contains("Traits"), "panel heading: {html}");
+        assert!(html.contains(">Curse<"), "kind tag: {html}");
+        assert!(html.contains("-15% max stamina"), "effect line: {html}");
+        assert!(html.contains("friendly"), "personality name: {html}");
+        assert!(!html.contains("Personality"), "kind leaked: {html}");
+
+        ctx.insert("traits", &Vec::<characters::traits::TraitView>::new());
+        let html = crate::templates::tera_engine::render("timeline.html", &ctx);
+        assert!(!html.contains("-15% max stamina"), "panel shown: {html}");
+        assert!(!html.contains("Traits"), "heading shown: {html}");
     }
 }
