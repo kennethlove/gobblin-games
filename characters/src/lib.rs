@@ -921,11 +921,20 @@ impl Character {
             Action::ProposeAlliance => {
                 self.act_propose_alliance(&encounter_context, rng, events);
             }
-            Action::SeekShelter
-            | Action::Forage
-            | Action::DrinkFromTerrain
-            | Action::Eat(_)
-            | Action::DrinkItem(_) => {}
+            Action::SeekShelter => {
+                self.act_seek_shelter(
+                    area_details,
+                    environment_details.current_day,
+                    environment_details.is_day,
+                    rng,
+                    events,
+                );
+            }
+            Action::Forage => {
+                self.act_forage(area_details, rng, events);
+            }
+            // Drinking/eating executors are deferred; these stay no-ops.
+            Action::DrinkFromTerrain | Action::Eat(_) | Action::DrinkItem(_) => {}
             Action::Sleep { duration_phases } => {
                 // PR1 Task 9a: roll shelter quality at sleep start (we6l)
                 let terrain = area_details.terrain.base;
@@ -1298,6 +1307,186 @@ impl Character {
             );
             events.push(TaggedEvent::new(line, MessagePayload::Generic));
         }
+    }
+
+    /// Stamina gate shared by the survival executors (`SeekShelter`,
+    /// `Forage`). Mirrors the travel path: check `calculate_stamina_cost`
+    /// first and deny with an exhausted event when the pool cannot cover
+    /// it. Returns `false` (and pushes the denial) when the action must
+    /// not run. The act path does not deduct stamina generically — only
+    /// travel and combat do — so this helper deducts the cost itself once
+    /// the check passes.
+    fn spend_stamina_for(
+        &mut self,
+        action: &Action,
+        terrain: &world::terrain::TerrainType,
+        verb: &str,
+        events: &mut Vec<TaggedEvent>,
+    ) -> bool {
+        let cost = calculate_stamina_cost(action, terrain, self);
+        if self.stamina < cost {
+            let line = format!(
+                "🥵 {} is too exhausted to {}, lacks stamina",
+                self.name, verb
+            );
+            events.push(TaggedEvent::new(
+                line,
+                MessagePayload::CharacterRested {
+                    character: CharacterRef {
+                        identifier: self.identifier.clone().into(),
+                        name: self.name.clone(),
+                    },
+                    hp_restored: 0,
+                },
+            ));
+            return false;
+        }
+        self.stamina = self.stamina.saturating_sub(cost);
+        true
+    }
+
+    /// Execute `Action::SeekShelter`.
+    ///
+    /// Reuses [`crate::incidents::find_shelter`], the same roll that rates
+    /// sleep-shelter quality. `sheltered_until` stores the day/night slot
+    /// index (`day * 2 + !is_day` — the unit the survival/cascade
+    /// consumers compare against) plus a tier-scaled duration:
+    /// Crude = 1 slot (rest of the current day/night half-day),
+    /// Natural = 2 slots, Fortified = 3 slots. Better shelters outlast
+    /// weather longer, mirroring the shelter multipliers (0.8 / 0.5 / 0.3)
+    /// without re-scaling the consumers.
+    ///
+    /// `MessagePayload::ShelterSought.roll` carries the tier
+    /// (None = 0, Crude = 1, Natural = 2, Fortified = 3). A failed roll
+    /// (tier None) still emits `ShelterSought { success: false }` so the
+    /// attempt is visible in history; no shelter is granted.
+    fn act_seek_shelter(
+        &mut self,
+        area_details: &mut AreaDetails,
+        current_day: u32,
+        is_day: bool,
+        rng: &mut impl Rng,
+        events: &mut Vec<TaggedEvent>,
+    ) {
+        if !self.spend_stamina_for(
+            &Action::SeekShelter,
+            &area_details.terrain,
+            "seek shelter",
+            events,
+        ) {
+            return;
+        }
+
+        let shelter = crate::incidents::find_shelter(
+            self.attributes.intelligence,
+            self.attributes.strength,
+            area_details.terrain.base,
+            rng,
+        );
+        let (tier, slots): (u8, u32) = match shelter {
+            crate::incidents::SleepShelter::None => (0, 0),
+            crate::incidents::SleepShelter::Crude => (1, 1),
+            crate::incidents::SleepShelter::Natural => (2, 2),
+            crate::incidents::SleepShelter::Fortified => (3, 3),
+        };
+        let success = slots > 0;
+
+        if success {
+            let phase_index = current_day * 2 + u32::from(!is_day);
+            let until = phase_index + slots;
+            self.sheltered_until = Some(self.sheltered_until.unwrap_or(0).max(until));
+        }
+
+        let area = AreaRef {
+            identifier: self.area.to_string().clone().into(),
+            name: self.area.to_string(),
+        };
+        let line = if success {
+            format!("{} found shelter in the {}", self.name, area.name)
+        } else {
+            format!("{} failed to find shelter in the {}", self.name, area.name)
+        };
+        events.push(TaggedEvent::new(
+            line,
+            MessagePayload::ShelterSought {
+                character: CharacterRef {
+                    identifier: self.identifier.clone().into(),
+                    name: self.name.clone(),
+                },
+                area,
+                success,
+                roll: tier,
+            },
+        ));
+    }
+
+    /// Execute `Action::Forage`.
+    ///
+    /// Yield formula: `forage_richness(terrain)` attempts (0 = barren,
+    /// 1..=3), each a d20 needing `>= 10 - StatModifiers.forage`
+    /// (the affliction `forage` channel is negative, so afflictions make
+    /// each attempt harder; clamp floor is applied by `compute_stat_modifiers`).
+    /// Every successful attempt grants one Food ration with value =
+    /// richness (1..3 hunger relief) via `OwnsItems::add_item` — the same
+    /// grant path patron gifts and take-item use. Food is banked in the
+    /// inventory; the deferred `Eat` executor will consume it.
+    ///
+    /// `MessagePayload::Foraged.debt_recovered` is 0 here: forage banks
+    /// food rather than eating it, so no hunger debt is cleared yet.
+    fn act_forage(
+        &mut self,
+        area_details: &mut AreaDetails,
+        rng: &mut impl Rng,
+        events: &mut Vec<TaggedEvent>,
+    ) {
+        if !self.spend_stamina_for(&Action::Forage, &area_details.terrain, "forage", events) {
+            return;
+        }
+
+        let richness = areas::forage::forage_richness(area_details.terrain.base);
+        let afflictions: Vec<_> = self.afflictions.values().cloned().collect();
+        let modifier = crate::afflictions::compute_stat_modifiers(&afflictions).forage;
+
+        let mut found: u8 = 0;
+        for _ in 0..richness {
+            let roll: i32 = rng.random_range(1..=20);
+            if roll + modifier >= 10 {
+                found = found.saturating_add(1);
+            }
+        }
+
+        let success = found > 0;
+        if success {
+            use world::items::OwnsItems;
+            for _ in 0..found {
+                self.add_item(Item::new_food(None, richness.max(1)));
+            }
+        }
+
+        let area = AreaRef {
+            identifier: self.area.to_string().clone().into(),
+            name: self.area.to_string(),
+        };
+        let line = if success {
+            format!(
+                "{} forages the {} and finds {found} ration(s)",
+                self.name, area.name
+            )
+        } else {
+            format!("{} finds nothing foraging in the {}", self.name, area.name)
+        };
+        events.push(TaggedEvent::new(
+            line,
+            MessagePayload::Foraged {
+                character: CharacterRef {
+                    identifier: self.identifier.clone().into(),
+                    name: self.name.clone(),
+                },
+                area,
+                success,
+                debt_recovered: 0,
+            },
+        ));
     }
 
     fn act_attack(
@@ -2086,11 +2275,13 @@ impl Attributes {
 #[cfg(test)]
 mod tests {
 
+    use crate::Action;
     use crate::Character;
     use crate::brains::Brain;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
     use rstest::*;
+    use shared::messages::MessagePayload;
     use world::messages::TaggedEvent;
 
     #[fixture]
@@ -3177,5 +3368,207 @@ mod tests {
                     >= a.attributes.toughness.min(max),
             );
         }
+    }
+
+    // --- SeekShelter / Forage action executors --------------------------
+
+    fn survival_area(base: world::terrain::BaseTerrain) -> areas::AreaDetails {
+        areas::AreaDetails::new_with_terrain(
+            None,
+            areas::Area::Hub,
+            world::terrain::TerrainType::new(base, vec![]).unwrap(),
+        )
+    }
+
+    #[test]
+    fn seek_shelter_success_sets_sheltered_until_and_emits_payload() {
+        let mut me = character();
+        me.attributes.intelligence = 100;
+        me.attributes.strength = 100;
+        let mut area = survival_area(world::terrain::BaseTerrain::Clearing);
+        let before_stamina = me.stamina;
+        let expected_cost = crate::calculate_stamina_cost(&Action::SeekShelter, &area.terrain, &me);
+        let mut rng = SmallRng::seed_from_u64(7);
+        let mut events: Vec<TaggedEvent> = Vec::new();
+
+        me.act_seek_shelter(&mut area, 5, true, &mut rng, &mut events);
+
+        // Attributes 100 always clear the Fortified DC (max roll 80 vs
+        // worst-case DC+20 = 45), so tier = Fortified = 3 day/night slots
+        // past `day * 2 + !is_day` (= 10 here).
+        assert_eq!(me.sheltered_until, Some(13), "shelter granted for 3 slots");
+        assert_eq!(
+            me.stamina,
+            before_stamina - expected_cost,
+            "stamina cost deducted exactly once"
+        );
+
+        let payload = events
+            .iter()
+            .find_map(|e| match &e.payload {
+                MessagePayload::ShelterSought {
+                    success,
+                    roll,
+                    area,
+                    ..
+                } => Some((*success, *roll, area.name.clone())),
+                _ => None,
+            })
+            .expect("ShelterSought emitted on success");
+        assert!(payload.0, "success flag set");
+        assert_eq!(payload.1, 3, "roll carries the shelter tier (Fortified)");
+        assert_eq!(payload.2, "Hub");
+    }
+
+    #[test]
+    fn seek_shelter_respects_stamina_gating() {
+        let mut me = character();
+        let mut area = survival_area(world::terrain::BaseTerrain::Clearing);
+        let cost = crate::calculate_stamina_cost(&Action::SeekShelter, &area.terrain, &me);
+        assert!(cost > 0, "seek shelter must cost stamina");
+        me.stamina = cost - 1;
+        let mut rng = SmallRng::seed_from_u64(7);
+        let mut events: Vec<TaggedEvent> = Vec::new();
+
+        me.act_seek_shelter(&mut area, 5, true, &mut rng, &mut events);
+
+        assert_eq!(me.stamina, cost - 1, "no deduction when denied");
+        assert_eq!(me.sheltered_until, None, "no shelter when denied");
+        assert!(
+            events.iter().any(|e| matches!(
+                &e.payload,
+                MessagePayload::CharacterRested { hp_restored: 0, .. }
+            )),
+            "exhausted denial event emitted"
+        );
+        assert!(
+            events[0].content.contains("too exhausted"),
+            "denial line reads as exhaustion: {}",
+            events[0].content
+        );
+        assert!(
+            events
+                .iter()
+                .all(|e| !matches!(e.payload, MessagePayload::ShelterSought { .. })),
+            "no ShelterSought emitted when stamina denies the action"
+        );
+    }
+
+    #[test]
+    fn forage_on_barren_terrain_yields_nothing() {
+        let mut me = character();
+        let mut area = survival_area(world::terrain::BaseTerrain::Desert); // richness 0
+        let items_before = me.items.len();
+        let before_stamina = me.stamina;
+        let expected_cost = crate::calculate_stamina_cost(&Action::Forage, &area.terrain, &me);
+        let mut rng = SmallRng::seed_from_u64(3);
+        let mut events: Vec<TaggedEvent> = Vec::new();
+
+        me.act_forage(&mut area, &mut rng, &mut events);
+
+        assert_eq!(
+            me.items.len(),
+            items_before,
+            "barren terrain yields nothing"
+        );
+        assert_eq!(
+            me.stamina,
+            before_stamina - expected_cost,
+            "effort still spent"
+        );
+        let payload = events
+            .iter()
+            .find_map(|e| match &e.payload {
+                MessagePayload::Foraged {
+                    success,
+                    debt_recovered,
+                    ..
+                } => Some((*success, *debt_recovered)),
+                _ => None,
+            })
+            .expect("Foraged emitted even on a miss");
+        assert_eq!(payload, (false, 0));
+    }
+
+    #[test]
+    fn forage_yield_scales_with_richness_across_seeds() {
+        // Same seed, same d20 sequence: each richer terrain adds one more
+        // attempt on top of the poorer one's attempts, so per-seed yield is
+        // monotone in richness by construction.
+        let terrains = [
+            world::terrain::BaseTerrain::Clearing, // richness 1
+            world::terrain::BaseTerrain::Forest,   // richness 2
+            world::terrain::BaseTerrain::Wetlands, // richness 3
+        ];
+        let mut totals = [0u32; 3];
+        for (i, base) in terrains.into_iter().enumerate() {
+            for seed in 0..16u64 {
+                let mut me = character();
+                let mut area = survival_area(base);
+                let before = me.items.len();
+                let mut rng = SmallRng::seed_from_u64(seed);
+                let mut events: Vec<TaggedEvent> = Vec::new();
+
+                me.act_forage(&mut area, &mut rng, &mut events);
+
+                totals[i] += (me.items.len() - before) as u32;
+            }
+        }
+        assert!(
+            totals[0] <= totals[1] && totals[1] <= totals[2],
+            "yield monotone in richness: {totals:?}"
+        );
+        assert!(
+            totals[0] < totals[2],
+            "richer terrain yields strictly more across seeds: {totals:?}"
+        );
+    }
+
+    #[test]
+    fn forage_honors_affliction_forage_modifier() {
+        use shared::afflictions::{Affliction, AfflictionKind, AfflictionSource, Severity};
+
+        // Blind at Moderate severity carries a -2 forage modifier
+        // (`compute_stat_modifiers` base penalties).
+        let debuffed = Affliction {
+            kind: AfflictionKind::Blind,
+            body_part: None,
+            severity: Severity::Moderate,
+            source: AfflictionSource::Environmental,
+            acquired_cycle: 0,
+            last_progressed_cycle: 0,
+            trauma_metadata: None,
+            phobia_metadata: None,
+            fixation_metadata: None,
+            addiction_metadata: None,
+            trapped_metadata: None,
+        };
+
+        let mut plain_total = 0u32;
+        let mut debuff_total = 0u32;
+        for seed in 0..16u64 {
+            for (count, afflicted) in [(&mut plain_total, false), (&mut debuff_total, true)] {
+                let mut me = character();
+                if afflicted {
+                    me = me.with_affliction(debuffed.clone());
+                }
+                let mut area = survival_area(world::terrain::BaseTerrain::Forest);
+                let before = me.items.len();
+                let mut rng = SmallRng::seed_from_u64(seed);
+                let mut events: Vec<TaggedEvent> = Vec::new();
+
+                me.act_forage(&mut area, &mut rng, &mut events);
+
+                *count += (me.items.len() - before) as u32;
+            }
+        }
+        assert!(
+            debuff_total <= plain_total,
+            "forage modifier never helps: {debuff_total} > {plain_total}"
+        );
+        assert!(
+            debuff_total < plain_total,
+            "-2 forage modifier reduces yield: {debuff_total} == {plain_total}"
+        );
     }
 }
