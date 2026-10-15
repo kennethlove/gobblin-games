@@ -593,3 +593,107 @@ async fn test_create_game_rejects_invalid_day_night_hours() {
 
     test_db.cleanup().await;
 }
+
+/// Read the arena snapshot stored on a game row.
+async fn fetch_arena_snapshot(test_db: &TestDb, game_identifier: &str) -> serde_json::Value {
+    let mut result = test_db
+        .db
+        .query("SELECT arena FROM game WHERE identifier = $id")
+        .bind(("id", game_identifier.to_string()))
+        .await
+        .expect("failed to read game row");
+    let row: Option<serde_json::Value> = result.take(0).expect("failed to decode game row");
+    row.expect("game row must exist")["arena"].clone()
+}
+
+/// Creating a game with no arena choice stores the default preset
+/// snapshot on the game row and instantiates the usual seven areas.
+#[tokio::test]
+async fn test_create_game_without_arena_choice_uses_default_preset() {
+    let test_db = TestDb::new().await;
+    let app_state = test_db.app_state();
+    let router = create_test_router(app_state);
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "arena_default").await;
+
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Default Arena Game" }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let created = response.json::<serde_json::Value>();
+    let identifier = created["identifier"].as_str().unwrap();
+
+    let arena = fetch_arena_snapshot(&test_db, identifier).await;
+    assert_eq!(arena["id"], "classic-hex");
+    assert_eq!(arena["areas"].as_array().unwrap().len(), 7);
+
+    // Areas are instantiated from the snapshot: seven relation edges.
+    let mut result = test_db
+        .db
+        .query("SELECT count() AS n FROM areas GROUP ALL")
+        .await
+        .expect("failed to count areas");
+    let row: Option<serde_json::Value> = result.take(0).expect("failed to decode area count");
+    assert_eq!(row.expect("area count row")["n"], 7);
+
+    test_db.cleanup().await;
+}
+
+/// Creating a game with the default preset id explicitly chosen works
+/// and stores the same snapshot.
+#[tokio::test]
+async fn test_create_game_with_default_preset_id_works() {
+    let test_db = TestDb::new().await;
+    let app_state = test_db.app_state();
+    let router = create_test_router(app_state);
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "arena_explicit").await;
+
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Explicit Arena Game", "arena": "classic-hex" }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let created = response.json::<serde_json::Value>();
+    let identifier = created["identifier"].as_str().unwrap();
+
+    let arena = fetch_arena_snapshot(&test_db, identifier).await;
+    assert_eq!(arena["id"], "classic-hex");
+
+    test_db.cleanup().await;
+}
+
+/// An unknown arena preset id is rejected with a 400 that names the
+/// bad id and lists the available presets.
+#[tokio::test]
+async fn test_create_game_rejects_unknown_arena_preset() {
+    let test_db = TestDb::new().await;
+    let app_state = test_db.app_state();
+    let router = create_test_router(app_state);
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "arena_bad").await;
+
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Bad Arena Game", "arena": "volcano" }))
+        .await;
+    response.assert_status(axum::http::StatusCode::BAD_REQUEST);
+    let message = response.text();
+    assert!(
+        message.contains("volcano"),
+        "error should name the id: {message}"
+    );
+    assert!(
+        message.contains("classic-hex"),
+        "error should list available presets: {message}"
+    );
+
+    test_db.cleanup().await;
+}

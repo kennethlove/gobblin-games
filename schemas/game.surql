@@ -23,6 +23,10 @@ DEFINE FIELD OVERWRITE max_goblins_per_player ON game TYPE int DEFAULT 1;
 -- per-key schema would churn on every config change.
 DEFINE FIELD OVERWRITE config ON game TYPE object DEFAULT {};
 DEFINE FIELD OVERWRITE config.* ON game TYPE any;
+-- Arena snapshot: the resolved arena preset stored at game creation;
+-- areas are instantiated from it. DEFAULT {} covers pre-migration rows.
+DEFINE FIELD OVERWRITE arena ON game TYPE object DEFAULT {};
+DEFINE FIELD OVERWRITE arena.* ON game TYPE any;
 
 DEFINE INDEX OVERWRITE game_identifier ON game FIELDS identifier UNIQUE;
 

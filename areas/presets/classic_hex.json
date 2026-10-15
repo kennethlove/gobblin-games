@@ -1,0 +1,14 @@
+{
+  "id": "classic-hex",
+  "name": "Classic Hex",
+  "description": "The original seven-tile arena: a central Hub surrounded by six Sectors arranged clockwise.",
+  "areas": [
+    { "area": "Hub", "q": 0, "r": 0 },
+    { "area": "Sector 1", "q": 1, "r": -1 },
+    { "area": "Sector 2", "q": 1, "r": 0 },
+    { "area": "Sector 3", "q": 0, "r": 1 },
+    { "area": "Sector 4", "q": -1, "r": 1 },
+    { "area": "Sector 5", "q": -1, "r": 0 },
+    { "area": "Sector 6", "q": 0, "r": -1 }
+  ]
+}
