@@ -422,6 +422,8 @@ impl Character {
         let attributes = Attributes::from_rng_with_traits(&mut rng, &traits);
         let terrain_affinity = world::clans::roll_terrain_affinity(&mut rng);
         let brain = Brain::from_traits(&traits, &mut rng);
+        // Stamina coherence: curses like Asthmatic shrink the fresh pool.
+        let max_stamina = lifecycle::health::max_stamina_for_traits(&traits);
 
         Self {
             identifier: id,
@@ -440,8 +442,8 @@ impl Character {
             events: vec![],
             editable: true,
             terrain_affinity,
-            stamina: 100,
-            max_stamina: 100,
+            stamina: max_stamina,
+            max_stamina,
             blood: 1000,
             wounds: Vec::new(),
             traits,
@@ -559,6 +561,8 @@ impl Character {
             // Everything else is per-game and dies with the old character.
             ..
         } = self;
+        // Stamina coherence: carried traits like Asthmatic shrink the pool.
+        let max_stamina = lifecycle::health::max_stamina_for_traits(&traits);
         Self {
             // Persistent: identity, ownership, progression.
             identifier,
@@ -591,8 +595,8 @@ impl Character {
             area: Area::Hub,
             status: CharacterStatus::default(),
             editable: true,
-            stamina: 100,
-            max_stamina: 100,
+            stamina: max_stamina,
+            max_stamina,
             blood: default_blood(),
             wounds: Vec::new(),
             items: Vec::new(),
@@ -643,6 +647,8 @@ impl Character {
         let attributes = Attributes::from_rng_with_traits(rng, &traits);
         let terrain_affinity = world::clans::roll_terrain_affinity(rng);
         let brain = Brain::from_traits(&traits, rng);
+        // Stamina coherence: curses like Asthmatic shrink the fresh pool.
+        let max_stamina = lifecycle::health::max_stamina_for_traits(&traits);
 
         Self {
             identifier: id,
@@ -661,8 +667,8 @@ impl Character {
             events: vec![],
             editable: true,
             terrain_affinity,
-            stamina: 100,
-            max_stamina: 100,
+            stamina: max_stamina,
+            max_stamina,
             blood: 1000,
             wounds: Vec::new(),
             traits,
@@ -2528,8 +2534,11 @@ mod tests {
         assert!(me.is_alive());
         assert!(me.wounds.is_empty());
         assert!(matches!(me.area, Area::Hub));
-        assert_eq!(me.stamina, 100);
-        assert_eq!(me.max_stamina, 100);
+        // Pristine stamina is trait-coherent: carried curses like
+        // Asthmatic shrink the fresh pool.
+        let fresh_max = crate::lifecycle::health::max_stamina_for_traits(&me.traits);
+        assert_eq!(me.stamina, fresh_max);
+        assert_eq!(me.max_stamina, fresh_max);
         assert_eq!(me.hunger, 0);
         assert_eq!(me.thirst, 0);
         assert!(me.allies.is_empty());

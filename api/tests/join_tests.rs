@@ -509,8 +509,14 @@ async fn test_entry_resets_per_game_state_and_items() {
     let body = detail.json::<serde_json::Value>();
     assert_eq!(body["hunger"], json!(0));
     assert_eq!(body["thirst"], json!(0));
-    assert_eq!(body["stamina"], json!(100));
-    assert_eq!(body["max_stamina"], json!(100));
+    // Pristine stamina is trait-coherent: a curse like Asthmatic shrinks
+    // the fresh pool at entry, so expect the rolled traits' value, not a
+    // hardcoded 100.
+    let rolled: Vec<characters::traits::Trait> =
+        serde_json::from_value(body["traits"].clone()).expect("traits array");
+    let fresh_max = characters::lifecycle::health::max_stamina_for_traits(&rolled);
+    assert_eq!(body["stamina"], json!(fresh_max));
+    assert_eq!(body["max_stamina"], json!(fresh_max));
     assert!(
         body.get("allies")
             .is_none_or(|a| a.as_array().is_some_and(|arr| arr.is_empty())),
@@ -721,7 +727,7 @@ async fn test_roster_ceiling() {
 
 /// Games are private by default: a create that doesn't opt into public
 /// listing stores `private = true`, and the game stays out of other players'
-/// lists until the creator publishes it (gobblin-games-ay4).
+/// lists until the creator publishes it.
 #[tokio::test]
 async fn test_create_game_is_private_by_default() {
     let test_db = TestDb::new().await;
@@ -765,7 +771,7 @@ async fn test_create_game_is_private_by_default() {
 
 /// A persisted `game` row that omits `private` entirely hydrates to private
 /// via the schema default (`DEFINE FIELD private ... DEFAULT true`). This is
-/// the back-compat guarantee for pre-flag rows (gobblin-games-ay4).
+/// the back-compat guarantee for pre-flag rows.
 #[tokio::test]
 async fn test_missing_private_flag_hydrates_to_private() {
     let test_db = TestDb::new().await;
@@ -811,7 +817,7 @@ async fn test_missing_private_flag_hydrates_to_private() {
 /// Public means LISTABLE, not open-join: a private game is invisible until
 /// published; publishing only makes it appear in listings. Entering it still
 /// goes through the game's own join endpoint (the game URL IS the invite
-/// link) — there is no join shortcut from the list (gobblin-games-ay4).
+/// link) — there is no join shortcut from the list.
 #[tokio::test]
 async fn test_public_game_is_listable_but_join_goes_through_the_link() {
     let test_db = TestDb::new().await;
