@@ -7,11 +7,30 @@
 //! there is no special-cased code path for it beyond its registry entry.
 
 use crate::Area;
+use crate::hex::SUB_SLOTS;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use world::terrain::BaseTerrain;
 
 /// Id of the preset used when a game creator makes no arena choice.
 pub const DEFAULT_PRESET_ID: &str = "classic-hex";
+
+/// One sub-hex — the smallest map unit inside an area hex. A big hex
+/// is the general biome; the sub-hexes are the actual features within
+/// it (a valley inside a mountain biome reads as its own terrain).
+/// Atmosphere only today; the pre-1.0 interaction layer (real combat,
+/// adjacency and travel keyed on sub-hexes) promotes this container.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubHex {
+    /// Base terrain of this sub-hex.
+    pub terrain: BaseTerrain,
+    /// Short feature name shown on the map, e.g. "Hidden Valley".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feature: Option<String>,
+    /// One-line flavor text shown next to the feature name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flavor: Option<String>,
+}
 
 /// One area slot in an arena preset.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,6 +46,12 @@ pub struct ArenaSlot {
     /// Fixed display name. Absent = a fresh generated name per game.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// The seven sub-hexes this area hex divides into, in
+    /// `hex::SUB_SLOTS` order (index 0 = center, 1..6 = ring clockwise
+    /// from top-right). Optional for backward compatibility; the loader
+    /// requires exactly seven when present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sub_hexes: Option<Vec<SubHex>>,
 }
 
 /// A complete arena preset.
@@ -44,11 +69,12 @@ pub struct ArenaPreset {
 }
 
 impl ArenaPreset {
-    /// Concrete `(area, display name)` pairs for a fresh game, in slot
-    /// order. Slots with a fixed name keep it; the rest draw from the
-    /// same generated-name bank the pre-preset flow used, so the
-    /// default preset behaves exactly like the old inline flow.
-    pub fn instantiate(&self) -> Vec<(Area, String)> {
+    /// Concrete `(area, display name, sub-hexes)` triples for a fresh
+    /// game, in slot order. Slots with a fixed name keep it; the rest
+    /// draw from the same generated-name bank the pre-preset flow used,
+    /// so the default preset behaves exactly like the old inline flow.
+    /// Slots without authored sub-hexes yield an empty sub-hex list.
+    pub fn instantiate(&self) -> Vec<(Area, String, Vec<SubHex>)> {
         let generated = crate::generate_area_names();
         debug_assert_eq!(
             generated.len(),
@@ -58,7 +84,10 @@ impl ArenaPreset {
         self.areas
             .iter()
             .zip(generated)
-            .map(|(slot, fallback)| (slot.area, slot.name.clone().unwrap_or(fallback)))
+            .map(|(slot, fallback)| {
+                let sub_hexes = slot.sub_hexes.clone().unwrap_or_default();
+                (slot.area, slot.name.clone().unwrap_or(fallback), sub_hexes)
+            })
             .collect()
     }
 }
@@ -179,6 +208,20 @@ fn validate_layout(areas: &[ArenaSlot]) -> Result<(), String> {
     if coords.len() != areas.len() {
         return Err("duplicate axial coordinates".to_string());
     }
+    for slot in areas {
+        if let Some(subs) = slot
+            .sub_hexes
+            .as_ref()
+            .filter(|subs| subs.len() != SUB_SLOTS.len())
+        {
+            return Err(format!(
+                "area {} has {} sub-hexes; expected {}",
+                slot.area,
+                subs.len(),
+                SUB_SLOTS.len()
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -260,12 +303,13 @@ mod tests {
 
     #[test]
     fn instantiate_default_preset_covers_all_areas_with_unique_names() {
-        let pairs = default_preset().instantiate();
-        assert_eq!(pairs.len(), 7);
-        assert_eq!(pairs[0], (Area::Hub, "The Hub".to_string()));
-        let kinds: HashSet<Area> = pairs.iter().map(|(area, _)| *area).collect();
+        let triples = default_preset().instantiate();
+        assert_eq!(triples.len(), 7);
+        assert_eq!(triples[0].0, Area::Hub);
+        assert_eq!(triples[0].1, "The Hub".to_string());
+        let kinds: HashSet<Area> = triples.iter().map(|(area, _, _)| *area).collect();
         assert_eq!(kinds.len(), 7);
-        let names: HashSet<String> = pairs.iter().map(|(_, name)| name.clone()).collect();
+        let names: HashSet<String> = triples.iter().map(|(_, name, _)| name.clone()).collect();
         assert_eq!(names.len(), 7);
     }
 
@@ -290,8 +334,10 @@ mod tests {
         let decoded: ArenaPreset = serde_json::from_str(&encoded).expect("deserialize");
         assert_eq!(decoded, preset);
         assert_eq!(decoded.areas[0].name.as_deref(), Some("Home"));
-        let pairs = decoded.instantiate();
-        assert_eq!(pairs[0], (Area::Hub, "Home".to_string()));
+        let triples = decoded.instantiate();
+        assert_eq!(triples[0].0, Area::Hub);
+        assert_eq!(triples[0].1, "Home".to_string());
+        assert!(triples[0].2.is_empty(), "no sub-hexes authored");
     }
 
     #[test]
@@ -351,5 +397,82 @@ mod tests {
         }"#;
         let err = parse_preset(json, "bad").expect_err("id mismatch must fail");
         assert!(err.to_string().contains("registry id"), "message: {err}");
+    }
+
+    #[test]
+    fn slot_without_sub_hexes_still_deserializes() {
+        let json = r#"{
+            "id": "test-preset",
+            "name": "Test",
+            "description": "no sub-hexes anywhere",
+            "areas": [
+                { "area": "Hub", "q": 0, "r": 0 },
+                { "area": "Sector 1", "q": 1, "r": -1 },
+                { "area": "Sector 2", "q": 1, "r": 0 },
+                { "area": "Sector 3", "q": 0, "r": 1 },
+                { "area": "Sector 4", "q": -1, "r": 1 },
+                { "area": "Sector 5", "q": -1, "r": 0 },
+                { "area": "Sector 6", "q": 0, "r": -1 }
+            ]
+        }"#;
+        let preset = parse_preset(json, "test-preset").expect("valid preset");
+        assert!(preset.areas.iter().all(|slot| slot.sub_hexes.is_none()));
+    }
+
+    #[test]
+    fn slot_with_wrong_sub_hex_count_is_rejected() {
+        let json = r#"{
+            "id": "test-preset",
+            "name": "Test",
+            "description": "six sub-hexes instead of seven",
+            "areas": [
+                { "area": "Hub", "q": 0, "r": 0, "sub_hexes": [
+                    { "terrain": "Clearing" }, { "terrain": "Clearing" },
+                    { "terrain": "Clearing" }, { "terrain": "Clearing" },
+                    { "terrain": "Clearing" }, { "terrain": "Clearing" }
+                ] },
+                { "area": "Sector 1", "q": 1, "r": -1 },
+                { "area": "Sector 2", "q": 1, "r": 0 },
+                { "area": "Sector 3", "q": 0, "r": 1 },
+                { "area": "Sector 4", "q": -1, "r": 1 },
+                { "area": "Sector 5", "q": -1, "r": 0 },
+                { "area": "Sector 6", "q": 0, "r": -1 }
+            ]
+        }"#;
+        let err = parse_preset(json, "test-preset").expect_err("wrong count must fail");
+        let message = err.to_string();
+        assert!(message.contains("6 sub-hexes"), "message: {message}");
+        assert!(message.contains("expected 7"), "message: {message}");
+    }
+
+    #[test]
+    fn default_preset_authors_seven_sub_hexes_per_slot() {
+        let preset = default_preset();
+        for slot in &preset.areas {
+            let subs = slot
+                .sub_hexes
+                .as_ref()
+                .unwrap_or_else(|| panic!("{} must author sub-hexes", slot.area));
+            assert_eq!(subs.len(), SUB_SLOTS.len(), "{}", slot.area);
+            assert!(
+                subs.iter()
+                    .all(|s| !s.feature.as_deref().unwrap_or("").is_empty())
+            );
+        }
+    }
+
+    #[test]
+    fn sub_hexes_round_trip_through_loader_format() {
+        let preset = default_preset();
+        let encoded = serde_json::to_string(&preset).expect("serialize");
+        assert!(encoded.contains("sub_hexes"), "encoded: {encoded}");
+        let decoded: ArenaPreset = serde_json::from_str(&encoded).expect("deserialize");
+        assert_eq!(decoded, preset);
+        let triples = decoded.instantiate();
+        assert!(
+            triples
+                .iter()
+                .all(|(_, _, subs)| subs.len() == SUB_SLOTS.len())
+        );
     }
 }

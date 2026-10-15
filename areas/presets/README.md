@@ -33,10 +33,46 @@ Each entry of `areas`:
 | `q` | integer | Axial hex coordinate `q`. Presentation only — game logic uses area identity, not coordinates. |
 | `r` | integer | Axial hex coordinate `r`. See `q`. |
 | `name` | string (optional) | Fixed display name for this area. When omitted, each game draws a fresh themed name at creation. |
+| `sub_hexes` | array (optional) | The seven sub-hexes this area hex divides into. See below. |
+
+### Sub-hexes
+
+Each big area hex divides into 7 sub-hexes — the smallest map units.
+The big hex is the general biome; the sub-hexes are the actual
+features inside it (a valley inside a mountain biome reads as its own
+terrain). Today sub-hexes are **atmosphere**: they show on the map and
+area cards and change nothing mechanical. Before 1.0 they become the
+real interaction layer (combat, adjacency, travel costs) — this format
+is the container that upgrade promotes, so author them like they
+matter.
+
+`sub_hexes` is an array of exactly 7 entries in `hex::SUB_SLOTS` order:
+index 0 = center, 1..6 = ring clockwise from top-right (same numeric
+order as the top-level layout). Omitting `sub_hexes` entirely is valid
+(older presets keep loading).
+
+Each entry of `sub_hexes`:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `terrain` | string | Base terrain of this sub-hex: `"Clearing"`, `"Forest"`, `"Desert"`, `"Tundra"`, `"Wetlands"`, `"Mountains"`, `"UrbanRuins"`, `"Jungle"`, `"Grasslands"`, `"Badlands"`, `"Highlands"`, `"Geothermal"`. May differ from the parent biome — that's the point (a `Wetlands` spring inside a `Mountains` sector). |
+| `feature` | string (optional) | Short feature name shown on the map, e.g. `"Hidden Valley"`. |
+| `flavor` | string (optional) | One-line flavor text shown next to the feature name. |
+
+Example (three entries shown — the real list has seven):
+
+```json
+"sub_hexes": [
+  { "terrain": "Mountains", "feature": "The High Rocks", "flavor": "Valleys nest between the peaks." },
+  { "terrain": "Mountains", "feature": "Scree Slope" },
+  { "terrain": "Wetlands", "feature": "Cold Spring", "flavor": "Meltwater gathers in a mountain bowl." }
+]
+```
 
 Validation rules (enforced by the loader): valid JSON, `id` matches the
-registry id, exactly the seven known areas each once, Hub first, and no
-two slots share the same `(q, r)`.
+registry id, exactly the seven known areas each once, Hub first, no
+two slots share the same `(q, r)`, and any slot that declares
+`sub_hexes` declares exactly seven of them.
 
 ## Adding a preset
 

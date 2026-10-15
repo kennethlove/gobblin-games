@@ -4,7 +4,30 @@
   <a href="/games/{{ game_id }}" class="back-link">Back to Game</a>
   <h2 style="font-family:var(--font-display);font-size:var(--fs-h3);font-weight:600;margin:0 0 var(--gap-md);">Areas</h2>
   <div class="card-grid">
-    {{ area_cards | safe }}
+    {% for area in areas %}
+    <div class="area-card">
+      <div class="card-top">
+        <span class="card-name">{{ area.name }}</span>
+        <span class="card-status open">OPEN</span>
+      </div>
+      <div class="card-items">
+        {% if area.items %}{{ area.items | length }} items{% else %}No items{% endif %}
+      </div>
+      {% if area.sub_hexes %}
+      <div class="card-subhexes">
+        <ul>
+          {% for sub in area.sub_hexes %}
+          <li>
+            {%- if sub.feature %}<strong>{{ sub.feature }}</strong> ({{ sub.terrain }}){% else %}({{ sub.terrain }}){% endif -%}
+            {%- if sub.flavor %} — {{ sub.flavor }}{% endif -%}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+      <div class="card-events">{{ area.events | length }} events</div>
+    </div>
+    {% endfor %}
   </div>
 </div>
 {% endblock %}

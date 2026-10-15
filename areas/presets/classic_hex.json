@@ -3,12 +3,103 @@
   "name": "Classic Hex",
   "description": "The original seven-tile arena: a central Hub surrounded by six Sectors arranged clockwise.",
   "areas": [
-    { "area": "Hub", "q": 0, "r": 0 },
-    { "area": "Sector 1", "q": 1, "r": -1 },
-    { "area": "Sector 2", "q": 1, "r": 0 },
-    { "area": "Sector 3", "q": 0, "r": 1 },
-    { "area": "Sector 4", "q": -1, "r": 1 },
-    { "area": "Sector 5", "q": -1, "r": 0 },
-    { "area": "Sector 6", "q": 0, "r": -1 }
+    {
+      "area": "Hub",
+      "q": 0,
+      "r": 0,
+      "sub_hexes": [
+        { "terrain": "Clearing", "feature": "The Hearth", "flavor": "Open ground where every road ends." },
+        { "terrain": "Clearing", "feature": "Old Well", "flavor": "Bucket rope worn to threads." },
+        { "terrain": "Grasslands", "feature": "Market Stumps" },
+        { "terrain": "Clearing", "feature": "Watchfire Ring" },
+        { "terrain": "Clearing", "feature": "The Meeting Stone" },
+        { "terrain": "Forest", "feature": "Shade Grove" },
+        { "terrain": "Clearing", "feature": "Bootprints Crossroads" }
+      ]
+    },
+    {
+      "area": "Sector 1",
+      "q": 1,
+      "r": -1,
+      "sub_hexes": [
+        { "terrain": "Forest", "feature": "Deepwood Heart", "flavor": "Canopy swallows the sky." },
+        { "terrain": "Forest", "feature": "Fallen Giant", "flavor": "A tree older than the clan records." },
+        { "terrain": "Forest", "feature": "Fern Hollow" },
+        { "terrain": "Forest", "feature": "Timberfall" },
+        { "terrain": "Forest", "feature": "Owl Roost" },
+        { "terrain": "Forest", "feature": "Bramble Thicket" },
+        { "terrain": "Clearing", "feature": "Old Lumber Camp" }
+      ]
+    },
+    {
+      "area": "Sector 2",
+      "q": 1,
+      "r": 0,
+      "sub_hexes": [
+        { "terrain": "Mountains", "feature": "The High Rocks", "flavor": "Valleys nest between the peaks." },
+        { "terrain": "Mountains", "feature": "Scree Slope" },
+        { "terrain": "UrbanRuins", "feature": "Abandoned Mine" },
+        { "terrain": "Mountains", "feature": "Eagle Ledge" },
+        { "terrain": "Wetlands", "feature": "Cold Spring", "flavor": "Meltwater gathers in a mountain bowl." },
+        { "terrain": "Mountains", "feature": "Stone Stair" },
+        { "terrain": "Mountains", "feature": "Avalanche Scar" }
+      ]
+    },
+    {
+      "area": "Sector 3",
+      "q": 0,
+      "r": 1,
+      "sub_hexes": [
+        { "terrain": "Wetlands", "feature": "The Mire", "flavor": "Every step renegotiates the ground." },
+        { "terrain": "Wetlands", "feature": "Sunken Boardwalk" },
+        { "terrain": "Wetlands", "feature": "Heron Shallows" },
+        { "terrain": "Wetlands", "feature": "Fog Bank" },
+        { "terrain": "Wetlands", "feature": "Mudflat" },
+        { "terrain": "Forest", "feature": "Driftwood Camp" },
+        { "terrain": "Wetlands", "feature": "Leech Pool" }
+      ]
+    },
+    {
+      "area": "Sector 4",
+      "q": -1,
+      "r": 1,
+      "sub_hexes": [
+        { "terrain": "Grasslands", "feature": "Open Range", "flavor": "Wind moves the grass like water." },
+        { "terrain": "Grasslands", "feature": "Tallgrass Sea" },
+        { "terrain": "Grasslands", "feature": "Old Stampede Line" },
+        { "terrain": "Grasslands", "feature": "Wildflower Flat" },
+        { "terrain": "Badlands", "feature": "Coyote Den" },
+        { "terrain": "Grasslands", "feature": "Stone Well" },
+        { "terrain": "UrbanRuins", "feature": "Haycutter Ruins" }
+      ]
+    },
+    {
+      "area": "Sector 5",
+      "q": -1,
+      "r": 0,
+      "sub_hexes": [
+        { "terrain": "Desert", "feature": "The Dry Expanse", "flavor": "Heat prints everything that crosses." },
+        { "terrain": "Desert", "feature": "Salt Flat" },
+        { "terrain": "Desert", "feature": "Shade Arroyo" },
+        { "terrain": "UrbanRuins", "feature": "Broken Aqueduct" },
+        { "terrain": "Desert", "feature": "Dune Sea" },
+        { "terrain": "Wetlands", "feature": "Mirage Pool", "flavor": "Real water, or the best imitation." },
+        { "terrain": "Desert", "feature": "Caravan Bones" }
+      ]
+    },
+    {
+      "area": "Sector 6",
+      "q": 0,
+      "r": -1,
+      "sub_hexes": [
+        { "terrain": "Highlands", "feature": "The Windward Tops", "flavor": "Clouds pass below the ridge." },
+        { "terrain": "Highlands", "feature": "Wind Shelf" },
+        { "terrain": "Highlands", "feature": "Cloud Stairs" },
+        { "terrain": "Tundra", "feature": "Frost Field" },
+        { "terrain": "Highlands", "feature": "Shepherd's Ruin" },
+        { "terrain": "Mountains", "feature": "Thunder Ridge" },
+        { "terrain": "Highlands", "feature": "Cold Hearth" }
+      ]
+    }
   ]
 }
