@@ -423,9 +423,11 @@ impl Game {
 
     /// Run the post-game recovery ([`characters::revival`]) before
     /// characters are written back: every dead goblin runs the revival
-    /// roll (Clean / Penalty / Scar / Bonus) and the outcome lands as
-    /// persistent state (traits / attribute deltas); every survivor is
-    /// restored to full health.
+    /// roll (Clean / Penalty / Scar / Bonus), its afflictions are consumed
+    /// at the boundary (design A conversion — mental kinds may become
+    /// permanent traits), a one-off event boon/curse may land, and the
+    /// outcome lands as persistent state (traits / attribute deltas);
+    /// every survivor is restored to full health.
     pub fn post_game_recovery(&mut self) {
         let mut rng = rand::rng();
         for character in &mut self.characters {
