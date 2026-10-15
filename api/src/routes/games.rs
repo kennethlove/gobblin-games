@@ -652,13 +652,21 @@ pub async fn timeline_handler(
         .bind(("identifier", identifier.clone()))
         .await;
 
-    let character_refs: Vec<shared::messages::CharacterRef> = match characters_result {
+    // Full rows too: the `traits` field feeds the selected character's
+    // trait panel (Boon/Curse tags, spec §10.7).
+    let (character_refs, character_rows): (
+        Vec<shared::messages::CharacterRef>,
+        Vec<serde_json::Value>,
+    ) = match characters_result {
         Ok(mut result) => {
             let raw_rows: Vec<serde_json::Value> = result.take(0).unwrap_or_default();
-            raw_rows
+            let rows: Vec<serde_json::Value> = raw_rows
                 .into_iter()
                 .filter_map(|row| row["characters"].as_array().cloned())
                 .flatten()
+                .collect();
+            let refs = rows
+                .iter()
                 .filter_map(|t| {
                     let id = t.get("identifier")?.as_str()?.to_string();
                     let name = t.get("name")?.as_str()?.to_string();
@@ -667,9 +675,10 @@ pub async fn timeline_handler(
                         name,
                     })
                 })
-                .collect()
+                .collect();
+            (refs, rows)
         }
-        Err(_) => vec![],
+        Err(_) => (vec![], vec![]),
     };
 
     // ── Fetch messages ─────────────────────────────────────────────
@@ -782,6 +791,17 @@ pub async fn timeline_handler(
     ctx.insert("filter", filter_str);
     ctx.insert("character_filter", character_filter_str);
     ctx.insert("characters", &character_refs);
+    // Trait panel for the selected character (empty when no filter).
+    let selected_traits: Vec<characters::traits::TraitView> = if character_filter_str.is_empty() {
+        Vec::new()
+    } else {
+        character_rows
+            .iter()
+            .find(|row| row["name"].as_str() == Some(character_filter_str))
+            .map(game_detail::trait_views_from_row)
+            .unwrap_or_default()
+    };
+    ctx.insert("traits", &selected_traits);
     ctx.insert("rendered_events", &rendered_events);
     ctx.insert("selected_day", &selected_day);
     ctx.insert("selected_phase", &selected_phase.map(|p| p.to_string()));

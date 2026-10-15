@@ -61,6 +61,25 @@ pub enum CharacterAttribute {
     Perception,
 }
 
+impl CharacterAttribute {
+    /// Display name for human-facing effect text ("-25% movement"), not
+    /// the `Debug`/serde form ("Movement") — that is the persistence key.
+    pub fn display_name(self) -> &'static str {
+        use CharacterAttribute::*;
+        match self {
+            Movement => "movement",
+            Strength => "strength",
+            Toughness => "toughness",
+            Bravery => "bravery",
+            Intelligence => "intelligence",
+            Persuasion => "persuasion",
+            Luck => "luck",
+            Speed => "speed",
+            Perception => "perception",
+        }
+    }
+}
+
 /// Actions a trait can unlock; the single variant is reserved for the v2
 /// Call Ally combat action (spec §3) and has no behavior yet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -138,6 +157,54 @@ pub struct TraitDef {
     pub effects: &'static [Effect],
 }
 
+/// One trait as presentation surfaces consume it (spec §10.7): the display
+/// name, a `Boon`/`Curse` tag when the kind is shown, and one plain phrase
+/// per visible effect. Personality traits carry no tag and no effect lines —
+/// that kind stays internal-only. Pure data: no HTML (Tera escapes it).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TraitView {
+    pub name: String,
+    pub kind_tag: Option<String>,
+    pub effect_lines: Vec<String>,
+}
+
+/// One human phrase per effect for the trait-view surfaces. `Unlock` says
+/// nothing yet: the single variant (Call Ally, spec §3) has no behavior.
+fn effect_phrase(effect: &Effect) -> Option<String> {
+    match effect {
+        Effect::AttrMod {
+            attr,
+            flat,
+            percent,
+        } => match (*flat, *percent) {
+            (0, 0) => None,
+            // Percent wins when an effect carries both: it applies after
+            // the flat term in the effective-value formula (spec §2).
+            (_, 0) => Some(format!("{flat:+} {}", attr.display_name())),
+            (_, percent) => Some(format!("{percent:+}% {}", attr.display_name())),
+        },
+        Effect::MaxStaminaPercent { percent } if *percent != 0 => {
+            Some(format!("{percent:+}% max stamina"))
+        }
+        Effect::MaxStaminaPercent { .. } => None,
+        Effect::BehaviorWeight { .. } => Some("steers decisions".to_string()),
+        Effect::Unlock { .. } => None,
+    }
+}
+
+/// Effect phrases for one trait, in effect order, with repeated phrases
+/// collapsed (several `BehaviorWeight` rows on a Boon/Curse would otherwise
+/// print "steers decisions" over and over).
+fn visible_effect_lines(effects: &[Effect]) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for phrase in effects.iter().filter_map(effect_phrase) {
+        if !lines.contains(&phrase) {
+            lines.push(phrase);
+        }
+    }
+    lines
+}
+
 impl Trait {
     /// Display/tuning classification (spec §3: display-only for now).
     pub fn kind(&self) -> TraitKind {
@@ -149,6 +216,27 @@ impl Trait {
     /// betrayal cadence, combat brain, phobia/fixation tiers).
     pub fn effects(&self) -> &'static [Effect] {
         self.def().effects
+    }
+
+    /// The presentation view of this trait (spec §10.7): name plus
+    /// Boon/Curse tag and effect lines; Personality shows name only.
+    pub fn view(&self) -> TraitView {
+        let def = self.def();
+        let kind_tag = match def.kind {
+            TraitKind::Personality => None,
+            TraitKind::Boon => Some("Boon".to_string()),
+            TraitKind::Curse => Some("Curse".to_string()),
+        };
+        let personality = kind_tag.is_none();
+        TraitView {
+            name: def.label.to_string(),
+            kind_tag,
+            effect_lines: if personality {
+                Vec::new()
+            } else {
+                visible_effect_lines(def.effects)
+            },
+        }
     }
 
     /// Static definition (label, kind, effects) for this variant.
@@ -878,6 +966,67 @@ mod tests {
         assert_eq!(json, r#"{"MaxStaminaPercent":{"percent":-15}}"#);
         let back: Effect = serde_json::from_str(&json).unwrap();
         assert_eq!(back, Effect::MaxStaminaPercent { percent: -15 });
+    }
+
+    // ---- Trait view rendering (spec §10.7: Boon/Curse tags + effects) ----
+
+    #[test]
+    fn curse_views_carry_tag_and_effect_lines() {
+        let asthmatic = Trait::Asthmatic.view();
+        assert_eq!(asthmatic.name, "asthmatic");
+        assert_eq!(asthmatic.kind_tag.as_deref(), Some("Curse"));
+        assert_eq!(asthmatic.effect_lines, vec!["-15% max stamina"]);
+
+        let nearsighted = Trait::Nearsighted.view();
+        assert_eq!(nearsighted.kind_tag.as_deref(), Some("Curse"));
+        assert_eq!(nearsighted.effect_lines, vec!["-25% perception"]);
+    }
+
+    #[test]
+    fn boon_view_carries_tag_and_flat_or_percent_phrases() {
+        let tough = Trait::Tough.view();
+        assert_eq!(tough.kind_tag.as_deref(), Some("Boon"));
+        assert_eq!(tough.effect_lines, vec!["+20% toughness"]);
+
+        // Flat AttrMods read as "+3 strength"-style phrases; the display
+        // name (not the Debug enum) is the axis word.
+        let flat = Effect::AttrMod {
+            attr: CharacterAttribute::Strength,
+            flat: 3,
+            percent: 0,
+        };
+        assert_eq!(effect_phrase(&flat).as_deref(), Some("+3 strength"));
+        let down = Effect::AttrMod {
+            attr: CharacterAttribute::Movement,
+            flat: -2,
+            percent: 0,
+        };
+        assert_eq!(effect_phrase(&down).as_deref(), Some("-2 movement"));
+    }
+
+    #[test]
+    fn personality_view_is_name_only() {
+        let friendly = Trait::Friendly.view();
+        assert_eq!(friendly.name, "friendly");
+        assert_eq!(friendly.kind_tag, None);
+        assert!(friendly.effect_lines.is_empty(), "{friendly:?}");
+    }
+
+    #[test]
+    fn repeated_behavior_weight_phrases_collapse_to_one_line() {
+        // Resilient carries three BehaviorWeight rows — one phrase, once.
+        let resilient = Trait::Resilient.view();
+        assert_eq!(resilient.effect_lines, vec!["steers decisions"]);
+    }
+
+    #[test]
+    fn trait_view_serde_roundtrip() {
+        let view = Trait::Asthmatic.view();
+        let json = serde_json::to_string(&view).unwrap();
+        assert!(json.contains(r#""kind_tag":"Curse""#), "{json}");
+        assert!(json.contains("-15% max stamina"), "{json}");
+        let back: TraitView = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, view);
     }
 
     #[test]

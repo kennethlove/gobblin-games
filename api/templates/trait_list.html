@@ -1,0 +1,22 @@
+{# Trait panel for the character sheet and the timeline's per-character
+   view (spec §10.7): Boon/Curse traits show a kind tag plus one muted
+   phrase per effect; Personality traits render as name only. Context:
+   `traits` = array of { name, kind_tag, effect_lines }. Pure data — no
+   `| safe` anywhere, so names and phrases are autoescaped. #}
+{% if traits %}
+<div class="card-traits" style="padding-top: 4px;">
+  <div style="color: var(--muted); font-size: var(--fs-xs); margin-bottom: 2px;">Traits</div>
+  {% for t in traits %}
+  <div style="display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; padding: 2px 0;">
+    <span style="font-weight: 500;">{{ t.name }}</span>
+    {% if t.kind_tag %}
+    {% if t.kind_tag == "Boon" %}{% set tag_color = "var(--info)" %}{% else %}{% set tag_color = "var(--danger)" %}{% endif %}
+    <span style="font-size: var(--fs-xs); font-weight: 600; padding: 1px 6px; border-radius: 9999px; border: 1px solid {{ tag_color }}; color: {{ tag_color }};">{{ t.kind_tag }}</span>
+    {% endif %}
+    {% if t.effect_lines %}
+    <span style="color: var(--muted); font-size: var(--fs-xs);">{{ t.effect_lines | join(sep=" · ") }}</span>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

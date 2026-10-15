@@ -96,6 +96,15 @@
   </div>
   {% endif %}
 
+  {# Per-character traits follow the chip row: Boon/Curse tag + effect
+     lines for the selected goblin (spec §10.7); hidden when nobody is
+     selected. Rows live in trait_list.html. #}
+  {% if traits %}
+  <div style="margin-bottom: var(--gap-md);">
+    {% include "trait_list.html" %}
+  </div>
+  {% endif %}
+
   {% if selected_day and selected_phase %}
     {% if rendered_events %}
     <div style="display: flex; flex-direction: column; gap: 8px;">
