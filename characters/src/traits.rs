@@ -711,8 +711,11 @@ pub fn conflicts_with(a: Trait, b: Trait) -> bool {
 /// clan-keyed pools (90), so the overall mix matches the old uniform-clan
 /// distribution without keying traits to any grouping. Reckless and LoneWolf
 /// never belonged to a legacy clan pool; they join at modest weights below
-/// their flavor siblings (Cautious 6, Paranoid 3). Traits roll per goblin
-/// from that goblin's own RNG.
+/// their flavor siblings (Cautious 6, Paranoid 3). Builder and
+/// ResourcefulForager (the shelter/forage survival pair) join at moderate
+/// weight 4 — beside Reckless/Nearsighted (4), below the unconditional boons
+/// (Tough 9, Resilient 8) because their payoff is gated on terrain and day/
+/// night phase. Traits roll per goblin from that goblin's own RNG.
 pub const TRAIT_POOL: &[(Trait, u8)] = &[
     (Trait::Loyal, 13),
     (Trait::Aggressive, 11),
@@ -726,6 +729,8 @@ pub const TRAIT_POOL: &[(Trait, u8)] = &[
     (Trait::Fragile, 5),
     (Trait::Reckless, 4),
     (Trait::Nearsighted, 4),
+    (Trait::Builder, 4),
+    (Trait::ResourcefulForager, 4),
     (Trait::LoneWolf, 3),
     (Trait::Paranoid, 3),
     (Trait::Dim, 2),
@@ -903,7 +908,10 @@ mod tests {
         assert!(TRAIT_POOL.iter().any(|(t, _)| *t == Trait::Loyal));
         assert!(TRAIT_POOL.iter().any(|(t, _)| *t == Trait::Friendly));
         let total: u32 = TRAIT_POOL.iter().map(|(_, w)| *w as u32).sum();
-        assert_eq!(total, 97, "legacy pools (90) plus Reckless 4 + LoneWolf 3");
+        assert_eq!(
+            total, 105,
+            "legacy pools (90) plus Reckless 4 + LoneWolf 3 + Builder 4 + ResourcefulForager 4"
+        );
     }
 
     #[test]
@@ -916,11 +924,11 @@ mod tests {
         // revival scar/bonus picks all draw from pool traits today.
         const EVENT_ONLY: &[Trait] = &[];
 
-        // Pending systems: Builder and ResourcefulForager have no resolver
-        // systems yet (shelter/forage action execution is unimplemented).
-        // Do not pool or event-wire them until those land; move them to
-        // TRAIT_POOL or EVENT_ONLY then.
-        const PENDING: &[Trait] = &[Trait::Builder, Trait::ResourcefulForager];
+        // Nothing awaits a resolver system today: Builder and
+        // ResourcefulForager moved to TRAIT_POOL once the SeekShelter/Forage
+        // executors wired their effects. New variants land here until they
+        // are pool- or event-wired.
+        const PENDING: &[Trait] = &[];
 
         let mut bucketed: Vec<Trait> = TRAIT_POOL.iter().map(|(t, _)| *t).collect();
         bucketed.extend_from_slice(EVENT_ONLY);
