@@ -1345,6 +1345,19 @@ impl Character {
         true
     }
 
+    /// Tier (0..=3) of a rolled shelter — the `ShelterSought.roll` encoding
+    /// (None = 0, Crude = 1, Natural = 2, Fortified = 3). The granted slots
+    /// equal the tier (1 slot per tier step).
+    fn shelter_tier(shelter: crate::incidents::SleepShelter) -> u8 {
+        use crate::incidents::SleepShelter;
+        match shelter {
+            SleepShelter::None => 0,
+            SleepShelter::Crude => 1,
+            SleepShelter::Natural => 2,
+            SleepShelter::Fortified => 3,
+        }
+    }
+
     /// Execute `Action::SeekShelter`.
     ///
     /// Reuses [`crate::incidents::find_shelter`], the same roll that rates
@@ -1360,6 +1373,10 @@ impl Character {
     /// (None = 0, Crude = 1, Natural = 2, Fortified = 3). A failed roll
     /// (tier None) still emits `ShelterSought { success: false }` so the
     /// attempt is visible in history; no shelter is granted.
+    ///
+    /// [`Trait::Builder`](crate::traits::Trait) effect: a second
+    /// `find_shelter` roll keeps the better tier, and a granted shelter
+    /// lasts one extra half-day slot.
     fn act_seek_shelter(
         &mut self,
         area_details: &mut AreaDetails,
@@ -1377,23 +1394,33 @@ impl Character {
             return;
         }
 
-        let shelter = crate::incidents::find_shelter(
+        let builder = self.traits.contains(&crate::traits::Trait::Builder);
+        let mut shelter = crate::incidents::find_shelter(
             self.attributes.intelligence,
             self.attributes.strength,
             area_details.terrain.base,
             rng,
         );
-        let (tier, slots): (u8, u32) = match shelter {
-            crate::incidents::SleepShelter::None => (0, 0),
-            crate::incidents::SleepShelter::Crude => (1, 1),
-            crate::incidents::SleepShelter::Natural => (2, 2),
-            crate::incidents::SleepShelter::Fortified => (3, 3),
-        };
+        if builder {
+            // Builder re-rolls once and keeps the better tier.
+            let reroll = crate::incidents::find_shelter(
+                self.attributes.intelligence,
+                self.attributes.strength,
+                area_details.terrain.base,
+                rng,
+            );
+            if Self::shelter_tier(reroll) > Self::shelter_tier(shelter) {
+                shelter = reroll;
+            }
+        }
+        let tier = Self::shelter_tier(shelter);
+        let slots = u32::from(tier);
         let success = slots > 0;
 
         if success {
             let phase_index = current_day * 2 + u32::from(!is_day);
-            let until = phase_index + slots;
+            // Builder's shelter outlasts weather one extra half-day slot.
+            let until = phase_index + slots + u32::from(builder);
             self.sheltered_until = Some(self.sheltered_until.unwrap_or(0).max(until));
         }
 
@@ -1433,6 +1460,9 @@ impl Character {
     ///
     /// `MessagePayload::Foraged.debt_recovered` is 0 here: forage banks
     /// food rather than eating it, so no hunger debt is cleared yet.
+    ///
+    /// [`Trait::ResourcefulForager`](crate::traits::Trait) effect: one
+    /// extra d20 attempt on top of the terrain's richness.
     fn act_forage(
         &mut self,
         area_details: &mut AreaDetails,
@@ -1444,11 +1474,17 @@ impl Character {
         }
 
         let richness = areas::forage::forage_richness(area_details.terrain.base);
+        // ResourcefulForager adds one d20 attempt to the loop.
+        let attempts = richness
+            + u8::from(
+                self.traits
+                    .contains(&crate::traits::Trait::ResourcefulForager),
+            );
         let afflictions: Vec<_> = self.afflictions.values().cloned().collect();
         let modifier = crate::afflictions::compute_stat_modifiers(&afflictions).forage;
 
         let mut found: u8 = 0;
-        for _ in 0..richness {
+        for _ in 0..attempts {
             let roll: i32 = rng.random_range(1..=20);
             if roll + modifier >= 10 {
                 found = found.saturating_add(1);
@@ -2286,7 +2322,17 @@ mod tests {
 
     #[fixture]
     fn character() -> Character {
-        Character::new("Snaggletooth".to_string(), None, None)
+        let mut c = Character::new("Snaggletooth".to_string(), None, None);
+        // Builder/ResourcefulForager change the SeekShelter/Forage rolls;
+        // survival tests pin them explicitly instead of taking the entropy
+        // roll (the same way `trait_golden::fixture` pins attributes).
+        c.traits.retain(|t| {
+            !matches!(
+                t,
+                crate::traits::Trait::Builder | crate::traits::Trait::ResourcefulForager
+            )
+        });
+        c
     }
 
     #[fixture]
@@ -3569,6 +3615,130 @@ mod tests {
         assert!(
             debuff_total < plain_total,
             "-2 forage modifier reduces yield: {debuff_total} == {plain_total}"
+        );
+    }
+
+    #[test]
+    fn builder_reroll_keeps_better_shelter_and_extends_duration() {
+        // Same seed, pinned attributes: the plain run takes the first
+        // `find_shelter` roll, the Builder run re-rolls once and keeps the
+        // better tier (never worse), and any Builder grant lasts tier + 1
+        // half-day slots past phase index 10 (day 5, is_day).
+        fn run(seed: u64, with_builder: bool) -> (u8, Option<u32>) {
+            let mut me = character();
+            me.attributes.movement = 50;
+            // 30 keeps both rolls inside the tier band: the plain run can
+            // land below Fortified, so the Builder re-roll gets to win.
+            me.attributes.strength = 30;
+            me.attributes.toughness = 50;
+            me.attributes.bravery = 50;
+            me.attributes.intelligence = 30;
+            me.attributes.persuasion = 50;
+            me.attributes.luck = 50;
+            me.attributes.speed = 50;
+            me.stamina = 100;
+            me.max_stamina = 100;
+            if with_builder {
+                me.traits.push(crate::traits::Trait::Builder);
+            }
+            let mut area = survival_area(world::terrain::BaseTerrain::Forest);
+            // Terrain affinity rolls per character, so the cost is measured
+            // on this exact instance instead of compared across runs.
+            let expected_cost =
+                crate::calculate_stamina_cost(&Action::SeekShelter, &area.terrain, &me);
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let mut events: Vec<TaggedEvent> = Vec::new();
+
+            me.act_seek_shelter(&mut area, 5, true, &mut rng, &mut events);
+            assert_eq!(
+                me.stamina,
+                100 - expected_cost,
+                "stamina cost deducted exactly once"
+            );
+
+            let tier = events
+                .iter()
+                .find_map(|e| match &e.payload {
+                    MessagePayload::ShelterSought { roll, success, .. } => {
+                        assert_eq!(*success, *roll > 0, "success iff tier > 0");
+                        Some(*roll)
+                    }
+                    _ => None,
+                })
+                .expect("ShelterSought emitted");
+            (tier, me.sheltered_until)
+        }
+
+        let mut improved = false;
+        for seed in 0..64u64 {
+            let (plain_tier, plain_until) = run(seed, false);
+            let (builder_tier, builder_until) = run(seed, true);
+            assert!(
+                builder_tier >= plain_tier,
+                "seed {seed}: Builder never rolls worse ({builder_tier} < {plain_tier})"
+            );
+            improved |= builder_tier > plain_tier;
+            if builder_tier > 0 {
+                assert_eq!(
+                    builder_until,
+                    Some(10 + u32::from(builder_tier) + 1),
+                    "seed {seed}: Builder grant = phase + tier + 1 half-day slots"
+                );
+                if plain_tier > 0 {
+                    assert!(
+                        builder_until.unwrap() > plain_until.unwrap(),
+                        "seed {seed}: Builder shelter lasts at least one slot longer"
+                    );
+                }
+            } else {
+                assert_eq!(builder_until, None, "seed {seed}: tier None grants nothing");
+            }
+        }
+        assert!(
+            improved,
+            "some seed must show the Builder re-roll beating the first roll"
+        );
+    }
+
+    #[test]
+    fn resourceful_forager_adds_attempt_and_raises_yield() {
+        // Forest richness 2: the forager gets a third d20 per seed. Same
+        // seed means identical first two rolls, so per-seed yield never
+        // drops; the extra attempt raises the total across seeds, by at
+        // most one success per seed.
+        let mut plain_total = 0u32;
+        let mut forager_total = 0u32;
+        for seed in 0..64u64 {
+            let mut per_seed = [0u32; 2];
+            for (i, forager) in [false, true].into_iter().enumerate() {
+                let mut me = character();
+                if forager {
+                    me.traits.push(crate::traits::Trait::ResourcefulForager);
+                }
+                let mut area = survival_area(world::terrain::BaseTerrain::Forest);
+                let before = me.items.len();
+                let mut rng = SmallRng::seed_from_u64(seed);
+                let mut events: Vec<TaggedEvent> = Vec::new();
+
+                me.act_forage(&mut area, &mut rng, &mut events);
+
+                per_seed[i] = (me.items.len() - before) as u32;
+            }
+            assert!(
+                per_seed[1] >= per_seed[0],
+                "seed {seed}: extra attempt never lowers yield ({per_seed:?})"
+            );
+            plain_total += per_seed[0];
+            forager_total += per_seed[1];
+        }
+        assert!(
+            forager_total > plain_total,
+            "extra attempt raises yield across seeds: {forager_total} == {plain_total}"
+        );
+        assert!(
+            forager_total <= plain_total + 64,
+            "at most one extra success per seed: {forager_total} > {}",
+            plain_total + 64
         );
     }
 }
