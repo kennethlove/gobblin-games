@@ -535,15 +535,9 @@ SELECT (
         Err(_) => vec![],
     };
 
-    // Pre-render area cards
-    let mut area_cards = String::new();
-    for area in &areas {
-        area_cards.push_str(&game_detail::render_area_card(area));
-    }
-
     let mut ctx = tera_engine::base_context("Areas", &auth);
     ctx.insert("game_id", &identifier);
-    ctx.insert("area_cards", &area_cards);
+    ctx.insert("areas", &areas);
     html_with_csrf(tera_engine::render("areas.html", &ctx), &csrf)
 }
 
@@ -1083,9 +1077,19 @@ pub async fn create_game_post_handler(
     }
 
     let base_item_count = shared::ItemQuantity::default().base_item_count();
-    let area_futures = arena.instantiate().into_iter().map(|(area, name)| {
-        api::games::create_area(&game_identifier, area, name, base_item_count, &user_db)
-    });
+    let area_futures = arena
+        .instantiate()
+        .into_iter()
+        .map(|(area, name, sub_hexes)| {
+            api::games::create_area(
+                &game_identifier,
+                area,
+                name,
+                sub_hexes,
+                base_item_count,
+                &user_db,
+            )
+        });
     let area_results = futures::future::join_all(area_futures).await;
     if area_results.into_iter().any(|r| r.is_err()) {
         return Redirect::to("/games/new").into_response();

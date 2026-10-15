@@ -636,33 +636,6 @@ pub fn render_character_card(character: &characters::Character) -> String {
     )
 }
 
-pub fn render_area_card(area: &areas::AreaDetails) -> String {
-    let item_count = area.items.len();
-    let event_count = area.events.len();
-
-    format!(
-        r#"<div class="area-card">
-          <div class="card-top">
-            <span class="card-name">{name}</span>
-            <span class="card-status open">OPEN</span>
-          </div>
-          <div class="card-items">
-            {items}
-          </div>
-          <div class="card-events">
-            {events} events
-          </div>
-        </div>"#,
-        name = html_escape(&area.name),
-        items = if item_count > 0 {
-            format!("{} items", item_count)
-        } else {
-            "No items".to_string()
-        },
-        events = event_count,
-    )
-}
-
 pub fn render_character_detail(character: &characters::Character, _game_id: &str) -> String {
     let is_alive = character.is_alive();
     let health = character.effective_health();
