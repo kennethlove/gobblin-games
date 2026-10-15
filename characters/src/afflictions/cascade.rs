@@ -277,6 +277,31 @@ mod tests {
         );
     }
 
+    /// The `sheltered` flag that `Character::act_seek_shelter` writes into
+    /// `sheltered_until` is what the game cycle passes as `is_sheltered`
+    /// (see `game/src/games/cycle.rs`). While it is set, an affliction can
+    /// only hold or improve — it must never step up and never kill.
+    #[test]
+    fn sheltered_cascade_never_steps_up_across_seeds() {
+        let tuning = AfflictionTuning::default();
+        for severity in [Severity::Moderate, Severity::Severe] {
+            let aff = make_affliction(AfflictionKind::Wounded, severity);
+            for seed in 0..128u64 {
+                let mut rng = SmallRng::seed_from_u64(seed);
+                let result = tick_cascade(std::slice::from_ref(&aff), true, &tuning, &mut rng);
+                let outcome = &result.outcomes[0].1;
+                assert!(
+                    !matches!(outcome, CascadeOutcome::SteppedUp { .. }),
+                    "sheltered must never step up (seed {seed}): {outcome:?}"
+                );
+                assert!(
+                    !result.character_died,
+                    "sheltered must never kill (seed {seed})"
+                );
+            }
+        }
+    }
+
     #[test]
     fn exposed_mild_steps_up_to_moderate() {
         let aff = make_affliction(AfflictionKind::Wounded, Severity::Mild);

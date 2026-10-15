@@ -918,4 +918,53 @@ mod tests {
             0
         );
     }
+
+    #[test]
+    fn shelter_sought_and_foraged_render_in_history() {
+        use shared::messages::AreaRef;
+
+        let roster = vec![make_character("Snaggletooth", 12)];
+        let mut h = CharacterHistories::new(roster);
+        let id = tr("Snaggletooth");
+        let area = AreaRef {
+            identifier: "hub-area".to_string().into(),
+            name: "Hub".into(),
+        };
+        // Field shapes mirror what `Character::act_seek_shelter` /
+        // `act_forage` emit: tier-in-roll shelter attempts (success and
+        // failure) and forage outcomes with no debt cleared yet.
+        h.update(&[
+            make_msg(MessagePayload::ShelterSought {
+                character: id.clone(),
+                area: area.clone(),
+                success: true,
+                roll: 3,
+            }),
+            make_msg(MessagePayload::ShelterSought {
+                character: id.clone(),
+                area: area.clone(),
+                success: false,
+                roll: 0,
+            }),
+            make_msg(MessagePayload::Foraged {
+                character: id.clone(),
+                area: area.clone(),
+                success: true,
+                debt_recovered: 0,
+            }),
+            make_msg(MessagePayload::Foraged {
+                character: id.clone(),
+                area,
+                success: false,
+                debt_recovered: 0,
+            }),
+        ]);
+
+        let d = h.get(&test_uuid("Snaggletooth").to_string()).unwrap();
+        let events: Vec<&str> = d.notable_events.iter().map(|s| s.as_str()).collect();
+        assert!(events.contains(&"Found shelter"), "{events:?}");
+        assert!(events.contains(&"Failed to find shelter"), "{events:?}");
+        assert!(events.contains(&"Successfully foraged"), "{events:?}");
+        assert!(events.contains(&"Found nothing foraging"), "{events:?}");
+    }
 }
