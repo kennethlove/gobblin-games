@@ -31,11 +31,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: ci-fmt
-          cache-on-failure: true
       - name: Format check
         run: cargo fmt --all -- --check
 
@@ -52,7 +47,10 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: ci-clippy
+          # One cache for every compiling job: they all build the same
+          # workspace with the same flags, so per-job keys just multiplied
+          # storage 5x until GitHub's 10GB eviction cold-missed them all.
+          shared-key: ci
           cache-on-failure: true
       - name: Clippy
         run: cargo clippy --workspace --tests -- -D warnings
@@ -68,7 +66,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: ci-test-game
+          shared-key: ci
           cache-on-failure: true
       - name: Test (game)
         run: cargo test --package game
@@ -84,7 +82,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: ci-test-shared
+          shared-key: ci
           cache-on-failure: true
       - name: Test (shared)
         run: cargo test --package shared
@@ -100,7 +98,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: ci-test-api
+          shared-key: ci
           cache-on-failure: true
       - name: Test (api integration)
         # api/tests/common/mod.rs spins up an in-memory SurrealDB per test
