@@ -61,12 +61,12 @@ fn witness_ally_death_acquires_mild_trauma() {
 
     let mut victim = make_character("Victim");
     let victim_id = victim.id;
-    victim.area = Area::Sector1;
+    victim.location.area = Area::Sector1;
     victim.blood = 0;
     game.characters.push(victim);
 
     let mut witness = make_character("Witness");
-    witness.area = Area::Sector1;
+    witness.location.area = Area::Sector1;
     witness.allies.push(victim_id);
     game.characters.push(witness);
 
@@ -105,11 +105,11 @@ fn witness_different_area_no_trauma() {
 
     let mut victim = make_character("Victim");
     let victim_id = victim.id;
-    victim.area = Area::Sector1;
+    victim.location.area = Area::Sector1;
     game.characters.push(victim);
 
     let mut witness = make_character("Witness");
-    witness.area = Area::Sector2; // different area
+    witness.location.area = Area::Sector2; // different area
     witness.allies.push(victim_id);
     game.characters.push(witness);
 
@@ -288,14 +288,14 @@ fn mass_casualty_three_deaths_moderate() {
     // Three victims in Sector1
     for name in ["V1", "V2", "V3"] {
         let mut v = make_character(name);
-        v.area = Area::Sector1;
+        v.location.area = Area::Sector1;
         v.blood = 0;
         game.characters.push(v);
     }
 
     // Witness in same area
     let mut w = make_character("Witness");
-    w.area = Area::Sector1;
+    w.location.area = Area::Sector1;
     game.characters.push(w);
 
     for v in &game.characters[..3] {
@@ -325,13 +325,13 @@ fn mass_casualty_five_deaths_severe() {
 
     for name in ["V1", "V2", "V3", "V4", "V5"] {
         let mut v = make_character(name);
-        v.area = Area::Sector1;
+        v.location.area = Area::Sector1;
         v.blood = 0;
         game.characters.push(v);
     }
 
     let mut w = make_character("Witness");
-    w.area = Area::Sector1;
+    w.location.area = Area::Sector1;
     game.characters.push(w);
 
     for v in &game.characters[..5] {
@@ -364,11 +364,11 @@ fn different_phase_messages_ignored() {
 
     let mut victim = make_character("Victim");
     let victim_id = victim.id;
-    victim.area = Area::Sector1;
+    victim.location.area = Area::Sector1;
     game.characters.push(victim);
 
     let mut witness = make_character("Witness");
-    witness.area = Area::Sector1;
+    witness.location.area = Area::Sector1;
     witness.allies.push(victim_id);
     game.characters.push(witness);
 

@@ -177,7 +177,7 @@ pub fn process_character_fixations(
 
     let character_id = character.identifier.clone();
     let character_uuid = character.id;
-    let character_area = character.area;
+    let character_area = character.location.area;
     let self_area_str = character_area.to_string();
 
     // Collect fixation keys (clone to release borrow on afflictions).
@@ -621,7 +621,7 @@ mod tests {
             &mut SmallRng::seed_from_u64(42),
         );
         // Default area is Hub.
-        t.area = Area::Hub;
+        t.location.area = Area::Hub;
         add_fixation(&mut t, FixationTarget::Area("Hub".to_string()));
 
         let id_to_uuid = HashMap::new();
@@ -712,7 +712,7 @@ mod tests {
         // add_acquired_fixation sets cycles_since_last_contact = 6,
         // which is above DECAY_THRESHOLD (5).
         // Place character in a DIFFERENT area so they're not in contact.
-        t.area = Area::Sector1;
+        t.location.area = Area::Sector1;
 
         let id_to_uuid = HashMap::new();
         let dead_killers = HashMap::new();
@@ -752,8 +752,8 @@ mod tests {
             None,
             &mut SmallRng::seed_from_u64(99),
         );
-        a.area = Area::Hub;
-        b.area = Area::Hub; // same area
+        a.location.area = Area::Hub;
+        b.location.area = Area::Hub; // same area
 
         // Acquired fixation with cycles_since_last_contact = 6 (past decay threshold).
         let key = (
@@ -822,7 +822,7 @@ mod tests {
             None,
             &mut SmallRng::seed_from_u64(42),
         );
-        t.area = Area::Sector1;
+        t.location.area = Area::Sector1;
         let target = FixationTarget::Area("Hub".to_string());
         add_acquired_fixation(&mut t, target.clone());
 
@@ -883,7 +883,7 @@ mod tests {
             None,
             &mut SmallRng::seed_from_u64(42),
         );
-        t.area = Area::Sector1;
+        t.location.area = Area::Sector1;
         // Add an Innate fixation with high contact gap.
         let target = FixationTarget::Area("Hub".to_string());
         let key = (AfflictionKind::Fixation(target.clone()), None);

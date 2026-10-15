@@ -1034,7 +1034,7 @@ pub fn render_hex_map(
 
         let character_count = characters
             .iter()
-            .filter(|t| t.is_alive() && *area_type == t.area)
+            .filter(|t| t.is_alive() && *area_type == t.location.area)
             .count();
 
         hexes.push_str(&format!(
@@ -1046,7 +1046,7 @@ pub fn render_hex_map(
         // Character dots in this hex
         let in_hex: Vec<_> = characters
             .iter()
-            .filter(|t| t.is_alive() && *area_type == t.area)
+            .filter(|t| t.is_alive() && *area_type == t.location.area)
             .enumerate()
             .map(|(i, t)| {
                 let angle = std::f64::consts::PI * 2.0 * i as f64 / character_count.max(1) as f64;

@@ -9,9 +9,7 @@ pub mod water;
 pub mod weather;
 
 use crate::events::AreaEvent;
-use crate::hex::{SUB_SLOTS, SubAxial};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::str::FromStr;
 use strum_macros::EnumIter;
@@ -188,12 +186,6 @@ pub struct AreaDetails {
     /// Traps placed by characters in this area.
     #[serde(default)]
     pub placed_traps: Vec<traps::PlacedTrap>,
-    /// Per-character sub-tile slot assignments within this area-hex.
-    /// Presentation/positioning only — game logic operates at the area
-    /// level. Keys are character identifiers; values are area-local sub
-    /// coordinates from `hex::SUB_SLOTS`.
-    #[serde(default)]
-    pub character_slots: HashMap<String, SubAxial>,
 }
 
 fn default_terrain() -> TerrainType {
@@ -211,7 +203,6 @@ impl Default for AreaDetails {
             placed_traps: vec![],
             terrain: TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap(),
             sub_hexes: vec![],
-            character_slots: HashMap::new(),
         }
     }
 }
@@ -261,7 +252,6 @@ impl AreaDetails {
             placed_traps: vec![],
             terrain: TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap(),
             sub_hexes: vec![],
-            character_slots: HashMap::new(),
         }
     }
 
@@ -275,38 +265,11 @@ impl AreaDetails {
             placed_traps: vec![],
             terrain,
             sub_hexes: vec![],
-            character_slots: HashMap::new(),
         }
     }
 
     pub fn is_open(&self) -> bool {
         self.events.is_empty()
-    }
-
-    /// Assign the next available sub-tile slot to `character_id`. If the
-    /// character is already assigned, returns its existing slot. If all 7
-    /// slots are taken, falls back to the center slot (overflow — v1
-    /// accepts visual stacking past 7 characters; sub-tiles are
-    /// presentation-only).
-    pub fn assign_slot(&mut self, character_id: &str) -> SubAxial {
-        if let Some(slot) = self.character_slots.get(character_id) {
-            return *slot;
-        }
-        let used: std::collections::HashSet<SubAxial> =
-            self.character_slots.values().copied().collect();
-        let chosen = SUB_SLOTS
-            .iter()
-            .copied()
-            .find(|s| !used.contains(s))
-            .unwrap_or(SUB_SLOTS[0]);
-        self.character_slots
-            .insert(character_id.to_string(), chosen);
-        chosen
-    }
-
-    /// Release the slot currently held by `character_id`, if any.
-    pub fn release_slot(&mut self, character_id: &str) -> Option<SubAxial> {
-        self.character_slots.remove(character_id)
     }
 }
 
@@ -378,54 +341,6 @@ mod tests {
     fn partial_eq_with_reference() {
         let area = Area::Hub;
         assert_eq!(area, &area);
-    }
-
-    #[test]
-    fn assign_slot_returns_center_first() {
-        let mut a = AreaDetails::new(None, Area::Hub);
-        let s = a.assign_slot("t1");
-        assert_eq!(s, SUB_SLOTS[0]);
-    }
-
-    #[test]
-    fn assign_slot_is_idempotent_for_same_character() {
-        let mut a = AreaDetails::new(None, Area::Hub);
-        let s1 = a.assign_slot("t1");
-        let s2 = a.assign_slot("t1");
-        assert_eq!(s1, s2);
-        assert_eq!(a.character_slots.len(), 1);
-    }
-
-    #[test]
-    fn assign_slot_gives_unique_slots_until_full() {
-        let mut a = AreaDetails::new(None, Area::Hub);
-        let mut slots = std::collections::HashSet::new();
-        for i in 0..7 {
-            let s = a.assign_slot(&format!("t{i}"));
-            assert!(slots.insert(s), "duplicate slot {:?} on character t{i}", s);
-        }
-        assert_eq!(slots.len(), 7);
-    }
-
-    #[test]
-    fn assign_slot_overflows_to_center_when_full() {
-        let mut a = AreaDetails::new(None, Area::Hub);
-        for i in 0..7 {
-            a.assign_slot(&format!("t{i}"));
-        }
-        let overflow = a.assign_slot("t7");
-        assert_eq!(overflow, SUB_SLOTS[0]);
-    }
-
-    #[test]
-    fn release_slot_frees_slot_for_reassignment() {
-        let mut a = AreaDetails::new(None, Area::Hub);
-        let original = a.assign_slot("t1");
-        let released = a.release_slot("t1");
-        assert_eq!(released, Some(original));
-        assert!(a.character_slots.is_empty());
-        let again = a.assign_slot("t2");
-        assert_eq!(again, original);
     }
 
     /// Regression: `Area`'s serde representation

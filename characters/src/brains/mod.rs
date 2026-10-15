@@ -256,7 +256,9 @@ impl Brain {
         phase: shared::messages::Phase,
         rng: &mut impl Rng,
     ) -> Action {
-        let area = all_areas.iter().find(|a| a.area == Some(character.area));
+        let area = all_areas
+            .iter()
+            .find(|a| a.area == Some(character.location.area));
         if let Some(early) = self.run_pre_decision_overrides(
             character,
             nearby_characters,
@@ -293,7 +295,7 @@ impl Brain {
                     // naturally outscores the crowded current one, so the
                     // legacy escape-hatch is gone. If the best area is still
                     // the current one, the character simply rests.
-                    if best_goal == character.area {
+                    if best_goal == character.location.area {
                         return Action::Rest;
                     }
                     let goal = best_goal;
@@ -301,7 +303,7 @@ impl Brain {
                         all_areas,
                         closed_areas,
                         character,
-                        character.area,
+                        character.location.area,
                         goal,
                     ) && path.len() >= 2
                     {
@@ -390,7 +392,7 @@ impl Brain {
             // current one) without a call-site special case.
             if let Some(area) = area_details.area {
                 let raw = enemy_density.get(&area).copied().unwrap_or(0);
-                let others = if area == character.area {
+                let others = if area == character.location.area {
                     raw.saturating_sub(1)
                 } else {
                     raw

@@ -52,7 +52,7 @@ pub fn resolve_rescue(
     _rng: &mut impl Rng,
 ) -> bool {
     // 1. Validate co-location
-    if target.area != rescuer.area || area.area != Some(target.area) {
+    if target.location.area != rescuer.location.area || area.area != Some(target.location.area) {
         return false;
     }
 
@@ -214,7 +214,7 @@ mod tests {
     fn free_character(name: &str, strength: u32) -> Character {
         let mut t = Character::new(name.into(), None, None);
         t.attributes.strength = strength;
-        t.area = Area::Hub;
+        t.location.area = Area::Hub;
         t
     }
 
@@ -405,10 +405,10 @@ mod tests {
     #[test]
     fn evaluate_rescue_finds_trapped_character() {
         let mut rescuer = Character::new("Rescuer".into(), None, None);
-        rescuer.area = Area::Hub;
+        rescuer.location.area = Area::Hub;
 
         let mut trapped = Character::new("Trapped".into(), None, None);
-        trapped.area = Area::Hub;
+        trapped.location.area = Area::Hub;
         trapped.try_acquire_affliction(crate::AfflictionDraft {
             kind: AfflictionKind::Trapped(TrapKind::Buried),
             body_part: None,

@@ -37,6 +37,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::afflictions::{AcquireResolution, can_acquire};
 use crate::events::CharacterEvent;
 use actions::{Action, AttackOutcome};
+use areas::location::Location;
 use areas::{Area, AreaDetails};
 use brains::Brain;
 use rand::RngExt;
@@ -193,8 +194,12 @@ pub struct Character {
         deserialize_with = "deserialize_uuid_lenient"
     )]
     pub id: Uuid,
-    /// Where are they?
-    pub area: Area,
+    /// Where are they? Area-hex plus sub-hex slot. Flattened so the
+    /// legacy top-level `area` column keeps hydrating (area preserved,
+    /// sub defaults to center); the wire carries `area` and `sub` as
+    /// sibling top-level columns.
+    #[serde(flatten)]
+    pub location: Location,
     /// What is their current status?
     pub status: CharacterStatus,
     /// This is their thinker. Persisted so load restores the same brain as
@@ -440,7 +445,7 @@ impl Character {
         Self {
             identifier: id,
             id: id_uuid,
-            area: Area::Hub,
+            location: Location::center(Area::Hub),
             name: name.clone(),
             team,
             clan_name: String::new(),
@@ -661,7 +666,7 @@ impl Character {
             terrain_affinity: world::clans::roll_terrain_affinity(&mut rng),
             traits,
             // Per-game state: zeroed by construction.
-            area: Area::Hub,
+            location: Location::center(Area::Hub),
             status: CharacterStatus::default(),
             editable: true,
             stamina: max_stamina,
@@ -722,7 +727,7 @@ impl Character {
         Self {
             identifier: id,
             id: id_uuid,
-            area: Area::Hub,
+            location: Location::center(Area::Hub),
             name,
             team,
             clan_name: String::new(),
@@ -1205,14 +1210,17 @@ impl Character {
                 match dest_info {
                     Some(info) => {
                         if self.stamina >= info.stamina_cost {
-                            self.area = destination;
+                            // Area-level travel for now: the sub slot
+                            // resets to the destination's center (nothing
+                            // yet produces non-center subs).
+                            self.location = Location::center(destination);
                             self.stamina = self.stamina.saturating_sub(info.stamina_cost);
                         } else {
                             events.pop();
                             self.short_rests();
                             let line = GameOutput::CharacterTravelExhausted(
                                 self.name.as_str(),
-                                &self.area.to_string(),
+                                &self.location.area.to_string(),
                             )
                             .to_string();
                             events.push(TaggedEvent::new(
@@ -1265,7 +1273,7 @@ impl Character {
         };
 
         let _hidden = self.hides();
-        let current_area = self.area;
+        let current_area = self.location.area;
         let line = GameOutput::CharacterHide(self.name.as_str()).to_string();
         events.push(TaggedEvent::new(
             line,
@@ -1495,8 +1503,8 @@ impl Character {
         }
 
         let area = AreaRef {
-            identifier: self.area.to_string().clone().into(),
-            name: self.area.to_string(),
+            identifier: self.location.area.to_string().clone().into(),
+            name: self.location.area.to_string(),
         };
         let line = if success {
             format!("{} found shelter in the {}", self.name, area.name)
@@ -1570,8 +1578,8 @@ impl Character {
         }
 
         let area = AreaRef {
-            identifier: self.area.to_string().clone().into(),
-            name: self.area.to_string(),
+            identifier: self.location.area.to_string().clone().into(),
+            name: self.location.area.to_string(),
         };
         let line = if success {
             format!(
@@ -1668,7 +1676,7 @@ impl Character {
                 identifier: item.identifier.clone().into(),
                 name: item.name.clone(),
             };
-            let current_area = self.area;
+            let current_area = self.location.area;
             events.push(TaggedEvent::new(
                 line,
                 MessagePayload::ItemFound {
@@ -2840,7 +2848,7 @@ mod tests {
         assert_eq!(me.status, CharacterStatus::default());
         assert!(me.is_alive());
         assert!(me.wounds.is_empty());
-        assert!(matches!(me.area, Area::Hub));
+        assert!(matches!(me.location.area, Area::Hub));
         // Pristine stamina is trait-coherent: carried curses like
         // Asthmatic shrink the fresh pool.
         let fresh_max = crate::lifecycle::health::max_stamina_for_traits(&me.traits);
@@ -3970,5 +3978,49 @@ mod tests {
             "settle must not resurrect an expired temporary trait"
         );
         assert!(settled.temporary_traits.is_empty());
+    }
+
+    // ── Location persistence (wire shape) ──────────────────────────
+    // `location` is `#[serde(flatten)]`: the wire carries `area` and
+    // `sub` as sibling top-level columns, so legacy rows that only
+    // have `area` hydrate with area preserved and sub = center.
+
+    #[test]
+    fn location_serializes_flat_area_and_sub_columns() {
+        let mut c = Character::new("Stinky".to_string(), None, None);
+        c.location =
+            areas::location::Location::new(areas::Area::Sector3, areas::hex::SubAxial::new(1, -1));
+        let v = serde_json::to_value(&c).unwrap();
+        assert_eq!(v["area"], serde_json::json!("Sector 3"));
+        assert_eq!(v["sub"], serde_json::json!({"q": 1, "r": -1}));
+        assert!(v.get("location").is_none(), "location must be flattened");
+    }
+
+    #[test]
+    fn location_round_trips_through_json() {
+        let mut c = Character::new("Stinky".to_string(), None, None);
+        c.location =
+            areas::location::Location::new(areas::Area::Sector6, areas::hex::SubAxial::new(-1, 1));
+        let v = serde_json::to_value(&c).unwrap();
+        let back: Character = serde_json::from_value(v).unwrap();
+        assert_eq!(back.location, c.location);
+    }
+
+    /// Old-shape fixture row: pre-sub-hex saves carry a top-level
+    /// `area` column and no `sub`. Hydration must preserve the area and
+    /// default the sub to the center slot.
+    #[test]
+    fn legacy_area_only_row_hydrates_with_center_sub() {
+        let c = Character::new("Stinky".to_string(), None, None);
+        let mut v = serde_json::to_value(&c).unwrap();
+        v["area"] = serde_json::json!("Sector 1");
+        v.as_object_mut().unwrap().remove("sub");
+        let back: Character = serde_json::from_value(v).unwrap();
+        assert_eq!(back.location.area, areas::Area::Sector1);
+        assert_eq!(
+            back.location.sub,
+            areas::location::Location::default().sub,
+            "legacy rows must hydrate to the center sub"
+        );
     }
 }
