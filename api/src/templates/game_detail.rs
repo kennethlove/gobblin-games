@@ -685,7 +685,7 @@ pub fn render_character_detail(character: &characters::Character, _game_id: &str
     } else {
         format!(
             "<div class=\"card-traits\">{}</div>",
-            render_trait_panel(&character.traits)
+            render_trait_panel(&character.traits, &character.temporary_traits)
         )
     };
 
@@ -728,22 +728,48 @@ pub fn render_character_detail(character: &characters::Character, _game_id: &str
 /// Trait rows for one character, rendered through the `trait_list.html`
 /// partial (spec §10.7: Boon/Curse tag + effect lines, Personality name
 /// only). Rust passes pure [`characters::traits::TraitView`] data; Tera
-/// owns the markup and escapes it.
-pub fn render_trait_panel(traits: &[characters::traits::Trait]) -> String {
-    let views: Vec<characters::traits::TraitView> = traits.iter().map(|t| t.view()).collect();
+/// owns the markup and escapes it. Temporary traits (event boons/curses
+/// with an N-game duration, see `Character::temporary_traits`) get their
+/// games-left count attached from `temporary_traits`.
+pub fn render_trait_panel(
+    traits: &[characters::traits::Trait],
+    temporary_traits: &std::collections::BTreeMap<characters::traits::Trait, u32>,
+) -> String {
+    let views: Vec<characters::traits::TraitView> = traits
+        .iter()
+        .map(|t| match temporary_traits.get(t) {
+            Some(&games_remaining) => t.with_games_remaining(games_remaining),
+            None => t.view(),
+        })
+        .collect();
     let mut ctx = tera::Context::new();
     ctx.insert("traits", &views);
     crate::templates::tera_engine::render("trait_list.html", &ctx)
 }
 
 /// Trait presentation data from a persisted character row: the `traits`
-/// field is an array of PascalCase variant names. A missing or unknown
+/// field is an array of PascalCase variant names, and a row's
+/// `temporary_traits` map (Trait → games remaining) attaches the
+/// games-left countdown to the matching views. A missing or unknown
 /// array degrades to no traits rather than failing the page.
 pub fn trait_views_from_row(row: &serde_json::Value) -> Vec<characters::traits::TraitView> {
+    let temporary: std::collections::BTreeMap<characters::traits::Trait, u32> = row
+        .get("temporary_traits")
+        .cloned()
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
     row.get("traits")
         .cloned()
         .and_then(|v| serde_json::from_value::<Vec<characters::traits::Trait>>(v).ok())
-        .map(|traits| traits.iter().map(|t| t.view()).collect())
+        .map(|traits| {
+            traits
+                .iter()
+                .map(|t| match temporary.get(t) {
+                    Some(&games_remaining) => t.with_games_remaining(games_remaining),
+                    None => t.view(),
+                })
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -1434,6 +1460,7 @@ mod trait_panel_tests {
             name: "<script>alert(1)</script>".into(),
             kind_tag: Some("Curse".into()),
             effect_lines: vec!["<b>−25% movement</b>".into()],
+            games_remaining: None,
         };
         let mut ctx = tera::Context::new();
         ctx.insert("traits", &[hostile]);
@@ -1442,6 +1469,31 @@ mod trait_panel_tests {
         assert!(html.contains("&lt;script&gt;"), "escaped: {html}");
         assert!(!html.contains("<b>"), "unescaped phrase: {html}");
         assert!(html.contains("&lt;b&gt;"), "escaped phrase: {html}");
+    }
+
+    #[test]
+    fn trait_panel_shows_games_left_for_temporary_traits() {
+        use std::collections::BTreeMap;
+        let traits = vec![
+            characters::traits::Trait::Asthmatic,
+            characters::traits::Trait::Friendly,
+        ];
+        let mut temporary = BTreeMap::new();
+        temporary.insert(characters::traits::Trait::Asthmatic, 2u32);
+
+        let html = render_trait_panel(&traits, &temporary);
+        assert!(html.contains("2 games left"), "{html}");
+        // One countdown per temporary trait only.
+        assert_eq!(html.matches("games left").count(), 1, "{html}");
+
+        // Singular at one game.
+        temporary.insert(characters::traits::Trait::Asthmatic, 1u32);
+        let html = render_trait_panel(&traits, &temporary);
+        assert!(html.contains("1 game left"), "{html}");
+
+        // All-permanent panel carries no countdown.
+        let html = render_trait_panel(&traits, &BTreeMap::new());
+        assert!(!html.contains("game left"), "{html}");
     }
 
     #[test]
@@ -1459,6 +1511,27 @@ mod trait_panel_tests {
             trait_views_from_row(&serde_json::json!({"traits": ["NotATrait"]})).is_empty(),
             "unknown variant must degrade quietly"
         );
+
+        // A row's temporary_traits map attaches the games-left countdown
+        // to exactly the matching views; permanent traits stay None.
+        let row = serde_json::json!({
+            "name": "Stinky",
+            "traits": ["Asthmatic", "Tough"],
+            "temporary_traits": { "Tough": 2 }
+        });
+        let views = trait_views_from_row(&row);
+        assert_eq!(
+            views[0].games_remaining, None,
+            "asthmatic is permanent here"
+        );
+        assert_eq!(views[1].games_remaining, Some(2), "tough has 2 games left");
+
+        // Garbage durations degrade to permanent, not a page failure.
+        let row = serde_json::json!({
+            "traits": ["Tough"],
+            "temporary_traits": { "Tough": "many" }
+        });
+        assert_eq!(trait_views_from_row(&row)[0].games_remaining, None);
     }
 
     /// The timeline include renders the selected character's panel and

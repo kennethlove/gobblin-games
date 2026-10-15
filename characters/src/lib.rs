@@ -396,6 +396,18 @@ pub struct Character {
     /// events. Empty for characters created before this field existed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub advancement_log: Vec<advancement::AdvancementEvent>,
+    /// Games remaining per temporary trait — event boons/curses granted
+    /// with a duration at the revival boundary
+    /// (`revival::maybe_grant_event_traits`). The trait itself still lives
+    /// in `traits` (the stable serde unit-enum key); an entry here only
+    /// bounds it. Empty map = everything permanent: old saves hydrate
+    /// empty via `#[serde(default)]`, and creation/pool/conversion traits
+    /// never get an entry (only event grants do). Ticked once per played
+    /// game at the finish seam (`Game::post_game_recovery` →
+    /// [`tick_temporary_traits`]); at zero the trait is removed with no
+    /// trace left behind.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub temporary_traits: BTreeMap<traits::Trait, u32>,
 }
 
 impl Default for Character {
@@ -473,6 +485,7 @@ impl Character {
             mental_conditions: Vec::new(),
             game_baseline: None,
             advancement_log: Vec::new(),
+            temporary_traits: BTreeMap::new(),
         }
     }
 
@@ -508,6 +521,57 @@ impl Character {
             );
         }
         changed
+    }
+
+    /// Tick every temporary trait's duration once, at the game boundary
+    /// (`Game::post_game_recovery` runs this before the revival roll).
+    /// Each entry in [`Self::temporary_traits`] loses one game; entries
+    /// that reach zero expire: the duration entry is dropped and the
+    /// trait leaves through [`Self::lose_trait`]. The `TraitLost` stamp is
+    /// required, not incidental — baseline settle replays the log, and
+    /// an unstamped removal would be restored off the baseline floor.
+    /// "No trace" means no trait, no duration entry, and no scar left
+    /// behind; the log event is consumed by the next settle.
+    ///
+    /// Attribute bends lift for free on expiry: `AttrMod` effects (and
+    /// every behavior-weight consumer) are read at access time from
+    /// `traits` (`effective_attribute`), so removal *is* the unbend. The
+    /// max-stamina pool is the one stored bend — `max_stamina` is a
+    /// persisted field set at construction — so when an expired trait
+    /// carried `MaxStaminaPercent` (e.g. Asthmatic) the pool is recomputed
+    /// exactly like the constructors (`max_stamina_for_traits`), and
+    /// current stamina is clamped to the new maximum. A pool that grows
+    /// back is not refilled — capacity returns, spent stamina does not.
+    pub fn tick_temporary_traits(&mut self) {
+        if self.temporary_traits.is_empty() {
+            return;
+        }
+        for remaining in self.temporary_traits.values_mut() {
+            *remaining = remaining.saturating_sub(1);
+        }
+        let expired: Vec<traits::Trait> = self
+            .temporary_traits
+            .iter()
+            .filter_map(|(trait_, remaining)| (*remaining == 0).then_some(*trait_))
+            .collect();
+        if expired.is_empty() {
+            return;
+        }
+        use traits::Effect;
+        let bent_stamina = expired.iter().any(|trait_| {
+            trait_
+                .effects()
+                .iter()
+                .any(|e| matches!(e, Effect::MaxStaminaPercent { percent } if *percent != 0))
+        });
+        for trait_ in &expired {
+            self.temporary_traits.remove(trait_);
+            self.lose_trait(*trait_);
+        }
+        if bent_stamina {
+            self.max_stamina = lifecycle::health::max_stamina_for_traits(&self.traits);
+            self.stamina = self.stamina.min(self.max_stamina);
+        }
     }
 
     /// Rebuild a goblin for a new game: the old character is consumed and
@@ -558,6 +622,7 @@ impl Character {
             traits,
             ever_addicted_to,
             advancement_log,
+            temporary_traits,
             // Everything else is per-game and dies with the old character.
             ..
         } = self;
@@ -572,6 +637,10 @@ impl Character {
             clan_name,
             avatar,
             human_player_name,
+            // Duration entries ride along untouched: their countdown is
+            // ticked at the finish seam (`post_game_recovery`), not here,
+            // so settling this rebuild does not double-count a game.
+            temporary_traits,
             attributes,
             statistics: Statistics {
                 day_killed: None,
@@ -698,6 +767,7 @@ impl Character {
             mental_conditions: Vec::new(),
             game_baseline: None,
             advancement_log: Vec::new(),
+            temporary_traits: BTreeMap::new(),
         }
     }
 
@@ -3740,5 +3810,165 @@ mod tests {
             "at most one extra success per seed: {forager_total} > {}",
             plain_total + 64
         );
+    }
+
+    // ---- Temporary traits: N-game durations on event grants ----
+
+    use crate::traits::{CharacterAttribute, Trait};
+
+    #[test]
+    fn temporary_trait_expires_after_exactly_n_boundaries() {
+        let mut c = Character::new("Stinky".to_string(), None, None);
+        c.traits.clear();
+        c.gain_trait(Trait::Tough).expect("tough");
+        c.temporary_traits.insert(Trait::Tough, 2);
+
+        // First boundary: one game consumed, trait still on.
+        c.tick_temporary_traits();
+        assert!(c.traits.contains(&Trait::Tough), "still within duration");
+        assert_eq!(c.temporary_traits.get(&Trait::Tough), Some(&1));
+
+        // Second boundary: exactly N — trait and duration entry gone with
+        // no trace beyond the sanctioned loss stamp.
+        c.tick_temporary_traits();
+        assert!(
+            !c.traits.contains(&Trait::Tough),
+            "expired trait must leave the set"
+        );
+        assert!(
+            c.temporary_traits.is_empty(),
+            "expired duration entry must be removed"
+        );
+        assert!(
+            c.advancement_log.iter().any(|e| matches!(
+                e,
+                crate::advancement::AdvancementEvent::TraitLost { trait_ } if *trait_ == Trait::Tough
+            )),
+            "expiry must stamp TraitLost or the next settle restores it"
+        );
+
+        // Further ticks are a no-op: nothing left to expire.
+        c.tick_temporary_traits();
+        assert!(c.traits.is_empty());
+    }
+
+    #[test]
+    fn permanent_traits_and_empty_duration_map_survive_ticks() {
+        let mut c = Character::new("Billy Slick".to_string(), None, None);
+        c.traits = vec![Trait::Friendly, Trait::Tough];
+        for _ in 0..5 {
+            c.tick_temporary_traits();
+        }
+        assert_eq!(
+            c.traits,
+            vec![Trait::Friendly, Trait::Tough],
+            "a character with no duration entries is untouched"
+        );
+    }
+
+    #[test]
+    fn expiry_lifts_attribute_bends_immediately() {
+        let mut c = Character::new("Snaggletooth".to_string(), None, None);
+        c.traits.clear();
+        c.gain_trait(Trait::Nearsighted).expect("nearsighted");
+        c.temporary_traits.insert(Trait::Nearsighted, 1);
+        let base = c.attributes.perception;
+        assert!(
+            c.effective_attribute(CharacterAttribute::Perception) < base,
+            "AttrMod bend must apply while the curse is held"
+        );
+        c.tick_temporary_traits();
+        assert_eq!(
+            c.effective_attribute(CharacterAttribute::Perception),
+            base,
+            "AttrMods are read at access time — removal is the unbend"
+        );
+    }
+
+    #[test]
+    fn asthmatic_expiry_recomputes_the_stamina_pool() {
+        let mut c = Character::new("Stinky".to_string(), None, None);
+        c.traits.clear();
+        c.gain_trait(Trait::Asthmatic).expect("asthmatic");
+        c.temporary_traits.insert(Trait::Asthmatic, 1);
+        c.max_stamina = crate::lifecycle::health::max_stamina_for_traits(&c.traits);
+        assert_eq!(c.max_stamina, 85, "Asthmatic -15% of 100");
+        c.stamina = 50; // spent mid-game; the pool must not refill on expiry
+
+        c.tick_temporary_traits();
+
+        assert!(!c.traits.contains(&Trait::Asthmatic));
+        assert_eq!(
+            c.max_stamina, 100,
+            "the stored max-stamina bend must lift on expiry"
+        );
+        assert_eq!(c.stamina, 50, "capacity returns, spent stamina does not");
+    }
+
+    #[test]
+    fn temporary_traits_survive_save_load_round_trip() {
+        let mut c = Character::new("Billy Slick".to_string(), None, None);
+        c.traits.push(Trait::Tough);
+        c.temporary_traits.insert(Trait::Tough, 3);
+        let json = serde_json::to_string(&c).unwrap();
+        let back: Character = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.temporary_traits, c.temporary_traits);
+        assert_eq!(back.temporary_traits.get(&Trait::Tough), Some(&3));
+    }
+
+    #[test]
+    fn old_rows_without_the_duration_field_deserialize_as_permanent() {
+        // Old-shape fixture, both directions: an empty map serializes away
+        // (the payload keeps its pre-field shape), and a row that lacks the
+        // key hydrates with an empty map = everything permanent.
+        let mut c = Character::new("Stinky".to_string(), None, None);
+        c.traits = vec![Trait::Friendly];
+        let json = serde_json::to_string(&c).unwrap();
+        assert!(
+            !json.contains("temporary_traits"),
+            "empty map must keep the old payload shape: {json}"
+        );
+        let back: Character = serde_json::from_str(&json).unwrap();
+        assert!(back.temporary_traits.is_empty());
+        assert_eq!(back.traits, vec![Trait::Friendly]);
+
+        let mut with_duration = c.clone();
+        with_duration.traits.push(Trait::Tough);
+        with_duration.temporary_traits.insert(Trait::Tough, 2);
+        let mut value = serde_json::to_value(&with_duration).unwrap();
+        value.as_object_mut().unwrap().remove("temporary_traits");
+        let legacy: Character = serde_json::from_value(value).unwrap();
+        assert!(legacy.temporary_traits.is_empty());
+        assert!(
+            legacy.traits.contains(&Trait::Tough),
+            "trait still permanent"
+        );
+    }
+
+    #[test]
+    fn into_new_game_carries_durations_and_settle_does_not_resurrect_expired() {
+        let mut c = Character::new("Stinky".to_string(), None, None);
+        c.traits = vec![Trait::Friendly];
+        c.gain_trait(Trait::Tough).expect("tough");
+        c.temporary_traits.insert(Trait::Tough, 2);
+        c.game_baseline = Some(crate::baseline::GameBaseline::capture(&c));
+
+        // Durations cross the rebuild untouched (tick happens at the
+        // finish seam, not here — no double-count).
+        let mut next = c.into_new_game();
+        assert_eq!(next.temporary_traits.get(&Trait::Tough), Some(&2));
+        assert!(next.traits.contains(&Trait::Tough));
+
+        // Expiry must survive the following settle: the TraitLost stamp
+        // keeps the baseline floor from restoring the trait.
+        next.tick_temporary_traits(); // 2 -> 1
+        next.tick_temporary_traits(); // 1 -> 0: expires
+        assert!(!next.traits.contains(&Trait::Tough));
+        let settled = next.into_new_game();
+        assert!(
+            !settled.traits.contains(&Trait::Tough),
+            "settle must not resurrect an expired temporary trait"
+        );
+        assert!(settled.temporary_traits.is_empty());
     }
 }

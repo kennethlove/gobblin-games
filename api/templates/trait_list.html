@@ -1,8 +1,11 @@
 {# Trait panel for the character sheet and the timeline's per-character
    view (spec §10.7): Boon/Curse traits show a kind tag plus one muted
-   phrase per effect; Personality traits render as name only. Context:
-   `traits` = array of { name, kind_tag, effect_lines }. Pure data — no
-   `| safe` anywhere, so names and phrases are autoescaped. #}
+   phrase per effect; Personality traits render as name only. Temporary
+   traits (event boons/curses that last N games) additionally show a
+   games-left countdown. Context: `traits` = array of { name, kind_tag,
+   effect_lines, games_remaining? } (`games_remaining` absent for
+   permanent traits). Pure data — no `| safe` anywhere, so names and
+   phrases are autoescaped. #}
 {% if traits %}
 <div class="card-traits" style="padding-top: 4px;">
   <div style="color: var(--muted); font-size: var(--fs-xs); margin-bottom: 2px;">Traits</div>
@@ -15,6 +18,9 @@
     {% endif %}
     {% if t.effect_lines %}
     <span style="color: var(--muted); font-size: var(--fs-xs);">{{ t.effect_lines | join(sep=" · ") }}</span>
+    {% endif %}
+    {% if t.games_remaining %}
+    <span style="color: var(--muted); font-size: var(--fs-xs);">{% if t.games_remaining == 1 %}1 game left{% else %}{{ t.games_remaining }} games left{% endif %}</span>
     {% endif %}
   </div>
   {% endfor %}

@@ -422,15 +422,23 @@ impl Game {
     }
 
     /// Run the post-game recovery ([`characters::revival`]) before
-    /// characters are written back: every dead goblin runs the revival
-    /// roll (Clean / Penalty / Scar / Bonus), its afflictions are consumed
-    /// at the boundary (design A conversion — mental kinds may become
-    /// permanent traits), a one-off event boon/curse may land, and the
-    /// outcome lands as persistent state (traits / attribute deltas);
-    /// every survivor is restored to full health.
+    /// characters are written back: every goblin's temporary traits tick
+    /// one game ([`characters::Character::tick_temporary_traits`] —
+    /// event boons/curses that ran out their N-game duration vanish with
+    /// no trace), every dead goblin runs the revival roll (Clean /
+    /// Penalty / Scar / Bonus), its afflictions are consumed at the
+    /// boundary (design A conversion — mental kinds may become permanent
+    /// traits), a one-off event boon/curse may land (temporary, same
+    /// duration table), and the outcome lands as persistent state
+    /// (traits / attribute deltas); every survivor is restored to full
+    /// health.
     pub fn post_game_recovery(&mut self) {
         let mut rng = rand::rng();
         for character in &mut self.characters {
+            // Boundary tick BEFORE revival: expired durations lift first,
+            // and a grant landed by this revival starts its countdown at
+            // the next boundary — not the one that granted it.
+            character.tick_temporary_traits();
             if character.is_alive() {
                 characters::revival::restore(character);
             } else {

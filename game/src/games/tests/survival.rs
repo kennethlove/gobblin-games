@@ -227,6 +227,28 @@ fn test_post_game_recovery_wakes_dead_and_restores_survivor() {
 }
 
 #[test]
+fn test_post_game_recovery_ticks_temporary_traits_at_the_boundary() {
+    use std::collections::BTreeMap;
+    // A survivor whose Tough boon ran its last game: the boundary tick
+    // must remove the trait and its duration entry with no trace.
+    let mut survivor = create_character("Stinky", true);
+    survivor.team = 1;
+    survivor
+        .traits
+        .retain(|t| *t != characters::traits::Trait::Tough);
+    survivor.traits.push(characters::traits::Trait::Tough);
+    survivor.temporary_traits = BTreeMap::from([(characters::traits::Trait::Tough, 1)]);
+
+    let mut game = create_test_game_with_characters(vec![survivor]);
+    game.post_game_recovery();
+
+    let after = &game.characters[0];
+    assert!(after.is_alive());
+    assert!(!after.traits.contains(&characters::traits::Trait::Tough));
+    assert!(after.temporary_traits.is_empty());
+}
+
+#[test]
 fn test_sole_team_wins_with_multiple_survivors() {
     let stinky = create_character("Stinky", true);
     let slick = create_character("Billy Slick", true);
