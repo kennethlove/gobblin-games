@@ -3,6 +3,12 @@
 Status: SPIKE FINDINGS — docs-only, no production code changed.
 Base: `main` (parent of this change).
 
+> **Geometry note (2026-10-16, post-PR #64):** this spike predates the
+> triangle layout. Sub-tiles are now 6 isosceles triangles per area —
+> there is no center sub-tile. Everything below that says "center sub"
+> means the `Location::center` default, which resolves to triangle 0.
+> Current geometry: `2026-10-16-arena-generation-spike.md`.
+
 **Owner decision driving this doc:** before 1.0, the 7 sub-tiles per big arena
 hex (`areas/src/hex.rs`: `SubAxial`, `SUB_SLOTS`, `SUB_SIZE_RATIO = 1/3`) become
 what characters actually interact with and traverse. Big hexes = general
@@ -274,7 +280,8 @@ resolution (~10 lines); flee destination resolution (~40 lines in
 stamp on `CombatRoundStart`/`CombatEnded` payloads (~30 lines incl. wire);
 tests (same-sub fight, cross-sub no-engage, flee-into-sub, chokepoint
 crowding). Plus P3 (§3) as prerequisite. Note the migration center-crunch:
-all pre-existing characters hydrate into the center sub (§5), so every old
+all pre-existing characters hydrate into the center-default location
+(`Location::center`, triangle 0; §5), so every old
 game becomes one big hub-center brawl on first load — moot per owner:
 no pre-existing characters exist (PR #58 answers).
 
@@ -462,7 +469,7 @@ Result: a future change to sub-tile topology, sizing, or costing touches
   compensating knob (e.g. movement attribute ⇒ hops per phase) and a sim
   pass before any tuning PR.
 - Migration center-crunch: every pre-existing character hydrates into the
-  center sub (Q2) — hub-center becomes a forced 7-slot jumble and, with P4,
+  center-default location (`Location::center`, triangle 0; Q2) — hub-center becomes a forced 7-slot jumble and, with P4,
   a permanent brawl.
 - Facing-pair chokepoints (one door per big-hex edge) concentrate traffic;
   >7 characters converging reintroduces stacking (today's accepted overflow,

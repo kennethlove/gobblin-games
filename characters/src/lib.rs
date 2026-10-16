@@ -196,7 +196,8 @@ pub struct Character {
     pub id: Uuid,
     /// Where are they? Area-hex plus sub-tile slot. Flattened so the
     /// legacy top-level `area` column keeps hydrating (area preserved,
-    /// sub defaults to center); the wire carries `area` and `sub` as
+    /// sub defaults to the canonical triangle 0 via `Location::center`);
+    /// the wire carries `area` and `sub` as
     /// sibling top-level columns.
     #[serde(flatten)]
     pub location: Location,

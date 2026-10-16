@@ -669,7 +669,8 @@ fn brain_act_routes_first_hop_to_non_neighbor_goal(
             // Sector1's clockwise neighbors are Sector2 and Hub.
             // The shortest path to Sector4 goes Sector1 -> Hub
             // -> Sector4, so the first hop must be Hub. Brains are
-            // area-level: the destination's center sub-tile stands in.
+            // area-level: the destination's canonical sub-tile
+            // (triangle 0 via Location::center) stands in.
             assert_eq!(
                 first_hop,
                 Location::center(Area::Hub),
