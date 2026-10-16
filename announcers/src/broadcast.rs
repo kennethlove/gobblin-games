@@ -699,6 +699,8 @@ mod tests {
             character: tr("Snaggletooth"),
             from: ar("Hub"),
             to: ar("Forest"),
+            from_sub: None,
+            to_sub: None,
         });
         let line = BroadcastPackageBuilder::classify_event(&msg).unwrap();
         assert_eq!(line.kind, EventKind::Movement);
@@ -793,6 +795,8 @@ mod tests {
                 character: tr("Snaggletooth"),
                 from: ar("Hub"),
                 to: ar("Forest"),
+                from_sub: None,
+                to_sub: None,
             }),
             make_msg(MessagePayload::PatronGift {
                 recipient: tr("Snaggletooth"),

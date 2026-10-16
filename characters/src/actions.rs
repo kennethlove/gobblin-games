@@ -1,5 +1,5 @@
 use crate::Character;
-use areas::Area;
+use areas::location::Location;
 use serde::{Deserialize, Serialize};
 use shared::afflictions::TraumaSource;
 use std::fmt::Display;
@@ -22,7 +22,11 @@ impl CharacterAction {
 pub enum Action {
     #[default]
     None,
-    Move(Option<Area>),
+    /// Travel one or two sub-hops toward the given sub-tile (owner
+    /// decision: the move slot hops once and the action slot may hop
+    /// again; every hop pays its destination's own move cost, and the
+    /// remainder stays). `None` lets the movement engine wander.
+    Move(Option<Location>),
     Rest,
     UseItem(Option<Item>),
     Attack,

@@ -883,7 +883,9 @@ impl Game {
                         .find(|ad| ad.area == Some(neighbor_area))
                         .map(|ad| {
                             // Calculate stamina cost to move to this area
-                            let move_action = Action::Move(Some(neighbor_area));
+                            let move_action = Action::Move(Some(
+                                areas::location::Location::center(neighbor_area),
+                            ));
                             let stamina_cost =
                                 calculate_stamina_cost(&move_action, &ad.terrain, character);
 
@@ -1194,14 +1196,14 @@ impl Game {
                 use std::collections::HashMap;
                 use uuid::Uuid;
 
-                // Build identifier → UUID lookup.
+                // Build identifier -> UUID lookup.
                 let id_to_uuid: HashMap<String, Uuid> = self
                     .characters
                     .iter()
                     .map(|t| (t.identifier.to_string(), t.id))
                     .collect();
 
-                // Build dead-character → killer lookup from drained alliance events.
+                // Build dead-character -> killer lookup from drained alliance events.
                 let mut dead_character_killers: HashMap<Uuid, Option<Uuid>> = HashMap::new();
                 for event in &drained_alliance_events {
                     if let characters::alliances::AllianceEvent::DeathRecorded {
@@ -1233,7 +1235,7 @@ impl Game {
                     )
                     .collect();
 
-                // Character identifier → area name mapping for same-area contact checks.
+                // Character identifier -> area name mapping for same-area contact checks.
                 let character_areas: HashMap<String, String> = self
                     .characters
                     .iter()
@@ -1353,7 +1355,7 @@ impl Game {
 
         self.execute_cycle(ctx, rng)?;
 
-        // Patronship PR1: translate cycle messages → AudienceEvents and update affinities.
+        // Patronship PR1: translate cycle messages -> AudienceEvents and update affinities.
         // PR2: resolve gifts and deliver them.
         let cycle_payloads: Vec<shared::messages::MessagePayload> = self
             .messages

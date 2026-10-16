@@ -34,6 +34,8 @@ pub enum GameOutput<'a> {
     CharacterSleepFlavor(&'a str, &'a str),
     CharacterHide(&'a str),
     CharacterTravel(&'a str, &'a str, &'a str),
+    /// A sub-tile hop that stays inside one area: character name, area name.
+    CharacterSubHop(&'a str, &'a str),
     CharacterTakeItem(&'a str, &'a str),
     CharacterCannotUseItem(&'a str, &'a str),
     CharacterUseItem(&'a str, &'a Item),
@@ -165,6 +167,9 @@ impl<'a> Display for GameOutput<'a> {
             }
             GameOutput::CharacterTravel(character, area_a, area_b) => {
                 write!(f, "🚶 {} moves from {} to {}", character, area_a, area_b)
+            }
+            GameOutput::CharacterSubHop(character, area) => {
+                write!(f, "👣 {} shifts position within {}", character, area)
             }
             GameOutput::CharacterTakeItem(character, item) => {
                 let object = indefinite(item);

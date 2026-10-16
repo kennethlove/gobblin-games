@@ -16,6 +16,7 @@ mod tests {
     use crate::combat::inflict_table::{HitSeverity, WeaponKind, lookup_inflicts};
     use crate::combat_tuning::CombatTuning;
     use areas::Area;
+    use areas::location::Location;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
     use shared::afflictions::{Affliction, AfflictionKind, AfflictionSource, BodyPart, Severity};
@@ -319,7 +320,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Area::Sector1)),
+            &Action::Move(Some(Location::center(Area::Sector1))),
             Some(world::terrain::BaseTerrain::Mountains),
         );
         assert_eq!(result, Some(Action::Rest));
@@ -334,7 +335,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Area::Sector1)),
+            &Action::Move(Some(Location::center(Area::Sector1))),
             Some(world::terrain::BaseTerrain::Highlands),
         );
         assert_eq!(result, Some(Action::Rest));
@@ -349,7 +350,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Area::Sector1)),
+            &Action::Move(Some(Location::center(Area::Sector1))),
             Some(world::terrain::BaseTerrain::Wetlands),
         );
         assert_eq!(result, Some(Action::Rest));
@@ -364,7 +365,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Area::Sector1)),
+            &Action::Move(Some(Location::center(Area::Sector1))),
             Some(world::terrain::BaseTerrain::Forest),
         );
         assert!(result.is_none(), "Forest should be allowed");
@@ -376,7 +377,7 @@ mod tests {
             make_ttribute_with_affliction("Character", AfflictionKind::MissingLeg, Severity::Mild);
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Area::Sector1)),
+            &Action::Move(Some(Location::center(Area::Sector1))),
             Some(world::terrain::BaseTerrain::Mountains),
         );
         assert!(result.is_none(), "Mild MissingLeg should not block terrain");
@@ -391,7 +392,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Area::Sector1)),
+            &Action::Move(Some(Location::center(Area::Sector1))),
             Some(world::terrain::BaseTerrain::Mountains),
         );
         assert_eq!(result, Some(Action::Rest));
@@ -440,7 +441,11 @@ mod tests {
             AfflictionKind::MissingLeg,
             Severity::Moderate,
         );
-        let result = hard_gates_with_terrain(&character, &Action::Move(Some(Area::Sector1)), None);
+        let result = hard_gates_with_terrain(
+            &character,
+            &Action::Move(Some(Location::center(Area::Sector1))),
+            None,
+        );
         assert!(
             result.is_none(),
             "MissingLeg gate should be skipped when terrain unknown"

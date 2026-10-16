@@ -44,7 +44,7 @@ impl Serialize for Area {
 
 impl<'de> Deserialize<'de> for Area {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        // ponytail: null → default. The SQL subquery sometimes returns null
+        // ponytail: null -> default. The SQL subquery sometimes returns null
         // for area (e.g. character created before area field existed).
         let s = Option::<String>::deserialize(d)?;
         match s {
@@ -189,7 +189,7 @@ pub struct AreaDetails {
     pub placed_traps: Vec<traps::PlacedTrap>,
 }
 
-fn default_terrain() -> TerrainType {
+pub fn default_terrain() -> TerrainType {
     TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap()
 }
 
