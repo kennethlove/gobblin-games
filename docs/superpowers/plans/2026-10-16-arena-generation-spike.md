@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-16
 **Spike:** Arena generation: seed-driven topology and terrain
-**Base:** main (`be2a4329`, post-#60 sub-hex Location merge)
+**Base:** main (`be2a4329`, post-#60 sub-tile Location merge)
 **Status:** spike complete — findings, recommendations, PoC test
 
 This spike answers six questions about generating arenas from a seed
@@ -30,16 +30,16 @@ The engine's area graph has exactly seven nodes and one fixed shape:
 - `ArenaSlot.q/r` is documented presentation-only (`areas/src/preset.rs:42-45`);
   game logic keys on area identity, not coordinates. `hex::default_layout`
   (`areas/src/hex.rs:70-85`) is the canonical cosmetic placement.
-- The sub-hex layer (`areas/src/location.rs`) also bakes in the 7-area
+- The sub-tile layer (`areas/src/location.rs`) also bakes in the 7-area
   cluster: `all_locations()` (`location.rs:74-79`) and `area_axial()`
   (`location.rs:81-88`) iterate `default_layout()`. Its scaled-coordinate
   math (`G = 3·P + s`) is linear over axial isometries, so it survives a
   rotation/reflection of the ring unchanged.
-- **Owner geometry decision (PR #62 review): the 7-sub-hex cluster fails
+- **Owner geometry decision (PR #62 review): the 7-sub-tile cluster fails
   the no-gaps condition (7/9 coverage, dead wedges), so sub-tiles change
   to 6 isosceles triangles per area — point to center, flat sides out.
   This rework is IN PROGRESS (sub-tile geometry rework, stacked on the
-  character-location work). The PoC still emits 7 sub-hexes per slot and
+  character-location work). The PoC still emits 7 sub-tiles per slot and
   will follow the6-triangle shape —7 entries become6, ring slots remap
   to triangle bases — when the rework lands. The parent-level math above
   (dihedral wheel, scaled isometry) is unaffected.
@@ -55,7 +55,7 @@ q/r lie about the engine graph, and 7±N is flat-out rejected by
 `validate_layout` and by `AreaGraph`'s node set (see §5).
 
 So today, generation coexists with the fixed enum as: **cosmetic
-orientation (q/r), names, terrain, sub-hexes — identity and adjacency
+orientation (q/r), names, terrain, sub-tiles — identity and adjacency
 untouched.** That is honest but limited: map rotation is the *only*
 topology-flavored variance, and it changes nothing mechanical.
 
@@ -77,7 +77,7 @@ This spike does not build any of that; it only names the seams.
 ### Recommendation
 
 **v1: generate within the fixed 7-node wheel — the 12 dihedral
-rearrangements plus seeded names/terrain/sub-hexes.** Do not attempt
+rearrangements plus seeded names/terrain/sub-tiles.** Do not attempt
 free-graph generation in this spike. The wheel covers the spike's stated
 shape (topology + terrain vary per seed); real topology freedom is
 blocked on the enum and belongs to the data-driven layouts work, which
@@ -158,7 +158,7 @@ The PoC authors names from the seed.
 - **It is dormant.** The only consumers are tests
   (`world/src/terrain/assignment.rs` tests, `game/tests/terrain_assignment_test.rs`).
   No production path calls it. Area rows are created with
-  identifier/name/area/sub-hexes only (`api/src/games/mod.rs:99-131`);
+  identifier/name/area/sub-tiles only (`api/src/games/mod.rs:99-131`);
   top-level `AreaDetails.terrain` serde-defaults to Clearing
   (`areas/src/lib.rs:199`, `areas/src/lib.rs:185` `#[serde(default = "default_terrain")]`).
   A generated arena would be the *first* production consumer of the
@@ -178,7 +178,7 @@ it takes `&mut [TerrainType]` — but the "max 3 Harsh" constant may need
 retuning for N≠7.)
 
 **Preset interaction:** when a preset is active, the preset wins
-verbatim — its authored terrains and sub-hexes are the snapshot
+verbatim — its authored terrains and sub-tiles are the snapshot
 (`areas/presets/README.md`, `api/src/games/handlers.rs:61-66`). A
 generated arena and an authored preset should be mutually exclusive
 choices at creation ("generated" being a pseudo-preset id), not layers.
@@ -203,8 +203,8 @@ The arena snapshot mechanism already exists and is cheap:
 - Round-tripping `ArenaPreset` through serde is already tested
   (`areas/src/preset.rs` `default_preset_round_trips_through_loader_format`,
   `every_registered_preset_round_trips`).
-- Size: `classic_hex.json` is ~4 KB including all 49 sub-hexes. Seven
-  slots with sub-hexes is the worst case. Cheap.
+- Size: `classic_hex.json` is ~4 KB including all 49 sub-tiles. Seven
+  slots with sub-tiles is the worst case. Cheap.
 - Areas are instantiated from the snapshot (`arena.instantiate()` →
   `create_area`, `api/src/games/handlers.rs:148-170`) and the snapshot
   is what the game reads (`fn::get_full_game` returns `config` and the
@@ -293,7 +293,7 @@ order (this order is the documented contract):
    `TerrainType::random`, then `enforce_balance_constraint` (max 3
    Harsh; consumes a variable number of draws — see §2 debt).
 3. **Sub-hexes** — 7 per slot via `TerrainType::random`, parent biome
-   ignored (sub-hex divergence is the point, per `areas/presets/README.md`).
+   ignored (sub-tile divergence is the point, per `areas/presets/README.md`).
 4. **Names** — `crate::generated_area_names(&mut rng)` (the existing
    14-name bank, seeded here — the public wrapper is unseeded).
 5. **Assemble** — `ArenaSlot`s in label order (Hub first), authored
@@ -314,7 +314,7 @@ seeds through `validate_layout` + serde round-trip through the real
 - **P0 — this spike.** PoC test + findings. No production change.
 - **P1 — `areas::generation` (production module).** `generate(seed) ->
   ArenaPreset` with per-concern sub-RNGs (terrain / orientation /
-  sub-hexes / names each derived: `seed ⊕ DOMAIN`), golden test pinning
+  sub-tiles / names each derived: `seed ⊕ DOMAIN`), golden test pinning
   one seed's full JSON, property test over 100 seeds (all validate,
   >1 distinct output, harsh-count ≤ 3). No wiring.
 - **P2 — seed plumbing.** `CreateGame.seed: Option<u64>`; mint-and-store

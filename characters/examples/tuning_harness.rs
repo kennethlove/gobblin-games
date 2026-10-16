@@ -90,15 +90,14 @@ fn main() {
                 for ev in &events {
                     if let shared::messages::MessagePayload::CombatBeat(b) = &ev.payload {
                         if let shared::combat_beat::BeatOutcome::Swing { outcome, .. } = &b.outcome
+                            && let shared::combat_beat::SwingOutcome::Kill { damage } = outcome
                         {
-                            if let shared::combat_beat::SwingOutcome::Kill { damage } = outcome {
-                                sample_kill.push(format!(
-                                    "{} -> {} dmg {damage} (round {})",
-                                    b.actor.name,
-                                    b.target.as_ref().map(|t| t.name.as_str()).unwrap_or("?"),
-                                    b.round
-                                ));
-                            }
+                            sample_kill.push(format!(
+                                "{} -> {} dmg {damage} (round {})",
+                                b.actor.name,
+                                b.target.as_ref().map(|t| t.name.as_str()).unwrap_or("?"),
+                                b.round
+                            ));
                         }
                         let key: &str = match &b.outcome {
                             shared::combat_beat::BeatOutcome::Swing { outcome, .. } => {
@@ -145,23 +144,19 @@ fn main() {
                 Some(b)
             }
             _ => None,
-        }) {
-            if first_beat.actor.name == "Alice" {
-                init_first += 1;
-            }
+        }) && first_beat.actor.name == "Alice"
+        {
+            init_first += 1;
         }
 
         // Flee stats from beats.
         for ev in &events {
-            if let shared::messages::MessagePayload::CombatBeat(b) = &ev.payload {
-                match b.action {
-                    CombatActionKind::Flee => {
-                        flee_attempts += 1;
-                        if matches!(b.outcome, shared::combat_beat::BeatOutcome::Fled) {
-                            flee_success += 1;
-                        }
-                    }
-                    _ => {}
+            if let shared::messages::MessagePayload::CombatBeat(b) = &ev.payload
+                && matches!(b.action, CombatActionKind::Flee)
+            {
+                flee_attempts += 1;
+                if matches!(b.outcome, shared::combat_beat::BeatOutcome::Fled) {
+                    flee_success += 1;
                 }
             }
         }

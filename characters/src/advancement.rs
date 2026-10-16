@@ -42,7 +42,7 @@ pub enum AdvancementEvent {
         #[serde(rename = "trait")]
         trait_: Trait,
     },
-    /// Reserved slot for the XP system (bead `e1d`): purchases are
+    /// Reserved slot for the XP system: purchases are
     /// immediate and non-negative (spec §10.9), so their state effect
     /// applies at purchase time and settle consumes this without
     /// replaying it. Recorded for the durable-change record and so e1d
