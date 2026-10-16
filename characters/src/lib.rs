@@ -873,18 +873,29 @@ impl Character {
 
         // Character died to the period's events (status effects or blood loss).
         if self.status == CharacterStatus::RecentlyDead || self.blood == 0 {
-            let line = GameOutput::CharacterDead(self.name.as_str()).to_string();
-            events.push(TaggedEvent::new(
-                line,
-                MessagePayload::CharacterKilled {
-                    victim: CharacterRef {
-                        identifier: self.identifier.clone().into(),
-                        name: self.name.clone(),
+            // WHY: process_status already announced status/area/affliction
+            // deaths when it promoted to RecentlyDead — announce here only a
+            // fresh bleed-out (blood hit 0 while otherwise healthy), so one
+            // death yields exactly one CharacterKilled.
+            if self.blood == 0
+                && !matches!(
+                    self.status,
+                    CharacterStatus::RecentlyDead | CharacterStatus::Dead
+                )
+            {
+                let line = GameOutput::CharacterDead(self.name.as_str()).to_string();
+                events.push(TaggedEvent::new(
+                    line,
+                    MessagePayload::CharacterKilled {
+                        victim: CharacterRef {
+                            identifier: self.identifier.clone().into(),
+                            name: self.name.clone(),
+                        },
+                        killer: None,
+                        cause: shared::afflictions::DeathCause::Unknown,
                     },
-                    killer: None,
-                    cause: shared::afflictions::DeathCause::Unknown,
-                },
-            ));
+                ));
+            }
             return;
         }
 
@@ -1181,25 +1192,16 @@ impl Character {
         &self,
         mut targets: Vec<Character>,
         living_characters_count: u32,
-        events: &mut Vec<TaggedEvent>,
     ) -> Option<Character> {
         // If there are no targets, check if the character is feeling suicidal.
         if targets.is_empty() {
             return match self.effective_sanity() {
                 0..=SANITY_BREAK_LEVEL => {
-                    // attempt suicide
-                    let line = GameOutput::CharacterSuicide(self.name.as_str()).to_string();
-                    events.push(TaggedEvent::new(
-                        line,
-                        MessagePayload::CharacterKilled {
-                            victim: CharacterRef {
-                                identifier: self.identifier.clone().into(),
-                                name: self.name.clone(),
-                            },
-                            killer: None,
-                            cause: shared::afflictions::DeathCause::Suicide,
-                        },
-                    ));
+                    // Hand the strike to the resolver: it announces the death
+                    // once if the blow lands and stays silent if the goblin
+                    // survives it. Emitting here reported a death for a
+                    // possibly-alive goblin and duplicated the resolver's
+                    // announcement.
                     Some(self.clone())
                 }
                 _ => None, // Attack no one
@@ -1622,7 +1624,7 @@ impl Character {
         phase: shared::messages::Phase,
         combat_tuning: &crate::combat_tuning::CombatTuning,
     ) {
-        let target = self.pick_target(potential_targets, total_living_characters, events);
+        let target = self.pick_target(potential_targets, total_living_characters);
         if let Some(mut target) = target {
             // Self-attack / suicide only mutates `self` (the real character);
             // resolve it inline exactly as before. A real two-character fight
@@ -2797,10 +2799,27 @@ mod tests {
         let ally = Character::new("Grubworm".to_string(), Some(8), None);
         me.allies.push(ally.id);
 
-        let mut events: Vec<TaggedEvent> = vec![];
-        let target = me.pick_target(vec![ally.clone()], 5, &mut events);
+        let target = me.pick_target(vec![ally.clone()], 5);
         // Only candidate was an ally and we're not in final confrontation.
         assert!(target.is_none());
+    }
+
+    #[rstest]
+    fn suicidal_pick_target_hands_self_to_resolver_without_announcing() {
+        use shared::conditions::{ConditionSeverity, MentalCondition};
+        let mut me = Character::new("Doomed".to_string(), Some(8), None);
+        for _ in 0..10 {
+            me.mental_conditions.push(MentalCondition::Horrified {
+                severity: ConditionSeverity::Critical,
+                remaining_periods: 3,
+            });
+        }
+        assert!(me.effective_sanity() <= crate::SANITY_BREAK_LEVEL);
+
+        // With no `events` parameter, announcing early is structurally
+        // impossible — the resolver owns the only emission.
+        let target = me.pick_target(vec![], 5);
+        assert!(target.is_some(), "suicidal goblin targets itself");
     }
 
     #[rstest]
@@ -2974,8 +2993,7 @@ mod tests {
         let me = Character::new("Snaggletooth".to_string(), Some(8), None);
         let same_team = Character::new("Grubworm".to_string(), Some(8), None);
 
-        let mut events: Vec<TaggedEvent> = vec![];
-        let target = me.pick_target(vec![same_team.clone()], 5, &mut events);
+        let target = me.pick_target(vec![same_team.clone()], 5);
         assert!(target.is_some());
         assert_eq!(target.unwrap().id, same_team.id);
     }
@@ -2989,8 +3007,7 @@ mod tests {
         let ally = Character::new("Grubworm".to_string(), Some(3), None);
         me.allies.push(ally.id);
 
-        let mut events: Vec<TaggedEvent> = vec![];
-        let target = me.pick_target(vec![ally.clone()], 2, &mut events);
+        let target = me.pick_target(vec![ally.clone()], 2);
         assert!(target.is_some());
         assert_eq!(target.unwrap().id, ally.id);
     }
@@ -3003,8 +3020,7 @@ mod tests {
         let teammate = Character::new("Grubworm".to_string(), Some(8), None);
         me.allies.push(teammate.id);
 
-        let mut events: Vec<TaggedEvent> = vec![];
-        let target = me.pick_target(vec![teammate.clone()], 2, &mut events);
+        let target = me.pick_target(vec![teammate.clone()], 2);
         assert!(target.is_none());
     }
 
@@ -3055,8 +3071,7 @@ mod tests {
         // does on the victim's side: drop the ex-ally locally).
         victim.allies.retain(|id| *id != ex_ally.id);
 
-        let mut events: Vec<TaggedEvent> = vec![];
-        let target = victim.pick_target(vec![ex_ally.clone()], 5, &mut events);
+        let target = victim.pick_target(vec![ex_ally.clone()], 5);
         assert!(
             target.is_some(),
             "ex-ally must be targetable after the bond breaks"
