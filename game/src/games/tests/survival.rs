@@ -362,7 +362,7 @@ fn smoke_night_event_frequency_uses_configured_hours() {
         "shifted night hour fires via the configured night frequency"
     );
 
-    // Shifted hours: the dawn anchor moves to hour 8 — silent there …
+    // Shifted hours: the dawn anchor moves to hour 8 — silent there ...
     let mut shifted_dawn = game_with_hours(8, 18);
     shifted_dawn
         .trigger_cycle_events(Phase::from_hour(8).unwrap(), &mut rng)
@@ -373,7 +373,7 @@ fn smoke_night_event_frequency_uses_configured_hours() {
         "shifted dawn anchor stays silent"
     );
 
-    // … while hour 8 is an ordinary day phase under the defaults, fired
+    // ... while hour 8 is an ordinary day phase under the defaults, fired
     // through the configured day frequency.
     let mut default_day = game_with_hours(6, 20);
     default_day.config.day_event_frequency = 1.0;
@@ -555,11 +555,56 @@ fn survival_tick_routes_dehydration_death_through_character_killed() {
     let mut game = create_test_game_with_characters(vec![a]);
     game.day = Some(1);
     let _ = game.run_phase(shared::messages::Phase::DAY);
-    let killed = game.messages.iter().any(|m| {
-        matches!(&m.payload,
-            MessagePayload::CharacterKilled { cause, .. } if *cause == DeathCause::Dehydration)
+    let killed = game
+        .messages
+        .iter()
+        .filter(|m| {
+            matches!(&m.payload,
+                MessagePayload::CharacterKilled { cause, .. } if *cause == DeathCause::Dehydration)
+        })
+        .count();
+    assert_eq!(
+        killed, 1,
+        "exactly one CharacterKilled with cause=dehydration"
+    );
+}
+
+#[test]
+fn status_death_emits_exactly_one_character_killed() {
+    use characters::AfflictionDraft;
+    use shared::afflictions::{AfflictionKind, AfflictionSource, Severity};
+    use shared::messages::MessagePayload;
+    let mut a = Character::new("Doomed".to_string(), Some(1), None);
+    a.blood = 5;
+    a.try_acquire_affliction(AfflictionDraft {
+        kind: AfflictionKind::Wounded,
+        body_part: None,
+        severity: Severity::Moderate,
+        source: AfflictionSource::Environmental,
+        trapped_metadata: None,
     });
-    assert!(killed, "expected a CharacterKilled with cause=dehydration");
+    let mut game = create_test_game_with_characters(vec![a]);
+    // Without an area record the character's turn (and process_status,
+    // where the death announcement lives) never runs.
+    game.areas
+        .push(AreaDetails::new(Some("Hub".to_string()), Area::Hub));
+    game.day = Some(1);
+    let _ = game.run_phase(shared::messages::Phase::DAY);
+    // process_status announces the status death and promotes to RecentlyDead;
+    // the period-end sweep must not announce it a second time.
+    let killed = game
+        .messages
+        .iter()
+        .filter(|m| matches!(&m.payload, MessagePayload::CharacterKilled { .. }))
+        .count();
+    assert_eq!(
+        killed,
+        1,
+        "one status death -> exactly one CharacterKilled; state: blood={} status={:?} aff={:?}",
+        game.characters[0].blood,
+        game.characters[0].status,
+        game.characters[0].afflictions.keys().collect::<Vec<_>>()
+    );
 }
 
 #[test]
