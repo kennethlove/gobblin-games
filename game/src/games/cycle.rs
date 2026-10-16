@@ -928,6 +928,10 @@ impl Game {
             let targets: Vec<Character> = nearby_characters
                 .iter()
                 .filter(|t| t.is_visible() && t.identifier != character.identifier)
+                // Combat scoping (P4 option A): a fight requires both
+                // combatants in the SAME sub-tile. Same area, different
+                // sub-tile is not a fight.
+                .filter(|t| t.location == character.location)
                 .cloned()
                 .collect();
 
@@ -1066,13 +1070,25 @@ impl Game {
                 continue;
             }
 
+            // Defensive re-check at resolution (P4 option A): the target
+            // may have moved sub-tile since targeting (e.g. a prior fight's
+            // flee relocated someone). Same-sub or no fight.
+            if self.characters[*attacker_idx].location != self.characters[target_idx].location {
+                continue;
+            }
+
             // Capture identity up front: once CombatRoundLoop borrows both
             // combatants via split_at_mut we cannot read self.characters again
             // until the loop drops.
-            let (attacker_ident, attacker_name, target_name) = {
+            let (attacker_ident, attacker_name, target_name, fight_location) = {
                 let a = &self.characters[*attacker_idx];
                 let t = &self.characters[target_idx];
-                (a.identifier.clone(), a.name.clone(), t.name.clone())
+                (
+                    a.identifier.clone(),
+                    a.name.clone(),
+                    t.name.clone(),
+                    location_ref(a.location),
+                )
             };
             let combat_id = format!("combat-{}-{}", attacker_ident, target_uuid);
 
@@ -1084,6 +1100,7 @@ impl Game {
                 Some(MessagePayload::CombatRoundStart {
                     combat_id: combat_id.clone(),
                     round: 0,
+                    location: Some(fight_location.clone()),
                 }),
                 None,
             ));
@@ -1116,6 +1133,7 @@ impl Game {
                         Some(MessagePayload::CombatRoundStart {
                             combat_id: combat_id.clone(),
                             round: round.number,
+                            location: Some(fight_location.clone()),
                         }),
                         None,
                     ));
@@ -1145,15 +1163,38 @@ impl Game {
                 winner.statistics.kills += 1;
             }
 
-            // Emit the terminal result.
+            // Emit the terminal result. A successful flee is the only
+            // outcome that moves a goblin: resolve the fleer into an
+            // adjacent sub-tile (within-parent ring neighbors preferred,
+            // cross-parent facing door as fallback).
             if let Some(result) = fight_result {
+                let mut fled_to: Option<areas::location::Location> = None;
+                if let shared::combat_beat::CombatResult::Fled { fled, .. } = &result
+                    && let Some(fleer) = self
+                        .characters
+                        .iter_mut()
+                        .find(|c| fled.identifier == c.identifier)
+                {
+                    let from = fleer.location;
+                    if let Some(destination) = flee_destination(from, rng) {
+                        fleer.location = destination;
+                        fled_to = Some(destination);
+                    }
+                }
+
                 let summary = match &result {
                     shared::combat_beat::CombatResult::Winner { character } => {
                         format!("{} wins the fight!", character.name)
                     }
-                    shared::combat_beat::CombatResult::Fled { fled, .. } => {
-                        format!("{} flees the fight!", fled.name)
-                    }
+                    shared::combat_beat::CombatResult::Fled { fled, .. } => match fled_to {
+                        Some(dest) => format!(
+                            "{} flees the fight to {} sub-tile {}!",
+                            fled.name,
+                            dest.area,
+                            dest.sub.index()
+                        ),
+                        None => format!("{} flees the fight!", fled.name),
+                    },
                     shared::combat_beat::CombatResult::Spared { winner, spared } => {
                         format!("{} spares {}!", winner.name, spared.name)
                     }
@@ -1168,6 +1209,7 @@ impl Game {
                     Some(MessagePayload::CombatEnded {
                         combat_id: combat_id.clone(),
                         result,
+                        location: Some(fight_location),
                     }),
                     None,
                 ));
@@ -1473,5 +1515,98 @@ impl Game {
     /// Get a mutable reference to the area details for a given area.
     pub(super) fn get_area_details_mut(&mut self, area: Area) -> Option<&mut AreaDetails> {
         self.areas.iter_mut().find(|ad| ad.area == Some(area))
+    }
+}
+
+/// Wire form of a fight's position: area name plus sub-tile triangle
+/// index. Combat payloads carry this so spectators can scope a fight to
+/// its sub-tile (P4 option A).
+fn location_ref(location: areas::location::Location) -> shared::messages::LocationRef {
+    let area = location.area.to_string();
+    shared::messages::LocationRef {
+        area: AreaRef {
+            identifier: area.clone().into(),
+            name: area,
+        },
+        sub: location.sub.index(),
+    }
+}
+
+/// Resolve a successful flee into a destination sub-tile (P4 option A).
+///
+/// Fights start and end in one sub-tile; only a fleeing goblin moves.
+/// The destination is an adjacent sub-tile from
+/// [`areas::location::sub_neighbors`]: within-parent ring neighbors are
+/// preferred, and the cross-parent facing door is the fallback when no
+/// ring neighbor exists. Returns `None` when the location has no
+/// neighbors (unoccupied sub index).
+fn flee_destination(
+    from: areas::location::Location,
+    rng: &mut impl rand::Rng,
+) -> Option<areas::location::Location> {
+    let neighbors: Vec<areas::location::Location> = areas::location::sub_neighbors(from)
+        .into_iter()
+        .flatten()
+        .collect();
+    let within_parent: Vec<areas::location::Location> = neighbors
+        .iter()
+        .copied()
+        .filter(|n| n.area == from.area)
+        .collect();
+    let pool = if within_parent.is_empty() {
+        &neighbors
+    } else {
+        &within_parent
+    };
+    if pool.is_empty() {
+        None
+    } else {
+        Some(pool[rng.random_range(0..pool.len())])
+    }
+}
+
+#[cfg(test)]
+mod combat_scoping_tests {
+    use super::*;
+    use areas::hex::SubTriangle;
+    use areas::location::Location;
+    use rand::SeedableRng;
+    use rand::rngs::SmallRng;
+
+    #[test]
+    fn flee_destination_always_lands_on_an_adjacent_sub_tile() {
+        let mut rng = SmallRng::seed_from_u64(7);
+        for from in areas::location::all_locations() {
+            let dest = flee_destination(from, &mut rng).unwrap_or_else(|| {
+                panic!("occupied location {from:?} must have a flee destination")
+            });
+            assert!(
+                areas::location::sub_neighbors(from).contains(&Some(dest)),
+                "flee destination {dest:?} is not adjacent to {from:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn flee_destination_prefers_within_parent_ring_neighbors() {
+        let mut rng = SmallRng::seed_from_u64(11);
+        // Every occupied triangle has both within-parent ring neighbors
+        // set, so the within-parent preference always wins.
+        for from in areas::location::all_locations() {
+            for _ in 0..8 {
+                let dest = flee_destination(from, &mut rng).expect("occupied location");
+                assert_eq!(
+                    dest.area, from.area,
+                    "flee from {from:?} left the parent hex despite a ring neighbor existing"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn flee_destination_is_none_for_unoccupied_sub() {
+        let mut rng = SmallRng::seed_from_u64(3);
+        let from = Location::new(Area::Hub, SubTriangle::new(6));
+        assert!(flee_destination(from, &mut rng).is_none());
     }
 }

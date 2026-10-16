@@ -200,6 +200,15 @@ pub struct AreaRef {
     pub name: String,
 }
 
+/// Arena position stamped on combat payloads so spectators can scope a
+/// fight to where it happens (P4: fights start and end in one sub-tile).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LocationRef {
+    pub area: AreaRef,
+    /// Sub-tile triangle index within the area-hex (`0..=5`).
+    pub sub: u8,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ItemRef {
     pub identifier: ItemId,
@@ -459,6 +468,9 @@ pub enum MessagePayload {
     CombatRoundStart {
         combat_id: String,
         round: u32,
+        /// Where the fight happens; `None` hydrates old persisted rows.
+        #[serde(default)]
+        location: Option<LocationRef>,
     },
     /// One combatant's action within a round (see `CombatBeat`).
     CombatBeat(crate::combat_beat::CombatBeat),
@@ -466,6 +478,9 @@ pub enum MessagePayload {
     CombatEnded {
         combat_id: String,
         result: crate::combat_beat::CombatResult,
+        /// Where the fight happened; `None` hydrates old persisted rows.
+        #[serde(default)]
+        location: Option<LocationRef>,
     },
 
     AllianceFormed {
