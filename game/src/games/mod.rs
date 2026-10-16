@@ -210,8 +210,6 @@ impl From<String> for GameError {
     }
 }
 
-const LOW_CHARACTER_THRESHOLD: u32 = 8;
-
 /// Per-period tick counter. Resets to 0 at every phase boundary.
 /// Phase-boundary side-effect messages get tick=0.
 /// First action in a phase gets tick=1.

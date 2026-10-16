@@ -355,7 +355,9 @@ pub fn render_event_cards(msgs: &[shared::messages::GameMessage]) -> String {
     for msg in msgs {
         match &msg.payload {
             MessagePayload::CombatBeat(_) => fight_beats.push(msg),
-            MessagePayload::CombatEnded { combat_id, result } => {
+            MessagePayload::CombatEnded {
+                combat_id, result, ..
+            } => {
                 fight_result = Some((combat_id, result));
             }
             MessagePayload::CombatRoundStart { .. } => {
@@ -749,7 +751,7 @@ pub fn render_trait_panel(
 
 /// Trait presentation data from a persisted character row: the `traits`
 /// field is an array of PascalCase variant names, and a row's
-/// `temporary_traits` map (Trait → games remaining) attaches the
+/// `temporary_traits` map (Trait -> games remaining) attaches the
 /// games-left countdown to the matching views. A missing or unknown
 /// array degrades to no traits rather than failing the page.
 pub fn trait_views_from_row(row: &serde_json::Value) -> Vec<characters::traits::TraitView> {
@@ -1295,6 +1297,7 @@ mod day_summary_card_tests {
             MessagePayload::CombatEnded {
                 combat_id: "c1".into(),
                 result,
+                location: None,
             },
         )
     }

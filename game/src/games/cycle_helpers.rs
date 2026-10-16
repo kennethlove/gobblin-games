@@ -123,7 +123,9 @@ impl Game {
         let odds = character_count as f64 / 24.0;
         let mut area_events: HashMap<String, (AreaDetails, Vec<AreaEvent>)> = HashMap::new();
 
-        if (1..LOW_CHARACTER_THRESHOLD).contains(&character_count) {
+        // WHY: read the config field (was a dead duplicate of this
+        // const); tests with tiny casts disable the random closing rolls.
+        if (1..self.config.low_character_threshold).contains(&character_count) {
             // If there is an open area, close it.
             if let Some(area_details) = self.random_open_area() {
                 let event = AreaEvent::random(rng);

@@ -148,11 +148,16 @@ impl BroadcastPackageBuilder {
                 })
             }
 
-            MessagePayload::CombatRoundStart { combat_id, round } => {
+            MessagePayload::CombatRoundStart {
+                combat_id,
+                round,
+                location,
+            } => {
                 let structured = serde_json::json!({
                     "type": "combat_round_start",
                     "combat_id": combat_id,
                     "round": round,
+                    "location": location,
                 });
                 Some(EventLine {
                     kind: EventKind::Combat,
@@ -161,11 +166,16 @@ impl BroadcastPackageBuilder {
                 })
             }
 
-            MessagePayload::CombatEnded { combat_id, result } => {
+            MessagePayload::CombatEnded {
+                combat_id,
+                result,
+                location,
+            } => {
                 let structured = serde_json::json!({
                     "type": "combat_ended",
                     "combat_id": combat_id,
                     "result": result,
+                    "location": location,
                 });
                 Some(EventLine {
                     kind: EventKind::Combat,

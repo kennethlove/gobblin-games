@@ -594,6 +594,7 @@ fn importance_tiers_match_decision() {
             CombatRoundStart {
                 combat_id: "c1".into(),
                 round: 1,
+                location: None,
             },
             ServerLogOnly,
         ),
@@ -601,6 +602,7 @@ fn importance_tiers_match_decision() {
             CombatEnded {
                 combat_id: "c1".into(),
                 result: crate::combat_beat::CombatResult::Draw,
+                location: None,
             },
             Persist,
         ),
@@ -1421,6 +1423,7 @@ fn smoke_involves_matches_character_refs_for_all_variants() {
             CombatRoundStart {
                 combat_id: "fight-1".into(),
                 round: 1,
+                location: None,
             },
             vec![],
         ),
@@ -1428,6 +1431,7 @@ fn smoke_involves_matches_character_refs_for_all_variants() {
             CombatEnded {
                 combat_id: "fight-1".into(),
                 result: CombatResult::Winner { character: t("w") },
+                location: None,
             },
             vec!["id-w"],
         ),
@@ -1435,6 +1439,7 @@ fn smoke_involves_matches_character_refs_for_all_variants() {
             CombatEnded {
                 combat_id: "fight-1".into(),
                 result: CombatResult::Draw,
+                location: None,
             },
             vec![],
         ),
