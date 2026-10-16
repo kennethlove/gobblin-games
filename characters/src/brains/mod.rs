@@ -280,83 +280,166 @@ impl Brain {
             self.decide_action_many_enemies(character)
         };
 
-        // If the action is Move(None), choose smart destination based on terrain
+        // If the action is Move(None), pick the destination with the
+        // shared destination logic, then apply act's gates.
         match action {
             Action::Move(None) => {
-                // Multi-hop pathfinding (8pq): score every known area
-                // (not just neighbors), then plan a stamina-aware path
-                // and return the first hop. Falls through to neighbor-
-                // only legacy behavior when `all_areas` is empty.
-                if !all_areas.is_empty()
-                    && let Some(best_goal) =
-                        self.choose_destination(all_areas, character, enemy_density)
-                {
-                    // With per-area enemy density baked into the score (see
-                    // `choose_destination`), a non-current empty area now
-                    // naturally outscores the crowded current one, so the
-                    // legacy escape-hatch is gone. If the best area is still
-                    // the current one, the character simply rests.
-                    if best_goal == character.location.area {
-                        return Action::Rest;
+                let destination = self.move_destination(
+                    character,
+                    available_destinations,
+                    all_areas,
+                    closed_areas,
+                    enemy_density,
+                );
+                match destination {
+                    // The best area is already the occupied one, so
+                    // the character rests in place (see
+                    // `move_destination`).
+                    Some(destination) if destination.area == character.location.area => {
+                        Action::Rest
                     }
-                    let goal = best_goal;
-                    if let Some((path, _cost)) = crate::path::plan_path(
-                        all_areas,
-                        closed_areas,
-                        character,
-                        character.location.area,
-                        goal,
-                    ) && path.len() >= 2
-                    {
-                        let first_hop = path[1];
-                        // Stamina gate against the first hop's cost
+                    Some(destination) => {
+                        // Stamina gate against the hop's cost
                         // (use available_destinations if present, else
                         // fall back to permitting the move).
                         let cost_ok = available_destinations
                             .iter()
-                            .find(|d| d.area == first_hop)
+                            .find(|d| d.area == destination.area)
                             .map(|d| character.stamina >= d.stamina_cost)
                             .unwrap_or(true);
                         if cost_ok {
-                            return Action::Move(Some(Location::center(first_hop)));
+                            Action::Move(Some(destination))
+                        } else {
+                            Action::Rest
                         }
-                        return Action::Rest;
                     }
+                    // No destination knowledge (legacy callers with
+                    // empty `available_destinations`): wander.
+                    None if available_destinations.is_empty() => Action::Move(None),
+                    // Nothing worth taking (or nothing affordable).
+                    None => Action::Rest,
                 }
-
-                // Legacy neighbor-only path (also used by brains tests
-                // that call `act` with empty slices).
-                if available_destinations.is_empty() {
-                    return Action::Move(None);
-                }
-
-                // Convert DestinationInfo to AreaDetails for choose_destination
-                let area_details: Vec<AreaDetails> = available_destinations
-                    .iter()
-                    .map(|dest| AreaDetails {
-                        area: Some(dest.area),
-                        terrain: dest.terrain.clone(),
-                        events: dest.active_events.clone(),
-                        ..AreaDetails::default()
-                    })
-                    .collect();
-
-                // Choose best destination using terrain scoring
-                if let Some(best_area) =
-                    self.choose_destination(&area_details, character, enemy_density)
-                {
-                    // Also check if character has enough stamina
-                    if let Some(dest_info) =
-                        available_destinations.iter().find(|d| d.area == best_area)
-                        && character.stamina >= dest_info.stamina_cost
-                    {
-                        return Action::Move(Some(Location::center(best_area)));
-                    }
-                }
-                // Fall back to rest if no good destination or insufficient stamina
-                Action::Rest
             }
             other => other,
+        }
+    }
+
+    /// The brain's existing destination logic, extracted from `act`'s
+    /// `Move(None)` branch: where a Move beat heads, at the center
+    /// sub-tile (brains stay area-level). Returns
+    /// `Some(current cell)` when the best area is the one the
+    /// character already occupies — `act` turns that into a Rest,
+    /// while the dispatch loop skips that Move beat silently (owner
+    /// decision C). Returns `None` when the brain has no destination
+    /// knowledge (legacy callers with empty `available_destinations`),
+    /// which callers turn into a wandering `Move(None)`.
+    fn move_destination(
+        &self,
+        character: &Character,
+        available_destinations: &[areas::DestinationInfo],
+        all_areas: &[AreaDetails],
+        closed_areas: &[Area],
+        enemy_density: &HashMap<Area, u32>,
+    ) -> Option<Location> {
+        // Multi-hop pathfinding (8pq): score every known area (not
+        // just neighbors), then plan a stamina-aware path and take
+        // the first hop. Falls through to neighbor-only legacy
+        // behavior when `all_areas` is empty.
+        if !all_areas.is_empty()
+            && let Some(best_goal) = self.choose_destination(all_areas, character, enemy_density)
+        {
+            // With per-area enemy density baked into the score (see
+            // `choose_destination`), a non-current empty area now
+            // naturally outscores the crowded current one, so the
+            // legacy escape-hatch is gone. If the best area is still
+            // the current one, the destination is the current cell.
+            if best_goal == character.location.area {
+                return Some(Location::center(best_goal));
+            }
+            if let Some((path, _cost)) = crate::path::plan_path(
+                all_areas,
+                closed_areas,
+                character,
+                character.location.area,
+                best_goal,
+            ) && path.len() >= 2
+            {
+                return Some(Location::center(path[1]));
+            }
+            // Unreachable goal: fall through to the neighbor-only pick.
+        }
+
+        // Legacy neighbor-only path (also used by brains tests
+        // that call `act` with empty slices).
+        if available_destinations.is_empty() {
+            return None;
+        }
+
+        // Convert DestinationInfo to AreaDetails for choose_destination
+        let area_details: Vec<AreaDetails> = available_destinations
+            .iter()
+            .map(|dest| AreaDetails {
+                area: Some(dest.area),
+                terrain: dest.terrain.clone(),
+                events: dest.active_events.clone(),
+                ..AreaDetails::default()
+            })
+            .collect();
+
+        // Choose best destination using terrain scoring
+        self.choose_destination(&area_details, character, enemy_density)
+            .map(Location::center)
+    }
+
+    /// The two beats of one phase (owner decision C): every phase runs
+    /// exactly two beats, each beat a Move (one sub-hop) or an Action.
+    /// `primary` is the decision `act` (or `should_sleep`, whose Sleep
+    /// flows as `P == Sleep`) already made; it sets the shape:
+    ///
+    /// - `Move(d)` -> `[Move(d), Move(d)]` — move/move; the two beats
+    ///   are the two sub-hops cap.
+    /// - `Attack`  -> `[Move(D), Attack]` — move FIRST: pending fights
+    ///   resolve after every character acts, and a Move beat after the
+    ///   Attack would break same-sub targeting and drop the fight.
+    /// - `Rest`    -> `[Rest, Rest]` — action/action hunker, no
+    ///   movement.
+    /// - `Hide` / `SeekShelter` / `Sleep` -> `[Move(D), P]` —
+    ///   move/action: arrive, then hunker.
+    /// - anything else -> `[P, Move(D)]` — action/move; non-combat
+    ///   acts resolve inline, so moving afterwards is safe.
+    ///
+    /// `D` comes from the shared destination logic
+    /// ([`Brain::move_destination`]); when the brain has no
+    /// destination knowledge the beat is a wandering `Move(None)`.
+    pub fn sequence(
+        &self,
+        primary: Action,
+        character: &Character,
+        available_destinations: &[areas::DestinationInfo],
+        all_areas: &[AreaDetails],
+        closed_areas: &[Area],
+        enemy_density: &HashMap<Area, u32>,
+    ) -> [Action; 2] {
+        let destination = || {
+            Action::Move(self.move_destination(
+                character,
+                available_destinations,
+                all_areas,
+                closed_areas,
+                enemy_density,
+            ))
+        };
+        match primary {
+            Action::Move(destination_move) => [
+                Action::Move(destination_move),
+                Action::Move(destination_move),
+            ],
+            Action::Attack => [destination(), Action::Attack],
+            Action::Rest => [Action::Rest, Action::Rest],
+            primary @ (Action::Hide | Action::SeekShelter | Action::Sleep { .. }) => {
+                [destination(), primary]
+            }
+            other => [other, destination()],
         }
     }
 

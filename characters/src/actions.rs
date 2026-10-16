@@ -22,10 +22,11 @@ impl CharacterAction {
 pub enum Action {
     #[default]
     None,
-    /// Travel one or two sub-hops toward the given sub-tile (owner
-    /// decision: the move slot hops once and the action slot may hop
-    /// again; every hop pays its destination's own move cost, and the
-    /// remainder stays). `None` lets the movement engine wander.
+    /// Travel exactly one sub-hop toward the given sub-tile (owner
+    /// decision C: every phase runs two beats and each Move beat is
+    /// one sub-hop — two Move beats are the two sub-hops cap; every
+    /// hop pays its destination's own move cost, and the remainder
+    /// stays). `None` lets the movement engine wander.
     Move(Option<Location>),
     Rest,
     UseItem(Option<Item>),
