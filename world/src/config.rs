@@ -29,30 +29,6 @@ pub struct GameConfig {
     /// Global multiplier for event severity (1.0 = normal, 2.0 = double damage)
     pub catastrophic_severity_multiplier: f64,
 
-    // Character AI decision thresholds (from characters/brains.rs)
-    /// Enemy count threshold for "few enemies" AI decisions
-    pub low_enemy_limit: u32,
-    /// Health threshold for low health AI decisions
-    pub low_health_limit: u32,
-    /// Health threshold for mid health AI decisions
-    pub mid_health_limit: u32,
-    /// Extreme low sanity threshold for desperate actions
-    pub extreme_low_sanity_limit: u32,
-    /// Low sanity threshold for impulsive actions
-    pub low_sanity_limit: u32,
-    /// Mid sanity threshold for cautious actions
-    pub mid_sanity_limit: u32,
-    /// Low movement threshold for exhaustion checks
-    pub low_movement_limit: u32,
-    /// High intelligence threshold for tactical decisions
-    pub high_intelligence_limit: u32,
-    /// Low intelligence threshold for reckless decisions
-    pub low_intelligence_limit: u32,
-
-    // Character lifecycle constants (from characters/mod.rs)
-    /// Sanity level at which characters may attempt suicide
-    pub sanity_break_level: u32,
-
     // Survival cadence (per-day schedules, independent of phase count)
     /// Even hours on which the survival clock ticks: hunger/thirst bars,
     /// starvation/dehydration HP drain, and the affliction cascade all
@@ -76,9 +52,10 @@ pub struct GameConfig {
     /// (wrap-aware), so days start at 06 and nights last 20 -> 06.
     pub nightfall_hour: u8,
 
-    // Attribute maximums (from characters/mod.rs)
-    pub max_health: u32,
-    pub max_sanity: u32,
+    // Attribute maximums (from characters/mod.rs). New characters roll
+    // against these via `GameConfig::default()` (characters/src/lib.rs);
+    // health/sanity have no stored max (blood system / condition-derived
+    // sanity), so former `max_health`/`max_sanity` fields were removed.
     pub max_strength: u32,
     #[serde(alias = "max_defense")]
     pub max_toughness: u32,
@@ -106,20 +83,6 @@ impl Default for GameConfig {
             addiction_enabled: true,
             catastrophic_severity_multiplier: 1.0,
 
-            // Character AI
-            low_enemy_limit: 6,
-            low_health_limit: 20,
-            mid_health_limit: 40,
-            extreme_low_sanity_limit: 10,
-            low_sanity_limit: 20,
-            mid_sanity_limit: 35,
-            low_movement_limit: 10,
-            high_intelligence_limit: 35,
-            low_intelligence_limit: 80,
-
-            // Character lifecycle
-            sanity_break_level: 9,
-
             // Survival cadence: tick every 4 h; day-scaled flat drains.
             survival_tick_hours: [0, 4, 8, 12, 16, 20],
             starvation_hp_base_per_day: 12,
@@ -132,8 +95,6 @@ impl Default for GameConfig {
             nightfall_hour: 20,
 
             // Attribute maximums
-            max_health: 100,
-            max_sanity: 100,
             max_strength: 50,
             max_toughness: 50,
             max_bravery: 100,
@@ -154,8 +115,7 @@ mod tests {
     fn test_default_config() {
         let config = GameConfig::default();
         assert_eq!(config.low_character_threshold, 8);
-        assert_eq!(config.max_health, 100);
-        assert_eq!(config.low_health_limit, 20);
+        assert_eq!(config.max_strength, 50);
     }
 
     #[test]
@@ -176,6 +136,38 @@ mod tests {
         let config: GameConfig = serde_json::from_str(old).unwrap();
         assert_eq!(config.max_strength, 50);
         assert_eq!(config.low_character_threshold, 8); // filled from Default
+    }
+
+    #[test]
+    fn old_configs_carrying_dead_ai_and_max_keys_still_decode() {
+        // The AI-threshold fields (`low_enemy_limit`, `*_sanity_limit`,
+        // ...), `sanity_break_level`, `max_health`, and `max_sanity` were
+        // removed: the live code reads private consts in `characters`
+        // instead (`LOW_ENEMY_LIMIT`, the `PersonalityThresholds` baselines,
+        // `SANITY_BREAK_LEVEL`) or the mechanics moved away from a stored max
+        // (blood, condition-derived sanity). Stored rows still carry the old
+        // keys; no deny_unknown_fields + container-level serde(default):
+        // stale keys are ignored and missing fields hydrate from Default.
+        // Same one-way-safe removal as `max_movement` above.
+        let old = r#"{
+            "low_enemy_limit": 5,
+            "low_health_limit": 25,
+            "mid_health_limit": 45,
+            "extreme_low_sanity_limit": 12,
+            "low_sanity_limit": 22,
+            "mid_sanity_limit": 37,
+            "low_movement_limit": 12,
+            "high_intelligence_limit": 30,
+            "low_intelligence_limit": 75,
+            "sanity_break_level": 7,
+            "max_health": 80,
+            "max_sanity": 90,
+            "day_start_hour": 8
+        }"#;
+        let config: GameConfig = serde_json::from_str(old).unwrap();
+        assert_eq!(config.day_start_hour, 8);
+        assert_eq!(config.low_character_threshold, 8); // filled from Default
+        assert_eq!(config.max_strength, 50); // filled from Default
     }
 
     #[test]
