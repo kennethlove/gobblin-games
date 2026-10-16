@@ -476,3 +476,166 @@ mod tests {
         );
     }
 }
+
+/// ── SPIKE PoC (gobblin-games-inf): seed-driven arena generation ────
+///
+/// Throwaway proof of concept for the arena-generation spike
+/// (`docs/superpowers/plans/2026-10-16-arena-generation-spike.md`).
+/// Test-only: no production path calls this, nothing is registered or
+/// wired. It proves the concept — `generate(seed) -> ArenaPreset` that
+/// is deterministic per seed and passes the *existing* preset
+/// validation — it is **not** the shipping API (see spike §6).
+///
+/// Draw order (the versioning contract, spike §2):
+///   1. ring orientation: rotation 0..6 + reflection flag (the 12
+///      dihedral rearrangements of the Hub+6 wheel),
+///   2. terrains: Hub random_safe, six sectors random, then
+///      `enforce_balance_constraint` (max 3 Harsh),
+///   3. sub-hexes: 7 per slot via `TerrainType::random`,
+///   4. names: the existing 14-name bank, seeded.
+///
+/// Known debt (documented in the spike): one shared RNG, and step 2
+/// consumes a variable number of draws. The production module should
+/// use per-concern sub-RNGs and add a golden test.
+#[cfg(test)]
+mod arena_generation_poc {
+    use super::*;
+    use crate::hex::{Axial, default_layout};
+    use rand::RngExt;
+    use rand::SeedableRng;
+    use rand::rngs::SmallRng;
+    use std::str::FromStr;
+    use strum::IntoEnumIterator;
+    use world::terrain::{TerrainType, enforce_balance_constraint};
+
+    /// Deterministic-by-seed arena generator. PoC only — see module doc.
+    fn generate(seed: u64) -> ArenaPreset {
+        let mut rng = SmallRng::seed_from_u64(seed);
+
+        // 1. Ring orientation: sector i (1..=6) lands at ring position
+        //    (±(i-1) + rotation) mod 6. Hub stays at (0, 0).
+        let rotation: i32 = rng.random_range(0..6);
+        let reflected = rng.random_bool(0.5);
+        let ring: Vec<Axial> = default_layout().iter().skip(1).map(|(_, ax)| *ax).collect();
+        let sector_axial = |i: usize| -> Axial {
+            let label = (i - 1) as i32;
+            let pos = if reflected { -label } else { label };
+            ring[((pos + rotation).rem_euclid(6)) as usize]
+        };
+
+        // 2. Terrains, with the shared balance rule applied.
+        let mut terrains = Vec::with_capacity(7);
+        terrains.push(TerrainType::random_safe(&mut rng));
+        for _ in 0..6 {
+            terrains.push(TerrainType::random(&mut rng));
+        }
+        enforce_balance_constraint(&mut terrains, &mut rng);
+
+        // 3. Sub-hexes: 7 per slot, all seven areas, drawn independently
+        //    of the parent biome (divergence is the point per
+        //    areas/presets/README.md).
+        let sub_hexes: Vec<Vec<SubHex>> = (0..7)
+            .map(|_| {
+                (0..SUB_SLOTS.len())
+                    .map(|_| SubHex {
+                        terrain: TerrainType::random(&mut rng).base,
+                        feature: None,
+                        flavor: None,
+                    })
+                    .collect()
+            })
+            .collect();
+
+        // 4. Seeded names from the existing bank (the public wrapper is
+        //    unseeded; the internal fn takes an rng).
+        let names = crate::generated_area_names(&mut rng);
+
+        let mut areas = Vec::with_capacity(7);
+        for i in 0..7 {
+            let (area, q, r) = if i == 0 {
+                (Area::Hub, 0, 0)
+            } else {
+                let ax = sector_axial(i);
+                (
+                    Area::from_str(&format!("Sector {}", i)).expect("known sector"),
+                    ax.q,
+                    ax.r,
+                )
+            };
+            areas.push(ArenaSlot {
+                area,
+                q,
+                r,
+                name: Some(names[i].clone()),
+                sub_hexes: Some(sub_hexes[i].clone()),
+            });
+        }
+
+        ArenaPreset {
+            id: format!("generated-poc-{seed}"),
+            name: format!("Generated Arena {seed}"),
+            description: "Spike PoC: seed-driven generated arena.".to_string(),
+            areas,
+        }
+    }
+
+    /// The bead's verify test: same seed twice = identical, different
+    /// seeds = different.
+    #[test]
+    fn generated_arena_is_deterministic_for_seed() {
+        let a = generate(20261016);
+        let b = generate(20261016);
+        assert_eq!(a, b, "same seed must reproduce the identical arena");
+
+        let c = generate(42);
+        assert_ne!(a, c, "different seeds must produce different arenas");
+    }
+
+    /// Every generated arena passes the existing preset validation —
+    /// via the real loader path (`parse_preset` enforces
+    /// `validate_layout`), not a reimplementation.
+    #[test]
+    fn every_generated_arena_passes_existing_validation() {
+        for seed in [0u64, 1, 7, 42, 999, 20261016, u64::MAX] {
+            let preset = generate(seed);
+            validate_layout(&preset.areas)
+                .unwrap_or_else(|e| panic!("seed {seed} failed layout validation: {e}"));
+            let json = serde_json::to_string(&preset).expect("serialize generated preset");
+            let parsed = parse_preset(&json, &preset.id)
+                .unwrap_or_else(|e| panic!("seed {seed} failed loader validation: {e}"));
+            assert_eq!(parsed, preset, "seed {seed} must round-trip");
+        }
+    }
+
+    /// The generated shape stays hex-compatible with the engine wheel:
+    /// all seven areas, Hub first at the origin, unique coords, and the
+    /// coordinate ring preserves `Area::neighbors` adjacency (spike §1,
+    /// §5: no pathfinding changes needed for this topology).
+    #[test]
+    fn generated_arena_preserves_wheel_adjacency() {
+        use crate::hex::Axial;
+        let preset = generate(7);
+        assert_eq!(preset.areas[0].area, Area::Hub);
+        assert_eq!((preset.areas[0].q, preset.areas[0].r), (0, 0));
+
+        let coord_of = |area: Area| -> Axial {
+            let slot = preset
+                .areas
+                .iter()
+                .find(|s| s.area == area)
+                .expect("every area present");
+            Axial::new(slot.q, slot.r)
+        };
+        for area in Area::iter() {
+            let here = coord_of(area);
+            for neighbor in area.neighbors() {
+                let there = coord_of(neighbor);
+                assert_eq!(
+                    here.distance(there),
+                    1,
+                    "{area} -> {neighbor} must be coordinate-adjacent"
+                );
+            }
+        }
+    }
+}
