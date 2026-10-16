@@ -26,7 +26,7 @@ fn test_event_survival_integration_with_game_loop() {
     // Create characters in forest with vulnerable health
     for i in 0..5 {
         let mut character = Character::new(format!("Character{}", i), Some((i % 8) + 1), None);
-        character.area = Area::Sector1;
+        character.location.area = Area::Sector1;
         character.blood = 500;
         character.terrain_affinity = vec![]; // No protection
         character.statistics.game = game.identifier.clone();
@@ -98,7 +98,7 @@ fn test_trigger_cycle_events_calls_process_event() {
     // Create characters in each area
     for i in 0..6 {
         let mut character = Character::new(format!("Character{}", i), Some((i % 8) + 1), None);
-        character.area = if i < 3 { Area::Sector1 } else { Area::Sector4 };
+        character.location.area = if i < 3 { Area::Sector1 } else { Area::Sector4 };
         character.blood = 500;
         character.terrain_affinity = vec![];
         character.statistics.game = game.identifier.clone();
@@ -167,7 +167,7 @@ fn test_terrain_affinity_improves_survival() {
         game_with.areas.push(area);
 
         let mut character = Character::new("Affinity Character".to_string(), Some(1), None);
-        character.area = Area::Sector1;
+        character.location.area = Area::Sector1;
         character.blood = 500;
         character.terrain_affinity = vec![BaseTerrain::Forest]; // HAS affinity
         character.statistics.game = game_with.identifier.clone();
@@ -194,7 +194,7 @@ fn test_terrain_affinity_improves_survival() {
         game_without.areas.push(area2);
 
         let mut character2 = Character::new("No Affinity Character".to_string(), Some(1), None);
-        character2.area = Area::Sector1;
+        character2.location.area = Area::Sector1;
         character2.blood = 500;
         character2.terrain_affinity = vec![]; // NO affinity
         character2.statistics.game = game_without.identifier.clone();

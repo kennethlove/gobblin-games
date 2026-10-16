@@ -409,8 +409,8 @@ pub fn apply_sleep_incident(
             )
         }
         SleepIncident::Relocation { new_area } => {
-            let old_area = character.area;
-            character.area = *new_area;
+            let old_area = character.location.area;
+            character.location.area = *new_area;
             format!(
                 "{} sleepwalks from {} to {}!",
                 character.name, old_area, new_area
@@ -533,14 +533,14 @@ mod tests {
     #[test]
     fn apply_relocation_changes_area() {
         let mut character = Character::new("Test".to_string(), None, None);
-        let orig_area = character.area;
+        let orig_area = character.location.area;
         let incident = SleepIncident::Relocation {
             new_area: Area::Sector1,
         };
         let mut rng = SmallRng::seed_from_u64(42);
         apply_sleep_incident(&mut character, &incident, &mut rng);
-        assert_ne!(character.area, orig_area, "area should change");
-        assert_eq!(character.area, Area::Sector1);
+        assert_ne!(character.location.area, orig_area, "area should change");
+        assert_eq!(character.location.area, Area::Sector1);
     }
 
     #[test]

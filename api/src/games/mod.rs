@@ -715,7 +715,7 @@ fn build_character_digest(t: &characters::Character) -> announcers::CharacterDig
             "deceased".into()
         },
         injury_level: "unknown".into(),
-        location: t.area.to_string(),
+        location: t.location.area.to_string(),
         allies: vec![],
         kill_streak: 0,
         highlights: vec![],

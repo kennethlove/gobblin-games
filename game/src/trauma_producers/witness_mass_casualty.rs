@@ -27,7 +27,7 @@ pub(super) fn produce_witness_mass_casualty(game: &mut Game, phase: Phase) {
             continue;
         };
 
-        *deaths_by_area.entry(vt.area).or_insert(0) += 1;
+        *deaths_by_area.entry(vt.location.area).or_insert(0) += 1;
     }
 
     // Phase 2: find living characters in areas with >= 3 deaths
@@ -45,7 +45,7 @@ pub(super) fn produce_witness_mass_casualty(game: &mut Game, phase: Phase) {
         };
 
         for t in &game.characters {
-            if t.is_alive() && t.area == *area {
+            if t.is_alive() && t.location.area == *area {
                 events.push(TraumaEvent {
                     character_id: t.identifier.to_string(),
                     character_name: t.name.clone(),

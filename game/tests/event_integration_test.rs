@@ -22,7 +22,7 @@ fn test_wildfire_in_forest_kills_characters() {
 
     // Create character in forest area with low health
     let mut character = Character::random();
-    character.area = area_name;
+    character.location.area = area_name;
     character.blood = 500;
     character.terrain_affinity = vec![]; // No affinity bonus
     character.statistics.game = game.identifier.clone(); // Set game identifier
@@ -66,7 +66,7 @@ fn test_wildfire_in_desert_minor_impact() {
 
     // Create character
     let mut character = Character::random();
-    character.area = Area::Sector4;
+    character.location.area = Area::Sector4;
     character.blood = 500;
     character.terrain_affinity = vec![];
     character.statistics.game = game.identifier.clone();

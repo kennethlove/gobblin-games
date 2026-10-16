@@ -34,14 +34,14 @@ fn area_event_survival_narration_reaches_game_messages() {
 
     let mut alpha = Character::random();
     alpha.name = "Alpha".to_string();
-    alpha.area = area;
+    alpha.location.area = area;
     alpha.blood = 1000;
     alpha.statistics.game = game.identifier.clone();
     let alpha_id = alpha.identifier.clone();
 
     let mut bravo = Character::random();
     bravo.name = "Bravo".to_string();
-    bravo.area = area;
+    bravo.location.area = area;
     bravo.blood = 1000;
     bravo.statistics.game = game.identifier.clone();
     bravo.team = (alpha.team % 8) + 1;

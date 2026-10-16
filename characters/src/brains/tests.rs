@@ -625,7 +625,7 @@ fn brain_act_routes_first_hop_to_non_neighbor_goal(
     use areas::Area;
 
     // Place the character in Sector1.
-    character.area = Area::Sector1;
+    character.location.area = Area::Sector1;
     // Avoid the items branch & alliance branch — strip both.
     character.items.clear();
     character.brain.preferred_action = None;
@@ -719,7 +719,7 @@ fn choose_destination_excludes_self_from_own_area_density(character: Character) 
     use areas::Area;
 
     let mut t = character;
-    t.area = Area::Sector1;
+    t.location.area = Area::Sector1;
 
     let mk = |a: Area| {
         AreaDetails::new_with_terrain(

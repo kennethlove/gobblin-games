@@ -30,14 +30,14 @@ fn combat_events_reach_game_messages_with_character_source() {
     // Strong attacker, frail defender — combat is overwhelmingly likely.
     let mut attacker = Character::random();
     attacker.name = "Attacker".to_string();
-    attacker.area = area;
+    attacker.location.area = area;
     attacker.blood = 1000;
     attacker.attributes.strength = 60;
     attacker.statistics.game = game.identifier.clone();
 
     let mut defender = Character::random();
     defender.name = "Defender".to_string();
-    defender.area = area;
+    defender.location.area = area;
     defender.blood = 50;
     defender.attributes.toughness = 0;
     defender.statistics.game = game.identifier.clone();

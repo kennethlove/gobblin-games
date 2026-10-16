@@ -34,7 +34,7 @@ impl Character {
     ) -> TravelResult {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
         // Where is the character?
-        let current_area = self.area;
+        let current_area = self.location.area;
 
         let character_ref = || CharacterRef {
             identifier: self.identifier.clone().into(),
@@ -50,7 +50,7 @@ impl Character {
 
         // 1. Can the character move at all?
         if self.effective_attribute(CharacterAttribute::Movement) == 0 {
-            let current_area_name = self.area.to_string();
+            let current_area_name = self.location.area.to_string();
             let line =
                 GameOutput::CharacterTravelTooTired(self.name.as_str(), current_area_name.as_str())
                     .to_string();
@@ -233,7 +233,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn travels_fail_already_there(mut character: Character) {
-        character.area = Sector1;
+        character.location.area = Sector1;
         let result = character.travels(
             &[Hub, Sector2, Sector5, Sector4],
             Some(Sector1),
@@ -265,7 +265,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn travels_success_low_movement_suggestion(mut character: Character) {
-        character.area = Sector1;
+        character.location.area = Sector1;
         character.attributes.movement = 5;
         let open_area = AreaDetails::new(Some("Forest".to_string()), Hub);
         let result = character.travels(&[Sector2, Sector4], Some(Hub), &mut Vec::new());

@@ -703,7 +703,7 @@ impl Game {
             .characters
             .iter()
             .enumerate()
-            .filter(|(_, t)| t.is_alive() && t.area == area)
+            .filter(|(_, t)| t.is_alive() && t.location.area == area)
             .map(|(idx, _)| idx)
             .collect();
 
