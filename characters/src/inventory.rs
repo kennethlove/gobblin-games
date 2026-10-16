@@ -127,7 +127,7 @@ impl Character {
         match item.attribute {
             Attribute::Health => self.heals(item.effect as u32),
             Attribute::Sanity => self.heals_mental_damage(item.effect as u32),
-            Attribute::Movement | Attribute::Speed => self.increase_movement(item.effect as u32),
+            Attribute::Movement | Attribute::Speed => self.restore_stamina(item.effect as u32),
             Attribute::Bravery => self.increase_bravery(item.effect as u32),
             Attribute::Strength => self.increase_strength(item.effect as u32),
             _ => return Err(ItemError::InvalidAttribute),

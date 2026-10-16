@@ -48,7 +48,6 @@ pub enum TraitKind {
 /// exhaustive `match` here will point at the sites to update.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CharacterAttribute {
-    Movement,
     Strength,
     #[serde(alias = "Defense")]
     Toughness,
@@ -62,12 +61,11 @@ pub enum CharacterAttribute {
 }
 
 impl CharacterAttribute {
-    /// Display name for human-facing effect text ("-25% movement"), not
-    /// the `Debug`/serde form ("Movement") — that is the persistence key.
+    /// Display name for human-facing effect text ("-25% perception"), not
+    /// the `Debug`/serde form ("Perception") — that is the persistence key.
     pub fn display_name(self) -> &'static str {
         use CharacterAttribute::*;
         match self {
-            Movement => "movement",
             Strength => "strength",
             Toughness => "toughness",
             Bravery => "bravery",
@@ -90,7 +88,7 @@ pub enum ActionKind {
 /// One typed effect carried by a trait (spec §3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Effect {
-    /// Attribute modifier: applied as `(base + flat) × (1 + percent/100)`.
+    /// Attribute modifier: applied as `(base + flat) x (1 + percent/100)`.
     AttrMod {
         attr: CharacterAttribute,
         flat: i32,
@@ -120,7 +118,7 @@ pub enum Effect {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum BehaviorAxis {
     // Alliances (decisions.rs, alliances.rs, brains/mod.rs)
-    /// Per-mille multiplier: 1500 = ×1.5 affinity (default 1000 when absent).
+    /// Per-mille multiplier: 1500 = x1.5 affinity (default 1000 when absent).
     AllianceAffinity,
     AllianceRefusal,
     // Brain thresholds (brains/mod.rs PersonalityThresholds::from_traits)
@@ -1025,11 +1023,11 @@ mod tests {
         };
         assert_eq!(effect_phrase(&flat).as_deref(), Some("+3 strength"));
         let down = Effect::AttrMod {
-            attr: CharacterAttribute::Movement,
+            attr: CharacterAttribute::Perception,
             flat: -2,
             percent: 0,
         };
-        assert_eq!(effect_phrase(&down).as_deref(), Some("-2 movement"));
+        assert_eq!(effect_phrase(&down).as_deref(), Some("-2 perception"));
     }
 
     #[test]
@@ -1227,13 +1225,13 @@ mod tests {
     fn negative_attrmod_rule_is_per_attribute_across_held_traits() {
         use CharacterAttribute::*;
         let held = vec![Effect::AttrMod {
-            attr: Movement,
+            attr: Perception,
             flat: 0,
             percent: -25,
         }];
         // Same attribute, another negative percent -> collision.
         let collide = vec![Effect::AttrMod {
-            attr: Movement,
+            attr: Perception,
             flat: -2,
             percent: -10,
         }];
@@ -1247,7 +1245,7 @@ mod tests {
         assert!(!negative_attrmod_conflict(&held, &other_attr));
         // Positive modifiers never collide.
         let boon = vec![Effect::AttrMod {
-            attr: Movement,
+            attr: Perception,
             flat: 0,
             percent: 10,
         }];

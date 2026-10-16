@@ -108,9 +108,9 @@ fn decide_on_action_no_health(mut character: Character, mut small_rng: SmallRng)
 }
 
 #[rstest]
-fn decide_on_action_no_movement_alone(mut character: Character, mut small_rng: SmallRng) {
-    // If the character has no movement and is alone, they should rest
-    character.attributes.movement = 0;
+fn decide_on_action_no_stamina_alone(mut character: Character, mut small_rng: SmallRng) {
+    // If the character has no stamina and is alone, they should rest
+    character.stamina = 0;
     let action = character.brain.act(
         &character.clone(),
         0,
@@ -125,12 +125,12 @@ fn decide_on_action_no_movement_alone(mut character: Character, mut small_rng: S
 }
 
 #[rstest]
-fn decide_on_action_no_movement_surrounded_low_health(
+fn decide_on_action_low_stamina_surrounded_low_health(
     mut character: Character,
     mut small_rng: SmallRng,
 ) {
-    // If the character has no movement and is not alone, they should hide
-    character.attributes.movement = 1;
+    // If the character has barely any stamina and is not alone, they should hide
+    character.stamina = 1;
     character.blood = 100;
     let action = character.brain.act(
         &character.clone(),
@@ -257,8 +257,8 @@ fn prefer_to_move_at_mid_health_and_low_sanity(mut character: Character, mut sma
 }
 
 #[rstest]
-fn decide_on_action_alone_healthy_no_movement(mut character: Character, mut small_rng: SmallRng) {
-    character.attributes.movement = 0;
+fn decide_on_action_alone_healthy_no_stamina(mut character: Character, mut small_rng: SmallRng) {
+    character.stamina = 0;
     let action = character.brain.act(
         &character.clone(),
         0,
@@ -273,12 +273,12 @@ fn decide_on_action_alone_healthy_no_movement(mut character: Character, mut smal
 }
 
 #[rstest]
-fn decide_on_action_surrounded_low_health_low_movement_low_sanity(
+fn decide_on_action_surrounded_low_health_low_stamina_low_sanity(
     mut character: Character,
     mut small_rng: SmallRng,
 ) {
     character.blood = 100;
-    character.attributes.movement = 0;
+    character.stamina = 0;
     set_sanity(&mut character, 15);
     let action = character.brain.act(
         &character.clone(),
@@ -568,7 +568,7 @@ fn from_traits_empty_uses_balanced_baseline() {
     // documented baseline values (the original `Balanced` numbers).
     let mut rng = SmallRng::seed_from_u64(101);
     let thresholds = PersonalityThresholds::from_traits(&[], &mut rng);
-    // Each base ±20% — assert each lies in the expected window.
+    // Each base +/-20% — assert each lies in the expected window.
     assert!(
         (16..=24).contains(&thresholds.low_health),
         "low_health={}",
@@ -586,7 +586,7 @@ fn from_traits_empty_uses_balanced_baseline() {
 
 #[rstest]
 fn from_traits_aggressive_lowers_health_thresholds() {
-    // Aggressive: low_health -5 (→15), mid_health -10 (→30) before variance.
+    // Aggressive: low_health -5 (->15), mid_health -10 (->30) before variance.
     // Use many seeds and check the mean is shifted below baseline.
     let aggressive = vec![Trait::Aggressive];
     let mut total_low: u32 = 0;
@@ -597,7 +597,7 @@ fn from_traits_aggressive_lowers_health_thresholds() {
         total_low += t.low_health;
         total_mid += t.mid_health;
     }
-    // Mean low_health ≈ 15, mean mid_health ≈ 30.
+    // Mean low_health ~ 15, mean mid_health ~ 30.
     let mean_low = total_low / 50;
     let mean_mid = total_mid / 50;
     assert!((12..=18).contains(&mean_low), "mean_low={}", mean_low);
@@ -961,7 +961,7 @@ pub(crate) mod survival_override_tests {
 
         #[test]
         fn exhausted_self_does_not_count_as_threat() {
-            // Same identifier as actor → not a threat.
+            // Same identifier as actor -> not a threat.
             let mut actor = make("E", 10);
             actor.identifier = "self".into();
             let mut clone = make("E", 100);

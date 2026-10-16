@@ -408,7 +408,7 @@ pub struct Character {
     /// bounds it. Empty map = everything permanent: old saves hydrate
     /// empty via `#[serde(default)]`, and creation/pool/conversion traits
     /// never get an entry (only event grants do). Ticked once per played
-    /// game at the finish seam (`Game::post_game_recovery` →
+    /// game at the finish seam (`Game::post_game_recovery` ->
     /// [`tick_temporary_traits`]); at zero the trait is removed with no
     /// trace left behind.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -952,6 +952,31 @@ impl Character {
                 environment_details.phase,
                 rng,
             )
+        };
+
+        // Pre-gate Move on affordability — mirror of attack's stamina
+        // pre-gate (brains/scoring.rs): stops goblins burning a turn on
+        // moves they cannot pay for.
+        let action = match action {
+            Action::Move(dest) => {
+                let affordable = match dest {
+                    Some(area) => environment_details
+                        .available_destinations
+                        .iter()
+                        .find(|d| d.area == area)
+                        .is_some_and(|d| self.stamina >= d.stamina_cost),
+                    None => environment_details
+                        .available_destinations
+                        .iter()
+                        .any(|d| self.stamina >= d.stamina_cost),
+                };
+                if affordable {
+                    Action::Move(dest)
+                } else {
+                    Action::Rest
+                }
+            }
+            other => other,
         };
 
         let closed_areas = environment_details.closed_areas;
@@ -2087,18 +2112,18 @@ impl Character {
     /// Apply affliction-based hard gates to an action at execution time.
     ///
     /// This is the terrain-aware complement to the pre-decision
-    /// `affliction_override` layer. Some gates (MissingLeg → cliff/swamp
+    /// `affliction_override` layer. Some gates (MissingLeg -> cliff/swamp
     /// terrain) require knowledge of the destination area's terrain, which
     /// is only available after the brain has decided on a Move action.
     ///
     /// Returns `Some(fallback)` if the action is blocked, `None` if allowed.
     ///
     /// Gates (spec §11):
-    /// - MissingLeg (Moderate+) + cliff/swamp destination → Rest
-    /// - Blind (Moderate+) + ranged attack → Move(None)
+    /// - MissingLeg (Moderate+) + cliff/swamp destination -> Rest
+    /// - Blind (Moderate+) + ranged attack -> Move(None)
     ///   (Action::Attack covers both melee+ranged; gated when distinct
     ///   ranged variant exists.)
-    /// - MissingArm (Moderate+) + 2H weapon → fallback
+    /// - MissingArm (Moderate+) + 2H weapon -> fallback
     ///   (Weapon info not in Action yet; enforced at combat resolution.)
     pub fn affliction_action_gate(
         &self,
@@ -2175,7 +2200,7 @@ pub fn calculate_stamina_cost(
         1.0
     };
 
-    // Desperation multiplier: 1.0 + (0.5 × (1.0 - health%))
+    // Desperation multiplier: 1.0 + (0.5 x (1.0 - health%))
     let health_percent = character.effective_health() as f32 / 100.0;
     let desperation_multiplier = 1.0 + (0.5 * (1.0 - health_percent));
 
@@ -2207,8 +2232,6 @@ pub struct Statistics {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Attributes {
-    /// How far can they move before they need a rest?
-    pub movement: u32,
     /// How hard do they hit?
     pub strength: u32,
     /// How much of a hit can they take?
@@ -2241,7 +2264,6 @@ impl Default for Attributes {
     /// Provides a maxed-out set of Attributes
     fn default() -> Self {
         Self {
-            movement: 100,
             strength: 50,
             toughness: 50,
             bravery: 100,
@@ -2268,7 +2290,6 @@ impl Attributes {
     pub fn get(&self, attr: crate::traits::CharacterAttribute) -> u32 {
         use crate::traits::CharacterAttribute as A;
         match attr {
-            A::Movement => self.movement,
             A::Strength => self.strength,
             A::Toughness => self.toughness,
             A::Bravery => self.bravery,
@@ -2287,7 +2308,6 @@ impl Attributes {
         let config = world::config::GameConfig::default();
 
         Self {
-            movement: config.max_movement,
             strength: rng.random_range(1..=config.max_strength),
             toughness: rng.random_range(1..=config.max_toughness),
             bravery: rng.random_range(1..=config.max_bravery),
@@ -2312,12 +2332,7 @@ impl Attributes {
         let mut attrs = Self::from_rng(rng);
         let config = world::config::GameConfig::default();
 
-        let axes: [(CharacterAttribute, u32, u32); 9] = [
-            (
-                CharacterAttribute::Movement,
-                attrs.movement,
-                config.max_movement,
-            ),
+        let axes: [(CharacterAttribute, u32, u32); 8] = [
             (
                 CharacterAttribute::Strength,
                 attrs.strength,
@@ -2371,7 +2386,6 @@ impl Attributes {
             let bent = ((base as f64) * (1.0 + f64::from(bias) / 100.0)).round() as u32;
             let bent = bent.clamp(1, max);
             match attr {
-                CharacterAttribute::Movement => attrs.movement = bent,
                 CharacterAttribute::Strength => attrs.strength = bent,
                 CharacterAttribute::Toughness => attrs.toughness = bent,
                 CharacterAttribute::Bravery => attrs.bravery = bent,
@@ -2700,7 +2714,7 @@ mod tests {
 
     #[rstest]
     fn consume_pending_trust_shock_resets_flag_when_not_set() {
-        // No flag → no rolls, flag stays false, allies untouched.
+        // No flag -> no rolls, flag stays false, allies untouched.
         let mut character = Character::new("Snipsnout".to_string(), Some(1), None);
         let ally = uuid::Uuid::new_v4();
         character.allies.push(ally);
@@ -2715,10 +2729,10 @@ mod tests {
     #[rstest]
     fn consume_pending_trust_shock_breaks_allies_on_success_and_clears_flag() {
         // Force trust_shock to fire deterministically: sanity=0, threshold>0
-        // gives p = 0.5 + 0.5 * 1.0 = 1.0 → always true.
+        // gives p = 0.5 + 0.5 * 1.0 = 1.0 -> always true.
         use shared::conditions::{ConditionSeverity, MentalCondition};
         let mut character = Character::new("Snipsnout".to_string(), Some(1), None);
-        // 10 critical conditions → 100 drain → effective_sanity = 0
+        // 10 critical conditions -> 100 drain -> effective_sanity = 0
         character.mental_conditions = (0..10)
             .map(|_| MentalCondition::Pain {
                 severity: ConditionSeverity::Critical,
@@ -2745,9 +2759,9 @@ mod tests {
 
     #[rstest]
     fn consume_pending_trust_shock_no_break_when_sanity_above_threshold() {
-        // Sanity at/above threshold → trust_shock_roll returns false → no break.
+        // Sanity at/above threshold -> trust_shock_roll returns false -> no break.
         let mut character = Character::new("Snipsnout".to_string(), Some(1), None);
-        // No mental conditions → effective_sanity = 100
+        // No mental conditions -> effective_sanity = 100
         character.brain.thresholds.extreme_low_sanity = 50;
         let ally = uuid::Uuid::new_v4();
         character.allies.push(ally);
@@ -2771,7 +2785,7 @@ mod tests {
 
     #[rstest]
     fn traits_and_affinity_do_not_depend_on_team() {
-        // Same seed, different team slots → identical rolls. Team must not
+        // Same seed, different team slots -> identical rolls. Team must not
         // seed traits, brain, or terrain affinity.
         let mut rng_a = SmallRng::seed_from_u64(1234);
         let mut rng_b = SmallRng::seed_from_u64(1234);
@@ -2794,7 +2808,7 @@ mod tests {
     fn pick_target_skips_allies() {
         // An ally is in the same area but must not be picked as a target.
         let mut me = Character::new("Snaggletooth".to_string(), Some(8), None);
-        // No mental conditions → effective_sanity = 100 → not suicidal
+        // No mental conditions -> effective_sanity = 100 -> not suicidal
         let ally = Character::new("Grubworm".to_string(), Some(8), None);
         me.allies.push(ally.id);
 
@@ -2897,8 +2911,8 @@ mod tests {
         use crate::statuses::CharacterStatus;
         let mut boblin = Character::new("Boblin".to_string(), None, None);
         boblin.traits.clear();
-        boblin.attributes.movement = 36;
-        let base_movement = boblin.attributes.movement;
+        boblin.attributes.speed = 36;
+        let base_speed = boblin.attributes.speed;
         let base_strength = boblin.attributes.strength;
 
         // Boblin enters the first game Friendly; creation-time gains stamp
@@ -2946,7 +2960,7 @@ mod tests {
             "gains persist, the intentional Friendly loss stays lost"
         );
         assert!(boblin.advancement_log.is_empty(), "settle consumed the log");
-        assert_eq!(boblin.attributes.movement, base_movement);
+        assert_eq!(boblin.attributes.speed, base_speed);
         assert_eq!(
             boblin.attributes.strength, base_strength,
             "wound debuff dropped"
@@ -2986,7 +3000,7 @@ mod tests {
         // When only two characters remain alive, even an ally from another
         // team is a valid target.
         let mut me = Character::new("Snaggletooth".to_string(), Some(8), None);
-        // No mental conditions → effective_sanity = 100 → not suicidal
+        // No mental conditions -> effective_sanity = 100 -> not suicidal
         let ally = Character::new("Grubworm".to_string(), Some(3), None);
         me.allies.push(ally.id);
 
@@ -3046,7 +3060,7 @@ mod tests {
         // victim's `allies`, the victim's next `pick_target` call must
         // consider that ex-ally a valid target.
         let mut victim = Character::new("Gnawpaw".to_string(), Some(1), None);
-        // No mental conditions → effective_sanity = 100 → not suicidal
+        // No mental conditions -> effective_sanity = 100 -> not suicidal
         let ex_ally = Character::new("Rendmaw".to_string(), Some(2), None);
         // Pre-condition: bonded.
         victim.allies.push(ex_ally.id);
@@ -3072,7 +3086,7 @@ mod tests {
         // test pins that contract so any future tightening is intentional.
         use shared::conditions::{ConditionSeverity, MentalCondition};
         let mut victim = Character::new("Gnawpaw".to_string(), Some(1), None);
-        // 10 critical conditions → 100 drain → effective_sanity = 0
+        // 10 critical conditions -> 100 drain -> effective_sanity = 0
         victim.mental_conditions = (0..10)
             .map(|_| MentalCondition::Pain {
                 severity: ConditionSeverity::Critical,
@@ -3358,8 +3372,11 @@ mod tests {
     #[test]
     fn legacy_attribute_columns_load_via_serde_aliases() {
         // A pre-rename persisted row: defense/agility keys, no perception.
+        // It also still carries the dropped `movement` key — `Attributes`
+        // has no deny_unknown_fields, so old payloads decode one-way-safe.
         let legacy = r#"{"movement":100,"strength":25,"defense":30,"bravery":40,"intelligence":50,"persuasion":10,"luck":5,"agility":60,"is_hidden":false}"#;
         let attrs: crate::Attributes = serde_json::from_str(legacy).unwrap();
+        assert_eq!(attrs.strength, 25);
         assert_eq!(attrs.toughness, 30);
         assert_eq!(attrs.speed, 60);
         // New axis hydrates via its serde default, not a deserialize error.
@@ -3704,7 +3721,6 @@ mod tests {
         // half-day slots past phase index 10 (day 5, is_day).
         fn run(seed: u64, with_builder: bool) -> (u8, Option<u32>) {
             let mut me = character();
-            me.attributes.movement = 50;
             // 30 keeps both rolls inside the tier band: the plain run can
             // land below Fortified, so the Builder re-roll gets to win.
             me.attributes.strength = 30;

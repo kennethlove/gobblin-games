@@ -59,27 +59,26 @@ pub struct GameConfig {
     /// advance only at these hours (6 per day, every 4 h).
     pub survival_tick_hours: [u8; 6],
     /// Starvation drain on the first starvation day, in damage units
-    /// (blood cost = units × 10). ~10 units/day at the old cadence.
+    /// (blood cost = units x 10). ~10 units/day at the old cadence.
     pub starvation_hp_base_per_day: u32,
-    /// Daily growth of the starvation drain; 125 = ×1.25 per starvation
-    /// day, ceiling-applied (12, 15, 19, 24, 30, …).
+    /// Daily growth of the starvation drain; 125 = x1.25 per starvation
+    /// day, ceiling-applied (12, 15, 19, 24, 30, ...).
     pub starvation_growth_pct: u32,
     /// Dehydration drain on the first dehydrated day (damage units).
     pub dehydration_hp_base_per_day: u32,
-    /// Daily growth of the dehydration drain (ceiling ×1.25 by default).
+    /// Daily growth of the dehydration drain (ceiling x1.25 by default).
     pub dehydration_growth_pct: u32,
 
     // Day/night boundaries (the phase redesign; both even hours 00–22)
     /// First phase hour of every game day (default 06).
     pub day_start_hour: u8,
-    /// Hour night falls (default 20). Night runs nightfall → day_start
-    /// (wrap-aware), so days start at 06 and nights last 20 → 06.
+    /// Hour night falls (default 20). Night runs nightfall -> day_start
+    /// (wrap-aware), so days start at 06 and nights last 20 -> 06.
     pub nightfall_hour: u8,
 
     // Attribute maximums (from characters/mod.rs)
     pub max_health: u32,
     pub max_sanity: u32,
-    pub max_movement: u32,
     pub max_strength: u32,
     #[serde(alias = "max_defense")]
     pub max_toughness: u32,
@@ -135,7 +134,6 @@ impl Default for GameConfig {
             // Attribute maximums
             max_health: 100,
             max_sanity: 100,
-            max_movement: 100,
             max_strength: 50,
             max_toughness: 50,
             max_bravery: 100,
@@ -166,6 +164,18 @@ mod tests {
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: GameConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(config, deserialized);
+    }
+
+    #[test]
+    fn old_configs_carrying_max_movement_still_decode() {
+        // `max_movement` is gone from GameConfig, but stored configs carry
+        // it. No deny_unknown_fields + container-level serde(default): the
+        // stale key is ignored and every missing field hydrates from
+        // `Default`. Dropping the field is safe one-way.
+        let old = r#"{"max_movement":80,"max_strength":50}"#;
+        let config: GameConfig = serde_json::from_str(old).unwrap();
+        assert_eq!(config.max_strength, 50);
+        assert_eq!(config.low_character_threshold, 8); // filled from Default
     }
 
     #[test]

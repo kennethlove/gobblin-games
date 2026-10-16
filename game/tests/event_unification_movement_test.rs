@@ -36,7 +36,7 @@ fn movement_and_turn_phase_events_reach_game_messages() {
     lone.name = "Lone".to_string();
     lone.location.area = Area::Hub;
     lone.blood = 1000;
-    lone.attributes.movement = 80; // high movement → travel branch
+    lone.stamina = lone.max_stamina; // full stamina -> travel branch
     lone.statistics.game = game.identifier.clone();
 
     let lone_id = lone.identifier.clone();

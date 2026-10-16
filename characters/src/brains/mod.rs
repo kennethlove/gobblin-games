@@ -58,19 +58,19 @@ pub struct PersonalityThresholds {
 
 impl PersonalityThresholds {
     /// Derive thresholds from a character's traits. Sums each trait's
-    /// `ThresholdDelta`, applies it to baseline values, then applies ±20%
+    /// `ThresholdDelta`, applies it to baseline values, then applies +/-20%
     /// individual variance. Each field is clamped to at least 1.
     ///
     /// Field mapping from `ThresholdDelta` to `PersonalityThresholds`:
-    /// - `low_health_limit`        → `low_health`
-    /// - `mid_health_limit`        → `mid_health`
-    /// - `low_sanity_limit`        → `extreme_low_sanity`
-    /// - `mid_sanity_limit`        → `low_sanity`
-    /// - `high_sanity_limit`       → `mid_sanity`
-    /// - `movement_limit`          → `low_movement`
-    /// - `high_intelligence_limit` → `high_intelligence`
-    /// - `low_intelligence_limit`  → `low_intelligence`
-    /// - `psychotic_break_threshold` → `psychotic_break_threshold`
+    /// - `low_health_limit`        -> `low_health`
+    /// - `mid_health_limit`        -> `mid_health`
+    /// - `low_sanity_limit`        -> `extreme_low_sanity`
+    /// - `mid_sanity_limit`        -> `low_sanity`
+    /// - `high_sanity_limit`       -> `mid_sanity`
+    /// - `movement_limit`          -> `low_movement`
+    /// - `high_intelligence_limit` -> `high_intelligence`
+    /// - `low_intelligence_limit`  -> `low_intelligence`
+    /// - `psychotic_break_threshold` -> `psychotic_break_threshold`
     pub fn from_traits(traits: &[Trait], rng: &mut impl Rng) -> Self {
         fn apply_variance(base: i32, rng: &mut impl Rng) -> u32 {
             let variance = rng.random_range(-0.2_f32..=0.2_f32);
@@ -528,7 +528,7 @@ impl Brain {
     ///   characters sleep regardless of safety. Duration: 4 phases.
     /// - At/over the want threshold (6+ phases) AND no nearby hostiles
     ///   AND phase is Night or Dusk: sleep. Duration: 3 phases.
-    /// - Stamina exhausted (≤25% of max) AND no nearby hostiles AND
+    /// - Stamina exhausted (<=25% of max) AND no nearby hostiles AND
     ///   non-Day phase: sleep. Duration: 2 phases.
     pub fn should_sleep(
         &self,
@@ -572,7 +572,7 @@ impl Brain {
     /// to the normal nearby-enemies branching.
     ///
     /// Layers run in this order:
-    /// 1. Liveness (dead → `Action::None`)
+    /// 1. Liveness (dead -> `Action::None`)
     /// 2. Psychotic break
     /// 3. Survival override (terrain-dependent; skipped when `terrain` is `None`)
     /// 4. Stamina override (terrain-dependent for parity with survival)
@@ -699,7 +699,7 @@ impl Brain {
         }
 
         // Affliction override (spec §11): hard gates + brain bias.
-        // Terrain-dependent gates (MissingLeg → cliff/swamp) are deferred
+        // Terrain-dependent gates (MissingLeg -> cliff/swamp) are deferred
         // to action-execution time via `Character::affliction_action_gate`.
         if let Some(action) = affliction_override::affliction_override(character, &Action::None) {
             return Some(action);
@@ -767,12 +767,12 @@ impl Brain {
         let extreme_low_sanity = self.thresholds.extreme_low_sanity;
 
         let stats = (
-            character.effective_attribute(CharacterAttribute::Movement),
+            character.stamina_percent(),
             character.effective_sanity(),
             character.attributes.is_hidden,
         );
         match stats {
-            // Boost hiding in concealed terrain with low movement
+            // Boost hiding in concealed terrain with low stamina
             (m, s, false) if m < low_movement && s >= mid_sanity && is_concealed => Action::Hide,
             (m, s, false) if m < low_movement && s >= mid_sanity => Action::Hide,
             (m, s, _) if m < low_movement && s >= extreme_low_sanity && s < mid_sanity => {
@@ -879,17 +879,16 @@ impl Brain {
                     .bytes()
                     .map(|b| b as u32)
                     .sum();
-                if character.effective_attribute(CharacterAttribute::Movement) > 0
-                    && hash.is_multiple_of(7)
-                {
+                if character.stamina > 0 && hash.is_multiple_of(7) {
                     Action::SetTrap {
                         trap_kind: None,
                         severity: None,
                     }
                 } else {
-                    match character.effective_attribute(CharacterAttribute::Movement) {
-                        0 => Action::Rest,
-                        _ => Action::Move(None),
+                    if character.stamina == 0 {
+                        Action::Rest
+                    } else {
+                        Action::Move(None)
                     }
                 }
             }
@@ -902,22 +901,22 @@ impl Brain {
         let extreme_low_sanity = self.thresholds.extreme_low_sanity;
 
         let stats = (
-            character.effective_attribute(CharacterAttribute::Movement),
+            character.stamina_percent(),
             character.effective_sanity(),
             character.attributes.is_hidden,
         );
         match stats {
-            // low movement, ok sanity, visible
+            // low stamina, ok sanity, visible
             (m, s, false) if m < low_movement && s >= mid_sanity => Action::Hide,
-            // low movement, low sanity, any visibility
+            // low stamina, low sanity, any visibility
             (m, s, _) if m < low_movement && s >= extreme_low_sanity && s < mid_sanity => {
                 Action::Attack
             }
-            // any movement, ok sanity, visible
+            // any stamina, ok sanity, visible
             (_, s, false) if s >= mid_sanity => Action::Move(None),
-            // any movement, low sanity, visible
+            // any stamina, low sanity, visible
             (_, s, false) if s < mid_sanity => Action::Attack,
-            // any movement, any sanity, hidden
+            // any stamina, any sanity, hidden
             (_, _, true) => Action::None,
             (_, _, false) => Action::Move(None), // Catch-all for visible characters
         }
