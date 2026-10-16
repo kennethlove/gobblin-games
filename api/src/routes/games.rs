@@ -1100,12 +1100,12 @@ pub async fn create_game_post_handler(
     let area_futures = arena
         .instantiate()
         .into_iter()
-        .map(|(area, name, sub_hexes)| {
+        .map(|(area, name, sub_tiles)| {
             api::games::create_area(
                 &game_identifier,
                 area,
                 name,
-                sub_hexes,
+                sub_tiles,
                 base_item_count,
                 &user_db,
             )

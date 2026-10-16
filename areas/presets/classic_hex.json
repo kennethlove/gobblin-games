@@ -7,8 +7,7 @@
       "area": "Hub",
       "q": 0,
       "r": 0,
-      "sub_hexes": [
-        { "terrain": "Clearing", "feature": "The Hearth", "flavor": "Open ground where every road ends." },
+      "sub_tiles": [
         { "terrain": "Clearing", "feature": "Old Well", "flavor": "Bucket rope worn to threads." },
         { "terrain": "Grasslands", "feature": "Market Stumps" },
         { "terrain": "Clearing", "feature": "Watchfire Ring" },
@@ -21,8 +20,7 @@
       "area": "Sector 1",
       "q": 1,
       "r": -1,
-      "sub_hexes": [
-        { "terrain": "Forest", "feature": "Deepwood Heart", "flavor": "Canopy swallows the sky." },
+      "sub_tiles": [
         { "terrain": "Forest", "feature": "Fallen Giant", "flavor": "A tree older than the clan records." },
         { "terrain": "Forest", "feature": "Fern Hollow" },
         { "terrain": "Forest", "feature": "Timberfall" },
@@ -35,9 +33,8 @@
       "area": "Sector 2",
       "q": 1,
       "r": 0,
-      "sub_hexes": [
-        { "terrain": "Mountains", "feature": "The High Rocks", "flavor": "Valleys nest between the peaks." },
-        { "terrain": "Mountains", "feature": "Scree Slope" },
+      "sub_tiles": [
+        { "terrain": "Mountains", "feature": "Scree Slope", "flavor": "Valleys nest between the peaks." },
         { "terrain": "UrbanRuins", "feature": "Abandoned Mine" },
         { "terrain": "Mountains", "feature": "Eagle Ledge" },
         { "terrain": "Wetlands", "feature": "Cold Spring", "flavor": "Meltwater gathers in a mountain bowl." },
@@ -49,9 +46,8 @@
       "area": "Sector 3",
       "q": 0,
       "r": 1,
-      "sub_hexes": [
-        { "terrain": "Wetlands", "feature": "The Mire", "flavor": "Every step renegotiates the ground." },
-        { "terrain": "Wetlands", "feature": "Sunken Boardwalk" },
+      "sub_tiles": [
+        { "terrain": "Wetlands", "feature": "Sunken Boardwalk", "flavor": "Every step renegotiates the ground." },
         { "terrain": "Wetlands", "feature": "Heron Shallows" },
         { "terrain": "Wetlands", "feature": "Fog Bank" },
         { "terrain": "Wetlands", "feature": "Mudflat" },
@@ -63,9 +59,8 @@
       "area": "Sector 4",
       "q": -1,
       "r": 1,
-      "sub_hexes": [
-        { "terrain": "Grasslands", "feature": "Open Range", "flavor": "Wind moves the grass like water." },
-        { "terrain": "Grasslands", "feature": "Tallgrass Sea" },
+      "sub_tiles": [
+        { "terrain": "Grasslands", "feature": "Tallgrass Sea", "flavor": "Wind moves the grass like water." },
         { "terrain": "Grasslands", "feature": "Old Stampede Line" },
         { "terrain": "Grasslands", "feature": "Wildflower Flat" },
         { "terrain": "Badlands", "feature": "Coyote Den" },
@@ -77,9 +72,8 @@
       "area": "Sector 5",
       "q": -1,
       "r": 0,
-      "sub_hexes": [
-        { "terrain": "Desert", "feature": "The Dry Expanse", "flavor": "Heat prints everything that crosses." },
-        { "terrain": "Desert", "feature": "Salt Flat" },
+      "sub_tiles": [
+        { "terrain": "Desert", "feature": "Salt Flat", "flavor": "Heat prints everything that crosses." },
         { "terrain": "Desert", "feature": "Shade Arroyo" },
         { "terrain": "UrbanRuins", "feature": "Broken Aqueduct" },
         { "terrain": "Desert", "feature": "Dune Sea" },
@@ -91,9 +85,8 @@
       "area": "Sector 6",
       "q": 0,
       "r": -1,
-      "sub_hexes": [
-        { "terrain": "Highlands", "feature": "The Windward Tops", "flavor": "Clouds pass below the ridge." },
-        { "terrain": "Highlands", "feature": "Wind Shelf" },
+      "sub_tiles": [
+        { "terrain": "Highlands", "feature": "Wind Shelf", "flavor": "Clouds pass below the ridge." },
         { "terrain": "Highlands", "feature": "Cloud Stairs" },
         { "terrain": "Tundra", "feature": "Frost Field" },
         { "terrain": "Highlands", "feature": "Shepherd's Ruin" },

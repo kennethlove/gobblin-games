@@ -194,7 +194,7 @@ pub struct Character {
         deserialize_with = "deserialize_uuid_lenient"
     )]
     pub id: Uuid,
-    /// Where are they? Area-hex plus sub-hex slot. Flattened so the
+    /// Where are they? Area-hex plus sub-tile slot. Flattened so the
     /// legacy top-level `area` column keeps hydrating (area preserved,
     /// sub defaults to center); the wire carries `area` and `sub` as
     /// sibling top-level columns.
@@ -2888,7 +2888,7 @@ mod tests {
         assert!(me.ever_addicted_to.contains(&Substance::Alcohol));
     }
 
-    /// End-to-end advancement scenario from the bead: Boblin starts clean,
+    /// End-to-end advancement scenario: Boblin starts clean,
     /// dies once, wins once, gains a limp-like and a sharpshooter-like
     /// trait mid-game, resets to baseline-plus-advancements (not zero),
     /// and the advancements survive into the second game.
@@ -3983,16 +3983,17 @@ mod tests {
     // ── Location persistence (wire shape) ──────────────────────────
     // `location` is `#[serde(flatten)]`: the wire carries `area` and
     // `sub` as sibling top-level columns, so legacy rows that only
-    // have `area` hydrate with area preserved and sub = center.
+    // have `area` hydrate with area preserved and sub = the default
+    // triangle (index 0). `sub` serializes as the bare triangle index.
 
     #[test]
     fn location_serializes_flat_area_and_sub_columns() {
         let mut c = Character::new("Stinky".to_string(), None, None);
         c.location =
-            areas::location::Location::new(areas::Area::Sector3, areas::hex::SubAxial::new(1, -1));
+            areas::location::Location::new(areas::Area::Sector3, areas::hex::SubTriangle::new(4));
         let v = serde_json::to_value(&c).unwrap();
         assert_eq!(v["area"], serde_json::json!("Sector 3"));
-        assert_eq!(v["sub"], serde_json::json!({"q": 1, "r": -1}));
+        assert_eq!(v["sub"], serde_json::json!(4));
         assert!(v.get("location").is_none(), "location must be flattened");
     }
 
@@ -4000,17 +4001,17 @@ mod tests {
     fn location_round_trips_through_json() {
         let mut c = Character::new("Stinky".to_string(), None, None);
         c.location =
-            areas::location::Location::new(areas::Area::Sector6, areas::hex::SubAxial::new(-1, 1));
+            areas::location::Location::new(areas::Area::Sector6, areas::hex::SubTriangle::new(1));
         let v = serde_json::to_value(&c).unwrap();
         let back: Character = serde_json::from_value(v).unwrap();
         assert_eq!(back.location, c.location);
     }
 
-    /// Old-shape fixture row: pre-sub-hex saves carry a top-level
+    /// Old-shape fixture row: pre-sub-tile saves carry a top-level
     /// `area` column and no `sub`. Hydration must preserve the area and
-    /// default the sub to the center slot.
+    /// default the sub to triangle 0.
     #[test]
-    fn legacy_area_only_row_hydrates_with_center_sub() {
+    fn legacy_area_only_row_hydrates_with_default_sub() {
         let c = Character::new("Stinky".to_string(), None, None);
         let mut v = serde_json::to_value(&c).unwrap();
         v["area"] = serde_json::json!("Sector 1");
@@ -4020,7 +4021,24 @@ mod tests {
         assert_eq!(
             back.location.sub,
             areas::location::Location::default().sub,
-            "legacy rows must hydrate to the center sub"
+            "legacy rows must hydrate to the default sub-tile"
+        );
+    }
+
+    /// Rows written by the retired sub-tile layout carry `sub` as
+    /// `{"q": .., "r": ..}`. That shape has no unambiguous triangle
+    /// mapping, so hydration rejects it loudly instead of fabricating a
+    /// position.
+    #[test]
+    fn legacy_sub_object_row_is_rejected() {
+        let c = Character::new("Stinky".to_string(), None, None);
+        let mut v = serde_json::to_value(&c).unwrap();
+        v["sub"] = serde_json::json!({"q": 1, "r": -1});
+        let err = serde_json::from_value::<Character>(v)
+            .expect_err("legacy sub-tile object must not hydrate");
+        assert!(
+            err.to_string().contains("u8"),
+            "error should name the expected triangle index type: {err}"
         );
     }
 }

@@ -13,10 +13,10 @@
       <div class="card-items">
         {% if area.items %}{{ area.items | length }} items{% else %}No items{% endif %}
       </div>
-      {% if area.sub_hexes %}
-      <div class="card-subhexes">
+      {% if area.sub_tiles %}
+      <div class="card-sub-tiles">
         <ul>
-          {% for sub in area.sub_hexes %}
+          {% for sub in area.sub_tiles %}
           <li>
             {%- if sub.feature %}<strong>{{ sub.feature }}</strong> ({{ sub.terrain }}){% else %}({{ sub.terrain }}){% endif -%}
             {%- if sub.flavor %} — {{ sub.flavor }}{% endif -%}

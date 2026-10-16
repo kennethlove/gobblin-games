@@ -176,13 +176,14 @@ pub struct AreaDetails {
     pub events: Vec<AreaEvent>,
     #[serde(default = "default_terrain")]
     pub terrain: TerrainType,
-    /// Authored sub-hex atmosphere from the arena preset snapshot, in
-    /// `hex::SUB_SLOTS` order (index 0 = center, 1..6 = ring clockwise
-    /// from top-right). Empty for rows created before sub-hexes
+    /// Authored sub-tile atmosphere from the arena preset snapshot, in
+    /// `hex::SubTriangle::index` order (entry `i` covers the triangle
+    /// whose base spans this area hex's edge in axial direction `i`,
+    /// apex at the hex center). Empty for rows created before sub-tiles
     /// existed. Atmosphere only — the pre-1.0 interaction layer (real
-    /// combat/adjacency/travel keyed on sub-hexes) promotes this data.
-    #[serde(default)]
-    pub sub_hexes: Vec<crate::preset::SubHex>,
+    /// combat/adjacency/travel keyed on sub-tiles) promotes this data.
+    #[serde(default, alias = "sub_hexes")]
+    pub sub_tiles: Vec<crate::preset::SubTile>,
     /// Traps placed by characters in this area.
     #[serde(default)]
     pub placed_traps: Vec<traps::PlacedTrap>,
@@ -202,7 +203,7 @@ impl Default for AreaDetails {
             events: vec![],
             placed_traps: vec![],
             terrain: TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap(),
-            sub_hexes: vec![],
+            sub_tiles: vec![],
         }
     }
 }
@@ -251,7 +252,7 @@ impl AreaDetails {
             events: vec![],
             placed_traps: vec![],
             terrain: TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap(),
-            sub_hexes: vec![],
+            sub_tiles: vec![],
         }
     }
 
@@ -264,7 +265,7 @@ impl AreaDetails {
             events: vec![],
             placed_traps: vec![],
             terrain,
-            sub_hexes: vec![],
+            sub_tiles: vec![],
         }
     }
 

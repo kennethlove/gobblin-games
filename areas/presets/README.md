@@ -33,46 +33,53 @@ Each entry of `areas`:
 | `q` | integer | Axial hex coordinate `q`. Presentation only — game logic uses area identity, not coordinates. |
 | `r` | integer | Axial hex coordinate `r`. See `q`. |
 | `name` | string (optional) | Fixed display name for this area. When omitted, each game draws a fresh themed name at creation. |
-| `sub_hexes` | array (optional) | The seven sub-hexes this area hex divides into. See below. |
+| `sub_tiles` | array (optional) | The six sub-tiles this area hex divides into. See below. |
 
-### Sub-hexes
+### Sub-tiles (`sub_tiles`)
 
-Each big area hex divides into 7 sub-hexes — the smallest map units.
-The big hex is the general biome; the sub-hexes are the actual
+Each big area hex divides into 6 sub-tiles — the smallest map units.
+The big hex is the general biome; the sub-tiles are the actual
 features inside it (a valley inside a mountain biome reads as its own
-terrain). Today sub-hexes are **atmosphere**: they show on the map and
+terrain). Today sub-tiles are **atmosphere**: they show on the map and
 area cards and change nothing mechanical. Before 1.0 they become the
 real interaction layer (combat, adjacency, travel costs) — this format
 is the container that upgrade promotes, so author them like they
 matter.
 
-`sub_hexes` is an array of exactly 7 entries in `hex::SUB_SLOTS` order:
-index 0 = center, 1..6 = ring clockwise from top-right (same numeric
-order as the top-level layout). Omitting `sub_hexes` entirely is valid
-(older presets keep loading).
+The six sub-tiles are **isosceles triangles**: apex at the hex center,
+base spanning the hex's full edge ("flat sides out, pointed end to
+center"). They tile the hex exactly — no gaps, no overlaps — and each
+base edge is also the door to the neighboring area.
 
-Each entry of `sub_hexes`:
+`sub_tiles` is an array of exactly 6 entries in `hex::SubTriangle`
+index order: entry `i` describes the triangle whose base spans this
+area hex's edge in axial direction `i` — the same six directions as
+the top-level layout (0 = top-right, 1 = right, 2 = bottom-right,
+3 = bottom-left, 4 = left, 5 = top-left, clockwise). Omitting
+`sub_tiles` entirely is valid (older presets keep loading).
+
+Each entry of `sub_tiles`:
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `terrain` | string | Base terrain of this sub-hex: `"Clearing"`, `"Forest"`, `"Desert"`, `"Tundra"`, `"Wetlands"`, `"Mountains"`, `"UrbanRuins"`, `"Jungle"`, `"Grasslands"`, `"Badlands"`, `"Highlands"`, `"Geothermal"`. May differ from the parent biome — that's the point (a `Wetlands` spring inside a `Mountains` sector). |
+| `terrain` | string | Base terrain of this sub-tile: `"Clearing"`, `"Forest"`, `"Desert"`, `"Tundra"`, `"Wetlands"`, `"Mountains"`, `"UrbanRuins"`, `"Jungle"`, `"Grasslands"`, `"Badlands"`, `"Highlands"`, `"Geothermal"`. May differ from the parent biome — that's the point (a `Wetlands` spring inside a `Mountains` sector). |
 | `feature` | string (optional) | Short feature name shown on the map, e.g. `"Hidden Valley"`. |
 | `flavor` | string (optional) | One-line flavor text shown next to the feature name. |
 
-Example (three entries shown — the real list has seven):
+Example (three entries shown — the real list has six):
 
 ```json
-"sub_hexes": [
-  { "terrain": "Mountains", "feature": "The High Rocks", "flavor": "Valleys nest between the peaks." },
-  { "terrain": "Mountains", "feature": "Scree Slope" },
-  { "terrain": "Wetlands", "feature": "Cold Spring", "flavor": "Meltwater gathers in a mountain bowl." }
+"sub_tiles": [
+  { "terrain": "Mountains", "feature": "Scree Slope", "flavor": "Valleys nest between the peaks." },
+  { "terrain": "UrbanRuins", "feature": "Abandoned Mine" },
+  { "terrain": "Mountains", "feature": "Eagle Ledge" }
 ]
 ```
 
 Validation rules (enforced by the loader): valid JSON, `id` matches the
 registry id, exactly the seven known areas each once, Hub first, no
 two slots share the same `(q, r)`, and any slot that declares
-`sub_hexes` declares exactly seven of them.
+`sub_tiles` declares exactly six of them.
 
 ## Adding a preset
 

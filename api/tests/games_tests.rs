@@ -668,17 +668,17 @@ async fn test_create_game_with_default_preset_id_works() {
     test_db.cleanup().await;
 }
 
-/// The default preset's sub-hex atmosphere rides each area record:
-/// seven sub-hexes per area, in SUB_SLOTS order, with terrain and
-/// feature names hydrated for display.
+/// The default preset's sub-tile atmosphere rides each area record:
+/// six sub-tiles per area, in `SubTriangle` index order, with terrain
+/// and feature names hydrated for display.
 #[tokio::test]
-async fn test_created_area_records_carry_sub_hexes() {
+async fn test_created_area_records_carry_sub_tiles() {
     let test_db = TestDb::new().await;
     let app_state = test_db.app_state();
     let router = create_test_router(app_state);
     let server = TestServer::new(router);
 
-    let user = create_authenticated_user(&test_db, &server, "arena_subhex").await;
+    let user = create_authenticated_user(&test_db, &server, "arena_sub-tile").await;
 
     let response = server
         .post("/api/games")
@@ -689,16 +689,16 @@ async fn test_created_area_records_carry_sub_hexes() {
 
     let mut result = test_db
         .db
-        .query("SELECT sub_hexes FROM area")
+        .query("SELECT sub_tiles FROM area")
         .await
         .expect("failed to read area records");
     let rows: Vec<serde_json::Value> = result.take(0).expect("failed to decode area rows");
     assert_eq!(rows.len(), 7, "seven area records");
     for row in &rows {
-        let subs = row["sub_hexes"]
+        let subs = row["sub_tiles"]
             .as_array()
-            .unwrap_or_else(|| panic!("area record must carry sub-hexes: {row}"));
-        assert_eq!(subs.len(), 7);
+            .unwrap_or_else(|| panic!("area record must carry sub-tiles: {row}"));
+        assert_eq!(subs.len(), 6);
         assert!(subs.iter().all(|s| {
             s["terrain"].is_string() && !s["feature"].as_str().unwrap_or("").is_empty()
         }));

@@ -3,13 +3,13 @@
 Status: SPIKE FINDINGS — docs-only, no production code changed.
 Base: `main` (parent of this change).
 
-**Owner decision driving this doc:** before 1.0, the 7 sub-hexes per big arena
+**Owner decision driving this doc:** before 1.0, the 7 sub-tiles per big arena
 hex (`areas/src/hex.rs`: `SubAxial`, `SUB_SLOTS`, `SUB_SIZE_RATIO = 1/3`) become
 what characters actually interact with and traverse. Big hexes = general
-biomes; sub-hexes = actual features. Sub-hexes carry **combat**, **adjacency**,
+biomes; sub-tiles = actual features. Sub-hexes carry **combat**, **adjacency**,
 and **travel costs**. The existing "presentation only; game logic operates at
 the area level" comments become lies and are listed for removal in §7.1.
-Atmosphere data already ships (`SubHex` in `areas/src/preset.rs:20-29`, rides
+Atmosphere data already ships (`SubTile` in `areas/src/preset.rs:20-29`, rides
 the area record — `areas/src/lib.rs:179-186`); that container is what this
 design promotes to logic data. The hierarchy logic is centralized in one
 module (`areas::location`, §7) so future changes stay cheap.
@@ -19,7 +19,7 @@ module (`areas::location`, §7) so future changes stay cheap.
 ## 1. Character location today
 
 `Character.area: Area` — `characters/src/lib.rs:197`. Plain enum
-(`Hub`, `Sector1..6`, `areas/src/lib.rs:18-26`). No sub-hex, no coordinate.
+(`Hub`, `Sector1..6`, `areas/src/lib.rs:18-26`). No sub-tile, no coordinate.
 
 **Writes (production code, exhaustive):**
 
@@ -102,13 +102,13 @@ Geometry facts already in code (`areas/src/hex.rs`):
   parent incircle radius — the ring-outer-edge-grazing fact
   (`hex.rs:121-126`; non-overlap tested `hex.rs:244-268`).
 
-**Within-parent adjacency (trivial):** the 7 sub-hexes reuse the same axial
+**Within-parent adjacency (trivial):** the 7 sub-tiles reuse the same axial
 system, so adjacency = axial distance 1 among `SUB_SLOTS`: center↔each ring
 (6 pairs) and each ring↔its two ring neighbors (6 pairs). 12 undirected pairs
 per big hex. Opposite ring slots are distance 2 (not adjacent).
 
 **Scaled global coordinate.** Because `to_pixel` is linear, define the global
-sub-hex coordinate `G = 3·P + s` (P = parent axial coord, s = slot). Proof:
+sub-tile coordinate `G = 3·P + s` (P = parent axial coord, s = slot). Proof:
 `G·to_pixel(r) = 3P·to_pixel(r) + s·to_pixel(r) = P·to_pixel(R) + s·to_pixel(r)`
 = parent center + slot offset = the actual pixel position. So `G` lives in the
 same axial grid at size `r` and reproduces geometry exactly.
@@ -128,7 +128,7 @@ Sector1 parent center   = ( R·√3/2,      -1.5R    ) = ( 0.8660R, -1.500R )
 Sector1 sub (-1,1) off  = (-r·√3/2,       1.5r    ) = (-0.2887R,  0.500R)
 Sector1 sub (-1,1) glob = ( 0.5774R,     -1.000R )
 center distance         = |(0.2887, -0.500)|R = 0.5774R = √3·r  => exactly one
-                          sub-hex step: the two sub-hexes share an edge.
+                          sub-tile step: the two sub-tiles share an edge.
 Both sub edges are perpendicular to the Hub→Sector1 center line and sit on the
 big-hex boundary (0.866R from each parent center along that line). Each sub
 edge has length r = R/3, centered on the big edge (length R): both cover the
@@ -140,7 +140,7 @@ Full enumeration over the 49 cells `G = 3P + s` (P over the 7 areas from
 cross-parent adjacent pairs** = one per big-hex edge of the cluster (6 Hub
 edges + 6 sector↔sector edges), every pair the `s ↔ −s` facing pair. No other
 cross-parent contact exists — in particular **no corner/diagonal adjacency**:
-the outer two-thirds of each big-hex edge are unoccupied wedges (7 sub-hexes
+the outer two-thirds of each big-hex edge are unoccupied wedges (7 sub-tiles
 of radius R/3 cover `7/9 ≈ 77.8%` of the parent hex; the corner wedges are
 dead space the grid never tiles).
 
@@ -205,12 +205,12 @@ bearing design constraint for combat scoping and crowd flow (§4, §8 risks).
   as the area-level heuristic layered over the sub graph.
 - **Travel cost = terrain-derived, no new table.** Per-hop cost =
   `calculate_stamina_cost(&Action::Move, &sub_terrain, character)` using the
-  *destination* sub-hex's terrain (`AreaDetails.sub_hexes[i].terrain`,
+  *destination* sub-tile's terrain (`AreaDetails.sub_tiles[i].terrain`,
   `areas/src/preset.rs:21-22`; fallback: parent `AreaDetails.terrain` when
-  `sub_hexes` is empty, `areas/src/lib.rs:179-186`). The per-`BaseTerrain`
+  `sub_tiles` is empty, `areas/src/lib.rs:179-186`). The per-`BaseTerrain`
   tables (`world` terrain `movement_cost`) already exist and are tuned;
-  feature-based surcharges (`SubHex.feature`) are a later, optional layer.
-  A dedicated per-sub-hex cost *table* is unnecessary — terrain IS the table.
+  feature-based surcharges (`SubTile.feature`) are a later, optional layer.
+  A dedicated per-sub-tile cost *table* is unnecessary — terrain IS the table.
 - **Event schema change (additive, backward compatible):**
   `CharacterMoved` gains `#[serde(default)] from_sub: Option<u8>` /
   `to_sub: Option<u8>` — slot index into `SUB_SLOTS` (0..6; compact, stable,
@@ -248,9 +248,9 @@ compensating knob — see open question Q1.
 - Area events (`AreaEvent`, `areas/src/events.rs:10-20`) close whole areas
   (`is_open` `areas/src/lib.rs:276-278`) — the only "map pressure" on fights.
 
-**Options for sub-hex combat:**
+**Options for sub-tile combat:**
 
-- **(A) Fight scoped to shared sub-hex.** Attack requires `attacker.location
+- **(A) Fight scoped to shared sub-tile.** Attack requires `attacker.location
   == target.location` (same area AND sub). No positional movement inside
   combat; flee resolves the fleer into an adjacent occupied sub (within-parent
   preferred; cross-parent facing pair allowed). Everything else (round loop,
@@ -260,7 +260,7 @@ compensating knob — see open question Q1.
 - (C) Sub-hex as flavor only (status quo with location stamps on messages).
 
 **Recommendation: (A).** It is the smallest change that makes the owner
-decision real: sub-hexes determine *who can fight whom* and *where fights
+decision real: sub-tiles determine *who can fight whom* and *where fights
 happen*, and the facing-pair doors give fights natural chokepoints and
 escape routes — with zero changes to `attack_contest`, `round_loop`, or the
 beat wire. (B) adds a second decision layer per round (provider trait must
@@ -287,7 +287,7 @@ break when this lands (to be replanned, not deleted):**
    invalidates any v2 work (follow-up attacks, revenge targeting, pack logic)
    that iterates "everyone in my area".
 2. *Flee = fight over, position unchanged* (`round_loop.rs:366-371`). Under
-   sub-hexes flee must produce a destination; v2 flee/chase designs assuming
+   sub-tiles flee must produce a destination; v2 flee/chase designs assuming
    no relocation break.
 3. *Combat is unlocated.* `combat_id` + beats carry no map position
    (`cycle.rs:1034-1037`; `shared/src/combat_beat.rs`). Sub-scoped fights
@@ -298,7 +298,7 @@ break when this lands (to be replanned, not deleted):**
    Sub-hex chokepoints make 3+ characters stacked in one 7-slot sub likely;
    v2 group-combat assumptions collide with the pair-only state machine.
 5. *Flat per-swing stamina* (`combat_tuning.rs:24-29`) — no terrain/position
-   modifiers; v2 stamina pacing numbers were tuned pre-sub-hex.
+   modifiers; v2 stamina pacing numbers were tuned pre-sub-tile.
 6. *Cower/spare verdict is a closed pair* (`round_loop.rs` §7 verdict,
    `CombatActionProvider::verdict` `round_loop.rs:36-44`) — no representation
    for third-party intervention from an adjacent sub.
@@ -327,9 +327,9 @@ required**; the change is purely serde-driven:
 
 **Area record shape.** `AreaDetails` (`areas/src/lib.rs:158-197`):
 `area: Option<Area>`, `terrain`, `events`, `placed_traps`, and — already
-shipped — `sub_hexes: Vec<SubHex>` in `SUB_SLOTS` order with
-`#[serde(default)]` (empty for pre-sub-hex rows) and
-`character_slots: HashMap<String, SubAxial>` (`:188-196`). `sub_hexes` is
+shipped — `sub_tiles: Vec<SubTile>` in `SUB_SLOTS` order with
+`#[serde(default)]` (empty for pre-sub-tile rows) and
+`character_slots: HashMap<String, SubAxial>` (`:188-196`). `sub_tiles` is
 written at game creation, riding the area record directly
 (`api/src/games/mod.rs:118-127`) and asserted by
 `api/tests/games_tests.rs:675-700`. Area rows persist via the same
@@ -337,15 +337,15 @@ whole-struct UPDATE (`api/src/games/persist.rs:180-195`) — also schemaless.
 
 **Promotion path (atmosphere → logic):**
 
-1. `SubHex.terrain` becomes the source for per-hop travel cost (§3) and
+1. `SubTile.terrain` becomes the source for per-hop travel cost (§3) and
    later for shelter/forage/water (§6, item 7). Same container, same
    snapshot, no new data model.
-2. Rows with empty `sub_hexes` (pre-sub-hex areas) get a **derived default**:
+2. Rows with empty `sub_tiles` (pre-sub-tile areas) get a **derived default**:
    all 7 slots inherit `AreaDetails.terrain` (and no feature/flavor). This is
    mandatory because old games' arena-preset snapshot on the game row may be
    `{}` (`schemas/game.surql:27`, "DEFAULT {} covers pre-migration rows") —
    there is nothing to backfill from. An optional backfill
-   (`UPDATE area SET sub_hexes = …` from the snapshot) is only possible for
+   (`UPDATE area SET sub_tiles = …` from the snapshot) is only possible for
    games created post-snapshot and is a separate, owner-approval-gated task.
 3. `AreaDetails::assign_slot`/`release_slot` + `character_slots`
    (`areas/src/lib.rs:283-313`) have **zero production callers** (grep: only
@@ -355,7 +355,7 @@ whole-struct UPDATE (`api/src/games/persist.rs:180-195`) — also schemaless.
 
 ---
 
-## 6. Subsystems keying on `Area` today (file:line) and sub-hex impact
+## 6. Subsystems keying on `Area` today (file:line) and sub-tile impact
 
 | # | Subsystem | Sites | Sub-hex keying effect |
 |---|---|---|---|
@@ -368,7 +368,7 @@ whole-struct UPDATE (`api/src/games/persist.rs:180-195`) — also schemaless.
 | 7 | Water / forage / shelter | pure fns `areas/src/water.rs:6`, `areas/src/forage.rs:5`, `areas/src/shelter.rs:6`; called with AREA terrain at `brains/scoring.rs:40, 61` (terrain plumbed `brains/mod.rs:633-638`) and `characters/src/incidents.rs:78, 187` | One-line per call site: pass `location::terrain_at(character.location, area_details)` instead of `area_details.terrain` |
 | 8 | Area events / closure / survival checks | `areas/src/lib.rs:165-166, 276-278`; `cycle.rs:1419-1423`; `cycle_helpers.rs:66-111`; `game/src/games/mod.rs:674-700` (filter `t.area == area` at `:698`), survival roll `mod.rs:823`; wire `shared/src/messages/mod.rs:499-507` | v1 stays area-scoped (closing a whole biome is the point of "big hex = general biome"); sub-scoped events are a future layer — no change now |
 | 9 | Affliction witnessing / rescue | `afflictions/mod.rs:51`; `phobia/triggers.rs:23-27`; `trauma.rs:48`; `addiction.rs:255`; `fixation.rs:180`; `rescue.rs:55` | Each compares area equality — becomes `Location` equality when witnessing should require co-presence (owner knob per subsystem; default keep area-level) |
-| 10 | Death cleanup | `cycle.rs:1448-1459` | Items drop into the area — optionally into the death sub-hex |
+| 10 | Death cleanup | `cycle.rs:1448-1459` | Items drop into the area — optionally into the death sub-tile |
 | 11 | Trauma producers | `witness_ally_death.rs:34,48`; `witness_mass_casualty.rs:12,30,48` | HashMaps keyed `Area` — same knob as #9 |
 | 12 | API/templates | `api/src/templates/game_detail.rs:982,1011,1023`; `api/src/games/mod.rs:718`; `announcers/src/lib.rs:168`; `game/src/games/day_summary.rs:226`; `game/src/games/messages.rs:23` | Mechanical `.area` → `.location.area`; slot rendering optional |
 
@@ -389,9 +389,9 @@ blocks or forces a0x.
   pixel layout — only on neighbor adjacency and area identity."
 - `areas/src/preset.rs:42-43` — `ArenaSlot.q/r` "presentation only; game logic
   operates on area identity".
-- `areas/src/preset.rs:20-22` — `SubHex` "Atmosphere only today…promotes this
+- `areas/src/preset.rs:20-22` — `SubTile` "Atmosphere only today…promotes this
   container" (update, not delete).
-- `areas/src/lib.rs:183-185` — `sub_hexes` "Atmosphere only — the pre-1.0
+- `areas/src/lib.rs:183-185` — `sub_tiles` "Atmosphere only — the pre-1.0
   interaction layer…promotes this data" (update).
 - `areas/src/lib.rs:190-192` — `character_slots` "Presentation/positioning
   only…" (delete with the field, §5).
@@ -417,15 +417,15 @@ SUB_SIZE_RATIO, to_pixel + their tests). `location.rs` owns:
 - Occupancy-aware graph helpers: `walkable_neighbors(details, loc)`,
   `shortest_path(from, to, details)` (BFS/astar over the ≤49 occupied cells;
   the §2 lower-bound trap is fixed here, once).
-- `terrain_at(location, details) -> BaseTerrain` (sub-hex terrain with
-  empty-`sub_hexes` fallback to parent terrain) — the single source every
+- `terrain_at(location, details) -> BaseTerrain` (sub-tile terrain with
+  empty-`sub_tiles` fallback to parent terrain) — the single source every
   shelter/forage/water/trap upgrade consumes.
 - `travel_cost(from, to, details, character)` wrapping
   `calculate_stamina_cost` with destination-sub terrain resolution.
 
 What moves in / out: `assign_slot`/`release_slot` logic is deleted (§5), not
 moved; `Area::neighbors` stays where it is and is *called* by the facing rule.
-Result: a future change to sub-hex topology, sizing, or costing touches
+Result: a future change to sub-tile topology, sizing, or costing touches
 `areas/src/location.rs` (+ `hex.rs` for pure geometry) and nothing else.
 
 ---
@@ -483,13 +483,13 @@ Result: a future change to sub-hex topology, sizing, or costing touches
    as a design task in P3.
 2. **Spawn/migration spread — RESOLVED: no pre-existing characters exist,
    so migration is moot** (serde center default stays as the harmless
-   fallback). New characters spawn spread across the 7 sub-hexes to
-   disperse violence; sub-hexes immediately across a big-hex boundary are
+   fallback). New characters spawn spread across the 7 sub-tiles to
+   disperse violence; sub-tiles immediately across a big-hex boundary are
    also valid spawn targets. Every goblin in its own hex would be ideal
    but is silly at 128 goblins. Related owner note: arena size should
    scale up/down with goblin counts as a DEFAULT SUGGESTION only —
    user-set values are never overridden.
 3. **Combat scope — RESOLVED: option A confirmed.** Fights start AND end
-   in the same sub-hex; only a successfully fleeing goblin moves to a new
-   sub-hex. Cross-sub ranged attacks and adjacent-sub assists stay OUT
+   in the same sub-tile; only a successfully fleeing goblin moves to a new
+   sub-tile. Cross-sub ranged attacks and adjacent-sub assists stay OUT
    for v1.

@@ -7,7 +7,7 @@
 //! there is no special-cased code path for it beyond its registry entry.
 
 use crate::Area;
-use crate::hex::SUB_SLOTS;
+use crate::hex::SubTriangle;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use world::terrain::BaseTerrain;
@@ -15,14 +15,15 @@ use world::terrain::BaseTerrain;
 /// Id of the preset used when a game creator makes no arena choice.
 pub const DEFAULT_PRESET_ID: &str = "classic-hex";
 
-/// One sub-hex — the smallest map unit inside an area hex. A big hex
-/// is the general biome; the sub-hexes are the actual features within
-/// it (a valley inside a mountain biome reads as its own terrain).
+/// One sub-tile — the smallest map unit inside an area hex. A big hex
+/// is the general biome; the sub-tiles (one per triangle sub-tile) are
+/// the actual features within it (a valley inside a mountain biome
+/// reads as its own terrain).
 /// Atmosphere only today; the pre-1.0 interaction layer (real combat,
-/// adjacency and travel keyed on sub-hexes) promotes this container.
+/// adjacency and travel keyed on sub-tiles) promotes this container.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SubHex {
-    /// Base terrain of this sub-hex.
+pub struct SubTile {
+    /// Base terrain of this sub-tile.
     pub terrain: BaseTerrain,
     /// Short feature name shown on the map, e.g. "Hidden Valley".
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -46,12 +47,14 @@ pub struct ArenaSlot {
     /// Fixed display name. Absent = a fresh generated name per game.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    /// The seven sub-hexes this area hex divides into, in
-    /// `hex::SUB_SLOTS` order (index 0 = center, 1..6 = ring clockwise
-    /// from top-right). Optional for backward compatibility; the loader
-    /// requires exactly seven when present.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sub_hexes: Option<Vec<SubHex>>,
+    /// The six sub-tiles this area hex divides into, in
+    /// `hex::SubTriangle::index` order (entry `i` describes the
+    /// triangle whose base spans this hex's edge in axial direction
+    /// `i` — the same six directions as the top-level layout).
+    /// Optional for backward compatibility; the loader requires exactly
+    /// six when present.
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "sub_hexes")]
+    pub sub_tiles: Option<Vec<SubTile>>,
 }
 
 /// A complete arena preset.
@@ -69,12 +72,12 @@ pub struct ArenaPreset {
 }
 
 impl ArenaPreset {
-    /// Concrete `(area, display name, sub-hexes)` triples for a fresh
+    /// Concrete `(area, display name, sub-tiles)` triples for a fresh
     /// game, in slot order. Slots with a fixed name keep it; the rest
     /// draw from the same generated-name bank the pre-preset flow used,
     /// so the default preset behaves exactly like the old inline flow.
-    /// Slots without authored sub-hexes yield an empty sub-hex list.
-    pub fn instantiate(&self) -> Vec<(Area, String, Vec<SubHex>)> {
+    /// Slots without authored sub-tiles yield an empty sub-tile list.
+    pub fn instantiate(&self) -> Vec<(Area, String, Vec<SubTile>)> {
         let generated = crate::generate_area_names();
         debug_assert_eq!(
             generated.len(),
@@ -85,8 +88,8 @@ impl ArenaPreset {
             .iter()
             .zip(generated)
             .map(|(slot, fallback)| {
-                let sub_hexes = slot.sub_hexes.clone().unwrap_or_default();
-                (slot.area, slot.name.clone().unwrap_or(fallback), sub_hexes)
+                let sub_tiles = slot.sub_tiles.clone().unwrap_or_default();
+                (slot.area, slot.name.clone().unwrap_or(fallback), sub_tiles)
             })
             .collect()
     }
@@ -210,15 +213,15 @@ fn validate_layout(areas: &[ArenaSlot]) -> Result<(), String> {
     }
     for slot in areas {
         if let Some(subs) = slot
-            .sub_hexes
+            .sub_tiles
             .as_ref()
-            .filter(|subs| subs.len() != SUB_SLOTS.len())
+            .filter(|subs| subs.len() != SubTriangle::COUNT)
         {
             return Err(format!(
-                "area {} has {} sub-hexes; expected {}",
+                "area {} has {} sub-tiles; expected {}",
                 slot.area,
                 subs.len(),
-                SUB_SLOTS.len()
+                SubTriangle::COUNT
             ));
         }
     }
@@ -337,7 +340,7 @@ mod tests {
         let triples = decoded.instantiate();
         assert_eq!(triples[0].0, Area::Hub);
         assert_eq!(triples[0].1, "Home".to_string());
-        assert!(triples[0].2.is_empty(), "no sub-hexes authored");
+        assert!(triples[0].2.is_empty(), "no sub-tiles authored");
     }
 
     #[test]
@@ -400,11 +403,11 @@ mod tests {
     }
 
     #[test]
-    fn slot_without_sub_hexes_still_deserializes() {
+    fn slot_without_sub_tiles_still_deserializes() {
         let json = r#"{
             "id": "test-preset",
             "name": "Test",
-            "description": "no sub-hexes anywhere",
+            "description": "no sub-tiles anywhere",
             "areas": [
                 { "area": "Hub", "q": 0, "r": 0 },
                 { "area": "Sector 1", "q": 1, "r": -1 },
@@ -416,20 +419,21 @@ mod tests {
             ]
         }"#;
         let preset = parse_preset(json, "test-preset").expect("valid preset");
-        assert!(preset.areas.iter().all(|slot| slot.sub_hexes.is_none()));
+        assert!(preset.areas.iter().all(|slot| slot.sub_tiles.is_none()));
     }
 
     #[test]
-    fn slot_with_wrong_sub_hex_count_is_rejected() {
+    fn slot_with_wrong_sub_tile_count_is_rejected() {
         let json = r#"{
             "id": "test-preset",
             "name": "Test",
-            "description": "six sub-hexes instead of seven",
+            "description": "seven sub-tiles instead of six",
             "areas": [
-                { "area": "Hub", "q": 0, "r": 0, "sub_hexes": [
+                { "area": "Hub", "q": 0, "r": 0, "sub_tiles": [
                     { "terrain": "Clearing" }, { "terrain": "Clearing" },
                     { "terrain": "Clearing" }, { "terrain": "Clearing" },
-                    { "terrain": "Clearing" }, { "terrain": "Clearing" }
+                    { "terrain": "Clearing" }, { "terrain": "Clearing" },
+                    { "terrain": "Clearing" }
                 ] },
                 { "area": "Sector 1", "q": 1, "r": -1 },
                 { "area": "Sector 2", "q": 1, "r": 0 },
@@ -441,19 +445,19 @@ mod tests {
         }"#;
         let err = parse_preset(json, "test-preset").expect_err("wrong count must fail");
         let message = err.to_string();
-        assert!(message.contains("6 sub-hexes"), "message: {message}");
-        assert!(message.contains("expected 7"), "message: {message}");
+        assert!(message.contains("7 sub-tiles"), "message: {message}");
+        assert!(message.contains("expected 6"), "message: {message}");
     }
 
     #[test]
-    fn default_preset_authors_seven_sub_hexes_per_slot() {
+    fn default_preset_authors_six_sub_tiles_per_slot() {
         let preset = default_preset();
         for slot in &preset.areas {
             let subs = slot
-                .sub_hexes
+                .sub_tiles
                 .as_ref()
-                .unwrap_or_else(|| panic!("{} must author sub-hexes", slot.area));
-            assert_eq!(subs.len(), SUB_SLOTS.len(), "{}", slot.area);
+                .unwrap_or_else(|| panic!("{} must author sub-tiles", slot.area));
+            assert_eq!(subs.len(), SubTriangle::COUNT, "{}", slot.area);
             assert!(
                 subs.iter()
                     .all(|s| !s.feature.as_deref().unwrap_or("").is_empty())
@@ -462,22 +466,53 @@ mod tests {
     }
 
     #[test]
-    fn sub_hexes_round_trip_through_loader_format() {
+    fn legacy_sub_hexes_key_still_deserializes() {
+        // Rows and snapshots written before the rename carry `sub_hexes`.
+        let json = format!(
+            r#"{{
+            "id": "test-preset",
+            "name": "Test",
+            "description": "legacy key",
+            "areas": [
+                {{ "area": "Hub", "q": 0, "r": 0, "sub_hexes": [{}] }},
+                {{ "area": "Sector 1", "q": 1, "r": -1 }},
+                {{ "area": "Sector 2", "q": 1, "r": 0 }},
+                {{ "area": "Sector 3", "q": 0, "r": 1 }},
+                {{ "area": "Sector 4", "q": -1, "r": 1 }},
+                {{ "area": "Sector 5", "q": -1, "r": 0 }},
+                {{ "area": "Sector 6", "q": 0, "r": -1 }}
+            ]
+        }}"#,
+            [r#"{"terrain": "Clearing"}"#; 6].join(",")
+        );
+        let preset = parse_preset(&json, "test-preset").expect("legacy key must load");
+        assert_eq!(
+            preset.areas[0]
+                .sub_tiles
+                .as_ref()
+                .expect("alias populated")
+                .len(),
+            6
+        );
+    }
+
+    #[test]
+    fn sub_tiles_round_trip_through_loader_format() {
         let preset = default_preset();
         let encoded = serde_json::to_string(&preset).expect("serialize");
-        assert!(encoded.contains("sub_hexes"), "encoded: {encoded}");
+        assert!(encoded.contains("sub_tiles"), "encoded: {encoded}");
         let decoded: ArenaPreset = serde_json::from_str(&encoded).expect("deserialize");
         assert_eq!(decoded, preset);
         let triples = decoded.instantiate();
         assert!(
             triples
                 .iter()
-                .all(|(_, _, subs)| subs.len() == SUB_SLOTS.len())
+                .all(|(_, _, subs)| subs.len() == SubTriangle::COUNT)
         );
     }
 }
 
-/// ── SPIKE PoC (gobblin-games-inf): seed-driven arena generation ────
+/// ── SPIKE PoC: seed-driven arena generation ──────────────────────
 ///
 /// Throwaway proof of concept for the arena-generation spike
 /// (`docs/superpowers/plans/2026-10-16-arena-generation-spike.md`).
@@ -491,7 +526,7 @@ mod tests {
 ///      dihedral rearrangements of the Hub+6 wheel),
 ///   2. terrains: Hub random_safe, six sectors random, then
 ///      `enforce_balance_constraint` (max 3 Harsh),
-///   3. sub-hexes: 7 per slot via `TerrainType::random`,
+///   3. sub-tiles: 7 per slot via `TerrainType::random`,
 ///   4. names: the existing 14-name bank, seeded.
 ///
 /// Known debt (documented in the spike): one shared RNG, and step 2
@@ -531,13 +566,13 @@ mod arena_generation_poc {
         }
         enforce_balance_constraint(&mut terrains, &mut rng);
 
-        // 3. Sub-hexes: 7 per slot, all seven areas, drawn independently
-        //    of the parent biome (divergence is the point per
-        //    areas/presets/README.md).
-        let sub_hexes: Vec<Vec<SubHex>> = (0..7)
+        // 3. Sub-tiles: 6 triangles per slot, all seven areas, drawn
+        //    independently of the parent biome (divergence is the point
+        //    per areas/presets/README.md).
+        let sub_tiles: Vec<Vec<SubTile>> = (0..7)
             .map(|_| {
-                (0..SUB_SLOTS.len())
-                    .map(|_| SubHex {
+                (0..SubTriangle::COUNT)
+                    .map(|_| SubTile {
                         terrain: TerrainType::random(&mut rng).base,
                         feature: None,
                         flavor: None,
@@ -567,7 +602,7 @@ mod arena_generation_poc {
                 q,
                 r,
                 name: Some(names[i].clone()),
-                sub_hexes: Some(sub_hexes[i].clone()),
+                sub_tiles: Some(sub_tiles[i].clone()),
             });
         }
 
@@ -579,7 +614,7 @@ mod arena_generation_poc {
         }
     }
 
-    /// The bead's verify test: same seed twice = identical, different
+    /// The spike's verify test: same seed twice = identical, different
     /// seeds = different.
     #[test]
     fn generated_arena_is_deterministic_for_seed() {

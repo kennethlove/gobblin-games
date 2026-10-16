@@ -79,52 +79,50 @@ pub fn default_layout() -> [(Area, Axial); 7] {
     ]
 }
 
-/// Area-local sub-tile coordinate. Each area-hex is subdivided into 7
-/// sub-hexes (1 center + 6 ring) using the same axial system as the
-/// top-level layout. Sub-tiles are presentation/positioning only — game
-/// logic still operates at the area level.
+/// One of the six isosceles triangles that subdivide a single area-hex
+/// (sub-tile identity — presentation/positioning only; game logic still
+/// operates at the area level).
+///
+/// Index `i` is the triangle whose **base spans the parent hex's edge in
+/// axial direction `i`** — the same direction indexing as
+/// [`Axial::neighbors`] (0 = top-right, then clockwise), so direction
+/// `i` means the same edge for every parent. The apex sits at the
+/// parent center, the base covers the parent's full edge ("flat sides
+/// out, pointed end to center"), and the six triangles therefore tile
+/// the parent exactly: no gaps, no overlaps, no dead wedges.
+///
+/// Serde shape: the bare index (`0..=5`) as a JSON number. Indices
+/// outside `0..=5` deserialize but are unoccupied slots —
+/// [`crate::location::is_occupied`] rejects them, mirroring how
+/// out-of-cluster sub coordinates behaved before.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub struct SubAxial {
-    pub q: i32,
-    pub r: i32,
-}
+#[serde(transparent)]
+pub struct SubTriangle(u8);
 
-impl SubAxial {
-    pub const fn new(q: i32, r: i32) -> Self {
-        Self { q, r }
+impl SubTriangle {
+    /// Number of sub-tile triangles per area-hex.
+    pub const COUNT: usize = 6;
+
+    /// The triangle whose base lies on the parent's edge in axial
+    /// direction `index` (per [`Axial::neighbors`]). Indices `0..COUNT`
+    /// are the occupied slots; larger values are unoccupied.
+    pub const fn new(index: u8) -> Self {
+        Self(index)
     }
 
-    /// Convert to pixel coords relative to the parent hex center, using
-    /// the same pointy-top math as `Axial::to_pixel`. `sub_size` is the
-    /// sub-hex center-to-corner radius.
-    pub fn to_pixel(self, sub_size: f64) -> (f64, f64) {
-        let q = self.q as f64;
-        let r = self.r as f64;
-        let x = sub_size * (3.0_f64.sqrt() * q + 3.0_f64.sqrt() / 2.0 * r);
-        let y = sub_size * (3.0 / 2.0 * r);
-        (x, y)
+    /// Bare identity `0..=5` — also the entry order of a preset's
+    /// `sub_tiles` array.
+    pub const fn index(self) -> u8 {
+        self.0
+    }
+
+    /// Axial direction (0..=5, per [`Axial::neighbors`]) of this
+    /// triangle's base edge. Meaningful only for occupied indices
+    /// (`< [`SubTriangle::COUNT]`).
+    pub const fn base_direction(self) -> usize {
+        self.0 as usize
     }
 }
-
-/// The 7 sub-tile slots within a single area-hex, in the same numeric
-/// order as `default_layout()`: index 0 = center, 1..6 = ring clockwise
-/// from top-right.
-pub const SUB_SLOTS: [SubAxial; 7] = [
-    SubAxial::new(0, 0),
-    SubAxial::new(1, -1),
-    SubAxial::new(1, 0),
-    SubAxial::new(0, 1),
-    SubAxial::new(-1, 1),
-    SubAxial::new(-1, 0),
-    SubAxial::new(0, -1),
-];
-
-/// Sub-hex size relative to the parent area-hex size. The 7-cluster
-/// layout (1 center + 6 ring) fits inside the parent hex when each
-/// sub-hex has center-to-corner radius `parent_size / 3` — the ring
-/// sub-hex centers sit at distance `parent_size * sqrt(3) / 3` from the
-/// center, with their outer edges grazing the parent's inscribed circle.
-pub const SUB_SIZE_RATIO: f64 = 1.0 / 3.0;
 
 #[cfg(test)]
 mod tests {
@@ -234,39 +232,20 @@ mod tests {
     }
 
     #[test]
-    fn sub_slots_has_seven_unique_coords() {
-        let set: HashSet<SubAxial> = SUB_SLOTS.iter().copied().collect();
-        assert_eq!(set.len(), 7);
-    }
-
-    #[test]
-    fn sub_slots_first_is_center() {
-        assert_eq!(SUB_SLOTS[0], SubAxial::new(0, 0));
-    }
-
-    #[test]
-    fn sub_slots_no_overlap_at_default_ratio() {
-        // Sub-hexes are non-overlapping iff center-to-center distance >=
-        // 2 * sub_size * cos(30°) = sub_size * sqrt(3) for pointy-top
-        // adjacent hexes. With SUB_SIZE_RATIO = 1/3 and parent_size = 90,
-        // sub_size = 30, expected min center distance = 30 * sqrt(3).
-        let parent_size = 90.0_f64;
-        let sub_size = parent_size * SUB_SIZE_RATIO;
-        let min_dist = sub_size * 3.0_f64.sqrt();
-        for (i, a) in SUB_SLOTS.iter().enumerate() {
-            for b in SUB_SLOTS.iter().skip(i + 1) {
-                let (ax, ay) = a.to_pixel(sub_size);
-                let (bx, by) = b.to_pixel(sub_size);
-                let d = ((ax - bx).powi(2) + (ay - by).powi(2)).sqrt();
-                assert!(
-                    d + 1e-6 >= min_dist,
-                    "sub-slots {:?} and {:?} overlap (d={}, min={})",
-                    a,
-                    b,
-                    d,
-                    min_dist,
-                );
-            }
+    fn sub_triangle_count_is_six_with_indices_zero_to_five() {
+        assert_eq!(SubTriangle::COUNT, 6);
+        for i in 0..SubTriangle::COUNT {
+            let t = SubTriangle::new(i as u8);
+            assert_eq!(t.index(), i as u8);
+            assert_eq!(t.base_direction(), i);
         }
+    }
+
+    #[test]
+    fn sub_triangle_serializes_as_bare_index() {
+        let json = serde_json::to_value(SubTriangle::new(3)).unwrap();
+        assert_eq!(json, serde_json::json!(3));
+        let back: SubTriangle = serde_json::from_value(serde_json::json!(3)).unwrap();
+        assert_eq!(back, SubTriangle::new(3));
     }
 }

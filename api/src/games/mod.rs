@@ -5,7 +5,7 @@ pub(crate) mod persist;
 
 use crate::characters::CHARACTERS_ROUTER;
 use crate::{AppError, AppState};
-use areas::preset::SubHex;
+use areas::preset::SubTile;
 use areas::{Area, AreaDetails};
 use axum::Router;
 use axum::routing::{get, post, put};
@@ -99,7 +99,7 @@ pub struct GameAreaEdge {
 async fn create_game_area(
     area: Area,
     display_name: &str,
-    sub_hexes: &[SubHex],
+    sub_tiles: &[SubTile],
     db: &Surreal<Any>,
 ) -> Result<GameArea, AppError> {
     let identifier = Uuid::new_v4().to_string();
@@ -117,11 +117,11 @@ async fn create_game_area(
         .map_err(|e| AppError::InternalServerError(format!("Failed to encode area: {}", e)))?;
     // Sub-hex atmosphere rides the area record directly (GameArea has no
     // field for it); AreaDetails hydrates it on read via serde default.
-    if !sub_hexes.is_empty() {
-        let value = serde_json::to_value(sub_hexes).map_err(|e| {
-            AppError::InternalServerError(format!("Failed to encode sub-hexes: {}", e))
+    if !sub_tiles.is_empty() {
+        let value = serde_json::to_value(sub_tiles).map_err(|e| {
+            AppError::InternalServerError(format!("Failed to encode sub-tiles: {}", e))
         })?;
-        body["sub_hexes"] = value;
+        body["sub_tiles"] = value;
     }
     db.query("UPSERT $rid CONTENT $body")
         .bind(("rid", area_id.clone()))
@@ -135,7 +135,7 @@ async fn create_game_area(
 async fn create_game_area_edge(
     area: Area,
     display_name: &str,
-    sub_hexes: &[SubHex],
+    sub_tiles: &[SubTile],
     game_identifier: Uuid,
     db: &Surreal<Any>,
 ) -> Result<GameAreaEdge, AppError> {
@@ -163,7 +163,7 @@ async fn create_game_area_edge(
         Uuid::from_str(&identifier.to_string())
             .map_err(|e| AppError::BadRequest(format!("Invalid area UUID: {}", e)))?
     } else {
-        match create_game_area(area, display_name, sub_hexes, db).await {
+        match create_game_area(area, display_name, sub_tiles, db).await {
             Ok(game_area) => Uuid::from_str(game_area.identifier.as_str())
                 .map_err(|e| AppError::BadRequest(format!("Invalid game area UUID: {}", e)))?,
             Err(_) => {
@@ -197,13 +197,13 @@ pub async fn create_area(
     game_identifier: &str,
     area: Area,
     display_name: String,
-    sub_hexes: Vec<SubHex>,
+    sub_tiles: Vec<SubTile>,
     num_items: u32,
     db: &Surreal<Any>,
 ) -> Result<(), AppError> {
     let game_uuid = Uuid::from_str(game_identifier)
         .map_err(|e| AppError::BadRequest(format!("Invalid game UUID: {}", e)))?;
-    let game_area = create_game_area_edge(area, display_name.as_str(), &sub_hexes, game_uuid, db)
+    let game_area = create_game_area_edge(area, display_name.as_str(), &sub_tiles, game_uuid, db)
         .await
         .map_err(|e| {
             let detail = match &e {
