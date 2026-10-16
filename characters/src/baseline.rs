@@ -53,7 +53,7 @@ pub struct AttributeDelta {
 ///
 /// Not captured: identity, name, team, clan, avatar, `brain` (re-derived
 /// from traits), `ever_addicted_to` (deliberate cross-game carry, see its
-/// field docs), and everything per-game (wounds, items, allies, …).
+/// field docs), and everything per-game (wounds, items, allies, ...).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GameBaseline {
     pub attributes: Attributes,
@@ -94,7 +94,6 @@ impl GameBaseline {
         let now = &character.attributes;
         let base = &self.attributes;
         character.attributes = Attributes {
-            movement: base.movement.max(now.movement),
             strength: base.strength.max(now.strength),
             toughness: base.toughness.max(now.toughness),
             bravery: base.bravery.max(now.bravery),
@@ -162,7 +161,7 @@ mod tests {
     fn clean_goblin(name: &str) -> Character {
         let mut c = Character::new(name.to_string(), None, None);
         c.traits.clear();
-        c.attributes.movement = 36;
+        c.attributes.speed = 36;
         c.attributes.luck = 50;
         c
     }
@@ -202,14 +201,14 @@ mod tests {
 
         c.attributes.luck = baseline.attributes.luck + 1; // revival +1 luck
         c.attributes.strength = baseline.attributes.strength.saturating_sub(20); // wound debuff
-        c.attributes.movement = 0; // floor case
+        c.attributes.speed = 0; // floor case
 
         let mut restored = c.clone();
         baseline.settle_into(&mut restored);
 
         assert_eq!(restored.attributes.luck, baseline.attributes.luck + 1);
         assert_eq!(restored.attributes.strength, baseline.attributes.strength);
-        assert_eq!(restored.attributes.movement, baseline.attributes.movement);
+        assert_eq!(restored.attributes.speed, baseline.attributes.speed);
     }
 
     #[test]

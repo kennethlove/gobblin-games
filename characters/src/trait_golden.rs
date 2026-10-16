@@ -24,7 +24,6 @@ use rand::rngs::StdRng;
 /// golden is byte-stable (attributes feed the outmatched-flee check).
 fn fixture(name: &str) -> crate::Character {
     let mut c = crate::Character::new(name.to_string(), None, None);
-    c.attributes.movement = 50;
     c.attributes.strength = 30;
     c.attributes.toughness = 50;
     c.attributes.bravery = 50;
@@ -106,7 +105,7 @@ pub fn captured_lines() -> Vec<String> {
         out.push(format!("geom:{name} -> {}", geometric_mean_affinity(&set)));
     }
 
-    // 4. Derived brain thresholds (traits + ±20% variance, fixed seeds).
+    // 4. Derived brain thresholds (traits + +/-20% variance, fixed seeds).
     for (name, set) in sets() {
         for seed in [0u64, 1, 7] {
             let mut rng = StdRng::seed_from_u64(seed);
@@ -115,7 +114,7 @@ pub fn captured_lines() -> Vec<String> {
         }
     }
 
-    // 5. Combat brain action matrix: states × trait sets.
+    // 5. Combat brain action matrix: states x trait sets.
     let tuning = CombatTuning::default();
     let brain = CombatBrain::new(tuning);
     let states: [(&str, u32, u32); 4] = [
@@ -139,7 +138,7 @@ pub fn captured_lines() -> Vec<String> {
         }
     }
 
-    // 6. Spare/execute verdict matrix: relationships × temperaments.
+    // 6. Spare/execute verdict matrix: relationships x temperaments.
     let relations: [(&str, bool, bool); 4] = [
         ("ally", true, false),
         ("team", false, true),

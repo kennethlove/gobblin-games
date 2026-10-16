@@ -6,7 +6,6 @@ use shared::messages::{CharacterRef, MessagePayload};
 use shared::wounds::{BodyPart, Wound, WoundSeverity, WoundType};
 
 /// Attribute maximums
-const MAX_MOVEMENT: u32 = 100;
 const MAX_STRENGTH: u32 = 50;
 const MAX_BRAVERY: u32 = 100;
 
@@ -14,7 +13,7 @@ const MAX_BRAVERY: u32 = 100;
 const DEFAULT_HEAL: u32 = 5;
 const DEFAULT_MENTAL_HEAL: u32 = 5;
 
-/// `(base + flat) × percent`, floored at 0 (spec §2, §4).
+/// `(base + flat) x percent`, floored at 0 (spec §2, §4).
 ///
 /// Flat modifiers sum under the multiply; percentages accumulate additively
 /// and apply to the flat-adjusted base. Exposed so the formula can be tested
@@ -88,9 +87,11 @@ impl Character {
             .min(MAX_STRENGTH);
     }
 
-    /// Reduces movement which limits travel and is used by AI for retreat decisions.
-    pub(crate) fn reduce_movement(&mut self, amount: u32) {
-        self.attributes.movement = self.attributes.movement.saturating_sub(amount).max(1);
+    /// Drains stamina — the single viability source. Used by afflictions
+    /// (Sick, Frozen, Overheated, BrokenBone) that used to hamper travel by
+    /// reducing the removed movement attribute.
+    pub(crate) fn reduce_stamina(&mut self, amount: u32) {
+        self.stamina = self.stamina.saturating_sub(amount);
     }
 
     /// Reduces intelligence which affects decision-making and hiding.
@@ -107,13 +108,9 @@ impl Character {
             .min(MAX_BRAVERY);
     }
 
-    /// Increases movement which allows more travel
-    pub(crate) fn increase_movement(&mut self, amount: u32) {
-        self.attributes.movement = self
-            .attributes
-            .movement
-            .saturating_add(amount)
-            .min(MAX_MOVEMENT);
+    /// Restores stamina (consumables: trail mix, go-juice).
+    pub(crate) fn restore_stamina(&mut self, amount: u32) {
+        self.stamina = (self.stamina + amount).min(self.max_stamina);
     }
 
     /// Restores health (heals in old 0-100 scale, converted to blood 0-1000).
@@ -148,12 +145,12 @@ impl Character {
         });
     }
 
-    /// Restores movement.
-    pub(crate) fn short_rests(&mut self) {
-        self.attributes.movement = MAX_MOVEMENT;
-    }
+    /// No-op since movement went away: short rest no longer has a pool to
+    /// refill. Stamina recovery happens per-phase in `recover_stamina`.
+    /// Kept because the travel-failure refund path in `act_move` calls it.
+    pub(crate) fn short_rests(&mut self) {}
 
-    /// Restores movement, some health, and some sanity
+    /// Restores some health and sanity
     pub(crate) fn long_rests(&mut self) {
         self.short_rests();
         self.heals(DEFAULT_HEAL);
@@ -263,7 +260,7 @@ impl Character {
         (flat, percent)
     }
 
-    /// `(base + flat) × percent`, floored at 0 (spec §2, §4). The one path
+    /// `(base + flat) x percent`, floored at 0 (spec §2, §4). The one path
     /// every mechanic reads attributes through, so a permanent limp and a
     /// fresh sprain are indistinguishable to a consumer.
     pub fn effective_attribute(&self, attr: CharacterAttribute) -> u32 {
@@ -277,11 +274,6 @@ impl Character {
         self.effective_attribute(CharacterAttribute::Strength) as i32
     }
 
-    /// Effective movement: wound penalties plus trait modifiers.
-    pub fn effective_movement(&self) -> i32 {
-        self.effective_attribute(CharacterAttribute::Movement) as i32
-    }
-
     /// Effective toughness: wound penalties plus trait modifiers.
     pub fn effective_toughness(&self) -> i32 {
         self.effective_attribute(CharacterAttribute::Toughness) as i32
@@ -290,6 +282,16 @@ impl Character {
     /// Effective health derived from blood pool. Normalizes 0-1000 blood to 0-100 scale.
     pub fn effective_health(&self) -> u32 {
         (self.blood / 10).min(100)
+    }
+
+    /// Current stamina as a 0-100 percentage of the pool. Brains read this
+    /// wherever they used to read the (removed) Movement attribute — the
+    /// homebody `low_movement` thresholds compare on this same 0-100 scale.
+    /// A zero-sized pool counts as 0%.
+    pub fn stamina_percent(&self) -> u32 {
+        (self.stamina * 100)
+            .checked_div(self.max_stamina)
+            .unwrap_or(0)
     }
 
     /// Effective bravery: wound penalties plus trait modifiers.
@@ -304,7 +306,7 @@ impl Character {
     }
 
     /// Effective sanity derived from active mental conditions.
-    /// No conditions → full sanity (100). Each condition drains by its severity.
+    /// No conditions -> full sanity (100). Each condition drains by its severity.
     pub fn effective_sanity(&self) -> u32 {
         if self.mental_conditions.is_empty() {
             100
@@ -367,25 +369,27 @@ mod tests {
     }
 
     #[rstest]
-    fn short_rests(mut character: Character) {
-        character.attributes.movement = 0;
+    fn short_rests_noop(mut character: Character) {
+        // Movement pool is gone; short rest must not touch stamina or health.
+        character.stamina = 37;
+        character.blood = 500;
         character.short_rests();
-        assert_eq!(character.attributes.movement, 100);
+        assert_eq!(character.stamina, 37);
+        assert_eq!(character.effective_health(), 50);
     }
 
     #[rstest]
     fn long_rests(mut character: Character) {
-        character.attributes.movement = 0;
+        character.stamina = 0;
         character.blood = 500;
         character.long_rests();
-        assert_eq!(character.attributes.movement, 100);
         assert_eq!(character.effective_health(), 55);
     }
 
     #[rstest]
     fn misses_home(mut character: Character) {
         character.attributes.bravery = 20;
-        // With bravery 20, loneliness = 0.2, rounds to 0 < 0.25 → pushes condition
+        // With bravery 20, loneliness = 0.2, rounds to 0 < 0.25 -> pushes condition
         assert!(character.mental_conditions.is_empty());
         character.misses_home();
         assert!(!character.mental_conditions.is_empty());
@@ -395,10 +399,10 @@ mod tests {
 
     #[test]
     fn modifiers_apply_as_base_plus_flat_times_percent() {
-        // (36 + 10) × 1.0 = 46, then × 0.75 = 34.5 → 35 (round)
+        // (36 + 10) x 1.0 = 46, then x 0.75 = 34.5 -> 35 (round)
         assert_eq!(apply_attribute_modifiers(36, 10, -25.0), 35);
         // Percent applies to the flat-adjusted base, not the raw base:
-        // 36 × 0.75 = 27 would be wrong if flat were applied after.
+        // 36 x 0.75 = 27 would be wrong if flat were applied after.
         assert_eq!(apply_attribute_modifiers(36, 12, -25.0), 36);
     }
 
@@ -411,7 +415,7 @@ mod tests {
 
     #[test]
     fn percents_and_flats_accumulate_across_sources() {
-        // Two sources of −25% plus a flat −10 on base 100 → (90) × 0.5 = 45.
+        // Two sources of -25% plus a flat -10 on base 100 -> (90) x 0.5 = 45.
         assert_eq!(apply_attribute_modifiers(100, -10, -50.0), 45);
     }
 
@@ -426,7 +430,7 @@ mod tests {
             WoundSeverity::Critical,
             BodyPart::LeftArm,
         ));
-        // Critical −20% on a limb (×1.0) → 50 × 0.8 = 40.
+        // Critical -20% on a limb (x1.0) -> 50 x 0.8 = 40.
         assert_eq!(c.effective_strength(), 40);
         assert_eq!(
             c.effective_strength() as u32,
@@ -472,7 +476,7 @@ mod tests {
                 BodyPart::LeftArm,
             ));
         }
-        // 6 × −20% = −120% → floored at 0, never negative.
+        // 6 x -20% = -120% -> floored at 0, never negative.
         assert_eq!(c.effective_strength(), 0);
         assert_eq!(c.effective_attribute(CharacterAttribute::Strength), 0);
     }

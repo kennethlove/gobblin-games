@@ -2,11 +2,12 @@
 //!
 //! This module handles character movement between areas including:
 //! - Travel mechanics and validation
-//! - Movement restrictions based on attributes
 //! - Area selection logic
+//!
+//! Viability is not gated here: stamina (the pre-gate in the action
+//! dispatch and `act_move`'s check) decides whether a move happens.
 
 use crate::Character;
-use crate::traits::CharacterAttribute;
 use areas::Area;
 use rand::prelude::*;
 use rand::rngs::SmallRng;
@@ -22,10 +23,10 @@ pub enum TravelResult {
 
 impl Character {
     /// Moves a character to a new area.
-    /// If the character has no movement, they cannot move.
     /// If the character is already in the suggested area, they stay put.
-    /// If the character has low movement, they can only move to the suggested area or stay put.
-    /// If the character has high movement, they can move to any open neighbor or the suggested area.
+    /// Otherwise they travel to the suggested area, or wander to a random
+    /// open neighbor. Affordability is enforced downstream by the action
+    /// dispatch's stamina pre-gate and `act_move`'s stamina check.
     pub(crate) fn travels(
         &self,
         closed_areas: &[Area],
@@ -48,23 +49,7 @@ impl Character {
             }
         };
 
-        // 1. Can the character move at all?
-        if self.effective_attribute(CharacterAttribute::Movement) == 0 {
-            let current_area_name = self.location.area.to_string();
-            let line =
-                GameOutput::CharacterTravelTooTired(self.name.as_str(), current_area_name.as_str())
-                    .to_string();
-            events.push(TaggedEvent::new(
-                line,
-                MessagePayload::CharacterHidden {
-                    character: character_ref(),
-                    area: area_ref(current_area),
-                },
-            ));
-            return TravelResult::Failure;
-        }
-
-        // 2. Determine the target area based on suggestion and validity.
+        // 1. Determine the target area based on suggestion and validity.
         let mut target_area: Option<Area> = None;
         if let Some(suggestion) = suggested_area
             && !closed_areas.contains(&suggestion)
@@ -88,112 +73,71 @@ impl Character {
             target_area = Some(suggestion);
         }
 
-        // 3. Handle movement based on character's movement attribute.
-        match self.effective_attribute(CharacterAttribute::Movement) {
-            // Low movement: can only move to suggested_area if it's valid and set.
-            1..=10 => {
-                if let Some(new_area) = target_area {
-                    let current_area_name = current_area.to_string();
-                    let new_area_name = new_area.to_string();
-                    let line = GameOutput::CharacterTravel(
-                        self.name.as_str(),
-                        current_area_name.as_str(),
-                        new_area_name.as_str(),
-                    )
-                    .to_string();
-                    events.push(TaggedEvent::new(
-                        line,
-                        MessagePayload::CharacterMoved {
-                            character: character_ref(),
-                            from: area_ref(current_area),
-                            to: area_ref(new_area),
-                        },
-                    ));
-                    TravelResult::Success(new_area)
-                } else {
-                    let current_area_name = current_area.to_string();
-                    let line = GameOutput::CharacterTravelTooTired(
-                        self.name.as_str(),
-                        current_area_name.as_str(),
-                    )
-                    .to_string();
-                    events.push(TaggedEvent::new(
-                        line,
-                        MessagePayload::CharacterHidden {
-                            character: character_ref(),
-                            area: area_ref(current_area),
-                        },
-                    ));
-                    TravelResult::Failure
-                }
-            }
-            // High movement: can move to any open neighbor or the suggested area.
-            _ => {
-                if let Some(new_area) = target_area {
-                    let current_area_name = current_area.to_string();
-                    let new_area_name = new_area.to_string();
-                    let line = GameOutput::CharacterTravel(
-                        self.name.as_str(),
-                        current_area_name.as_str(),
-                        new_area_name.as_str(),
-                    )
-                    .to_string();
-                    events.push(TaggedEvent::new(
-                        line,
-                        MessagePayload::CharacterMoved {
-                            character: character_ref(),
-                            from: area_ref(current_area),
-                            to: area_ref(new_area),
-                        },
-                    ));
-                    return TravelResult::Success(new_area);
-                }
-
-                let neighbors = current_area.neighbors();
-                let available_neighbors: Vec<Area> = neighbors
-                    .into_iter()
-                    .filter(|area| area != &current_area && !closed_areas.contains(area))
-                    .collect();
-
-                if available_neighbors.is_empty() {
-                    let current_area_name = current_area.to_string();
-                    let line = GameOutput::CharacterTravelNoOptions(
-                        self.name.as_str(),
-                        current_area_name.as_str(),
-                    )
-                    .to_string();
-                    events.push(TaggedEvent::new(
-                        line,
-                        MessagePayload::CharacterHidden {
-                            character: character_ref(),
-                            area: area_ref(current_area),
-                        },
-                    ));
-                    return TravelResult::Success(current_area);
-                }
-
-                // TODO: Loyalty bit goes here
-
-                let chosen_neighbor = available_neighbors.choose(&mut rng).unwrap();
-                let current_area_name = current_area.to_string();
-                let chosen_area_name = chosen_neighbor.to_string();
-                let line = GameOutput::CharacterTravel(
-                    self.name.as_str(),
-                    current_area_name.as_str(),
-                    chosen_area_name.as_str(),
-                )
-                .to_string();
-                events.push(TaggedEvent::new(
-                    line,
-                    MessagePayload::CharacterMoved {
-                        character: character_ref(),
-                        from: area_ref(current_area),
-                        to: area_ref(*chosen_neighbor),
-                    },
-                ));
-                TravelResult::Success(*chosen_neighbor)
-            }
+        // 2. Travel to the suggested area, or wander to a random open
+        // neighbor.
+        if let Some(new_area) = target_area {
+            let current_area_name = current_area.to_string();
+            let new_area_name = new_area.to_string();
+            let line = GameOutput::CharacterTravel(
+                self.name.as_str(),
+                current_area_name.as_str(),
+                new_area_name.as_str(),
+            )
+            .to_string();
+            events.push(TaggedEvent::new(
+                line,
+                MessagePayload::CharacterMoved {
+                    character: character_ref(),
+                    from: area_ref(current_area),
+                    to: area_ref(new_area),
+                },
+            ));
+            return TravelResult::Success(new_area);
         }
+
+        let neighbors = current_area.neighbors();
+        let available_neighbors: Vec<Area> = neighbors
+            .into_iter()
+            .filter(|area| area != &current_area && !closed_areas.contains(area))
+            .collect();
+
+        if available_neighbors.is_empty() {
+            let current_area_name = current_area.to_string();
+            let line = GameOutput::CharacterTravelNoOptions(
+                self.name.as_str(),
+                current_area_name.as_str(),
+            )
+            .to_string();
+            events.push(TaggedEvent::new(
+                line,
+                MessagePayload::CharacterHidden {
+                    character: character_ref(),
+                    area: area_ref(current_area),
+                },
+            ));
+            return TravelResult::Success(current_area);
+        }
+
+        // TODO: Loyalty bit goes here
+
+        let chosen_neighbor = available_neighbors.choose(&mut rng).unwrap();
+        let current_area_name = current_area.to_string();
+        let chosen_area_name = chosen_neighbor.to_string();
+        let line = GameOutput::CharacterTravel(
+            self.name.as_str(),
+            current_area_name.as_str(),
+            chosen_area_name.as_str(),
+        )
+        .to_string();
+        events.push(TaggedEvent::new(
+            line,
+            MessagePayload::CharacterMoved {
+                character: character_ref(),
+                from: area_ref(current_area),
+                to: area_ref(*chosen_neighbor),
+            },
+        ));
+        TravelResult::Success(*chosen_neighbor)
     }
 }
 
@@ -224,10 +168,12 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn travels_fail_no_movement(mut character: Character) {
-        character.attributes.movement = 0;
+    async fn travels_zero_stamina_still_travels(mut character: Character) {
+        // Movement gates are gone: even an exhausted character may walk.
+        // Affordability is enforced by act_move/stamina, not travels().
+        character.stamina = 0;
         let result = character.travels(&[], None, &mut Vec::new());
-        assert_eq!(result, TravelResult::Failure);
+        assert!(matches!(result, TravelResult::Success(_)), "{result:?}");
     }
 
     #[rstest]
@@ -244,29 +190,25 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn travels_fail_low_movement_no_suggestion(mut character: Character) {
-        character.attributes.movement = 5;
-        let result = character.travels(&[Hub, Sector2, Sector5, Sector1], None, &mut Vec::new());
-        assert_eq!(result, TravelResult::Failure);
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn travels_fail_low_movement_suggestion(mut character: Character) {
-        character.attributes.movement = 5;
+    async fn travels_closed_suggestion_falls_back_to_wander(mut character: Character) {
+        // A closed suggested area is rejected; the character wanders to an
+        // open neighbor instead of failing (closed areas still respected).
+        character.location.area = Hub;
         let result = character.travels(
             &[Hub, Sector2, Sector5, Sector1],
             Some(Sector1),
             &mut Vec::new(),
         );
-        assert_eq!(result, TravelResult::Failure);
+        assert!(
+            matches!(result, TravelResult::Success(a) if a != Sector1 && !matches!(a, Hub | Sector2 | Sector5)),
+            "{result:?}"
+        );
     }
 
     #[rstest]
     #[tokio::test]
-    async fn travels_success_low_movement_suggestion(mut character: Character) {
+    async fn travels_success_with_suggestion(mut character: Character) {
         character.location.area = Sector1;
-        character.attributes.movement = 5;
         let open_area = AreaDetails::new(Some("Forest".to_string()), Hub);
         let result = character.travels(&[Sector2, Sector4], Some(Hub), &mut Vec::new());
         assert_eq!(result, TravelResult::Success(open_area.area.unwrap()));

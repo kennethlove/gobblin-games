@@ -19,13 +19,13 @@ use world::output::GameOutput;
 /// Status effect damage constants
 const WOUNDED_DAMAGE: u32 = 1;
 const SICK_STRENGTH_REDUCTION: u32 = 1;
-const SICK_MOVEMENT_REDUCTION: u32 = 1;
+const SICK_STAMINA_DRAIN: u32 = 1;
 const ELECTROCUTED_DAMAGE: u32 = 20;
-const FROZEN_MOVEMENT_REDUCTION: u32 = 1;
-const OVERHEATED_MOVEMENT_REDUCTION: u32 = 1;
+const FROZEN_STAMINA_DRAIN: u32 = 1;
+const OVERHEATED_STAMINA_DRAIN: u32 = 1;
 const DEHYDRATED_STRENGTH_REDUCTION: u32 = 1;
 const STARVING_STRENGTH_REDUCTION: u32 = 1;
-const BROKEN_BONE_LEG_MOVEMENT_REDUCTION: u32 = 10;
+const BROKEN_BONE_LEG_STAMINA_DRAIN: u32 = 10;
 const BROKEN_BONE_ARM_STRENGTH_REDUCTION: u32 = 5;
 const BROKEN_BONE_SKULL_INTELLIGENCE_REDUCTION: u32 = 5;
 const BROKEN_BONE_RIB_DAMAGE: u32 = 5;
@@ -181,16 +181,16 @@ impl Character {
                 }
                 AfflictionKind::Sick => {
                     self.reduce_strength(SICK_STRENGTH_REDUCTION);
-                    self.reduce_movement(SICK_MOVEMENT_REDUCTION);
+                    self.reduce_stamina(SICK_STAMINA_DRAIN);
                 }
                 AfflictionKind::Electrocuted => {
                     self.blood = self.blood.saturating_sub(ELECTROCUTED_DAMAGE * 10);
                 }
                 AfflictionKind::Frozen => {
-                    self.reduce_movement(FROZEN_MOVEMENT_REDUCTION);
+                    self.reduce_stamina(FROZEN_STAMINA_DRAIN);
                 }
                 AfflictionKind::Overheated => {
-                    self.reduce_movement(OVERHEATED_MOVEMENT_REDUCTION);
+                    self.reduce_stamina(OVERHEATED_STAMINA_DRAIN);
                 }
                 AfflictionKind::Dehydrated => {
                     self.reduce_strength(DEHYDRATED_STRENGTH_REDUCTION);
@@ -208,7 +208,7 @@ impl Character {
                 AfflictionKind::BrokenBone => {
                     let bone = rng.random_range(0..4);
                     match bone {
-                        0 => self.reduce_movement(BROKEN_BONE_LEG_MOVEMENT_REDUCTION),
+                        0 => self.reduce_stamina(BROKEN_BONE_LEG_STAMINA_DRAIN),
                         1 => self.reduce_strength(BROKEN_BONE_ARM_STRENGTH_REDUCTION),
                         2 => self.reduce_intelligence(BROKEN_BONE_SKULL_INTELLIGENCE_REDUCTION),
                         _ => self.blood = self.blood.saturating_sub(BROKEN_BONE_RIB_DAMAGE * 10),

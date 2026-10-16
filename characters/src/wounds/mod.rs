@@ -20,10 +20,10 @@ pub const REST_BLOOD_RESTORE: u32 = 20;
 
 /// --- Stat penalties per wound severity ---
 /// Wound penalties are **percentage-based** (spec §2/§10.1: wounds share the
-/// `(base + flat) × percent` formula with trait effects, so no consumer
+/// `(base + flat) x percent` formula with trait effects, so no consumer
 /// special-cases them). Each percentage is the old flat penalty expressed
 /// against the attribute's reference maximum (strength/defense 50,
-/// movement/bravery 100): a character at reference max takes exactly the
+/// bravery 100): a character at reference max takes exactly the
 /// old absolute hit, weaker characters take proportionally less.
 ///
 /// Penalty to effective strength per wound severity tier.
@@ -33,16 +33,6 @@ pub fn strength_penalty_percent(severity: WoundSeverity) -> f64 {
         WoundSeverity::Moderate => -6.0,  // was -3 of 50
         WoundSeverity::Severe => -12.0,   // was -6 of 50
         WoundSeverity::Critical => -20.0, // was -10 of 50
-    }
-}
-
-/// Penalty to effective movement per wound severity tier.
-pub fn movement_penalty_percent(severity: WoundSeverity) -> f64 {
-    match severity {
-        WoundSeverity::Minor => -1.0,     // was -1 of 100
-        WoundSeverity::Moderate => -2.0,  // was -2 of 100
-        WoundSeverity::Severe => -5.0,    // was -5 of 100
-        WoundSeverity::Critical => -10.0, // was -10 of 100
     }
 }
 
@@ -67,7 +57,7 @@ pub fn bravery_penalty_percent(severity: WoundSeverity) -> f64 {
 }
 
 /// Penalty to effective perception per wound severity tier (reference max
-/// 100, shaped like the movement table — modest early, steep at Critical).
+/// 100, modest early, steep at Critical).
 /// Head wounds amplify this further via the body-part multiplier.
 pub fn perception_penalty_percent(severity: WoundSeverity) -> f64 {
     match severity {
@@ -89,7 +79,6 @@ pub fn attr_mod_percent(
     use crate::traits::CharacterAttribute as A;
     let base = match attr {
         A::Strength => strength_penalty_percent(severity),
-        A::Movement => movement_penalty_percent(severity),
         A::Toughness => toughness_penalty_percent(severity),
         A::Bravery => bravery_penalty_percent(severity),
         A::Perception => perception_penalty_percent(severity),
@@ -147,11 +136,6 @@ mod tests {
         let arm = body_part_penalty_multiplier(BodyPart::LeftArm);
         assert!(head > torso);
         assert!(torso >= arm);
-    }
-
-    #[test]
-    fn minor_movement_penalty() {
-        assert_eq!(movement_penalty_percent(WoundSeverity::Minor), -1.0);
     }
 
     #[test]
@@ -255,11 +239,9 @@ mod tests {
     fn percent_tables_match_old_flat_penalties_at_reference_max() {
         use crate::traits::CharacterAttribute as A;
         // (attr, reference max, old flat penalty per severity)
-        let cases: [(A, u32, [f64; 4]); 4] = [
+        let cases: [(A, u32, [f64; 4]); 3] = [
             // strength: -1/-3/-6/-10 on 50
             (A::Strength, 50, [-1.0, -3.0, -6.0, -10.0]),
-            // movement: -1/-2/-5/-10 on 100
-            (A::Movement, 100, [-1.0, -2.0, -5.0, -10.0]),
             // defense: 0/-1/-3/-5 on 50
             (A::Toughness, 50, [0.0, -1.0, -3.0, -5.0]),
             // bravery: 0/-1/-3/-5 on 100
@@ -280,7 +262,6 @@ mod tests {
                 c.traits.clear();
                 match attr {
                     A::Strength => c.attributes.strength = reference,
-                    A::Movement => c.attributes.movement = reference,
                     A::Toughness => c.attributes.toughness = reference,
                     A::Bravery => c.attributes.bravery = reference,
                     // No wound model; skipped here.

@@ -47,7 +47,7 @@ impl Brain {
     fn decide_action_few_enemies_low_health_with_terrain(&self, t: &Character, concealed: bool) -> Action {
         let lm = self.thresholds.low_movement; let ms = self.thresholds.mid_sanity; let es = self.thresholds.extreme_low_sanity;
         let s = (
-            t.effective_attribute(CharacterAttribute::Movement),
+            t.stamina_percent(),
             t.effective_sanity(),
             t.attributes.is_hidden,
         );
@@ -81,7 +81,7 @@ impl Brain {
                 if t.effective_sanity() > ls && t.is_visible() { Action::Hide } else { Action::Move(None) }
             }
             _ => {
-                if t.effective_attribute(CharacterAttribute::Movement) == 0 {
+                if t.stamina == 0 {
                     Action::Rest
                 } else {
                     Action::Move(None)
@@ -104,7 +104,7 @@ impl Brain {
     fn decide_action_few_enemies_low_health(&self, t: &Character) -> Action {
         let lm = self.thresholds.low_movement; let ms = self.thresholds.mid_sanity; let es = self.thresholds.extreme_low_sanity;
         let s = (
-            t.effective_attribute(CharacterAttribute::Movement),
+            t.stamina_percent(),
             t.effective_sanity(),
             t.attributes.is_hidden,
         );
