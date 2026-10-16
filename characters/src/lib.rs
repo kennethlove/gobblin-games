@@ -931,9 +931,10 @@ impl Character {
                 .set_preferred_action(suggestion.action, suggestion.probability.unwrap_or(1.0));
         }
 
-        // Get character action
+        // Get the primary action (owner decision C): should_sleep's
+        // Sleep flows as the primary when it fires.
         let number_of_nearby_characters = encounter_context.nearby_characters_count;
-        let action = if let Some(sleep_action) = self.brain.should_sleep(
+        let primary = if let Some(sleep_action) = self.brain.should_sleep(
             self,
             number_of_nearby_characters,
             environment_details.phase,
@@ -954,140 +955,166 @@ impl Character {
             )
         };
 
-        // Pre-gate Move on affordability — mirror of attack's stamina
-        // pre-gate (brains/scoring.rs): a goblin that cannot pay the
-        // cheapest available hop Rests instead of burning the turn on
-        // an exhausted travel. Every destination prices at its own
-        // terrain (hop_stamina_cost / DestinationInfo share the same
-        // calculate_stamina_cost formula), so the cheapest option is
-        // the min across neighbors plus the goblin's own area.
-        let action = match action {
-            Action::Move(dest) => {
-                let current_hop =
-                    self.hop_stamina_cost(self.location.area, environment_details.all_areas);
-                let cheapest = environment_details
-                    .available_destinations
-                    .iter()
-                    .map(|d| d.stamina_cost)
-                    .chain(std::iter::once(current_hop))
-                    .min();
-                if cheapest.is_some_and(|price| self.stamina >= price) {
-                    Action::Move(dest)
-                } else {
-                    Action::Rest
-                }
-            }
-            other => other,
-        };
+        // Two beats per phase (owner decision C): the brain sequences
+        // the primary into move/move, move/action, action/move, or
+        // action/action.
+        let beats = self.brain.sequence(
+            primary,
+            self,
+            &environment_details.available_destinations,
+            environment_details.all_areas,
+            environment_details.closed_areas,
+            environment_details.enemy_density,
+        );
 
         let closed_areas = environment_details.closed_areas;
 
-        match action {
-            Action::Move(destination) => {
-                self.act_move(
-                    &destination,
-                    closed_areas,
-                    environment_details.all_areas,
-                    events,
-                );
-            }
-            Action::Rest => {
-                self.act_rest(events);
-            }
-            Action::Hide => {
-                self.act_hide(events);
-            }
-            Action::Attack => {
-                self.act_attack(
-                    encounter_context.potential_targets,
-                    encounter_context.total_living_characters,
-                    events,
-                    rng,
-                    environment_details.phase,
-                    environment_details.combat_tuning,
-                );
-            }
-            Action::TakeItem => {
-                self.act_take_item(
-                    area_details,
-                    &environment_details.sleeping_nearby,
-                    rng,
-                    events,
-                );
-            }
-            Action::UseItem(maybe_item) => {
-                self.act_use_item(&maybe_item, events);
-            }
-            Action::None => {}
-            Action::ProposeAlliance => {
-                self.act_propose_alliance(&encounter_context, rng, events);
-            }
-            Action::SeekShelter => {
-                self.act_seek_shelter(
-                    area_details,
-                    environment_details.current_day,
-                    environment_details.is_day,
-                    rng,
-                    events,
-                );
-            }
-            Action::Forage => {
-                self.act_forage(area_details, rng, events);
-            }
-            // Drinking/eating executors are deferred; these stay no-ops.
-            Action::DrinkFromTerrain | Action::Eat(_) | Action::DrinkItem(_) => {}
-            Action::Sleep { duration_phases } => {
-                // PR1 Task 9a: roll shelter quality at sleep start (we6l)
-                let terrain = area_details.terrain.base;
-                self.sleep_shelter = Some(crate::incidents::find_shelter(
-                    self.attributes.intelligence,
-                    self.attributes.strength,
-                    terrain,
-                    rng,
-                ));
-                self.act_sleep(duration_phases, environment_details.phase, events);
-            }
-            Action::Frozen | Action::Flashback { .. } | Action::Avoidance => {}
-            Action::SearchForSubstance { substance } => {
-                // Scan inventory for an item matching the craving substance.
-                let matching_item = self
-                    .items
-                    .iter()
-                    .find(|item| item.attribute.substance() == Some(substance))
-                    .cloned();
+        for beat in beats {
+            // Move beat pre-gates (owner decision C): (a) silently
+            // skip a beat whose destination is the goblin's current
+            // cell — no AlreadyThere event, no short-rest fallback,
+            // so standing where it wants keeps the beat's stamina —
+            // and (b) skip the beat when the cheapest available hop
+            // costs more than current stamina (the old dispatch
+            // pre-gate, now per beat; every destination prices at
+            // its own terrain via hop_stamina_cost / DestinationInfo).
+            let beat = match beat {
+                Action::Move(destination) => {
+                    if destination == Some(self.location) {
+                        continue;
+                    }
+                    let current_hop =
+                        self.hop_stamina_cost(self.location.area, environment_details.all_areas);
+                    let cheapest = environment_details
+                        .available_destinations
+                        .iter()
+                        .map(|d| d.stamina_cost)
+                        .chain(std::iter::once(current_hop))
+                        .min();
+                    if cheapest.is_some_and(|price| self.stamina < price) {
+                        continue;
+                    }
+                    Action::Move(destination)
+                }
+                other => other,
+            };
 
-                if let Some(item) = matching_item {
-                    // Found — auto-use it.
-                    self.try_use_consumable(&item, events, None).ok();
-                } else {
-                    // Not found — emit visible craving.
-                    let craving_severity = self
+            // The sleep stop condition reads after the beat executes.
+            let ends_round_asleep = matches!(beat, Action::Sleep { .. });
+
+            match beat {
+                Action::Move(destination) => {
+                    self.act_move(
+                        &destination,
+                        closed_areas,
+                        environment_details.all_areas,
+                        events,
+                    );
+                }
+                Action::Rest => {
+                    self.act_rest(events);
+                }
+                Action::Hide => {
+                    self.act_hide(events);
+                }
+                Action::Attack => {
+                    self.act_attack(
+                        encounter_context.potential_targets.clone(),
+                        encounter_context.total_living_characters,
+                        events,
+                        rng,
+                        environment_details.phase,
+                        environment_details.combat_tuning,
+                    );
+                }
+                Action::TakeItem => {
+                    self.act_take_item(
+                        area_details,
+                        &environment_details.sleeping_nearby,
+                        rng,
+                        events,
+                    );
+                }
+                Action::UseItem(maybe_item) => {
+                    self.act_use_item(&maybe_item, events);
+                }
+                Action::None => {}
+                Action::ProposeAlliance => {
+                    self.act_propose_alliance(&encounter_context, rng, events);
+                }
+                Action::SeekShelter => {
+                    self.act_seek_shelter(
+                        area_details,
+                        environment_details.current_day,
+                        environment_details.is_day,
+                        rng,
+                        events,
+                    );
+                }
+                Action::Forage => {
+                    self.act_forage(area_details, rng, events);
+                }
+                // Drinking/eating executors are deferred; these stay no-ops.
+                Action::DrinkFromTerrain | Action::Eat(_) | Action::DrinkItem(_) => {}
+                Action::Sleep { duration_phases } => {
+                    // PR1 Task 9a: roll shelter quality at sleep start (we6l)
+                    let terrain = area_details.terrain.base;
+                    self.sleep_shelter = Some(crate::incidents::find_shelter(
+                        self.attributes.intelligence,
+                        self.attributes.strength,
+                        terrain,
+                        rng,
+                    ));
+                    self.act_sleep(duration_phases, environment_details.phase, events);
+                }
+                Action::Frozen | Action::Flashback { .. } | Action::Avoidance => {}
+                Action::SearchForSubstance { substance } => {
+                    // Scan inventory for an item matching the craving substance.
+                    let matching_item = self
+                        .items
+                        .iter()
+                        .find(|item| item.attribute.substance() == Some(substance))
+                        .cloned();
+
+                    if let Some(item) = matching_item {
+                        // Found — auto-use it.
+                        self.try_use_consumable(&item, events, None).ok();
+                    } else {
+                        // Not found — emit visible craving.
+                        let craving_severity = self
                         .afflictions
                         .values()
                         .find(|a| matches!(a.kind, AfflictionKind::Addiction(s) if s == substance))
                         .map(|a| a.severity.to_string())
                         .unwrap_or_else(|| "moderate".to_string());
 
-                    let line = format!("{} craves {} but has none", self.name, substance);
-                    events.push(TaggedEvent::new(
-                        line,
-                        MessagePayload::AddictionCraving {
-                            character: self.identifier.to_string(),
-                            substance: substance.to_string(),
-                            severity: craving_severity,
-                        },
-                    ));
+                        let line = format!("{} craves {} but has none", self.name, substance);
+                        events.push(TaggedEvent::new(
+                            line,
+                            MessagePayload::AddictionCraving {
+                                character: self.identifier.to_string(),
+                                substance: substance.to_string(),
+                                severity: craving_severity,
+                            },
+                        ));
+                    }
+                }
+                Action::Rescue { .. } => {}
+                Action::SetTrap {
+                    trap_kind,
+                    severity,
+                } => {
+                    self.act_set_trap(trap_kind, severity, area_details, rng, events);
+                }
+                Action::Search => {
+                    self.act_search(area_details, rng, events);
                 }
             }
-            Action::Rescue { .. } => {}
-            Action::SetTrap {
-                trap_kind,
-                severity,
-            } => {
-                self.act_set_trap(trap_kind, severity, area_details, rng, events);
-            }
-            Action::Search => {
-                self.act_search(area_details, rng, events);
+
+            // Stop the whole round: the beat put the goblin to sleep
+            // (remaining beats skipped) or killed it.
+            if ends_round_asleep || !self.is_alive() {
+                break;
             }
         }
 

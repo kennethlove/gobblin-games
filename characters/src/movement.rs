@@ -4,10 +4,11 @@
 //! (`areas::location`); an area change is a side effect of the hop
 //! (the parent component of the `Location` flips when the hop crosses a
 //! facing-pair door). Per the owner decision in the sub-hex spike §8
-//! Q1, a phase allows at most two sub-hops: the move slot hops once,
-//! and the action slot may hop again. Each hop pays its OWN
-//! destination price (`calculate_stamina_cost` for that area's
-//! terrain); whatever stamina the hops leave stays for later rounds.
+//! Q1 (choice C), a phase runs two beats and every Move beat is
+//! exactly ONE sub-hop: two Move beats are the two sub-hops cap.
+//! Each hop pays its OWN destination price (`calculate_stamina_cost`
+//! for that area's terrain); whatever stamina the hops leave stays for
+//! later rounds.
 //!
 //! No attribute gates live here: stamina decides whether a hop
 //! happens (the action dispatch's stamina pre-gate and the hop
@@ -46,20 +47,19 @@ impl Character {
         crate::calculate_stamina_cost(&Action::Move(None), &terrain, self)
     }
 
-    /// Moves the character up to two sub-hops this phase.
+    /// Moves the character ONE sub-hop this phase (one Move beat).
     ///
-    /// Move slot: one hop toward `suggested_location` — or a random
-    /// open neighbor when `None`. Each hop pays its destination's own
-    /// move cost (see [`Character::hop_stamina_cost`]). Action slot:
-    /// if the goal is not yet reached and stamina covers the next
-    /// hop's price, hop again toward the same goal; otherwise the
-    /// hop is skipped and the stamina stays.
+    /// The hop goes toward `suggested_location` — or to a random open
+    /// neighbor when `None` (wander) — and pays the destination's own
+    /// move cost (see [`Character::hop_stamina_cost`]). Two Move
+    /// beats in one phase are the two sub-hops cap; each beat calls
+    /// this once.
     ///
     /// Cells inside closed areas are never entered: the path avoids
     /// them, and a suggested goal unreachable around a closure
     /// degrades to wandering. The move fails only when no hop is
-    /// possible or stamina cannot pay; the latter emits the
-    /// travel-exhausted event.
+    /// possible or stamina cannot pay the hop's price; the latter
+    /// emits the travel-exhausted event.
     pub(crate) fn travels(
         &mut self,
         closed_areas: &[Area],
@@ -113,8 +113,8 @@ impl Character {
             _ => None,
         };
 
-        // 3. Move slot: first sub-hop, priced by its destination.
-        let Some(hop_one) = self.next_sub_hop(goal, closed_areas, &mut rng) else {
+        // 3. The beat's single sub-hop, priced by its destination.
+        let Some(hop) = self.next_sub_hop(goal, closed_areas, &mut rng) else {
             let current_area_name = current.area.to_string();
             let line = GameOutput::CharacterTravelNoOptions(
                 self.name.as_str(),
@@ -131,8 +131,8 @@ impl Character {
             return TravelResult::Failure;
         };
 
-        let cost_one = self.hop_stamina_cost(hop_one.area, all_areas);
-        if self.stamina < cost_one {
+        let cost = self.hop_stamina_cost(hop.area, all_areas);
+        if self.stamina < cost {
             let current_area_name = current.area.to_string();
             let line = GameOutput::CharacterTravelExhausted(
                 self.name.as_str(),
@@ -148,22 +148,9 @@ impl Character {
             ));
             return TravelResult::Failure;
         }
-        self.location = hop_one;
-        self.stamina = self.stamina.saturating_sub(cost_one);
-        self.emit_sub_hop(current, hop_one, events);
-
-        // 4. Action slot: move again toward the same goal when the
-        // next hop's own price is affordable; otherwise the goblin
-        // keeps its remaining stamina.
-        if let Some(hop_two) = self.next_sub_hop(goal, closed_areas, &mut rng) {
-            let cost_two = self.hop_stamina_cost(hop_two.area, all_areas);
-            if self.stamina >= cost_two {
-                let from = self.location;
-                self.location = hop_two;
-                self.stamina = self.stamina.saturating_sub(cost_two);
-                self.emit_sub_hop(from, hop_two, events);
-            }
-        }
+        self.location = hop;
+        self.stamina = self.stamina.saturating_sub(cost);
+        self.emit_sub_hop(current, hop, events);
 
         TravelResult::Success(self.location)
     }
@@ -261,7 +248,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn travels_wander_takes_two_sub_hops(character: Character) {
+    async fn travels_wander_takes_one_sub_hop_per_beat(character: Character) {
         let mut character = character;
         let mut events = Vec::new();
         let result = character.travels(&[], None, &[], &mut events);
@@ -269,29 +256,57 @@ mod tests {
             matches!(result, TravelResult::Success(_)),
             "wander must succeed: {result:?}"
         );
-        // The random walk may legally end where it started (hop 2
-        // back to hop 0's cell); two committed hops are the proof.
-        assert_eq!(moved_events(&events).len(), 2, "both slots hop");
+        // One Move beat = one wander hop; the random walk may legally
+        // end where it started, so count the committed hops.
+        assert_eq!(moved_events(&events).len(), 1, "one hop per beat");
+        assert_eq!(
+            character.stamina,
+            100 - hop_price(&character),
+            "the hop paid its destination price; the remainder stays"
+        );
+
+        // Second Move beat: one more hop, one more price.
+        let result = character.travels(&[], None, &[], &mut events);
+        assert!(
+            matches!(result, TravelResult::Success(_)),
+            "second wander must succeed: {result:?}"
+        );
+        assert_eq!(moved_events(&events).len(), 2, "the second beat hops too");
         assert_eq!(
             character.stamina,
             100 - 2 * hop_price(&character),
-            "each hop paid its destination price; the remainder stays"
+            "each beat paid its destination price; the remainder stays"
         );
     }
 
     #[rstest]
     #[tokio::test]
-    async fn move_takes_two_sub_hops_pays_each_destination(character: Character) {
+    async fn move_beats_take_one_sub_hop_each_paying_its_destination(character: Character) {
         let mut character = character;
         let mut events = Vec::new();
         // Hub triangle 0 -> Sector 1 triangle 0: the door into
-        // Sector 1 triangle 3, then around the ring — 4 hops.
+        // Sector 1 triangle 3, then around the ring — 4 hops total;
+        // each Move beat commits exactly one of them.
+        let result = character.travels(&[], Some(Location::center(Sector1)), &[], &mut events);
+        assert_eq!(result, TravelResult::Success(at(Sector1, 3)));
+        assert_eq!(
+            character.location,
+            at(Sector1, 3),
+            "beat 1 hops through the door"
+        );
+        assert_eq!(
+            character.stamina,
+            100 - hop_price(&character),
+            "first destination price paid, remainder kept"
+        );
+
+        // Second Move beat toward the same goal: one more hop.
         let result = character.travels(&[], Some(Location::center(Sector1)), &[], &mut events);
         assert_eq!(result, TravelResult::Success(at(Sector1, 2)));
         assert_eq!(
             character.location,
             at(Sector1, 2),
-            "two hops: through the door, one step along the ring"
+            "beat 2 walks one step along the ring"
         );
         assert_eq!(
             character.stamina,
@@ -300,7 +315,7 @@ mod tests {
         );
 
         let moved = moved_events(&events);
-        assert_eq!(moved.len(), 2, "one CharacterMoved per hop");
+        assert_eq!(moved.len(), 2, "one CharacterMoved per beat");
         assert!(
             matches!(
                 moved[0],
@@ -339,16 +354,16 @@ mod tests {
         assert_eq!(
             character.stamina,
             100 - hop_price(&character),
-            "goal reached: only the move slot's hop was paid"
+            "goal reached: only the beat's hop was paid"
         );
         assert_eq!(moved_events(&events).len(), 1);
     }
 
     #[rstest]
     #[tokio::test]
-    async fn second_hop_skipped_when_stamina_runs_out(character: Character) {
+    async fn second_beat_fails_when_stamina_covers_only_one_hop(character: Character) {
         let mut character = character;
-        // Exactly one destination price: hop 1 empties the pool.
+        // Exactly one destination price: beat 1 empties the pool.
         character.stamina = hop_price(&character);
         let result = character.travels(&[], Some(Location::center(Sector1)), &[], &mut Vec::new());
         assert_eq!(result, TravelResult::Success(at(Sector1, 3)));
@@ -356,6 +371,18 @@ mod tests {
             character.stamina, 0,
             "the one affordable hop spent everything"
         );
+
+        // The second beat cannot pay its destination's price: the hop
+        // fails with the travel-exhausted event and the location stays.
+        let mut events = Vec::new();
+        let result = character.travels(&[], Some(Location::center(Sector1)), &[], &mut events);
+        assert_eq!(result, TravelResult::Failure);
+        assert_eq!(character.location, at(Sector1, 3));
+        assert_eq!(character.stamina, 0);
+        let exhausted_line = events
+            .iter()
+            .any(|e| e.content.contains("too exhausted to move"));
+        assert!(exhausted_line, "exhausted event expected: {events:?}");
     }
 
     #[rstest]
@@ -410,18 +437,19 @@ mod tests {
         let mut character = character;
         character.location = Location::center(Sector1);
         let goal = Location::center(Hub);
-        let expected_second_hop = shortest_path(character.location, goal).unwrap()[2];
+        let expected_first_hop = shortest_path(character.location, goal).unwrap()[1];
         let result = character.travels(&[Sector2, Sector4], Some(goal), &[], &mut Vec::new());
-        assert_eq!(result, TravelResult::Success(expected_second_hop));
+        assert_eq!(result, TravelResult::Success(expected_first_hop));
+        assert_eq!(character.location, expected_first_hop);
         assert_eq!(
             character.stamina,
-            100 - 2 * hop_price(&character),
-            "both hops paid their destination price"
+            100 - hop_price(&character),
+            "the single hop paid its destination price"
         );
     }
 
     /// Every other area closed: wander stays inside the open area
-    /// and still spends both slots.
+    /// and spends the beat's one hop.
     #[rstest]
     #[tokio::test]
     async fn travels_stay_in_open_area(character: Character) {
@@ -430,6 +458,6 @@ mod tests {
         let result = character.travels(&closed, None, &[], &mut Vec::new());
         assert_eq!(result, TravelResult::Success(character.location));
         assert_eq!(character.location.area, Hub);
-        assert_eq!(character.stamina, 100 - 2 * hop_price(&character));
+        assert_eq!(character.stamina, 100 - hop_price(&character));
     }
 }
