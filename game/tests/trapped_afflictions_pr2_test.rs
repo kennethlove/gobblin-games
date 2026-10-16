@@ -48,7 +48,7 @@ fn attack_while_trapped_defense_halved() {
     let outcome = attack_contest(&mut attacker, &mut target, &mut rng, &mut events, &tuning);
 
     // The structural property: target's effective defense is halved.
-    // With defense=20 (→10), attacker strength=50, the attacker should
+    // With defense=20 (->10), attacker strength=50, the attacker should
     // almost always win. Check that the result is an attacker win.
     assert!(
         matches!(
@@ -114,12 +114,17 @@ fn rescue_bonus_applied_to_trapped_target() {
 #[test]
 fn trapped_blocked_from_moving() {
     use areas::Area;
+    use areas::location::Location;
     use characters::brains::affliction_override::hard_gates_with_terrain;
 
     let mut character = make_character("Trapped");
     add_buried(&mut character, Severity::Moderate);
 
-    let result = hard_gates_with_terrain(&character, &Action::Move(Some(Area::Sector1)), None);
+    let result = hard_gates_with_terrain(
+        &character,
+        &Action::Move(Some(Location::center(Area::Sector1))),
+        None,
+    );
     assert_eq!(result, Some(Action::None));
 }
 
@@ -146,7 +151,10 @@ fn trapped_override_blocks_move() {
     let mut character = make_character("Trapped");
     add_buried(&mut character, Severity::Moderate);
 
-    let result = affliction_override(&character, &Action::Move(Some(areas::Area::Hub)));
+    let result = affliction_override(
+        &character,
+        &Action::Move(Some(areas::location::Location::center(areas::Area::Hub))),
+    );
     assert_eq!(result, Some(Action::None));
 }
 

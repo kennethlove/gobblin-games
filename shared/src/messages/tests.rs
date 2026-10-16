@@ -34,7 +34,7 @@ fn phase_serde_hour_labels() {
 
 #[test]
 fn phase_ord_and_next_canonical_cycle() {
-    // Cycle position from the day start (06): 06→0 … 04→11.
+    // Cycle position from the day start (06): 06->0 ... 04->11.
     assert_eq!(Phase::DAWN.ord(), 0);
     assert_eq!(Phase::DAY.ord(), 3);
     assert_eq!(Phase::DUSK.ord(), 6);
@@ -210,6 +210,8 @@ fn kind_movement_variants_map_correctly() {
             character: t("a"),
             from: area.clone(),
             to: area.clone(),
+            from_sub: None,
+            to_sub: None,
         }
         .kind(),
         MessageKind::CharacterMoved
@@ -394,7 +396,7 @@ fn summarize_groups_by_day_and_phase() {
     ];
     let result = summarize_periods(&msgs, (2, Phase::DAY));
     // Day 1 runs the full 12-phase cycle; day 2 is in progress up to
-    // the current phase (12, ord 3) → 12 + 4 = 16 periods.
+    // the current phase (12, ord 3) -> 12 + 4 = 16 periods.
     assert_eq!(result.len(), 16);
     assert_eq!(
         result[3],
@@ -641,6 +643,8 @@ fn importance_tiers_match_decision() {
                 character: t("c"),
                 from: area.clone(),
                 to: area.clone(),
+                from_sub: None,
+                to_sub: None,
             },
             ServerLogOnly, // position derivable; from/to goes to server logs
         ),
@@ -1473,6 +1477,8 @@ fn smoke_involves_matches_character_refs_for_all_variants() {
                 character: t("c"),
                 from: area.clone(),
                 to: area.clone(),
+                from_sub: None,
+                to_sub: None,
             },
             vec!["id-c"],
         ),

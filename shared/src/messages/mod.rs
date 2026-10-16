@@ -20,7 +20,7 @@ pub enum MessageSource {
 ///
 /// 12 phases per day (2 h each). The game-day cycle starts at
 /// [`Phase::DAY_START_HOUR`] (06 by default) and runs
-/// `06, 08, …, 22, 00, 02, 04`, so night hours (20–04) sit at the tail
+/// `06, 08, ..., 22, 00, 02, 04`, so night hours (20–04) sit at the tail
 /// of the game day. Ordinal order (`ord()` = position in that cycle)
 /// drives chronological sorting of `GameMessage`s.
 ///
@@ -30,7 +30,7 @@ pub enum MessageSource {
 pub struct Phase(u8);
 
 impl Phase {
-    /// Phases per game day (12 × 2 h slots).
+    /// Phases per game day (12 x 2 h slots).
     pub const PHASES_PER_DAY: u8 = 12;
     /// Default game-day start hour (first phase of every game day).
     pub const DAY_START_HOUR: u8 = 6;
@@ -54,12 +54,12 @@ impl Phase {
     /// Last phase of the game day (04 — followed by the day start).
     pub const DAY_END: Phase = Phase(4);
 
-    /// The hour label of this phase (`00` … `22`).
+    /// The hour label of this phase (`00` ... `22`).
     pub const fn hour(self) -> u8 {
         self.0
     }
 
-    /// Phase for an even hour in `00..=22`; `None` for odd or ≥ 24.
+    /// Phase for an even hour in `00..=22`; `None` for odd or >= 24.
     pub const fn from_hour(hour: u8) -> Option<Phase> {
         if hour < 24 && hour.is_multiple_of(2) {
             Some(Phase(hour))
@@ -69,7 +69,7 @@ impl Phase {
     }
 
     /// Chronological ordinal: position in the game-day cycle starting at
-    /// [`Self::DAY_START_HOUR`] (`06` → 0, …, `04` → 11). Stable across
+    /// [`Self::DAY_START_HOUR`] (`06` -> 0, ..., `04` -> 11). Stable across
     /// the wire format because `summarize_periods` relies on it.
     pub const fn ord(self) -> u8 {
         if self.0 >= Self::DAY_START_HOUR {
@@ -79,7 +79,7 @@ impl Phase {
         }
     }
 
-    /// Next phase in the canonical `06 → 08 → … → 04 → 06` cycle.
+    /// Next phase in the canonical `06 -> 08 -> ... -> 04 -> 06` cycle.
     /// Day-boundary handling lives in the engine driver, not here.
     pub const fn next(self) -> Phase {
         Phase((self.0 + 2) % 24)
@@ -105,7 +105,7 @@ impl Phase {
 
     /// Whether this phase counts as night for the given day boundary
     /// hours. Handles wrap-around (`day_start > nightfall`, the default:
-    /// night runs 20 → 06).
+    /// night runs 20 -> 06).
     pub const fn is_night(self, day_start: u8, nightfall: u8) -> bool {
         if day_start <= nightfall {
             self.0 >= nightfall || self.0 < day_start
@@ -120,7 +120,7 @@ impl Phase {
         self.is_night(Self::DAY_START_HOUR, Self::NIGHTFALL_HOUR)
     }
 
-    /// Two-digit hour label (`"00"` … `"22"`).
+    /// Two-digit hour label (`"00"` ... `"22"`).
     pub fn label(self) -> String {
         format!("{:02}", self.0)
     }
@@ -255,7 +255,7 @@ pub enum StaminaBand {
 
 /// Visible hunger band derived from a character's hunger counter. Lives in
 /// `shared/` because it is wire-visible via
-/// `MessagePayload::HungerBandChanged`. The mapping (counter → band) lives
+/// `MessagePayload::HungerBandChanged`. The mapping (counter -> band) lives
 /// in `characters::survival::hunger_band`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum HungerBand {
@@ -267,7 +267,7 @@ pub enum HungerBand {
 
 /// Visible thirst band derived from a character's thirst counter. Lives in
 /// `shared/` because it is wire-visible via
-/// `MessagePayload::ThirstBandChanged`. The mapping (counter → band) lives
+/// `MessagePayload::ThirstBandChanged`. The mapping (counter -> band) lives
 /// in `characters::survival::thirst_band`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ThirstBand {
@@ -492,6 +492,14 @@ pub enum MessagePayload {
         character: CharacterRef,
         from: AreaRef,
         to: AreaRef,
+        /// Sub-tile slot of `from` (triangle index `0..=6`). `None` on
+        /// messages persisted before sub-tile travel.
+        #[serde(default)]
+        from_sub: Option<u8>,
+        /// Sub-tile slot of `to` (triangle index `0..=6`). `None` on
+        /// messages persisted before sub-tile travel.
+        #[serde(default)]
+        to_sub: Option<u8>,
     },
     CharacterHidden {
         character: CharacterRef,

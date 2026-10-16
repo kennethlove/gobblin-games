@@ -623,6 +623,7 @@ fn brain_act_routes_first_hop_to_non_neighbor_goal(
     mut small_rng: SmallRng,
 ) {
     use areas::Area;
+    use areas::location::Location;
 
     // Place the character in Sector1.
     character.location.area = Area::Sector1;
@@ -667,10 +668,11 @@ fn brain_act_routes_first_hop_to_non_neighbor_goal(
         Action::Move(Some(first_hop)) => {
             // Sector1's clockwise neighbors are Sector2 and Hub.
             // The shortest path to Sector4 goes Sector1 -> Hub
-            // -> Sector4, so the first hop must be Hub.
+            // -> Sector4, so the first hop must be Hub. Brains are
+            // area-level: the destination's center sub-tile stands in.
             assert_eq!(
                 first_hop,
-                Area::Hub,
+                Location::center(Area::Hub),
                 "expected first hop toward Sector4 to be Hub, got {first_hop:?}"
             );
         }

@@ -955,22 +955,23 @@ impl Character {
         };
 
         // Pre-gate Move on affordability — mirror of attack's stamina
-        // pre-gate (brains/scoring.rs): stops goblins burning a turn on
-        // moves they cannot pay for.
+        // pre-gate (brains/scoring.rs): a goblin that cannot pay the
+        // cheapest available hop Rests instead of burning the turn on
+        // an exhausted travel. Every destination prices at its own
+        // terrain (hop_stamina_cost / DestinationInfo share the same
+        // calculate_stamina_cost formula), so the cheapest option is
+        // the min across neighbors plus the goblin's own area.
         let action = match action {
             Action::Move(dest) => {
-                let affordable = match dest {
-                    Some(area) => environment_details
-                        .available_destinations
-                        .iter()
-                        .find(|d| d.area == area)
-                        .is_some_and(|d| self.stamina >= d.stamina_cost),
-                    None => environment_details
-                        .available_destinations
-                        .iter()
-                        .any(|d| self.stamina >= d.stamina_cost),
-                };
-                if affordable {
+                let current_hop =
+                    self.hop_stamina_cost(self.location.area, environment_details.all_areas);
+                let cheapest = environment_details
+                    .available_destinations
+                    .iter()
+                    .map(|d| d.stamina_cost)
+                    .chain(std::iter::once(current_hop))
+                    .min();
+                if cheapest.is_some_and(|price| self.stamina >= price) {
                     Action::Move(dest)
                 } else {
                     Action::Rest
@@ -982,11 +983,11 @@ impl Character {
         let closed_areas = environment_details.closed_areas;
 
         match action {
-            Action::Move(area) => {
+            Action::Move(destination) => {
                 self.act_move(
-                    &area,
+                    &destination,
                     closed_areas,
-                    &environment_details.available_destinations,
+                    environment_details.all_areas,
                     events,
                 );
             }
@@ -1211,60 +1212,16 @@ impl Character {
 
     fn act_move(
         &mut self,
-        area: &Option<Area>,
+        destination: &Option<Location>,
         closed_areas: &[Area],
-        available_destinations: &[areas::DestinationInfo],
+        all_areas: &[AreaDetails],
         events: &mut Vec<TaggedEvent>,
     ) {
-        let character_ref = CharacterRef {
-            identifier: self.identifier.clone().into(),
-            name: self.name.clone(),
-        };
-
-        let travel_result = match area {
-            Some(specific_area) => self.travels(closed_areas, Some(*specific_area), events),
-            None => self.travels(closed_areas, None, events),
-        };
-
-        match travel_result {
-            TravelResult::Success(destination) => {
-                let dest_info = available_destinations
-                    .iter()
-                    .find(|d| d.area == destination);
-
-                match dest_info {
-                    Some(info) => {
-                        if self.stamina >= info.stamina_cost {
-                            // Area-level travel for now: the sub slot
-                            // resets to the destination's center (nothing
-                            // yet produces non-center subs).
-                            self.location = Location::center(destination);
-                            self.stamina = self.stamina.saturating_sub(info.stamina_cost);
-                        } else {
-                            events.pop();
-                            self.short_rests();
-                            let line = GameOutput::CharacterTravelExhausted(
-                                self.name.as_str(),
-                                &self.location.area.to_string(),
-                            )
-                            .to_string();
-                            events.push(TaggedEvent::new(
-                                line,
-                                MessagePayload::CharacterRested {
-                                    character: character_ref,
-                                    hp_restored: 0,
-                                },
-                            ));
-                        }
-                    }
-                    None => {
-                        self.short_rests();
-                    }
-                }
-            }
-            TravelResult::Failure => {
-                self.short_rests();
-            }
+        // The sub-hop engine owns stamina: every hop pays its own
+        // destination price. Failure (no options, or too broke for
+        // hop 1) falls back to a short rest.
+        if let TravelResult::Failure = self.travels(closed_areas, *destination, all_areas, events) {
+            self.short_rests();
         }
     }
 
@@ -3894,6 +3851,9 @@ mod tests {
     fn expiry_lifts_attribute_bends_immediately() {
         let mut c = Character::new("Snaggletooth".to_string(), None, None);
         c.traits.clear();
+        // Pin the axis: a rolled perception of 1 bends to 1 (0.75 rounds
+        // up), which would make the "bend applies" assertion flaky.
+        c.attributes.perception = 100;
         c.gain_trait(Trait::Nearsighted).expect("nearsighted");
         c.temporary_traits.insert(Trait::Nearsighted, 1);
         let base = c.attributes.perception;

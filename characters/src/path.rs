@@ -11,6 +11,7 @@
 
 use super::actions::Action;
 use super::{Character, calculate_stamina_cost};
+use areas::location::Location;
 use areas::{Area, AreaDetails};
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
@@ -56,7 +57,11 @@ impl<'a> AreaGraph<'a> {
     fn edge_cost(&self, to: Area) -> u32 {
         let detail = self.details.get(&to).copied();
         let stamina = if let Some(ad) = detail {
-            calculate_stamina_cost(&Action::Move(Some(to)), &ad.terrain, self.character)
+            calculate_stamina_cost(
+                &Action::Move(Some(Location::center(to))),
+                &ad.terrain,
+                self.character,
+            )
         } else {
             // No detail known — fall back to base move cost.
             20

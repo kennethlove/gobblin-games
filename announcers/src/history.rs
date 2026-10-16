@@ -651,7 +651,7 @@ impl CharacterHistories {
 
     /// Increment a character's kill streak (they scored a kill this phase).
     /// Fires a milestone event when crossing a spree tier boundary
-    /// (2 → "heating up", 4 → "on fire", 6 → "dominating", 8 → "unstoppable").
+    /// (2 -> "heating up", 4 -> "on fire", 6 -> "dominating", 8 -> "unstoppable").
     fn bump_streak(&mut self, id: &impl Display) {
         if let Some(digest) = self.inner.get_mut(&id.to_string()) {
             let old = digest.kill_streak;
@@ -836,6 +836,8 @@ mod tests {
                 identifier: test_uuid("area-2").to_string().into(),
                 name: "Forest".into(),
             },
+            from_sub: None,
+            to_sub: None,
         })]);
         let d = h.get(&test_uuid("Grubworm").to_string()).unwrap();
         assert_eq!(d.location, "Forest");

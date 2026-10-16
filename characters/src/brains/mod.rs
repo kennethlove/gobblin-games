@@ -2,6 +2,7 @@ use crate::Character;
 use crate::actions::Action;
 use crate::alliances::MAX_ALLIES;
 use crate::traits::{CharacterAttribute, REFUSERS, ThresholdDelta, Trait, geometric_mean_affinity};
+use areas::location::Location;
 use areas::{Area, AreaDetails};
 use rand::Rng;
 use rand::RngExt;
@@ -317,7 +318,7 @@ impl Brain {
                             .map(|d| character.stamina >= d.stamina_cost)
                             .unwrap_or(true);
                         if cost_ok {
-                            return Action::Move(Some(first_hop));
+                            return Action::Move(Some(Location::center(first_hop)));
                         }
                         return Action::Rest;
                     }
@@ -349,7 +350,7 @@ impl Brain {
                         available_destinations.iter().find(|d| d.area == best_area)
                         && character.stamina >= dest_info.stamina_cost
                     {
-                        return Action::Move(Some(best_area));
+                        return Action::Move(Some(Location::center(best_area)));
                     }
                 }
                 // Fall back to rest if no good destination or insufficient stamina

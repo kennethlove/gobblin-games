@@ -33,6 +33,7 @@ pub(crate) fn format_debug_line(game_id: &str, game_day: u32, log: &GameMessage)
         character,
         from,
         to,
+        ..
     } = &log.payload
     {
         line.push_str(&format!(
@@ -303,6 +304,8 @@ mod tests {
                 identifier: "a2".into(),
                 name: "East Mire".into(),
             },
+            from_sub: None,
+            to_sub: None,
         });
         let line = format_debug_line("game-1", 2, &moved);
         assert!(
@@ -352,6 +355,8 @@ mod tests {
                     identifier: "b".into(),
                     name: "B".into(),
                 },
+                from_sub: None,
+                to_sub: None,
             }),
             log(MessagePayload::PhaseStarted {
                 day: 1,

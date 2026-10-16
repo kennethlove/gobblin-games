@@ -91,7 +91,7 @@ pub fn sub_slots(area: Area) -> impl Iterator<Item = Location> {
     })
 }
 
-/// All 42 occupied sub-tile cells of the arena (7 areas × 6 triangles),
+/// All 42 occupied sub-tile cells of the arena (7 areas x 6 triangles),
 /// area order per [`default_layout`], triangle order per
 /// [`SubTriangle::index`].
 pub fn all_locations() -> impl Iterator<Item = Location> {
@@ -160,7 +160,7 @@ pub fn sub_neighbors(location: Location) -> [Option<Location>; 6] {
         sub: SubTriangle::new(i as u8),
     };
     // Within-parent radial edges: triangle t shares one edge with each
-    // of its ring-neighbors t±1 (mod 6).
+    // of its ring-neighbors t+/-1 (mod 6).
     out[(t + 1) % 6] = Some(ring((t + 1) % 6));
     out[(t + 5) % 6] = Some(ring((t + 5) % 6));
     // Cross-parent door: base-to-base across the full edge in direction t.
@@ -202,6 +202,19 @@ pub fn distance(from: Location, to: Location) -> Option<u32> {
 /// entries are mutual [`sub_neighbors`]; hop count = `len - 1` =
 /// [`distance`]. `None` when either location is not an occupied cell.
 pub fn shortest_path(from: Location, to: Location) -> Option<Vec<Location>> {
+    shortest_path_while(from, to, |_| false)
+}
+
+/// Like [`shortest_path`], but cells for which `is_blocked` returns
+/// `true` are never entered (the start cell `from` is always allowed).
+/// `None` when either location is not an occupied cell, or when every
+/// route to `to` passes through a blocked cell. The game uses this to
+/// route sub-hops around closed areas.
+pub fn shortest_path_while(
+    from: Location,
+    to: Location,
+    is_blocked: impl Fn(Location) -> bool,
+) -> Option<Vec<Location>> {
     if !is_occupied(from) || !is_occupied(to) {
         return None;
     }
@@ -215,11 +228,16 @@ pub fn shortest_path(from: Location, to: Location) -> Option<Vec<Location>> {
     queue.push_back(from);
     while let Some(current) = queue.pop_front() {
         for neighbor in sub_neighbors(current).into_iter().flatten() {
-            if visited.insert(neighbor) {
-                came_from.insert(neighbor, current);
-                queue.push_back(neighbor);
+            if visited.contains(&neighbor) || is_blocked(neighbor) {
+                continue;
             }
+            visited.insert(neighbor);
+            came_from.insert(neighbor, current);
+            queue.push_back(neighbor);
         }
+    }
+    if !came_from.contains_key(&to) {
+        return None;
     }
     let mut path = vec![to];
     let mut current = to;
@@ -314,7 +332,7 @@ mod tests {
     /// The6 sub-tiles tile the parent exactly — the golden zero-gap
     /// fact. Parent hex: circumradius `R`, area `(3√3/2)R²`. Triangle
     /// `i`: apex at the center, base = the chord between the corners at
-    /// direction angle `i` ± 30° — a 60° chord of radius `R`, i.e.
+    /// direction angle `i` +/- 30° — a 60° chord of radius `R`, i.e.
     /// length `R` (the FULL parent edge) — so it is equilateral with
     /// side `R`, area `(√3/4)R²`. Six of those sum to the hex area:
     /// coverage is exactly 1, no gaps, no overlaps.
@@ -468,8 +486,8 @@ mod tests {
     }
 
     /// Total edge count of the42-cell graph: each parent contributes a
-    /// 6-cycle of radial edges (6 × 7 = 42 undirected), plus 12
-    /// cross-parent doors → 54 undirected = 108 directed.
+    /// 6-cycle of radial edges (6 x 7 = 42 undirected), plus 12
+    /// cross-parent doors -> 54 undirected = 108 directed.
     #[test]
     fn edge_count_is_84_within_and_24_cross_directed() {
         let mut within_directed = 0;
@@ -597,5 +615,45 @@ mod tests {
         assert_eq!(shortest_path(dead, hub(0)), None);
         // An unoccupied sub has no neighbors at all.
         assert_eq!(sub_neighbors(dead), [None; 6]);
+    }
+
+    // ---- blocked-cell BFS -------------------------------------------
+
+    #[test]
+    fn shortest_path_while_detours_around_a_blocked_cell() {
+        let from = Location::center(Area::Hub);
+        let to = at(Area::Sector1, 0);
+        let door = at(Area::Sector1, 3); // the Hub0 <-> Sector1-3 door
+        let path = shortest_path_while(from, to, |cell| cell == door)
+            .expect("a route into Sector1 exists through another door");
+        assert!(!path.contains(&door), "blocked cell on path: {path:?}");
+        assert_eq!(path.first(), Some(&from));
+        assert_eq!(path.last(), Some(&to));
+        for window in path.windows(2) {
+            assert!(
+                sub_neighbors(window[0]).contains(&Some(window[1])),
+                "{:?} !-> {:?}",
+                window[0],
+                window[1]
+            );
+        }
+        assert!(path.len() > 5, "detour should be longer: {path:?}");
+    }
+
+    #[test]
+    fn shortest_path_while_returns_none_when_goal_is_behind_a_blocked_area() {
+        let from = Location::center(Area::Hub);
+        let to = at(Area::Sector1, 0);
+        let path = shortest_path_while(from, to, |cell| cell.area == Area::Sector1);
+        assert_eq!(path, None, "every route to Sector1 enters Sector1");
+    }
+
+    #[test]
+    fn shortest_path_while_allows_the_start_cell_even_if_marked_blocked() {
+        let from = Location::center(Area::Hub);
+        let to = hub(2);
+        let path = shortest_path_while(from, to, |cell| cell == from).unwrap();
+        assert_eq!(path.first(), Some(&from));
+        assert_eq!(path.last(), Some(&to));
     }
 }
