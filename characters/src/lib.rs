@@ -1128,12 +1128,27 @@ impl Character {
         }
 
         // ── Trap trigger check ──
-        // After resolving the chosen action, check if any traps in the area trigger.
-        // Setter auto-passes (no friendly fire).
+        // After resolving the chosen action, check if any traps in the
+        // victim's current sub-tile trigger.
+        self.check_trap_triggers(area_details, rng, events);
+    }
+
+    /// Post-action trap scan for this character's current sub-tile.
+    /// Traps keyed to another sub-tile are skipped. Setter auto-passes
+    /// (no friendly fire).
+    fn check_trap_triggers(
+        &mut self,
+        area_details: &mut AreaDetails,
+        rng: &mut impl Rng,
+        events: &mut Vec<TaggedEvent>,
+    ) {
         for idx in (0..area_details.placed_traps.len()).rev() {
             let triggered = area_details.placed_traps[idx].triggered;
             if triggered {
                 continue;
+            }
+            if area_details.placed_traps[idx].sub != self.location.sub {
+                continue; // Keyed to a different sub-tile
             }
             let set_by = area_details.placed_traps[idx].set_by.clone();
             if self.identifier == set_by {
@@ -1330,6 +1345,7 @@ impl Character {
             set_by: self.identifier.to_string(),
             concealment,
             triggered: false,
+            sub: self.location.sub,
         };
 
         _area_details.placed_traps.push(trap);
@@ -3830,6 +3846,99 @@ mod tests {
             forager_total <= plain_total + 64,
             "at most one extra success per seed: {forager_total} > {}",
             plain_total + 64
+        );
+    }
+
+    // ---- Traps keyed per sub-tile (sub-hex P5, spike §6 row 6) ----
+
+    fn trap_at(
+        set_by: &str,
+        sub: areas::hex::SubTriangle,
+        concealment: u32,
+    ) -> areas::traps::PlacedTrap {
+        areas::traps::PlacedTrap {
+            id: uuid::Uuid::new_v4().to_string(),
+            kind: shared::afflictions::TrapKind::Snared,
+            severity: shared::afflictions::Severity::Mild,
+            set_by: set_by.to_string(),
+            concealment,
+            triggered: false,
+            sub,
+        }
+    }
+
+    #[test]
+    fn set_trap_records_the_placing_goblins_sub_tile() {
+        let mut me = character();
+        me.location =
+            areas::location::Location::new(areas::Area::Hub, areas::hex::SubTriangle::new(3));
+        let mut area = survival_area(world::terrain::BaseTerrain::Clearing);
+        let mut rng = SmallRng::seed_from_u64(11);
+        let mut events: Vec<TaggedEvent> = Vec::new();
+
+        me.act_set_trap(None, None, &mut area, &mut rng, &mut events);
+
+        assert_eq!(area.placed_traps.len(), 1, "trap placed");
+        assert_eq!(
+            area.placed_traps[0].sub,
+            areas::hex::SubTriangle::new(3),
+            "placement records the setter's sub-tile"
+        );
+    }
+
+    #[test]
+    fn trap_triggers_for_goblin_in_the_keyed_sub_tile() {
+        let mut me = character();
+        me.location =
+            areas::location::Location::new(areas::Area::Hub, areas::hex::SubTriangle::new(2));
+        let mut area = survival_area(world::terrain::BaseTerrain::Clearing);
+        // Concealment 30 exceeds any perception roll (max 21), so the
+        // keyed-sub path must trigger regardless of the seeded rng.
+        area.placed_traps.push(trap_at(
+            "some-other-goblin",
+            areas::hex::SubTriangle::new(2),
+            30,
+        ));
+        let mut rng = SmallRng::seed_from_u64(11);
+        let mut events: Vec<TaggedEvent> = Vec::new();
+
+        me.check_trap_triggers(&mut area, &mut rng, &mut events);
+
+        assert!(area.placed_traps.is_empty(), "trap fired and was removed");
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e.payload, MessagePayload::TrapTriggered { .. })),
+            "TrapTriggered emitted for the keyed sub-tile"
+        );
+    }
+
+    #[test]
+    fn trap_does_not_trigger_for_goblin_in_another_sub_tile() {
+        let mut me = character();
+        me.location =
+            areas::location::Location::new(areas::Area::Hub, areas::hex::SubTriangle::new(4));
+        let mut area = survival_area(world::terrain::BaseTerrain::Clearing);
+        area.placed_traps.push(trap_at(
+            "some-other-goblin",
+            areas::hex::SubTriangle::new(2),
+            30,
+        ));
+        let mut rng = SmallRng::seed_from_u64(11);
+        let mut events: Vec<TaggedEvent> = Vec::new();
+
+        me.check_trap_triggers(&mut area, &mut rng, &mut events);
+
+        assert_eq!(
+            area.placed_traps.len(),
+            1,
+            "same-area, different sub-tile: trap stays"
+        );
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e.payload, MessagePayload::TrapTriggered { .. })),
+            "no TrapTriggered across sub-tile bounds"
         );
     }
 
