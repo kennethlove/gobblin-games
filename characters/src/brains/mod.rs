@@ -263,7 +263,7 @@ impl Brain {
         if let Some(early) = self.run_pre_decision_overrides(
             character,
             nearby_characters,
-            None,
+            area.map(|a| areas::location::terrain_at(character.location, a)),
             Some(phase),
             area,
             &world::config::GameConfig::default(),

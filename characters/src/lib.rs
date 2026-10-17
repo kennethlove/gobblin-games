@@ -1071,7 +1071,7 @@ impl Character {
                 Action::DrinkFromTerrain | Action::Eat(_) | Action::DrinkItem(_) => {}
                 Action::Sleep { duration_phases } => {
                     // PR1 Task 9a: roll shelter quality at sleep start (we6l)
-                    let terrain = area_details.terrain.base;
+                    let terrain = areas::location::terrain_at(self.location, area_details);
                     self.sleep_shelter = Some(crate::incidents::find_shelter(
                         self.attributes.intelligence,
                         self.attributes.strength,
@@ -1502,10 +1502,11 @@ impl Character {
         }
 
         let builder = self.traits.contains(&crate::traits::Trait::Builder);
+        let terrain = areas::location::terrain_at(self.location, area_details);
         let mut shelter = crate::incidents::find_shelter(
             self.attributes.intelligence,
             self.attributes.strength,
-            area_details.terrain.base,
+            terrain,
             rng,
         );
         if builder {
@@ -1513,7 +1514,7 @@ impl Character {
             let reroll = crate::incidents::find_shelter(
                 self.attributes.intelligence,
                 self.attributes.strength,
-                area_details.terrain.base,
+                terrain,
                 rng,
             );
             if Self::shelter_tier(reroll) > Self::shelter_tier(shelter) {
@@ -1580,7 +1581,10 @@ impl Character {
             return;
         }
 
-        let richness = areas::forage::forage_richness(area_details.terrain.base);
+        let richness = areas::forage::forage_richness(areas::location::terrain_at(
+            self.location,
+            area_details,
+        ));
         // ResourcefulForager adds one d20 attempt to the loop.
         let attempts = richness
             + u8::from(
@@ -3675,6 +3679,38 @@ mod tests {
             })
             .expect("Foraged emitted even on a miss");
         assert_eq!(payload, (false, 0));
+    }
+
+    #[test]
+    fn forage_keys_on_sub_tile_terrain_not_area_terrain() {
+        // Desert area (richness 0) with a Forest sub-tile under the
+        // character's feet: the forage roll reads the sub-tile.
+        let mut me = character();
+        let mut area = survival_area(world::terrain::BaseTerrain::Desert);
+        area.sub_tiles = vec![areas::preset::SubTile {
+            terrain: world::terrain::BaseTerrain::Forest,
+            feature: None,
+            flavor: None,
+        }];
+        let before_stamina = me.stamina;
+        let expected_cost = crate::calculate_stamina_cost(&Action::Forage, &area.terrain, &me);
+        let mut rng = SmallRng::seed_from_u64(3);
+        let mut events: Vec<TaggedEvent> = Vec::new();
+
+        me.act_forage(&mut area, &mut rng, &mut events);
+
+        assert_eq!(
+            me.stamina,
+            before_stamina - expected_cost,
+            "effort still spent"
+        );
+        let success = events
+            .iter()
+            .any(|e| matches!(&e.payload, MessagePayload::Foraged { success: true, .. }));
+        assert!(
+            success,
+            "sub-tile Forest under a Desert area should be forageable"
+        );
     }
 
     #[test]

@@ -503,7 +503,7 @@ impl Game {
                 let biome = area_details_map
                     .get(&character.location.area)
                     .and_then(|&idx| self.areas.get(idx))
-                    .map(|a| a.terrain.base)
+                    .map(|a| areas::location::terrain_at(character.location, a))
                     .unwrap_or(world::terrain::types::BaseTerrain::Clearing);
                 // Day/night-slot index (2 per day — shelter is a
                 // day/night mechanic, see the phase redesign notes).
