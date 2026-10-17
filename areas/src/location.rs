@@ -23,9 +23,11 @@
 //! deleted rather than adapted.
 
 use crate::Area;
+use crate::AreaDetails;
 use crate::hex::{Axial, SubTriangle, default_layout};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
+use world::terrain::BaseTerrain;
 
 /// A concrete position in the arena: an area-hex plus one of its 6
 /// sub-tile triangles.
@@ -111,6 +113,21 @@ pub fn area_axial(area: Area) -> Axial {
 
 /// The area whose layout hex sits at `axial`, or `None` when the coord
 /// is outside the 7-hex cluster.
+/// Terrain of the sub-tile triangle at `location` — the single source
+/// of truth for sub-tile terrain lookups (shelter/forage/water, trap
+/// keys).
+///
+/// Falls back to the parent area's terrain when the area has no
+/// authored sub-tiles (rows predating sub-tiles) or an out-of-range
+/// triangle index, so legacy data keeps its area-level behavior.
+pub fn terrain_at(location: Location, details: &AreaDetails) -> BaseTerrain {
+    details
+        .sub_tiles
+        .get(location.sub.index() as usize)
+        .map(|tile| tile.terrain)
+        .unwrap_or(details.terrain.base)
+}
+
 pub fn area_at(axial: Axial) -> Option<Area> {
     default_layout()
         .iter()
@@ -252,7 +269,9 @@ pub fn shortest_path_while(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::preset::SubTile;
     use std::collections::HashSet;
+    use world::terrain::TerrainType;
 
     fn hub(index: u8) -> Location {
         Location::new(Area::Hub, SubTriangle::new(index))
@@ -655,5 +674,66 @@ mod tests {
         let path = shortest_path_while(from, to, |cell| cell == from).unwrap();
         assert_eq!(path.first(), Some(&from));
         assert_eq!(path.last(), Some(&to));
+    }
+
+    #[test]
+    fn terrain_at_reads_the_sub_tile_terrain() {
+        let details = AreaDetails {
+            terrain: TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap(),
+            sub_tiles: vec![
+                SubTile {
+                    terrain: BaseTerrain::Forest,
+                    feature: None,
+                    flavor: None,
+                },
+                SubTile {
+                    terrain: BaseTerrain::Wetlands,
+                    feature: None,
+                    flavor: None,
+                },
+            ],
+            ..Default::default()
+        };
+        let forest = Location {
+            area: Area::Hub,
+            sub: SubTriangle::new(0),
+        };
+        let marsh = Location {
+            area: Area::Hub,
+            sub: SubTriangle::new(1),
+        };
+        assert_eq!(terrain_at(forest, &details), BaseTerrain::Forest);
+        assert_eq!(terrain_at(marsh, &details), BaseTerrain::Wetlands);
+    }
+
+    #[test]
+    fn terrain_at_falls_back_to_parent_without_authored_sub_tiles() {
+        let details = AreaDetails {
+            terrain: TerrainType::new(BaseTerrain::Desert, vec![]).unwrap(),
+            ..Default::default()
+        };
+        let at = Location {
+            area: Area::Hub,
+            sub: SubTriangle::new(3),
+        };
+        assert_eq!(terrain_at(at, &details), BaseTerrain::Desert);
+    }
+
+    #[test]
+    fn terrain_at_falls_back_when_sub_tiles_are_shorter_than_the_index() {
+        let details = AreaDetails {
+            terrain: TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap(),
+            sub_tiles: vec![SubTile {
+                terrain: BaseTerrain::Forest,
+                feature: None,
+                flavor: None,
+            }],
+            ..Default::default()
+        };
+        let out_of_range = Location {
+            area: Area::Hub,
+            sub: SubTriangle::new(5),
+        };
+        assert_eq!(terrain_at(out_of_range, &details), BaseTerrain::Clearing);
     }
 }
