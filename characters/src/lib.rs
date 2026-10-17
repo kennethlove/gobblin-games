@@ -996,8 +996,11 @@ impl Character {
                     if destination == Some(self.location) {
                         continue;
                     }
-                    let current_hop =
-                        self.hop_stamina_cost(self.location.area, environment_details.all_areas);
+                    let current_hop = self.hop_stamina_cost(
+                        self.location.area,
+                        self.location.area,
+                        environment_details.all_areas,
+                    );
                     let cheapest = environment_details
                         .available_destinations
                         .iter()
@@ -1259,9 +1262,10 @@ impl Character {
         all_areas: &[AreaDetails],
         events: &mut Vec<TaggedEvent>,
     ) {
-        // The sub-hop engine owns stamina: every hop pays its own
-        // destination price. Failure (no options, or too broke for
-        // hop 1) falls back to a short rest.
+        // The sub-hop engine owns stamina: every hop pays its
+        // crossing price (half the source's cost plus half the
+        // destination's, each rounded up). Failure (no options, or too
+        // broke for hop 1) falls back to a short rest.
         if let TravelResult::Failure = self.travels(closed_areas, *destination, all_areas, events) {
             self.short_rests();
         }
@@ -2211,6 +2215,17 @@ pub fn calculate_stamina_cost(
     final_cost.round() as u32
 }
 
+/// The stamina price of a sub-hop crossing from one cell to the next:
+/// half the SOURCE cell's standard move cost plus half the
+/// DESTINATION's, each rounded UP. Owner decision (sub-hex travel
+/// phase): neither tile dominates a crossing — a cheap tile next to an
+/// expensive one must not make repeated crossings from the cheap side
+/// free. Odd costs lean expensive on purpose: each half rounds up, so
+/// a 30/40 crossing prices at 15 + 20 = 35.
+pub fn crossing_stamina_cost(from_standard_cost: u32, to_standard_cost: u32) -> u32 {
+    from_standard_cost.div_ceil(2) + to_standard_cost.div_ceil(2)
+}
+
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct Statistics {
     /// What day, if any, were they killed?
@@ -2406,11 +2421,29 @@ mod tests {
     use crate::Action;
     use crate::Character;
     use crate::brains::Brain;
+    use crate::crossing_stamina_cost;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
     use rstest::*;
     use shared::messages::MessagePayload;
     use world::messages::TaggedEvent;
+
+    /// Owner's worked example: A costs 30, B costs 40 -> 15 + 20 = 35.
+    #[test]
+    fn crossing_cost_averages_half_of_each_tile() {
+        assert_eq!(crossing_stamina_cost(30, 40), 35);
+        assert_eq!(crossing_stamina_cost(40, 30), 35, "symmetric in order");
+    }
+
+    /// Each half rounds UP independently, so odd costs lean expensive.
+    #[test]
+    fn crossing_cost_rounds_each_half_up() {
+        assert_eq!(crossing_stamina_cost(31, 40), 16 + 20, "odd source");
+        assert_eq!(crossing_stamina_cost(30, 41), 15 + 21, "odd destination");
+        assert_eq!(crossing_stamina_cost(31, 41), 16 + 21, "both odd");
+        assert_eq!(crossing_stamina_cost(1, 1), 2, "minimum positive crossing");
+        assert_eq!(crossing_stamina_cost(0, 0), 0, "free cells cross free");
+    }
 
     #[fixture]
     fn character() -> Character {
