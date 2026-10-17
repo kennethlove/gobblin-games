@@ -608,6 +608,95 @@ fn status_death_emits_exactly_one_character_killed() {
 }
 
 #[test]
+fn bleed_out_death_emits_one_bled_out_and_one_killed() {
+    use shared::messages::MessagePayload;
+    use shared::wounds::{BodyPart, Wound, WoundSeverity, WoundType};
+    let mut a = Character::new("Bleedy".to_string(), Some(1), None);
+    a.blood = 10;
+    // A critical bleeding wound drains blood to 0 in the wounds block,
+    // not in process_status — this is the bleed-out death path.
+    a.wounds.push(Wound::new(
+        WoundType::Stab,
+        WoundSeverity::Critical,
+        BodyPart::Torso,
+    ));
+    let mut game = create_test_game_with_characters(vec![a]);
+    // Without an area record the character's turn (where the wound drain
+    // lives) never runs.
+    game.areas
+        .push(AreaDetails::new(Some("Hub".to_string()), Area::Hub));
+    game.day = Some(1);
+    let _ = game.run_phase(shared::messages::Phase::DAY);
+    let bled_out = game
+        .messages
+        .iter()
+        .filter(|m| matches!(&m.payload, MessagePayload::CharacterBledOut { .. }))
+        .count();
+    assert_eq!(bled_out, 1, "one bleed-out -> exactly one CharacterBledOut");
+    let killed: Vec<_> = game
+        .messages
+        .iter()
+        .filter(|m| matches!(&m.payload, MessagePayload::CharacterKilled { .. }))
+        .collect();
+    assert_eq!(
+        killed.len(),
+        1,
+        "one bleed-out -> exactly one CharacterKilled; state: blood={} status={:?}",
+        game.characters[0].blood,
+        game.characters[0].status
+    );
+    if let MessagePayload::CharacterKilled { killer, cause, .. } = &killed[0].payload {
+        assert!(killer.is_none(), "bleed-out has no character killer");
+        assert_eq!(
+            *cause,
+            shared::afflictions::DeathCause::Affliction(
+                shared::afflictions::AfflictionKind::Wounded
+            ),
+            "bleed-out death cause"
+        );
+    } else {
+        panic!("expected a CharacterKilled payload");
+    }
+}
+
+#[test]
+fn bleed_out_death_reaches_cycle_sweep_and_records_day_killed() {
+    use shared::messages::MessagePayload;
+    use shared::wounds::{BodyPart, Wound, WoundSeverity, WoundType};
+    let mut a = Character::new("Bleedy".to_string(), Some(1), None);
+    a.blood = 10;
+    a.wounds.push(Wound::new(
+        WoundType::Stab,
+        WoundSeverity::Critical,
+        BodyPart::Torso,
+    ));
+    let mut game = create_test_game_with_characters(vec![a]);
+    game.areas
+        .push(AreaDetails::new(Some("Hub".to_string()), Area::Hub));
+    game.day = Some(1);
+    let _ = game.run_phase(shared::messages::Phase::DAY);
+    // A second phase proves the dead character is swept and stays swept.
+    let _ = game.run_phase(shared::messages::Phase::DAY);
+    let character = &game.characters[0];
+    assert_eq!(
+        character.status,
+        CharacterStatus::Dead,
+        "bleed-out death promotes through the cycle to Dead"
+    );
+    assert_eq!(
+        character.statistics.day_killed,
+        Some(1),
+        "bleed-out death records day_killed"
+    );
+    let killed = game
+        .messages
+        .iter()
+        .filter(|m| matches!(&m.payload, MessagePayload::CharacterKilled { .. }))
+        .count();
+    assert_eq!(killed, 1, "second phase must not re-announce the death");
+}
+
+#[test]
 #[serial]
 fn sleeping_character_naturally_wakes_after_duration_emits_character_woke() {
     use shared::messages::{MessagePayload, Phase};

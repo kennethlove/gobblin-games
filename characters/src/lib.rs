@@ -861,6 +861,29 @@ impl Character {
                         },
                     },
                 ));
+                // WHY: a bleed-out is an environmental death — no character
+                // killer, so recently_killed_by stays None. Promote here and
+                // announce exactly once (the period-end block only
+                // early-returns for RecentlyDead) so the end-of-cycle sweep
+                // records DeathRecorded, day_killed, and loot like any other
+                // death.
+                self.status = CharacterStatus::RecentlyDead;
+                self.recently_killed_by = None;
+                self.statistics.killed_by = Some("their wounds".to_string());
+                let line = GameOutput::CharacterDead(self.name.as_str()).to_string();
+                events.push(TaggedEvent::new(
+                    line,
+                    MessagePayload::CharacterKilled {
+                        victim: CharacterRef {
+                            identifier: self.identifier.clone().into(),
+                            name: self.name.clone(),
+                        },
+                        killer: None,
+                        cause: shared::afflictions::DeathCause::Affliction(
+                            shared::afflictions::AfflictionKind::Wounded,
+                        ),
+                    },
+                ));
             }
         }
 
@@ -871,31 +894,11 @@ impl Character {
             self.tick_mental_conditions();
         }
 
-        // Character died to the period's events (status effects or blood loss).
+        // Character died to the period's events (status effects or blood
+        // loss). process_status and the wounds block each announce their own
+        // deaths and promote to RecentlyDead before this point — one death
+        // yields exactly one CharacterKilled, so just stop the turn here.
         if self.status == CharacterStatus::RecentlyDead || self.blood == 0 {
-            // WHY: process_status already announced status/area/affliction
-            // deaths when it promoted to RecentlyDead — announce here only a
-            // fresh bleed-out (blood hit 0 while otherwise healthy), so one
-            // death yields exactly one CharacterKilled.
-            if self.blood == 0
-                && !matches!(
-                    self.status,
-                    CharacterStatus::RecentlyDead | CharacterStatus::Dead
-                )
-            {
-                let line = GameOutput::CharacterDead(self.name.as_str()).to_string();
-                events.push(TaggedEvent::new(
-                    line,
-                    MessagePayload::CharacterKilled {
-                        victim: CharacterRef {
-                            identifier: self.identifier.clone().into(),
-                            name: self.name.clone(),
-                        },
-                        killer: None,
-                        cause: shared::afflictions::DeathCause::Unknown,
-                    },
-                ));
-            }
             return;
         }
 
