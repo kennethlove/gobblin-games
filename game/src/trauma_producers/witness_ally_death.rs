@@ -1,17 +1,17 @@
 //! Producer (a)/(b): Witness ally death — Mild trauma + phobia co-acquire stub.
 
 use crate::games::Game;
-use areas::Area;
+use areas::location::Location;
 use shared::afflictions::{Severity, TraumaSource};
 use shared::messages::{CharacterRef, MessagePayload, Phase};
 
 use super::shared::{TraumaEvent, apply_trauma_events, map_cause_to_death_cause};
 
 pub(super) fn produce_witness_ally_death(game: &mut Game, phase: Phase) {
-    // Phase 1: collect killed characters with area info
+    // Phase 1: collect killed characters with location info
     let killed: Vec<(
         String,
-        Area,
+        Location,
         uuid::Uuid,
         Option<CharacterRef>,
         shared::afflictions::DeathCause,
@@ -31,7 +31,7 @@ pub(super) fn produce_witness_ally_death(game: &mut Game, phase: Phase) {
                 .map(|vt| {
                     (
                         victim.identifier.to_string(),
-                        vt.location.area,
+                        vt.location,
                         vt.id,
                         killer.clone(),
                         cause.clone(),
@@ -41,11 +41,15 @@ pub(super) fn produce_witness_ally_death(game: &mut Game, phase: Phase) {
         })
         .collect();
 
-    // Phase 2: find living allies in same area
+    // Phase 2: find living allies witnessing the death — same area,
+    // or same sub-tile when witnessing.trauma_producers is on.
+    let co_presence = game.config.witnessing.trauma_producers;
     let mut events: Vec<TraumaEvent> = Vec::new();
-    for (victim_id, victim_area, victim_uuid, killer, cause) in &killed {
+    for (victim_id, victim_location, victim_uuid, killer, cause) in &killed {
         for t in &game.characters {
-            if t.is_alive() && t.allies.contains(victim_uuid) && t.location.area == *victim_area {
+            let witnessed = t.location.area == victim_location.area
+                && (!co_presence || t.location == *victim_location);
+            if t.is_alive() && t.allies.contains(victim_uuid) && witnessed {
                 let death_cause = map_cause_to_death_cause(killer.as_ref(), cause);
                 events.push(TraumaEvent {
                     character_id: t.identifier.to_string(),

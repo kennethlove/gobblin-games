@@ -227,7 +227,7 @@ mod tests {
         let target =
             make_ttribute_with_affliction("Target", AfflictionKind::Wounded, Severity::Mild);
 
-        let visible = visible_afflictions_to(&observer, &target);
+        let visible = visible_afflictions_to(&observer, &target, false);
         assert!(visible.is_empty(), "Mild afflictions must be hidden");
     }
 
@@ -239,7 +239,7 @@ mod tests {
             make_ttribute_with_affliction("Target", AfflictionKind::Blind, Severity::Severe);
         target.location.area = Area::Sector6;
 
-        let visible = visible_afflictions_to(&observer, &target);
+        let visible = visible_afflictions_to(&observer, &target, false);
         assert_eq!(visible.len(), 1, "Severe afflictions must be public");
         assert_eq!(visible[0].kind, AfflictionKind::Blind);
     }
@@ -253,12 +253,12 @@ mod tests {
         target.location.area = Area::Sector1;
 
         // Same area → visible.
-        let visible = visible_afflictions_to(&observer, &target);
+        let visible = visible_afflictions_to(&observer, &target, false);
         assert_eq!(visible.len(), 1);
 
         // Different area → hidden.
         observer.location.area = Area::Sector2;
-        let visible = visible_afflictions_to(&observer, &target);
+        let visible = visible_afflictions_to(&observer, &target, false);
         assert!(
             visible.is_empty(),
             "Moderate afflictions must be hidden from different areas"
@@ -275,8 +275,8 @@ mod tests {
         let severe_target =
             make_ttribute_with_affliction("Severe", AfflictionKind::Blind, Severity::Severe);
 
-        let mild_visible = visible_afflictions_to(&observer, &mild_target);
-        let severe_visible = visible_afflictions_to(&observer, &severe_target);
+        let mild_visible = visible_afflictions_to(&observer, &mild_target, false);
+        let severe_visible = visible_afflictions_to(&observer, &severe_target, false);
 
         assert!(
             mild_visible.is_empty(),
@@ -300,11 +300,11 @@ mod tests {
         target.location.area = Area::Sector3;
 
         assert!(
-            !visible_afflictions_to(&same_area_observer, &target).is_empty(),
+            !visible_afflictions_to(&same_area_observer, &target, false).is_empty(),
             "Same-area observer should see Moderate affliction"
         );
         assert!(
-            visible_afflictions_to(&far_observer, &target).is_empty(),
+            visible_afflictions_to(&far_observer, &target, false).is_empty(),
             "Different-area observer should NOT see Moderate affliction"
         );
     }

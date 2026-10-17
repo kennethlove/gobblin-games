@@ -39,8 +39,8 @@ pub fn accumulate_rescue_bonus(current: f32, additional: f32) -> f32 {
 /// 1. Validate co-location (same area)
 /// 2. Validate target has Trapped affliction
 /// 3. Compute rescuer bonus from strength
-/// 4. If Severe + first rescuer this cycle → increment escape_progress
-/// 5. Else → add to accumulated rescue bonus
+/// 4. If Severe + first rescuer this cycle -> increment escape_progress
+/// 5. Else -> add to accumulated rescue bonus
 /// 6. Consume rescuer's turn (caller responsibility)
 ///
 /// Returns `true` if rescue was resolved, `false` otherwise.
@@ -50,9 +50,15 @@ pub fn resolve_rescue(
     target: &mut Character,
     events: &mut Vec<TaggedEvent>,
     _rng: &mut impl Rng,
+    co_presence: bool,
 ) -> bool {
-    // 1. Validate co-location
-    if target.location.area != rescuer.location.area || area.area != Some(target.location.area) {
+    // 1. Validate co-location (sub-tile when the witnessing knob is on)
+    let colocated = if co_presence {
+        target.location == rescuer.location
+    } else {
+        target.location.area == rescuer.location.area
+    };
+    if !colocated || area.area != Some(target.location.area) {
         return false;
     }
 
@@ -78,7 +84,7 @@ pub fn resolve_rescue(
     let bonus =
         compute_rescue_bonus(rescuer.effective_attribute(CharacterAttribute::Strength) as f32);
 
-    // 4. Severe + first rescuer this cycle → partial rescue progress
+    // 4. Severe + first rescuer this cycle -> partial rescue progress
     if severity == Severity::Severe {
         let existing_bonus = target
             .afflictions
@@ -159,12 +165,15 @@ pub fn evaluate_rescue_opportunity(
     _area: &AreaDetails,
     area_characters: &[Character],
     rng: &mut impl Rng,
+    co_presence: bool,
 ) -> Option<String> {
-    // Find co-located characters with Trapped affliction
+    // Find co-located characters with Trapped affliction (sub-tile
+    // co-location when the witnessing knob is on)
     let trapped_targets: Vec<&Character> = area_characters
         .iter()
         .filter(|t| {
             t.identifier != potential_rescuer.identifier
+                && (!co_presence || t.location == potential_rescuer.location)
                 && t.afflictions
                     .values()
                     .any(|a| matches!(a.kind, AfflictionKind::Trapped(_)))
@@ -289,7 +298,7 @@ mod tests {
         let mut events = Vec::new();
         let mut rng = rand::rngs::SmallRng::seed_from_u64(0);
 
-        let result = resolve_rescue(&area, &rescuer, &mut target, &mut events, &mut rng);
+        let result = resolve_rescue(&area, &rescuer, &mut target, &mut events, &mut rng, false);
         assert!(!result, "rescue should fail when areas differ");
         assert!(events.is_empty(), "no events expected on co-location fail");
     }
@@ -302,7 +311,7 @@ mod tests {
         let mut events = Vec::new();
         let mut rng = rand::rngs::SmallRng::seed_from_u64(0);
 
-        let result = resolve_rescue(&area, &rescuer, &mut target, &mut events, &mut rng);
+        let result = resolve_rescue(&area, &rescuer, &mut target, &mut events, &mut rng, false);
         assert!(result, "rescue should succeed for co-located Mild");
 
         let key = (AfflictionKind::Trapped(TrapKind::Buried), None);
@@ -333,7 +342,7 @@ mod tests {
         let mut events = Vec::new();
         let mut rng = rand::rngs::SmallRng::seed_from_u64(0);
 
-        let result = resolve_rescue(&area, &rescuer, &mut target, &mut events, &mut rng);
+        let result = resolve_rescue(&area, &rescuer, &mut target, &mut events, &mut rng, false);
         assert!(result, "rescue should succeed for Severe");
 
         let key = (AfflictionKind::Trapped(TrapKind::Buried), None);
@@ -369,11 +378,11 @@ mod tests {
 
         // First rescue: progress = 1
         let mut events1 = Vec::new();
-        resolve_rescue(&area, &rescuer, &mut target, &mut events1, &mut rng);
+        resolve_rescue(&area, &rescuer, &mut target, &mut events1, &mut rng, false);
 
         // Second rescue: progress reaches threshold, bonus applied
         let mut events2 = Vec::new();
-        let result = resolve_rescue(&area, &rescuer, &mut target, &mut events2, &mut rng);
+        let result = resolve_rescue(&area, &rescuer, &mut target, &mut events2, &mut rng, false);
         assert!(result);
 
         let key = (AfflictionKind::Trapped(TrapKind::Buried), None);
@@ -423,9 +432,67 @@ mod tests {
 
         // With a 30% chance, we should see Some at least sometimes.
         // Use a seed that triggers it.
-        let result = evaluate_rescue_opportunity(&rescuer, &area, &characters, &mut rng);
+        let result = evaluate_rescue_opportunity(&rescuer, &area, &characters, &mut rng, false);
         // We don't assert specific value since it's probabilistic.
         // Just verify the function runs without error.
         let _ = result;
+    }
+
+    #[test]
+    fn resolve_rescue_co_presence_requires_same_sub_tile() {
+        let mut target = trapped_character("target", Severity::Moderate);
+        let rescuer = free_character("rescuer", 30);
+        let area = same_area_details();
+        let mut events = Vec::new();
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(0);
+
+        // Same sub-tile: resolves under both modes.
+        assert!(resolve_rescue(
+            &area,
+            &rescuer,
+            &mut target,
+            &mut events,
+            &mut rng,
+            true
+        ));
+
+        // Different sub-tile, same area: area mode resolves, co-presence refuses.
+        target.location.sub = areas::hex::SubTriangle::new(2);
+        assert!(resolve_rescue(
+            &area,
+            &rescuer,
+            &mut target,
+            &mut events,
+            &mut rng,
+            false
+        ));
+        assert!(!resolve_rescue(
+            &area,
+            &rescuer,
+            &mut target,
+            &mut events,
+            &mut rng,
+            true
+        ));
+    }
+
+    #[test]
+    fn evaluate_rescue_opportunity_co_presence_excludes_other_sub_tiles() {
+        let mut rescuer = Character::new("Rescuer".into(), None, None);
+        rescuer.location.area = Area::Hub;
+        let mut trapped = trapped_character("Trapped", Severity::Moderate);
+        trapped.location.area = Area::Hub;
+        trapped.location.sub = areas::hex::SubTriangle::new(3);
+
+        let area = AreaDetails::default();
+        let characters = vec![rescuer.clone(), trapped];
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(42);
+
+        // Same area, different sub-tile: knob off may pick the target,
+        // knob on never does.
+        assert_eq!(
+            evaluate_rescue_opportunity(&rescuer, &area, &characters, &mut rng, true),
+            None
+        );
     }
 }

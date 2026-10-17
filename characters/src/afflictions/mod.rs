@@ -32,22 +32,30 @@ use shared::afflictions::{Affliction, Severity};
 ///
 /// Visibility rules (spec §11):
 /// - Mild = hidden (not visible to anyone)
-/// - Moderate = visible only to characters in the same area
+/// - Moderate = visible only to characters in the same area (same
+///   sub-tile when `co_presence` is on)
 /// - Severe = public (visible to all)
 pub fn visible_afflictions_to<'a>(
     observer: &Character,
     target: &'a Character,
+    co_presence: bool,
 ) -> Vec<&'a Affliction> {
     target
         .afflictions
         .values()
-        .filter(|aff| is_visible_to(observer, target, aff))
+        .filter(|aff| is_visible_to(observer, target, aff, co_presence))
         .collect()
 }
 
-fn is_visible_to(observer: &Character, target: &Character, aff: &Affliction) -> bool {
+fn is_visible_to(
+    observer: &Character,
+    target: &Character,
+    aff: &Affliction,
+    co_presence: bool,
+) -> bool {
     match aff.severity {
         Severity::Mild => false,
+        Severity::Moderate if co_presence => observer.location == target.location,
         Severity::Moderate => observer.location.area == target.location.area,
         Severity::Severe => true,
     }
@@ -59,8 +67,9 @@ pub fn target_has_visible_affliction(
     target: &Character,
     kind: shared::afflictions::AfflictionKind,
     min_severity: Severity,
+    co_presence: bool,
 ) -> bool {
-    visible_afflictions_to(observer, target)
+    visible_afflictions_to(observer, target, co_presence)
         .iter()
         .any(|a| a.kind == kind && a.severity >= min_severity)
 }
@@ -113,7 +122,7 @@ mod visibility_tests {
         let aff = make_affliction(AfflictionKind::Wounded, Severity::Mild);
         target.afflictions.insert(aff.key(), aff);
 
-        let visible = visible_afflictions_to(&observer, &target);
+        let visible = visible_afflictions_to(&observer, &target, false);
         assert!(visible.is_empty());
     }
 
@@ -126,11 +135,11 @@ mod visibility_tests {
         let aff = make_affliction(AfflictionKind::BrokenBone, Severity::Moderate);
         target.afflictions.insert(aff.key(), aff);
 
-        let visible = visible_afflictions_to(&observer, &target);
+        let visible = visible_afflictions_to(&observer, &target, false);
         assert_eq!(visible.len(), 1);
 
         observer.location.area = Area::Sector2;
-        let visible = visible_afflictions_to(&observer, &target);
+        let visible = visible_afflictions_to(&observer, &target, false);
         assert!(visible.is_empty());
     }
 
@@ -143,7 +152,7 @@ mod visibility_tests {
         let aff = make_affliction(AfflictionKind::Blind, Severity::Severe);
         target.afflictions.insert(aff.key(), aff);
 
-        let visible = visible_afflictions_to(&observer, &target);
+        let visible = visible_afflictions_to(&observer, &target, false);
         assert_eq!(visible.len(), 1);
         assert_eq!(visible[0].kind, AfflictionKind::Blind);
     }
@@ -162,11 +171,11 @@ mod visibility_tests {
         target.afflictions.insert(moderate.key(), moderate);
         target.afflictions.insert(severe.key(), severe);
 
-        let visible = visible_afflictions_to(&observer, &target);
+        let visible = visible_afflictions_to(&observer, &target, false);
         assert_eq!(visible.len(), 2);
 
         observer.location.area = Area::Sector2;
-        let visible = visible_afflictions_to(&observer, &target);
+        let visible = visible_afflictions_to(&observer, &target, false);
         assert_eq!(visible.len(), 1);
         assert_eq!(visible[0].kind, AfflictionKind::Blind);
     }
@@ -184,13 +193,15 @@ mod visibility_tests {
             &observer,
             &target,
             AfflictionKind::Blind,
-            Severity::Moderate
+            Severity::Moderate,
+            false
         ));
         assert!(!target_has_visible_affliction(
             &observer,
             &target,
             AfflictionKind::MissingArm,
-            Severity::Moderate
+            Severity::Moderate,
+            false
         ));
 
         observer.location.area = Area::Sector2;
@@ -198,7 +209,8 @@ mod visibility_tests {
             &observer,
             &target,
             AfflictionKind::Blind,
-            Severity::Moderate
+            Severity::Moderate,
+            false
         ));
     }
 }

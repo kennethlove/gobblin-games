@@ -2,6 +2,30 @@ use serde::{Deserialize, Serialize};
 use shared::messages::Phase;
 
 /// Configuration for game constants and tuning parameters.
+/// Owner knobs for sub-tile witnessing (spike P5 items 9/11).
+///
+/// Every flag is `false` by default: witnessing keys on AREA. Turning a
+/// flag on makes that subsystem require the same sub-tile (`Location`)
+/// before a character counts as an observer.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct WitnessingConfig {
+    /// Moderate affliction visibility (afflictions::visible_afflictions_to).
+    pub affliction_visibility: bool,
+    /// Phobia trigger scans (other_characters_in_area slice).
+    pub phobia: bool,
+    /// Trauma flashback observer tracking.
+    pub trauma: bool,
+    /// Addiction craving observer tracking.
+    pub addiction: bool,
+    /// Fixation same-area contact checks.
+    pub fixation: bool,
+    /// Rescue co-location + opportunity evaluation.
+    pub rescue: bool,
+    /// Trauma producers: witness ally death / mass casualty.
+    pub trauma_producers: bool,
+}
+
 /// Centralizes magic numbers to enable runtime configuration and difficulty modes.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 // Per-field defaults from `Default` on hydration: a partial stored
@@ -28,6 +52,8 @@ pub struct GameConfig {
     pub addiction_enabled: bool,
     /// Global multiplier for event severity (1.0 = normal, 2.0 = double damage)
     pub catastrophic_severity_multiplier: f64,
+    /// Per-subsystem witness co-presence knobs (spike P5 items 9/11).
+    pub witnessing: WitnessingConfig,
 
     // Survival cadence (per-day schedules, independent of phase count)
     /// Even hours on which the survival clock ticks: hunger/thirst bars,
@@ -82,6 +108,7 @@ impl Default for GameConfig {
             fixations_enabled: true,
             addiction_enabled: true,
             catastrophic_severity_multiplier: 1.0,
+            witnessing: WitnessingConfig::default(),
 
             // Survival cadence: tick every 4 h; day-scaled flat drains.
             survival_tick_hours: [0, 4, 8, 12, 16, 20],
@@ -116,6 +143,16 @@ mod tests {
         let config = GameConfig::default();
         assert_eq!(config.low_character_threshold, 8);
         assert_eq!(config.max_strength, 50);
+        assert_eq!(config.witnessing, WitnessingConfig::default());
+        assert!(!config.witnessing.trauma && !config.witnessing.fixation);
+    }
+
+    #[test]
+    fn partial_witnessing_row_hydrates_from_default() {
+        let old = r#"{"witnessing":{"trauma":true}}"#;
+        let config: GameConfig = serde_json::from_str(old).unwrap();
+        assert!(config.witnessing.trauma);
+        assert!(!config.witnessing.phobia); // missing sibling fills from Default
     }
 
     #[test]
