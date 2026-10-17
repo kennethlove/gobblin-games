@@ -987,9 +987,7 @@ impl Character {
             // cell — no AlreadyThere event, no short-rest fallback,
             // so standing where it wants keeps the beat's stamina —
             // and (b) skip the beat when the cheapest available hop
-            // costs more than current stamina (the old dispatch
-            // pre-gate, now per beat; every destination prices at
-            // its own terrain via hop_stamina_cost / DestinationInfo).
+            // costs more than current stamina.
             let beat = match beat {
                 Action::Move(destination) => {
                     if destination == Some(self.location) {
@@ -1010,9 +1008,6 @@ impl Character {
                 }
                 other => other,
             };
-
-            // The sleep stop condition reads after the beat executes.
-            let ends_round_asleep = matches!(beat, Action::Sleep { .. });
 
             match beat {
                 Action::Move(destination) => {
@@ -1123,9 +1118,8 @@ impl Character {
                 }
             }
 
-            // Stop the whole round: the beat put the goblin to sleep
-            // (remaining beats skipped) or killed it.
-            if ends_round_asleep || !self.is_alive() {
+            // Stop the whole round when the beat kills the goblin.
+            if !self.is_alive() {
                 break;
             }
         }
@@ -2817,7 +2811,7 @@ mod tests {
         assert!(me.effective_sanity() <= crate::SANITY_BREAK_LEVEL);
 
         // With no `events` parameter, announcing early is structurally
-        // impossible — the resolver owns the only emission.
+        // impossible.
         let target = me.pick_target(vec![], 5);
         assert!(target.is_some(), "suicidal goblin targets itself");
     }
