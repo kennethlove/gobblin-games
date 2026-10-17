@@ -99,6 +99,14 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci
+          # WHY: actions/cache skips a save when the key already exists, so
+          # the fast jobs freeze `ci` at their small target dir (~189MB) and
+          # this job's ~460-crate tree never lands — every run cold-built
+          # 14+ minutes of deps while tests took ~6s (measured, bead fiz).
+          # A distinct key segment gives api its own ~1GB entry; total
+          # storage stays far under the 10GB budget that motivated
+          # shared-key in the first place.
+          key: api
           cache-on-failure: true
       - name: Test (api integration)
         # api/tests/common/mod.rs spins up an in-memory SurrealDB per test
