@@ -315,9 +315,7 @@ impl Brain {
                     }
                     // No destination knowledge (legacy callers with
                     // empty `available_destinations`): wander.
-                    None if available_destinations.is_empty() => Action::Move(None),
-                    // Nothing worth taking (or nothing affordable).
-                    None => Action::Rest,
+                    None => Action::Move(None),
                 }
             }
             other => other,
@@ -394,19 +392,11 @@ impl Brain {
     /// The two beats of one phase (owner decision C): every phase runs
     /// exactly two beats, each beat a Move (one sub-hop) or an Action.
     /// `primary` is the decision `act` (or `should_sleep`, whose Sleep
-    /// flows as `P == Sleep`) already made; it sets the shape:
+    /// flows as `P == Sleep`) already made; it sets the shape.
     ///
-    /// - `Move(d)` -> `[Move(d), Move(d)]` — move/move; the two beats
-    ///   are the two sub-hops cap.
-    /// - `Attack`  -> `[Move(D), Attack]` — move FIRST: pending fights
-    ///   resolve after every character acts, and a Move beat after the
-    ///   Attack would break same-sub targeting and drop the fight.
-    /// - `Rest`    -> `[Rest, Rest]` — action/action hunker, no
-    ///   movement.
-    /// - `Hide` / `SeekShelter` / `Sleep` -> `[Move(D), P]` —
-    ///   move/action: arrive, then hunker.
-    /// - anything else -> `[P, Move(D)]` — action/move; non-combat
-    ///   acts resolve inline, so moving afterwards is safe.
+    /// Attack beats move FIRST: pending fights resolve after every
+    /// character acts, and a Move beat after the Attack would break
+    /// same-sub targeting and drop the fight.
     ///
     /// `D` comes from the shared destination logic
     /// ([`Brain::move_destination`]); when the brain has no
