@@ -1,16 +1,18 @@
 //! Area-level pathfinding: builds a graph over the v1 7-area hex topology
 //! and exposes a path-planning helper for characters.
 //!
-//! Edge cost is a composite per the design decision (8pq Q2):
-//! `stamina_cost + harshness_penalty + closed_penalty`.
-//! - `stamina_cost`: per-character, per-terrain via `calculate_stamina_cost`
+//! Edge stamina cost is a composite per the design decision (8pq Q2):
+//! `crossing_stamina_cost + harshness_penalty + closed_penalty`.
+//! - `crossing_stamina_cost`: per-character, per-terrain — half the
+//!   source area's standard move cost plus half the destination's,
+//!   each rounded up (same crossing price the sub-hop engine charges)
 //! - `harshness_penalty`: 0/10/20 for Mild/Moderate/Harsh
 //! - `closed_penalty`: high additive cost (`CLOSED_PENALTY`) so closed
 //!   areas are routed around when alternatives exist, but still
 //!   traversable as a last resort (8pq Q4 = K, "high penalty").
 
 use super::actions::Action;
-use super::{Character, calculate_stamina_cost};
+use super::{Character, calculate_stamina_cost, crossing_stamina_cost};
 use areas::location::Location;
 use areas::{Area, AreaDetails};
 use std::collections::HashMap;
@@ -54,18 +56,27 @@ impl<'a> AreaGraph<'a> {
         }
     }
 
-    fn edge_cost(&self, to: Area) -> u32 {
-        let detail = self.details.get(&to).copied();
-        let stamina = if let Some(ad) = detail {
+    /// The standard move cost of entering `area` from this
+    /// perspective: per-character, per-terrain; `20` (the base move
+    /// cost) when no details are known.
+    fn standard_move_cost(&self, area: Area) -> u32 {
+        let detail = self.details.get(&area).copied();
+        if let Some(ad) = detail {
             calculate_stamina_cost(
-                &Action::Move(Some(Location::center(to))),
+                &Action::Move(Some(Location::center(area))),
                 &ad.terrain,
                 self.character,
             )
         } else {
             // No detail known — fall back to base move cost.
             20
-        };
+        }
+    }
+
+    fn edge_cost(&self, from: Area, to: Area) -> u32 {
+        let stamina =
+            crossing_stamina_cost(self.standard_move_cost(from), self.standard_move_cost(to));
+        let detail = self.details.get(&to).copied();
         let harshness = if let Some(ad) = detail {
             match ad.terrain.base.harshness() {
                 Harshness::Mild => 0,
@@ -91,7 +102,7 @@ impl<'a> Graph for AreaGraph<'a> {
     fn neighbors(&self, node: Area) -> Vec<(Area, u32)> {
         node.neighbors()
             .into_iter()
-            .map(|n| (n, self.edge_cost(n)))
+            .map(|n| (n, self.edge_cost(node, n)))
             .collect()
     }
 

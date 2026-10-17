@@ -8,6 +8,7 @@ use characters::statuses::CharacterStatus;
 use characters::traits::CharacterAttribute;
 use characters::{
     ActionSuggestion, Character, EncounterContext, EnvironmentContext, calculate_stamina_cost,
+    crossing_stamina_cost,
 };
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
@@ -870,7 +871,22 @@ impl Game {
                 None => continue,
             };
 
-            // Build available destinations BEFORE taking mutable borrow of area_details
+            // Build available destinations BEFORE taking mutable borrow of area_details.
+            // `stamina_cost` is the hop's crossing price: half the
+            // current area's standard move cost plus half the
+            // neighbor's, each rounded up — the same price the sub-hop
+            // engine charges (unknown areas price at default terrain).
+            let from_terrain = self
+                .areas
+                .iter()
+                .find(|ad| ad.area == Some(character.location.area))
+                .map(|ad| ad.terrain.clone())
+                .unwrap_or_else(areas::default_terrain);
+            let from_cost = calculate_stamina_cost(
+                &Action::Move(Some(character.location)),
+                &from_terrain,
+                character,
+            );
             let available_destinations = character
                 .location
                 .area
@@ -882,12 +898,13 @@ impl Game {
                         .iter()
                         .find(|ad| ad.area == Some(neighbor_area))
                         .map(|ad| {
-                            // Calculate stamina cost to move to this area
+                            // Crossing price into this neighbor
                             let move_action = Action::Move(Some(
                                 areas::location::Location::center(neighbor_area),
                             ));
-                            let stamina_cost =
+                            let to_cost =
                                 calculate_stamina_cost(&move_action, &ad.terrain, character);
+                            let stamina_cost = crossing_stamina_cost(from_cost, to_cost);
 
                             areas::DestinationInfo {
                                 area: neighbor_area,

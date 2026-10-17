@@ -6,9 +6,10 @@
 //! facing-pair door). Per the owner decision in the sub-hex spike §8
 //! Q1 (choice C), a phase runs two beats and every Move beat is
 //! exactly ONE sub-hop: two Move beats are the two sub-hops cap.
-//! Each hop pays its OWN destination price (`calculate_stamina_cost`
-//! for that area's terrain); whatever stamina the hops leave stays for
-//! later rounds.
+//! Each hop pays its CROSSING price (`crossing_stamina_cost`: half the
+//! source cell's standard move cost plus half the destination's, each
+//! rounded up); whatever stamina the hops leave stays for later
+//! rounds.
 //!
 //! No attribute gates live here: stamina decides whether a hop
 //! happens (the action dispatch's stamina pre-gate and the hop
@@ -31,29 +32,34 @@ pub enum TravelResult {
 }
 
 impl Character {
-    /// The stamina price of one sub-hop into `dest`: the standard move
-    /// cost for that area's terrain (base 20 x terrain multiplier x
-    /// affinity x desperation). WHY: destination-priced movement — each
-    /// hop pays for the tile it enters, never a share of the pool (owner
-    /// decision after the PR #58 20/80 example turned out too literal).
-    /// Unknown areas price at the default terrain — test harnesses pass
-    /// empty `all_areas`.
-    pub(crate) fn hop_stamina_cost(&self, dest: Area, all_areas: &[AreaDetails]) -> u32 {
-        let terrain = all_areas
-            .iter()
-            .find(|ad| ad.area == Some(dest))
-            .map(|ad| ad.terrain.clone())
-            .unwrap_or_else(areas::default_terrain);
-        crate::calculate_stamina_cost(&Action::Move(None), &terrain, self)
+    /// The stamina price of one sub-hop from `from` to `to`: the
+    /// crossing cost of the two cells' standard move costs (base 20 x
+    /// terrain multiplier x affinity x desperation, per area's
+    /// terrain) — half the source's plus half the destination's, each
+    /// rounded up (see [`crate::crossing_stamina_cost`]). WHY:
+    /// crossing-priced movement — neither tile dominates a crossing
+    /// (owner decision; see the formula's doc for the 30/40 example).
+    /// Unknown areas price at the default terrain — test harnesses
+    /// pass empty `all_areas`.
+    pub(crate) fn hop_stamina_cost(&self, from: Area, to: Area, all_areas: &[AreaDetails]) -> u32 {
+        let standard_cost = |area: Area| {
+            let terrain = all_areas
+                .iter()
+                .find(|ad| ad.area == Some(area))
+                .map(|ad| ad.terrain.clone())
+                .unwrap_or_else(areas::default_terrain);
+            crate::calculate_stamina_cost(&Action::Move(None), &terrain, self)
+        };
+        crate::crossing_stamina_cost(standard_cost(from), standard_cost(to))
     }
 
     /// Moves the character ONE sub-hop this phase (one Move beat).
     ///
     /// The hop goes toward `suggested_location` — or to a random open
-    /// neighbor when `None` (wander) — and pays the destination's own
-    /// move cost (see [`Character::hop_stamina_cost`]). Two Move
-    /// beats in one phase are the two sub-hops cap; each beat calls
-    /// this once.
+    /// neighbor when `None` (wander) — and pays the crossing price of
+    /// the source and destination cells (see
+    /// [`Character::hop_stamina_cost`]). Two Move beats in one phase
+    /// are the two sub-hops cap; each beat calls this once.
     ///
     /// Cells inside closed areas are never entered: the path avoids
     /// them, and a suggested goal unreachable around a closure
@@ -113,7 +119,7 @@ impl Character {
             _ => None,
         };
 
-        // 3. The beat's single sub-hop, priced by its destination.
+        // 3. The beat's single sub-hop, priced by its crossing.
         let Some(hop) = self.next_sub_hop(goal, closed_areas, &mut rng) else {
             let current_area_name = current.area.to_string();
             let line = GameOutput::CharacterTravelNoOptions(
@@ -131,7 +137,7 @@ impl Character {
             return TravelResult::Failure;
         };
 
-        let cost = self.hop_stamina_cost(hop.area, all_areas);
+        let cost = self.hop_stamina_cost(current.area, hop.area, all_areas);
         if self.stamina < cost {
             let current_area_name = current.area.to_string();
             let line = GameOutput::CharacterTravelExhausted(
@@ -235,7 +241,9 @@ mod tests {
     }
 
     fn hop_price(c: &Character) -> u32 {
-        crate::calculate_stamina_cost(&Action::Move(None), &areas::default_terrain(), c)
+        let standard =
+            crate::calculate_stamina_cost(&Action::Move(None), &areas::default_terrain(), c);
+        crate::crossing_stamina_cost(standard, standard)
     }
 
     fn moved_events(events: &[TaggedEvent]) -> Vec<&MessagePayload> {
@@ -262,7 +270,7 @@ mod tests {
         assert_eq!(
             character.stamina,
             100 - hop_price(&character),
-            "the hop paid its destination price; the remainder stays"
+            "the hop paid its crossing price; the remainder stays"
         );
 
         // Second Move beat: one more hop, one more price.
@@ -275,13 +283,13 @@ mod tests {
         assert_eq!(
             character.stamina,
             100 - 2 * hop_price(&character),
-            "each beat paid its destination price; the remainder stays"
+            "each beat paid its crossing price; the remainder stays"
         );
     }
 
     #[rstest]
     #[tokio::test]
-    async fn move_beats_take_one_sub_hop_each_paying_its_destination(character: Character) {
+    async fn move_beats_take_one_sub_hop_each_paying_its_crossing(character: Character) {
         let mut character = character;
         let mut events = Vec::new();
         // Hub triangle 0 -> Sector 1 triangle 0: the door into
@@ -297,7 +305,7 @@ mod tests {
         assert_eq!(
             character.stamina,
             100 - hop_price(&character),
-            "first destination price paid, remainder kept"
+            "first crossing price paid, remainder kept"
         );
 
         // Second Move beat toward the same goal: one more hop.
@@ -311,7 +319,7 @@ mod tests {
         assert_eq!(
             character.stamina,
             100 - 2 * hop_price(&character),
-            "both destination prices paid, remainder kept"
+            "both crossing prices paid, remainder kept"
         );
 
         let moved = moved_events(&events);
@@ -344,7 +352,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn single_hop_pays_only_its_destination_price(character: Character) {
+    async fn single_hop_pays_only_its_crossing_price(character: Character) {
         let mut character = character;
         let mut events = Vec::new();
         let goal = at(Hub, 1); // adjacent ring triangle
@@ -359,11 +367,50 @@ mod tests {
         assert_eq!(moved_events(&events).len(), 1);
     }
 
+    /// A cross-area hop prices at half the SOURCE area's standard
+    /// cost plus half the DESTINATION's, each rounded up: Clearing
+    /// (20) -> Desert (40) costs 10 + 20 = 30, not the destination's
+    /// full 40.
+    #[rstest]
+    #[tokio::test]
+    async fn cross_area_hop_averages_source_and_destination_terrain(character: Character) {
+        let mut character = character;
+        character.blood = 1000; // full health -> desperation 1.0
+        character.terrain_affinity = vec![]; // no 0.8 affinity discount
+        let all_areas = vec![
+            AreaDetails::new_with_terrain(
+                Some("Hub".to_string()),
+                Hub,
+                world::terrain::TerrainType::new(world::terrain::BaseTerrain::Clearing, vec![])
+                    .unwrap(),
+            ),
+            AreaDetails::new_with_terrain(
+                Some("S1".to_string()),
+                Sector1,
+                world::terrain::TerrainType::new(world::terrain::BaseTerrain::Desert, vec![])
+                    .unwrap(),
+            ),
+        ];
+        // Hub triangle 0 -> Sector1 triangle 3 crosses the door.
+        let result = character.travels(
+            &[],
+            Some(Location::center(Sector1)),
+            &all_areas,
+            &mut Vec::new(),
+        );
+        assert_eq!(result, TravelResult::Success(at(Sector1, 3)));
+        assert_eq!(
+            character.stamina,
+            100 - (10 + 20),
+            "hop paid ceil(20/2) from Hub plus ceil(40/2) into Desert"
+        );
+    }
+
     #[rstest]
     #[tokio::test]
     async fn second_beat_fails_when_stamina_covers_only_one_hop(character: Character) {
         let mut character = character;
-        // Exactly one destination price: beat 1 empties the pool.
+        // Exactly one crossing price: beat 1 empties the pool.
         character.stamina = hop_price(&character);
         let result = character.travels(&[], Some(Location::center(Sector1)), &[], &mut Vec::new());
         assert_eq!(result, TravelResult::Success(at(Sector1, 3)));
@@ -372,7 +419,7 @@ mod tests {
             "the one affordable hop spent everything"
         );
 
-        // The second beat cannot pay its destination's price: the hop
+        // The second beat cannot pay its crossing price: the hop
         // fails with the travel-exhausted event and the location stays.
         let mut events = Vec::new();
         let result = character.travels(&[], Some(Location::center(Sector1)), &[], &mut events);
@@ -444,7 +491,7 @@ mod tests {
         assert_eq!(
             character.stamina,
             100 - hop_price(&character),
-            "the single hop paid its destination price"
+            "the single hop paid its crossing price"
         );
     }
 
