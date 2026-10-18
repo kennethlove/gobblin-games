@@ -621,6 +621,11 @@ fn bleed_out_death_emits_one_bled_out_and_one_killed() {
         BodyPart::Torso,
     ));
     let mut game = create_test_game_with_characters(vec![a]);
+    // WHY: the default low_character_threshold (8) makes constrain_areas
+    // close the lone open area with a random event (e.g. Wildfire -> Severe
+    // Burned), which can zero blood in process_status before the wound drain
+    // runs and announces an Unknown death instead of the bleed-out.
+    game.config.low_character_threshold = 1;
     // Without an area record the character's turn (where the wound drain
     // lives) never runs.
     game.areas
