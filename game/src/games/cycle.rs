@@ -703,15 +703,20 @@ impl Game {
                 };
 
                 // Use the pre-built character snapshot for observer tracking.
-                let other_characters: &[Character] = characters_by_area
+                let raw_characters: &[Character] = characters_by_area
                     .get(&area)
                     .map(|v| v.as_slice())
                     .unwrap_or(&[]);
+                let other_characters = crate::witnessing::witnesses(
+                    raw_characters,
+                    self.characters[idx].location,
+                    self.config.witnessing.phobia,
+                );
 
                 let phobia_ctx = PhobiaContext {
                     area: area_details,
                     is_night: !day,
-                    other_characters_in_area: other_characters,
+                    other_characters_in_area: &other_characters,
                     cycle_messages: &[],
                     cycle: phobia_cycle,
                 };
@@ -742,14 +747,19 @@ impl Game {
 
             for &idx in &characters_to_act {
                 let area = self.characters[idx].location.area;
-                let other_characters: &[Character] = characters_by_area
+                let raw_characters: &[Character] = characters_by_area
                     .get(&area)
                     .map(|v| v.as_slice())
                     .unwrap_or(&[]);
+                let other_characters = crate::witnessing::witnesses(
+                    raw_characters,
+                    self.characters[idx].location,
+                    self.config.witnessing.trauma,
+                );
 
                 let t_result = characters::afflictions::trauma::process_traumas(
                     &mut self.characters[idx],
-                    other_characters,
+                    &other_characters,
                     trauma_cycle,
                     rng,
                 );
@@ -777,14 +787,19 @@ impl Game {
 
             for &idx in &characters_to_act {
                 let area = self.characters[idx].location.area;
-                let other_characters: &[Character] = characters_by_area
+                let raw_characters: &[Character] = characters_by_area
                     .get(&area)
                     .map(|v| v.as_slice())
                     .unwrap_or(&[]);
+                let other_characters = crate::witnessing::witnesses(
+                    raw_characters,
+                    self.characters[idx].location,
+                    self.config.witnessing.addiction,
+                );
 
                 let msgs = characters::afflictions::addiction::process_addictions(
                     &mut self.characters[idx],
-                    other_characters,
+                    &other_characters,
                     addiction_cycle,
                     rng,
                 );
@@ -968,6 +983,7 @@ impl Game {
                     environment_details.area_details,
                     nearby_characters,
                     rng,
+                    self.config.witnessing.rescue,
                 )
             {
                 override_suggestion = Some(ActionSuggestion {
@@ -1294,11 +1310,20 @@ impl Game {
                     )
                     .collect();
 
-                // Character identifier -> area name mapping for same-area contact checks.
+                // Character identifier -> contact-key mapping for
+                // same-area contact checks. With witnessing.fixation on,
+                // the key is "area|sub" so contact requires the same sub-tile.
                 let character_areas: HashMap<String, String> = self
                     .characters
                     .iter()
-                    .map(|t| (t.identifier.to_string(), t.location.area.to_string()))
+                    .map(|t| {
+                        let key = if self.config.witnessing.fixation {
+                            format!("{}|{}", t.location.area, t.location.sub.index())
+                        } else {
+                            t.location.area.to_string()
+                        };
+                        (t.identifier.to_string(), key)
+                    })
                     .collect();
 
                 let fix_ctx = FixationContext {
@@ -1308,6 +1333,7 @@ impl Game {
                     dead_character_killers: &dead_character_killers,
                     id_to_uuid: &id_to_uuid,
                     character_areas: &character_areas,
+                    co_presence: self.config.witnessing.fixation,
                     closed_areas: &closed_areas,
                     all_item_ids: &all_item_ids,
                 };

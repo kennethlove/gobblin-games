@@ -83,7 +83,7 @@ fn rescue_bonus_applied_to_trapped_target() {
     let mut rng = SmallRng::seed_from_u64(0);
     let mut events = Vec::new();
 
-    let resolved = resolve_rescue(&area, &rescuer, &mut target, &mut events, &mut rng);
+    let resolved = resolve_rescue(&area, &rescuer, &mut target, &mut events, &mut rng, false);
     assert!(
         resolved,
         "rescue should resolve for co-located trapped target"

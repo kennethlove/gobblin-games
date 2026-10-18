@@ -423,3 +423,75 @@ fn map_cause_to_death_cause_passthrough() {
         DeathCause::Unknown
     ));
 }
+
+#[test]
+fn witness_ally_death_co_presence_requires_same_sub_tile() {
+    let mut game = Game::default();
+    game.config.trauma_enabled = true;
+    game.config.witnessing.trauma_producers = true;
+    game.current_phase = Phase::DAY;
+
+    let mut victim = make_character("Victim");
+    let victim_id = victim.id;
+    victim.location.area = Area::Sector1;
+    victim.blood = 0;
+    game.characters.push(victim);
+
+    // Same area, different sub-tile: not a witness with the knob on.
+    let mut witness = make_character("Witness");
+    witness.location.area = Area::Sector1;
+    witness.location.sub = areas::hex::SubTriangle::new(2);
+    witness.allies.push(victim_id);
+    game.characters.push(witness);
+
+    game.messages.push(make_killed_msg(
+        game.characters[0].identifier.as_str(),
+        "Victim",
+        Phase::DAY,
+    ));
+
+    run_trauma_producers(&mut game);
+
+    assert!(
+        game.messages
+            .iter()
+            .all(|m| !matches!(&m.payload, MessagePayload::TraumaAcquired { .. })),
+        "cross-sub-tile ally death must not grant trauma with co-presence on"
+    );
+}
+
+#[test]
+fn mass_casualty_co_presence_counts_only_same_sub_tile() {
+    let mut game = Game::default();
+    game.config.trauma_enabled = true;
+    game.config.witnessing.trauma_producers = true;
+    game.current_phase = Phase::DAY;
+
+    // Three victims in Sector1 sub 0.
+    for name in ["V1", "V2", "V3"] {
+        let mut v = make_character(name);
+        v.location.area = Area::Sector1;
+        v.blood = 0;
+        game.characters.push(v);
+    }
+
+    // Witness shares the area but not the sub-tile.
+    let mut w = make_character("Witness");
+    w.location.area = Area::Sector1;
+    w.location.sub = areas::hex::SubTriangle::new(1);
+    game.characters.push(w);
+
+    for v in &game.characters[..3] {
+        game.messages
+            .push(make_killed_msg(v.identifier.as_str(), &v.name, Phase::DAY));
+    }
+
+    run_trauma_producers(&mut game);
+
+    assert!(
+        game.messages
+            .iter()
+            .all(|m| !matches!(&m.payload, MessagePayload::TraumaAcquired { .. })),
+        "witness outside the deaths' sub-tile must not get mass-casualty trauma"
+    );
+}

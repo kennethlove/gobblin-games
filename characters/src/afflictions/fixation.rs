@@ -150,12 +150,15 @@ pub const DECAY_THRESHOLD: u32 = 5;
 pub struct FixationContext<'a> {
     /// Current cycle number.
     pub cycle: u32,
-    /// Maps dead character UUID → optional killer UUID.
+    /// Maps dead character UUID -> optional killer UUID.
     pub dead_character_killers: &'a HashMap<Uuid, Option<Uuid>>,
-    /// Maps character identifier string → UUID.
+    /// Maps character identifier string -> UUID.
     pub id_to_uuid: &'a HashMap<String, Uuid>,
-    /// Maps character identifier → area name (for same-area contact checks).
+    /// Maps character identifier -> contact key (area name, or "area|sub"
+    /// when `co_presence` is on — for same-area contact checks).
     pub character_areas: &'a HashMap<String, String>,
+    /// Witness co-presence knob: contact requires the same sub-tile.
+    pub co_presence: bool,
     /// Set of closed area names (lowercased for matching).
     pub closed_areas: &'a BTreeSet<String>,
     /// Set of all item identifiers still present in the game.
@@ -178,7 +181,11 @@ pub fn process_character_fixations(
     let character_id = character.identifier.clone();
     let character_uuid = character.id;
     let character_area = character.location.area;
-    let self_area_str = character_area.to_string();
+    let self_area_str = if ctx.co_presence {
+        format!("{}|{}", character_area, character.location.sub.index())
+    } else {
+        character_area.to_string()
+    };
 
     // Collect fixation keys (clone to release borrow on afflictions).
     let fixation_keys: Vec<(AfflictionKey, FixationTarget, FixationOrigin, u32)> = character
@@ -380,12 +387,14 @@ mod tests {
         character_areas: &'a HashMap<String, String>,
         closed_areas: &'a BTreeSet<String>,
         all_item_ids: &'a BTreeSet<String>,
+        co_presence: bool,
     ) -> FixationContext<'a> {
         FixationContext {
             cycle,
             dead_character_killers,
             id_to_uuid,
             character_areas,
+            co_presence,
             closed_areas,
             all_item_ids,
         }
@@ -558,6 +567,7 @@ mod tests {
             &character_areas,
             &closed_areas,
             &all_items,
+            false,
         );
 
         let msgs = process_character_fixations(&mut a, &ctx);
@@ -599,6 +609,7 @@ mod tests {
             &character_areas,
             &closed_areas,
             &all_items,
+            false,
         );
 
         let msgs = process_character_fixations(&mut t, &ctx);
@@ -636,6 +647,7 @@ mod tests {
             &character_areas,
             &closed_areas,
             &all_items,
+            false,
         );
 
         let msgs = process_character_fixations(&mut t, &ctx);
@@ -690,6 +702,7 @@ mod tests {
             &character_areas,
             &closed_areas,
             &all_items,
+            false,
         );
 
         let msgs = process_character_fixations(&mut a, &ctx);
@@ -726,6 +739,7 @@ mod tests {
             &character_areas,
             &closed_areas,
             &all_items,
+            false,
         );
 
         let msgs = process_character_fixations(&mut t, &ctx);
@@ -785,7 +799,7 @@ mod tests {
         let mut id_to_uuid: HashMap<String, Uuid> = HashMap::new();
         id_to_uuid.insert(a.identifier.to_string(), a.id);
         id_to_uuid.insert(b.identifier.to_string(), b.id);
-        // B is alive → no entry in dead_killers
+        // B is alive -> no entry in dead_killers
         let dead_killers = HashMap::new();
         let closed_areas = BTreeSet::new();
         let all_items = BTreeSet::new();
@@ -799,11 +813,12 @@ mod tests {
             &character_areas,
             &closed_areas,
             &all_items,
+            false,
         );
 
         let msgs = process_character_fixations(&mut a, &ctx);
 
-        // Contact should prevent decay → no messages, fixation preserved.
+        // Contact should prevent decay -> no messages, fixation preserved.
         assert!(msgs.is_empty(), "expected no messages, got: {msgs:?}");
         assert_eq!(count_fixations(&a.afflictions), 1);
 
@@ -811,6 +826,91 @@ mod tests {
         let aff = a.afflictions.values().next().unwrap();
         let meta = aff.fixation_metadata.as_ref().unwrap();
         assert_eq!(meta.cycles_since_last_contact, 0);
+    }
+
+    fn co_presence_characters(diff_sub: bool) -> (Character, Character) {
+        let mut a = make_character();
+        let mut b = make_character();
+        a.location.area = Area::Hub;
+        b.location.area = Area::Hub;
+        if diff_sub {
+            b.location.sub = areas::hex::SubTriangle::new(2);
+        }
+        add_acquired_fixation(&mut a, FixationTarget::Character(b.identifier.to_string()));
+        (a, b)
+    }
+
+    fn contact_keys(a: &Character, b: &Character) -> HashMap<String, String> {
+        // Contact keys as the cycle build site encodes them with the knob on.
+        HashMap::from([
+            (
+                a.identifier.to_string(),
+                format!("Hub|{}", a.location.sub.index()),
+            ),
+            (
+                b.identifier.to_string(),
+                format!("Hub|{}", b.location.sub.index()),
+            ),
+        ])
+    }
+
+    #[test]
+    fn co_presence_contact_resets_in_same_sub_tile() {
+        let (mut a, b) = co_presence_characters(false);
+        let id_to_uuid = HashMap::from([
+            (a.identifier.to_string(), a.id),
+            (b.identifier.to_string(), b.id),
+        ]);
+        let dead_killers: HashMap<Uuid, Option<Uuid>> = HashMap::new();
+        let closed_areas = BTreeSet::new();
+        let all_items = BTreeSet::new();
+        let character_areas = contact_keys(&a, &b);
+        let ctx = ctx_from_refs(
+            5,
+            &id_to_uuid,
+            &dead_killers,
+            &character_areas,
+            &closed_areas,
+            &all_items,
+            true,
+        );
+        let msgs = process_character_fixations(&mut a, &ctx);
+        assert!(
+            msgs.is_empty(),
+            "same sub-tile should make contact: {msgs:?}"
+        );
+        let aff = a.afflictions.values().next().unwrap();
+        let meta = aff.fixation_metadata.as_ref().unwrap();
+        assert_eq!(meta.cycles_since_last_contact, 0);
+    }
+
+    #[test]
+    fn co_presence_blocks_contact_across_sub_tiles() {
+        let (mut a, b) = co_presence_characters(true);
+        let id_to_uuid = HashMap::from([
+            (a.identifier.to_string(), a.id),
+            (b.identifier.to_string(), b.id),
+        ]);
+        let dead_killers: HashMap<Uuid, Option<Uuid>> = HashMap::new();
+        let closed_areas = BTreeSet::new();
+        let all_items = BTreeSet::new();
+        let character_areas = contact_keys(&a, &b);
+        let ctx = ctx_from_refs(
+            5,
+            &id_to_uuid,
+            &dead_killers,
+            &character_areas,
+            &closed_areas,
+            &all_items,
+            true,
+        );
+        let msgs = process_character_fixations(&mut a, &ctx);
+        // No contact -> decay fires (6 >= DECAY_THRESHOLD at cycle 5).
+        assert!(
+            matches!(msgs.first(), Some(MessagePayload::FixationFaded { .. })),
+            "different sub-tile must not count as contact, got {msgs:?}"
+        );
+        assert_eq!(count_fixations(&a.afflictions), 0);
     }
 
     #[test]
@@ -855,6 +955,7 @@ mod tests {
             &character_areas,
             &closed_areas,
             &all_items,
+            false,
         );
 
         let _msgs = process_character_fixations(&mut t, &ctx);
@@ -919,6 +1020,7 @@ mod tests {
             &character_areas,
             &closed_areas,
             &all_items,
+            false,
         );
 
         let msgs = process_character_fixations(&mut t, &ctx);
