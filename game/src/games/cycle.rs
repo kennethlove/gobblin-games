@@ -994,6 +994,7 @@ impl Game {
             let mut character_events: Vec<world::messages::TaggedEvent> = Vec::new();
             character.process_turn_phase(
                 override_suggestion,
+                self.config.witnessing.affliction_visibility,
                 &mut environment_details,
                 encounter_context,
                 rng,

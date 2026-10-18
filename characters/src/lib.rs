@@ -816,6 +816,7 @@ impl Character {
     pub fn process_turn_phase(
         &mut self,
         action_suggestion: Option<ActionSuggestion>,
+        affliction_visibility: bool,
         environment_details: &mut EnvironmentContext<'_>,
         encounter_context: EncounterContext,
         rng: &mut impl Rng,
@@ -1053,7 +1054,12 @@ impl Character {
                 }
                 Action::None => {}
                 Action::ProposeAlliance => {
-                    self.act_propose_alliance(&encounter_context, rng, events);
+                    self.act_propose_alliance(
+                        &encounter_context,
+                        affliction_visibility,
+                        rng,
+                        events,
+                    );
                 }
                 Action::SeekShelter => {
                     self.act_seek_shelter(
@@ -1765,9 +1771,24 @@ impl Character {
         }
     }
 
+    /// dxj gate `witnessing.affliction_visibility`: can the proposer see
+    /// any affliction on `target`, and does that bar candidacy? Off =
+    /// legacy — candidacy never considers afflictions. On = co-present
+    /// targets show Moderate+ afflictions (Severe always, Mild never),
+    /// and anyone showing one is skipped.
+    fn perceivable_candidate(
+        observer: &Character,
+        target: &Character,
+        affliction_visibility: bool,
+    ) -> bool {
+        !affliction_visibility
+            || crate::afflictions::visible_afflictions_to(observer, target, true).is_empty()
+    }
+
     fn act_propose_alliance(
         &mut self,
         encounter_context: &EncounterContext,
+        affliction_visibility: bool,
         rng: &mut impl Rng,
         events: &mut Vec<TaggedEvent>,
     ) {
@@ -1785,6 +1806,9 @@ impl Character {
             .filter(|t| !self.allies.contains(&t.id))
             .filter(|t| t.allies.len() < MAX_ALLIES)
             .filter(|t| passes_gate(&self.traits, &t.traits))
+            // Affliction perception (dxj gate): with affliction_visibility
+            // on, skip candidates showing a visible affliction.
+            .filter(|t| Self::perceivable_candidate(self, t, affliction_visibility))
             .collect();
 
         // Phobia veto (qqqx PR3 spec §12):
@@ -4023,6 +4047,81 @@ mod tests {
         assert!(
             area.placed_traps[1].triggered,
             "same-sub-tile trap must be revealed"
+        );
+    }
+
+    fn gate_and_candidacy_test_affliction(
+        kind: shared::afflictions::AfflictionKind,
+        severity: shared::afflictions::Severity,
+    ) -> shared::afflictions::Affliction {
+        shared::afflictions::Affliction {
+            kind,
+            body_part: None,
+            severity,
+            source: shared::afflictions::AfflictionSource::Combat {
+                attacker_id: "characters:test".into(),
+            },
+            acquired_cycle: 1,
+            last_progressed_cycle: 1,
+            trauma_metadata: None,
+            phobia_metadata: None,
+            fixation_metadata: None,
+            addiction_metadata: None,
+            trapped_metadata: None,
+        }
+    }
+
+    #[test]
+    fn alliance_candidate_gate_honors_visibility_knob() {
+        use shared::afflictions::{AfflictionKind, Severity};
+        let me = character();
+        let mut other = character();
+        other.location = me.location;
+
+        // Knob off: candidacy never considers afflictions (legacy).
+        assert!(Character::perceivable_candidate(&me, &other, false));
+        // Knob on, clean target: still perceivable.
+        assert!(Character::perceivable_candidate(&me, &other, true));
+        // Knob on, Moderate affliction, co-present: skipped.
+        let moderate =
+            gate_and_candidacy_test_affliction(AfflictionKind::Blind, Severity::Moderate);
+        other.afflictions.insert(moderate.key(), moderate);
+        assert!(
+            !Character::perceivable_candidate(&me, &other, true),
+            "Moderate visible to co-present observer"
+        );
+        assert!(
+            Character::perceivable_candidate(&me, &other, false),
+            "knob off ignores afflictions"
+        );
+        // Knob on, Moderate, other sub-tile: hidden (co-presence required).
+        other.location =
+            areas::location::Location::new(areas::Area::Hub, areas::hex::SubTriangle::new(4));
+        assert!(
+            Character::perceivable_candidate(&me, &other, true),
+            "Moderate only visible with co-presence"
+        );
+        // Knob on, Severe: public regardless of location.
+        other.afflictions.clear();
+        let severe = gate_and_candidacy_test_affliction(AfflictionKind::Blind, Severity::Severe);
+        other.afflictions.insert(severe.key(), severe);
+        assert!(
+            !Character::perceivable_candidate(&me, &other, true),
+            "Severe public"
+        );
+    }
+
+    #[test]
+    fn alliance_candidate_gate_ignores_mild_afflictions() {
+        use shared::afflictions::{AfflictionKind, Severity};
+        let me = character();
+        let mut other = character();
+        other.location = me.location;
+        let mild = gate_and_candidacy_test_affliction(AfflictionKind::Blind, Severity::Mild);
+        other.afflictions.insert(mild.key(), mild);
+        assert!(
+            Character::perceivable_candidate(&me, &other, true),
+            "Mild is hidden from everyone"
         );
     }
 
