@@ -1321,14 +1321,19 @@ impl Character {
         _rng: &mut impl Rng,
         _events: &mut Vec<TaggedEvent>,
     ) {
-        // Check area cap: max 3 traps per area
+        // Cap: 2 untriggered traps per SUB-TILE (dxj owner gate: was 3 per
+        // area before traps were keyed). Traps in other sub-tiles of the
+        // same area don't count against this one.
         let untriggered_count = _area_details
             .placed_traps
             .iter()
-            .filter(|t| !t.triggered)
+            .filter(|t| !t.triggered && t.sub == self.location.sub)
             .count();
-        if untriggered_count >= 3 {
-            let line = format!("{} can't set another trap here — area is full.", self.name);
+        if untriggered_count >= 2 {
+            let line = format!(
+                "{} can't set another trap here — sub-tile is full.",
+                self.name
+            );
             _events.push(TaggedEvent::new(line, MessagePayload::Generic));
             return;
         }
@@ -1367,7 +1372,8 @@ impl Character {
         ));
     }
 
-    /// Execute a Search action — reveals hidden traps in current area.
+    /// Execute a Search action — reveals hidden traps in the character's
+    /// current sub-tile only (dxj owner gate: sub-tile search).
     fn act_search(
         &mut self,
         area_details: &mut AreaDetails,
@@ -1378,12 +1384,12 @@ impl Character {
             .placed_traps
             .iter()
             .enumerate()
-            .filter(|(_, t)| !t.triggered)
+            .filter(|(_, t)| !t.triggered && t.sub == self.location.sub)
             .map(|(i, _)| i)
             .collect();
 
         if untriggered.is_empty() {
-            let line = format!("{} searches the area but finds no traps.", self.name);
+            let line = format!("{} searches the sub-tile but finds no traps.", self.name);
             events.push(TaggedEvent::new(line, MessagePayload::Generic));
             return;
         }
@@ -3952,6 +3958,71 @@ mod tests {
             area.placed_traps[0].sub,
             areas::hex::SubTriangle::new(3),
             "placement records the setter's sub-tile"
+        );
+    }
+
+    #[test]
+    fn set_trap_caps_at_two_untriggered_traps_in_own_sub_tile() {
+        let mut me = character();
+        me.location =
+            areas::location::Location::new(areas::Area::Hub, areas::hex::SubTriangle::new(3));
+        let mut area = survival_area(world::terrain::BaseTerrain::Clearing);
+        // Untriggered traps in OTHER sub-tiles don't count against this one.
+        for sub in 0..5u8 {
+            area.placed_traps.push(trap_at(
+                "some-other-goblin",
+                areas::hex::SubTriangle::new(sub),
+                1,
+            ));
+        }
+        let mut rng = SmallRng::seed_from_u64(11);
+        let mut events: Vec<TaggedEvent> = Vec::new();
+
+        me.act_set_trap(None, None, &mut area, &mut rng, &mut events);
+        me.act_set_trap(None, None, &mut area, &mut rng, &mut events);
+        me.act_set_trap(None, None, &mut area, &mut rng, &mut events);
+
+        let own_sub = areas::hex::SubTriangle::new(3);
+        assert_eq!(
+            area.placed_traps
+                .iter()
+                .filter(|t| t.sub == own_sub)
+                .count(),
+            2,
+            "cap is 2 untriggered traps per sub-tile"
+        );
+    }
+
+    #[test]
+    fn search_only_reveals_traps_in_own_sub_tile() {
+        let mut me = character();
+        me.location =
+            areas::location::Location::new(areas::Area::Hub, areas::hex::SubTriangle::new(0));
+        let mut area = survival_area(world::terrain::BaseTerrain::Clearing);
+        // Concealment 1: any roll finds it — but only if the sub is scanned.
+        area.placed_traps.push(trap_at(
+            "some-other-goblin",
+            areas::hex::SubTriangle::new(4),
+            1,
+        ));
+        let mut rng = SmallRng::seed_from_u64(11);
+        let mut events: Vec<TaggedEvent> = Vec::new();
+
+        me.act_search(&mut area, &mut rng, &mut events);
+        assert!(
+            !area.placed_traps[0].triggered,
+            "cross-sub-tile trap must not be revealed"
+        );
+
+        area.placed_traps.push(trap_at(
+            "some-other-goblin",
+            areas::hex::SubTriangle::new(0),
+            1,
+        ));
+        me.act_search(&mut area, &mut rng, &mut events);
+        assert!(
+            area.placed_traps[1].triggered,
+            "same-sub-tile trap must be revealed"
         );
     }
 
