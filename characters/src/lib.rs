@@ -7,6 +7,7 @@ pub mod brains;
 pub mod combat;
 pub mod combat_beat;
 pub mod combat_tuning;
+pub mod evolution;
 pub mod events;
 mod helpers;
 pub mod incidents;
@@ -614,6 +615,10 @@ impl Character {
         } else {
             self.advancement_log.clear();
         }
+        // Trait evolution (dww.10): lifetime-record triggers earn durable
+        // gain/loss here — after settle (so lifetime totals are final),
+        // before capture (so the change lands in this game's baseline).
+        evolution::apply_evolution(&mut self);
         let baseline = baseline::GameBaseline::capture(&self);
         let Self {
             identifier,

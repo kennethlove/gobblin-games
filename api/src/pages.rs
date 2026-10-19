@@ -4,7 +4,7 @@
 //! `authenticate_db` live here so the page handlers built on them can
 //! also be mounted by integration
 //! tests, which link this library and not the binary. The binary
-//! re-exports them (`pub use api::pages::…`) so the handlers in
+//! re-exports them (`pub use api::pages::...`) so the handlers in
 //! `routes/` keep importing them through `crate::` unchanged.
 
 use crate::auth::require_auth;
@@ -148,6 +148,11 @@ pub struct MyGoblin {
     pub clan_name: String,
     pub status: String,
     pub avatar_url: Option<String>,
+    /// Pre-rendered trait panel (`trait_list.html` via
+    /// `render_trait_panel`), empty string when the goblin has no traits.
+    /// Evolution and revival can change traits between games (dww.10), so
+    /// the roster shows them.
+    pub traits_html: String,
 }
 
 /// Form payload shared by the create and edit posts. Both fields are
@@ -211,6 +216,10 @@ pub async fn my_goblins_handler(
                 .avatar
                 .as_deref()
                 .map(|path| state.storage.public_url(path)),
+            traits_html: crate::templates::game_detail::render_trait_panel(
+                &character.traits,
+                &character.temporary_traits,
+            ),
         })
         .collect();
 
@@ -272,7 +281,7 @@ pub async fn my_goblins_create_handler(
 }
 
 /// URL slug for a goblin name: lowercase, runs of non-alphanumerics
-/// folded into single hyphens (`Page Goblin` → `page-goblin`). Shared by
+/// folded into single hyphens (`Page Goblin` -> `page-goblin`). Shared by
 /// the `slug` Tera filter and `characters::resolve_owned_character_identifier`
 /// so form actions round-trip.
 pub fn slugify(name: &str) -> String {
