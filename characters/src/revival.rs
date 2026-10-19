@@ -8,10 +8,10 @@
 //! | Outcome  | Odds | Effect                                                    |
 //! |----------|------|-----------------------------------------------------------|
 //! | `Clean`  | 60%  | Wakes with no lasting change.                              |
-//! | `Penalty`| 20%  | Lingering ache: −1 to one of strength / defense / luck     |
+//! | `Penalty`| 20%  | Lingering ache: -1 to one of strength / defense / luck     |
 //! |          |      | (stat chosen by the roll, floor 1). Persistent.            |
 //! | `Scar`   | 10%  | Gains an eligible scar trait (Fragile, Paranoid,          |
-//! |          |      | Nearsighted); falls back to −1 luck when none fit.         |
+//! |          |      | Nearsighted); falls back to -1 luck when none fit.         |
 //! | `Bonus`  | 10%  | Gains an eligible bonus trait (Tough, Resilient, Cunning); |
 //! |          |      | falls back to +1 luck when none fit.                       |
 //!
@@ -108,7 +108,7 @@ const SCAR_TRAITS: &[Trait] = &[Trait::Fragile, Trait::Paranoid, Trait::Nearsigh
 /// Upside traits a bonus can grant.
 const BONUS_TRAITS: &[Trait] = &[Trait::Tough, Trait::Resilient, Trait::Cunning];
 
-/// Per-kind affliction → trait conversion odds at revival (spec §5's
+/// Per-kind affliction -> trait conversion odds at revival (spec §5's
 /// table, one config struct of plain numbers). **Placeholder values** —
 /// tuned with observability like every other odds table (spec §10.6).
 /// Percent of a `0..100` draw: success when `draw < odds`.
@@ -173,7 +173,7 @@ pub fn roll<R: Rng + ?Sized>(rng: &mut R) -> RevivalOutcome {
     outcome
 }
 
-/// −1 to one of strength / defense / luck (drawn from `rng`), floor 1.
+/// -1 to one of strength / defense / luck (drawn from `rng`), floor 1.
 pub fn apply_penalty<R: Rng + ?Sized>(character: &mut Character, rng: &mut R) {
     let stat = match rng.random_range(0..3u8) {
         0 => &mut character.attributes.strength,
@@ -185,7 +185,7 @@ pub fn apply_penalty<R: Rng + ?Sized>(character: &mut Character, rng: &mut R) {
     }
 }
 
-/// Grant an eligible scar trait; falls back to −1 luck when every scar
+/// Grant an eligible scar trait; falls back to -1 luck when every scar
 /// trait is already held or blocked by a conflict.
 pub fn apply_scar<R: Rng + ?Sized>(character: &mut Character, rng: &mut R) {
     match pick_eligible(character, SCAR_TRAITS, rng) {
@@ -354,6 +354,9 @@ pub fn restore(character: &mut Character) {
 /// happen in `Game::post_game_recovery` *before* this runs, so a fresh
 /// grant is never decremented in the boundary that granted it.
 pub fn revive<R: Rng + ?Sized>(character: &mut Character, rng: &mut R) -> RevivalOutcome {
+    // Lifetime counter (dww.10.1): every call here is one revival — the
+    // function has no non-revival exit — so the seam increments up front.
+    character.statistics.times_revived = character.statistics.times_revived.saturating_add(1);
     let outcome = roll(rng);
     match outcome {
         RevivalOutcome::Clean => {}
@@ -506,6 +509,19 @@ mod tests {
     }
 
     #[rstest]
+    fn revive_increments_the_lifetime_counter(mut character: Character) {
+        character.traits.clear();
+        character.dies();
+        let mut rng = SmallRng::seed_from_u64(5);
+        assert_eq!(character.statistics.times_revived, 0);
+        revive(&mut character, &mut rng);
+        assert_eq!(character.statistics.times_revived, 1);
+        character.dies();
+        revive(&mut character, &mut rng);
+        assert_eq!(character.statistics.times_revived, 2);
+    }
+
+    #[rstest]
     fn revive_applies_the_rolled_outcome(mut character: Character) {
         // Pin RNG-rolled fixture stats so the seeded penalty always bites
         // (same pre-existing flake class as penalty_reduces_one_stat...).
@@ -541,7 +557,7 @@ mod tests {
         assert!(character.is_alive());
     }
 
-    // ---- Affliction → trait conversion at revival (spec §3.2 design A
+    // ---- Affliction -> trait conversion at revival (spec §3.2 design A
     // consume, §5 odds table, §10.5 boundary-only) ----
 
     use shared::afflictions::{
@@ -620,7 +636,7 @@ mod tests {
     }
 
     /// Seeded revival conversion rolls per eligible kind: the grant rate
-    /// conforms to the odds table (statistical sanity band, ±5 points over
+    /// conforms to the odds table (statistical sanity band, +/-5 points over
     /// 10k deterministic seeds), and every grant consumes its affliction.
     #[test]
     fn conversion_frequency_conforms_to_the_odds_table() {
@@ -844,7 +860,7 @@ mod tests {
     /// Independent boon/curse rolls honored across a simulated second revival:
     /// (a) `curse_persists` draws conform to `EVENT_CURSE_PERSIST_ODDS`,
     /// (b) boon grant rate = `EVENT_ODDS` (a decided boon always sticks) and
-    ///     curse grant rate = `EVENT_ODDS × EVENT_CURSE_PERSIST_ODDS`; failed
+    ///     curse grant rate = `EVENT_ODDS x EVENT_CURSE_PERSIST_ODDS`; failed
     ///     curse persistence leaves the curse off,
     /// (c) landed traits stick across a second revival; presence after two
     ///     revivals matches the combined-rate formula.
@@ -866,7 +882,7 @@ mod tests {
             "curse persistence rate {persisted_pct}%, want {EVENT_CURSE_PERSIST_ODDS}% ±5"
         );
 
-        // (b) Boon rate = trigger; curse rate = trigger × persistence.
+        // (b) Boon rate = trigger; curse rate = trigger x persistence.
         let mut boon_count = 0u32;
         let mut curse_count = 0u32;
         let mut both_count = 0u32;
@@ -984,7 +1000,7 @@ mod tests {
         }
         assert!(filtered > 0, "filtered sample must not be empty");
         // Per-revival chance any event trait lands:
-        // 1 − (1 − boon)·(1 − boon·curse-persist).
+        // 1 - (1 - boon)·(1 - boon·curse-persist).
         let e = EVENT_ODDS as f64 / 100.0;
         let ep = e * EVENT_CURSE_PERSIST_ODDS as f64 / 100.0;
         let q = 1.0 - (1.0 - e) * (1.0 - ep);

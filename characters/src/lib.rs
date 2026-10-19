@@ -7,8 +7,8 @@ pub mod brains;
 pub mod combat;
 pub mod combat_beat;
 pub mod combat_tuning;
-pub mod evolution;
 pub mod events;
+pub mod evolution;
 mod helpers;
 pub mod incidents;
 pub mod inventory;
@@ -661,6 +661,7 @@ impl Character {
                 wins: statistics.wins,
                 defeats: statistics.defeats,
                 draws: statistics.draws,
+                times_revived: statistics.times_revived,
             },
             ever_addicted_to,
             advancement_log,
@@ -2282,6 +2283,10 @@ pub struct Statistics {
     /// Which game do these stats relate to?
     #[serde(default)]
     pub game: String,
+    /// How many times have they been revived? Lifetime total, carried
+    /// across game boundaries by the baseline settle.
+    #[serde(default)]
+    pub times_revived: u32,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

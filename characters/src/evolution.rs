@@ -18,8 +18,9 @@
 //! - **Conflicts** — `gain_trait` enforces `traits::CONFLICTS`; a trigger
 //!   whose trait conflicts with one held is skipped, never forced.
 //! - Only lifetime fight record stats are reachable today (kills, wins,
-//!   defeats, draws). Betrayals-survived and revival counts have no
-//!   persisted lifetime counter yet; their triggers wait on one.
+//!   defeats, draws) plus the lifetime revival counter (`times_revived`).
+//!   Betrayals-survived has no persisted lifetime counter yet; its trigger
+//!   waits on one.
 
 use crate::Character;
 use crate::traits::Trait;
@@ -39,6 +40,7 @@ pub enum Stat {
     Kills,
     Wins,
     Defeats,
+    Revivals,
 }
 
 /// What crossing a trigger's threshold does.
@@ -87,6 +89,11 @@ pub const TRIGGERS: &[Trigger] = &[
         threshold: 25,
         effect: Effect::Lose(Trait::Paranoid),
     },
+    Trigger {
+        stat: Stat::Revivals,
+        threshold: 2,
+        effect: Effect::Gain(Trait::Tough),
+    },
 ];
 
 fn lifetime(character: &Character, stat: Stat) -> u32 {
@@ -94,6 +101,7 @@ fn lifetime(character: &Character, stat: Stat) -> u32 {
         Stat::Kills => character.statistics.kills,
         Stat::Wins => character.statistics.wins,
         Stat::Defeats => character.statistics.defeats,
+        Stat::Revivals => character.statistics.times_revived,
     }
 }
 
@@ -226,6 +234,21 @@ mod tests {
                 .any(|e| matches!(e, crate::advancement::AdvancementEvent::TraitLost { trait_ } if *trait_ == Trait::Reckless)),
             "evolution losses ride the sanctioned lose_trait path"
         );
+    }
+
+    #[test]
+    fn revivals_trigger_fires_at_two_not_one() {
+        let mut c = goblin();
+        c.statistics.times_revived = 1;
+        apply_evolution(&mut c);
+        assert!(
+            !c.traits.contains(&Trait::Tough),
+            "one revival is not yet toughening"
+        );
+
+        c.statistics.times_revived = 2;
+        apply_evolution(&mut c);
+        assert!(c.traits.contains(&Trait::Tough));
     }
 
     #[test]
