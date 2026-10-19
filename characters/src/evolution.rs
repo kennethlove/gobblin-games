@@ -17,10 +17,10 @@
 //!   keeps its personality).
 //! - **Conflicts** — `gain_trait` enforces `traits::CONFLICTS`; a trigger
 //!   whose trait conflicts with one held is skipped, never forced.
-//! - Only lifetime fight record stats are reachable today (kills, wins,
-//!   defeats, draws) plus the lifetime revival counter (`times_revived`).
-//!   Betrayals-survived has no persisted lifetime counter yet; its trigger
-//!   waits on one.
+//! - Reachable stats are the lifetime fight record (kills, wins, defeats,
+//!   draws), the lifetime revival counter (`times_revived`), and the two
+//!   lifetime betrayal counters (`betrayals_suffered`,
+//!   `betrayals_committed`).
 
 use crate::Character;
 use crate::traits::Trait;
@@ -41,6 +41,8 @@ pub enum Stat {
     Wins,
     Defeats,
     Revivals,
+    BetrayalsSuffered,
+    BetrayalsCommitted,
 }
 
 /// What crossing a trigger's threshold does.
@@ -94,6 +96,16 @@ pub const TRIGGERS: &[Trigger] = &[
         threshold: 2,
         effect: Effect::Gain(Trait::Tough),
     },
+    Trigger {
+        stat: Stat::BetrayalsSuffered,
+        threshold: 2,
+        effect: Effect::Gain(Trait::Paranoid),
+    },
+    Trigger {
+        stat: Stat::BetrayalsCommitted,
+        threshold: 3,
+        effect: Effect::Lose(Trait::Loyal),
+    },
 ];
 
 fn lifetime(character: &Character, stat: Stat) -> u32 {
@@ -102,6 +114,8 @@ fn lifetime(character: &Character, stat: Stat) -> u32 {
         Stat::Wins => character.statistics.wins,
         Stat::Defeats => character.statistics.defeats,
         Stat::Revivals => character.statistics.times_revived,
+        Stat::BetrayalsSuffered => character.statistics.betrayals_suffered,
+        Stat::BetrayalsCommitted => character.statistics.betrayals_committed,
     }
 }
 
@@ -249,6 +263,39 @@ mod tests {
         c.statistics.times_revived = 2;
         apply_evolution(&mut c);
         assert!(c.traits.contains(&Trait::Tough));
+    }
+
+    #[test]
+    fn betrayals_suffered_trigger_fires_at_two_not_one() {
+        let mut c = goblin();
+        c.statistics.betrayals_suffered = 1;
+        apply_evolution(&mut c);
+        assert!(
+            !c.traits.contains(&Trait::Paranoid),
+            "one suffered betrayal is not paranoia yet"
+        );
+
+        c.statistics.betrayals_suffered = 2;
+        apply_evolution(&mut c);
+        assert!(c.traits.contains(&Trait::Paranoid));
+    }
+
+    #[test]
+    fn betrayals_committed_trigger_fires_at_three_not_two() {
+        let mut c = goblin();
+        c.traits.push(Trait::Loyal);
+        c.traits.push(Trait::Cunning); // above the MIN_TRAITS loss floor
+        c.traits.push(Trait::Tough);
+        c.statistics.betrayals_committed = 2;
+        apply_evolution(&mut c);
+        assert!(
+            c.traits.contains(&Trait::Loyal),
+            "two committed betrayals do not shed loyalty yet"
+        );
+
+        c.statistics.betrayals_committed = 3;
+        apply_evolution(&mut c);
+        assert!(!c.traits.contains(&Trait::Loyal));
     }
 
     #[test]
