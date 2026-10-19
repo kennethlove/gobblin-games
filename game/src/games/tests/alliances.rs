@@ -27,6 +27,30 @@ fn process_alliance_events_betrayal_removes_pair_on_victim_side() {
 }
 
 #[test]
+fn process_alliance_events_betrayal_increments_victims_suffered_counter() {
+    let betrayer = Character::new("Betrayer".to_string(), Some(1), None);
+    let victim = Character::new("Victim".to_string(), Some(2), None);
+    let bid = betrayer.id;
+    let vid = victim.id;
+
+    let mut game = create_test_game_with_characters(vec![betrayer, victim]);
+    game.alliance_events
+        .push(characters::alliances::AllianceEvent::BetrayalRecorded {
+            betrayer: bid,
+            victim: vid,
+        });
+
+    let mut rng = SmallRng::seed_from_u64(53);
+    game.process_alliance_events(&mut rng);
+
+    let v = game.characters.iter().find(|t| t.id == vid).unwrap();
+    assert_eq!(
+        v.statistics.betrayals_suffered, 1,
+        "the victim counts the betrayal it suffered at the drain"
+    );
+}
+
+#[test]
 fn process_alliance_events_betrayer_not_marked_for_trust_shock() {
     let betrayer = Character::new("Betrayer".to_string(), Some(1), None);
     let victim = Character::new("Victim".to_string(), Some(2), None);
@@ -220,6 +244,14 @@ fn run_character_cycle_treacherous_character_betrays_same_area_ally_when_timer_e
     assert_eq!(
         b.turns_since_last_betrayal, 0,
         "betrayal resets the cooldown timer"
+    );
+    assert_eq!(
+        b.statistics.betrayals_committed, 1,
+        "betrayer counts its own betrayal"
+    );
+    assert_eq!(
+        v.statistics.betrayals_suffered, 1,
+        "victim counts the betrayal it suffered"
     );
 }
 
@@ -736,4 +768,99 @@ fn dead_character_has_no_movement_event_after_death_in_same_period() {
         later_b_move.is_none(),
         "no CharacterMoved for B should appear after B's CharacterKilled in the same period"
     );
+}
+
+// ---- w8k: team seeding at game start ----
+
+#[test]
+fn seed_team_alliances_meshes_within_teams_only() {
+    let a = Character::new("A".to_string(), Some(0), None);
+    let b = Character::new("B".to_string(), Some(0), None);
+    let c = Character::new("C".to_string(), Some(0), None);
+    let d = Character::new("D".to_string(), Some(1), None);
+    let e = Character::new("E".to_string(), Some(1), None);
+    let ids: Vec<(uuid::Uuid, u32)> = [&a, &b, &c, &d, &e]
+        .iter()
+        .map(|g| (g.id, g.team))
+        .collect();
+
+    let mut game = create_test_game_with_characters(vec![a, b, c, d, e]);
+    game.seed_team_alliances();
+
+    for character in &game.characters {
+        let teammates: Vec<uuid::Uuid> = ids
+            .iter()
+            .filter(|(id, team)| *team == character.team && *id != character.id)
+            .map(|(id, _)| *id)
+            .collect();
+        assert_eq!(
+            character.allies.len(),
+            teammates.len(),
+            "{} should hold exactly its teammates",
+            character.name
+        );
+        for mate in teammates {
+            assert!(character.allies.contains(&mate));
+        }
+    }
+}
+
+#[test]
+fn seed_team_alliances_is_idempotent() {
+    let members = vec![
+        Character::new("A".to_string(), Some(0), None),
+        Character::new("B".to_string(), Some(0), None),
+        Character::new("C".to_string(), Some(0), None),
+    ];
+    let mut game = create_test_game_with_characters(members);
+    game.seed_team_alliances();
+    game.seed_team_alliances();
+    for character in &game.characters {
+        assert_eq!(
+            character.allies.len(),
+            2,
+            "{} gains no duplicate links on re-run",
+            character.name
+        );
+    }
+}
+
+#[test]
+fn seed_team_alliances_includes_refusers() {
+    // Teams are assigned, not chosen: paranoia must not exempt anyone.
+    use characters::traits::Trait;
+    let mut grumbler = Character::new("Grumbler".to_string(), Some(0), None);
+    grumbler.traits = vec![Trait::Paranoid, Trait::LoneWolf];
+    let mate = Character::new("Mate".to_string(), Some(0), None);
+    let grumbler_id = grumbler.id;
+
+    let mut game = create_test_game_with_characters(vec![grumbler, mate]);
+    game.seed_team_alliances();
+
+    let refuser = game
+        .characters
+        .iter()
+        .find(|g| g.id == grumbler_id)
+        .unwrap();
+    assert_eq!(refuser.allies.len(), 1, "refuser still gets the team link");
+}
+
+#[test]
+fn seed_team_alliances_arms_the_betrayal_timer() {
+    // Day-1 betrayal: the counter starts armed at the cadence interval so
+    // process_turn_phase's tick-then-check passes on the first turn.
+    let members = vec![
+        Character::new("A".to_string(), Some(0), None),
+        Character::new("B".to_string(), Some(0), None),
+    ];
+    let mut game = create_test_game_with_characters(members);
+    game.seed_team_alliances();
+    for character in &game.characters {
+        assert_eq!(
+            character.turns_since_last_betrayal,
+            characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL,
+            "{} is armed for a first-turn betrayal",
+            character.name
+        );
+    }
 }
