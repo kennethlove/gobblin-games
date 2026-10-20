@@ -641,6 +641,7 @@ fn test_fumble_self_damage(_small_rng: SmallRng) {
 /// cg9: clean hits never wear the blade — a landed hit on bare flesh (no
 /// armor, no shield margin, no fumble/perfect) leaves durability intact.
 /// Wear still applies when it fires: see weapon_break_records (armor).
+#[test]
 fn clean_hits_never_wear_weapon() {
     use world::items::{Attribute, Item, ItemRarity, ItemType};
 
@@ -1516,19 +1517,24 @@ fn decisive_shield_block_wears_weapon_and_shield() {
     // the heavy tier, shield its single point.
     let (events, weapon_dur, shield_dur) =
         hunt_block(Some(4), true, true).expect("no decisive shield block in 500 seeds");
+    let tuning = CombatTuning::default();
     assert_eq!(
-        shield_dur, 9,
-        "shield wears exactly one point on its own block"
+        shield_dur,
+        10 - tuning.shield_wear_on_decisive_block,
+        "shield wears its decisive-block tier on its own block"
     );
     assert_eq!(
-        weapon_dur, 7,
-        "blade wears the full tier-3 against a decisive shield block"
+        weapon_dur,
+        10 - tuning.weapon_wear_on_shield_block,
+        "blade wears its shield-block tier against a decisive shield block"
     );
     let beat = first_beat(&events).expect("beat exists");
-    assert!(
-        beat.wear.is_empty(),
-        "both crossed no tier boundary: pristine wear is unreported (shield rule)"
+    assert_eq!(
+        beat.wear.len(),
+        1,
+        "shield 10→5 crosses the half boundary (reported); weapon 10→8 stays pristine (omitted)"
     );
+    assert_eq!(beat.wear[0].item.name, "Oak Shield", "the shield report");
 }
 
 #[test]
@@ -1549,10 +1555,11 @@ fn defender_win_outside_shield_margin_spares_both() {
 fn perfect_block_wears_weapon_heavily() {
     // Natural 20 defense, no shield involved: the blade still rings off the
     // guard — full tier on the weapon alone.
-    let (events, weapon_dur, shield_dur) =
+    let (_events, weapon_dur, shield_dur) =
         hunt_block(None, false, true).expect("no perfect block in 500 seeds");
     assert_eq!(
-        weapon_dur, 7,
+        weapon_dur,
+        10 - CombatTuning::default().weapon_wear_on_perfect_block,
         "perfect block costs the weapon its full tier"
     );
     assert_eq!(shield_dur, 10, "no shield carried");

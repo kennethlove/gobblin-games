@@ -528,12 +528,10 @@ fn weapon_wear_amount(
                 0
             }
         }
-        DefenderWins | DefenderWinsDecisively => {
-            if shield_block_was_decisive(result, attack_roll, defense_roll, shield_effect) {
-                tuning.weapon_wear_on_shield_block
-            } else {
-                0
-            }
+        DefenderWins | DefenderWinsDecisively
+            if shield_block_was_decisive(result, attack_roll, defense_roll, shield_effect) =>
+        {
+            tuning.weapon_wear_on_shield_block
         }
         _ => 0,
     }

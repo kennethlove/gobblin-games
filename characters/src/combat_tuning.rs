@@ -96,7 +96,16 @@ pub struct CombatTuning {
 
     // --- Conditional weapon/shield wear tiers (cg9 balance pass) ---
     // Wear fires only on gated outcomes; clean hits and plain misses wear
-    // nothing. Amounts are starting values, tuned during the balance pass.
+    // nothing. Tuned with `tuning_harness` gear mode (2000 fights, Common
+    // fixtures: weapon dur 4, shield dur 5, armor dur 5 — real Common ranges
+    // are weapon 2-4 / shield 3-5, so harness breaks understate real ones).
+    //
+    // Rationale: the bead's strict 3>2>1 rank order breaks a weapon in 53% of
+    // fights — unaffordable at dur 2-4. Scaled order kept: blocks wear the
+    // blade (2) > armor block / fumble (1).
+    //
+    // Measured at these values per 100 fights: weapon 218 pts / 8.2% breaks,
+    // shield 248 pts / 16.1%, armor 320 pts / 1.8%, any-break fights 20.1%.
     /// Decisive shield block (attack landed inside the shield's margin):
     /// heaviest wear — the blade struck the shield and the block held.
     pub weapon_wear_on_shield_block: u32,
@@ -106,7 +115,10 @@ pub struct CombatTuning {
     pub weapon_wear_on_perfect_block: u32,
     /// Natural 1 fumble: least wear.
     pub weapon_wear_on_fumble: u32,
-    /// Shield wear amount; fires only on a decisive shield block.
+    /// Shield wear amount; fires only on a decisive shield block. At 1, 2000
+    /// fights broke 0.0% of shields; at 5 a Common (3-5) shield dies on its
+    /// first decisive block, Rare (6-10) on the second — the drama the wzk
+    /// bead asks for. Harness: 16.1% of fights lose a shield (dur-5 fixture).
     pub shield_wear_on_decisive_block: u32,
 }
 
@@ -162,11 +174,11 @@ impl Default for CombatTuning {
             brain_execute_treacherous_bonus: 50,
             brain_execute_aggressive_bonus: 20,
 
-            weapon_wear_on_shield_block: 3,
-            weapon_wear_on_armor_block: 2,
-            weapon_wear_on_perfect_block: 3,
+            weapon_wear_on_shield_block: 2,
+            weapon_wear_on_armor_block: 1,
+            weapon_wear_on_perfect_block: 2,
             weapon_wear_on_fumble: 1,
-            shield_wear_on_decisive_block: 1,
+            shield_wear_on_decisive_block: 5,
         }
     }
 }
