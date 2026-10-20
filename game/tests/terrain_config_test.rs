@@ -37,7 +37,7 @@ fn test_desert_is_exposed() {
 fn test_item_weights_sum_to_one() {
     for terrain in BaseTerrain::iter() {
         let weights = terrain.item_weights();
-        let sum = weights.weapons + weights.shields + weights.consumables;
+        let sum = weights.weapons + weights.shields + weights.armor + weights.consumables;
         assert!(
             (sum - 1.0).abs() < 0.01,
             "Item weights don't sum to 1.0 for {:?}: {}",

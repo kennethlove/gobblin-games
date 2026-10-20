@@ -362,7 +362,7 @@ fn item_kind_tag(item: &Item) -> ItemKindTag {
             world::items::Attribute::Defense => ItemKindTag::Antidote,
             _ => ItemKindTag::Bandage,
         },
-        ItemType::Weapon | ItemType::Shield => {
+        ItemType::Weapon | ItemType::Shield | ItemType::Armor => {
             if item.rarity == world::items::ItemRarity::Rare
                 || item.rarity == world::items::ItemRarity::Legendary
             {

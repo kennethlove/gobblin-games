@@ -4,7 +4,7 @@ use world::items::Item;
 use world::terrain::BaseTerrain;
 
 /// Test that Desert terrain creates consumables more frequently than other types.
-/// Desert has 0.6 consumable weight vs 0.2 weapons + 0.2 shields.
+/// Desert has 0.5 consumable + 0.1 armor weight vs 0.2 weapons + 0.2 shields.
 #[test]
 fn test_desert_favors_consumables() {
     let terrain = BaseTerrain::Desert;
@@ -14,6 +14,7 @@ fn test_desert_favors_consumables() {
     let mut consumable_count = 0;
     let mut weapon_count = 0;
     let mut shield_count = 0;
+    let mut armor_count = 0;
 
     // Generate 1000 items so the distribution assertions below are
     // stable across RNG tails (n=100 was tail-flaky).
@@ -23,6 +24,8 @@ fn test_desert_favors_consumables() {
             weapon_count += 1;
         } else if item.is_shield() {
             shield_count += 1;
+        } else if item.is_armor() {
+            armor_count += 1;
         } else {
             consumable_count += 1;
         }
@@ -32,10 +35,11 @@ fn test_desert_favors_consumables() {
     // Allow variance but should be clearly dominant.
     assert!(
         consumable_count > 400,
-        "Desert should favor consumables: got {} consumables, {} weapons, {} shields",
+        "Desert should favor consumables: got {} consumables, {} weapons, {} shields, {} armor",
         consumable_count,
         weapon_count,
-        shield_count
+        shield_count,
+        armor_count
     );
     assert!(
         consumable_count > weapon_count + shield_count,
@@ -44,7 +48,7 @@ fn test_desert_favors_consumables() {
 }
 
 /// Test that UrbanRuins terrain creates weapons more frequently.
-/// UrbanRuins has 0.5 weapon weight vs 0.3 shields + 0.2 consumables.
+/// UrbanRuins has 0.5 weapon weight vs 0.3 shields + 0.1 armor + 0.1 consumables.
 #[test]
 fn test_urban_ruins_favors_weapons() {
     let terrain = BaseTerrain::UrbanRuins;
@@ -53,6 +57,7 @@ fn test_urban_ruins_favors_weapons() {
     let mut weapon_count = 0;
     let mut shield_count = 0;
     let mut consumable_count = 0;
+    let mut armor_count = 0;
 
     for _ in 0..1000 {
         let item = Item::new_random_with_terrain_and_rng(terrain, None, &mut rng);
@@ -60,6 +65,8 @@ fn test_urban_ruins_favors_weapons() {
             weapon_count += 1;
         } else if item.is_shield() {
             shield_count += 1;
+        } else if item.is_armor() {
+            armor_count += 1;
         } else {
             consumable_count += 1;
         }
@@ -68,10 +75,11 @@ fn test_urban_ruins_favors_weapons() {
     // Weapons should be the plurality (expect ~50% = 500 items).
     assert!(
         weapon_count > 300,
-        "UrbanRuins should favor weapons: got {} weapons, {} shields, {} consumables",
+        "UrbanRuins should favor weapons: got {} weapons, {} shields, {} consumables, {} armor",
         weapon_count,
         shield_count,
-        consumable_count
+        consumable_count,
+        armor_count
     );
     assert!(
         weapon_count > shield_count && weapon_count > consumable_count,
@@ -80,7 +88,7 @@ fn test_urban_ruins_favors_weapons() {
 }
 
 /// Test that Clearing terrain has balanced distribution.
-/// Clearing has ~0.33 for each type (0.33, 0.33, 0.34).
+/// Clearing has 0.33 weapons, 0.33 shields, 0.1 armor, 0.24 consumables.
 #[test]
 fn test_clearing_balanced_distribution() {
     let terrain = BaseTerrain::Clearing;
@@ -96,6 +104,8 @@ fn test_clearing_balanced_distribution() {
             weapon_count += 1;
         } else if item.is_shield() {
             shield_count += 1;
+        } else if item.is_armor() {
+            // Armor bucket split off consumables; not asserted here.
         } else {
             consumable_count += 1;
         }
@@ -121,7 +131,7 @@ fn test_clearing_balanced_distribution() {
 }
 
 /// Test that Mountains terrain favors weapons and shields equally.
-/// Mountains has 0.4 weapons + 0.4 shields + 0.2 consumables.
+/// Mountains has 0.4 weapons + 0.4 shields + 0.1 armor + 0.1 consumables.
 #[test]
 fn test_mountains_favors_combat_gear() {
     let terrain = BaseTerrain::Mountains;
@@ -130,6 +140,7 @@ fn test_mountains_favors_combat_gear() {
     let mut weapon_count = 0;
     let mut shield_count = 0;
     let mut consumable_count = 0;
+    let mut armor_count = 0;
 
     for _ in 0..1000 {
         let item = Item::new_random_with_terrain_and_rng(terrain, None, &mut rng);
@@ -137,18 +148,21 @@ fn test_mountains_favors_combat_gear() {
             weapon_count += 1;
         } else if item.is_shield() {
             shield_count += 1;
+        } else if item.is_armor() {
+            armor_count += 1;
         } else {
             consumable_count += 1;
         }
     }
 
-    // Combat gear (weapons + shields) should dominate.
-    let combat_gear = weapon_count + shield_count;
+    // Combat gear (weapons + shields + armor) should dominate.
+    let combat_gear = weapon_count + shield_count + armor_count;
     assert!(
         combat_gear > 600,
-        "Mountains should favor combat gear: got {} weapons + {} shields = {} total",
+        "Mountains should favor combat gear: got {} weapons + {} shields + {} armor = {} total",
         weapon_count,
         shield_count,
+        armor_count,
         combat_gear
     );
     assert!(
@@ -158,7 +172,7 @@ fn test_mountains_favors_combat_gear() {
 }
 
 /// Test that Tundra terrain has specific distribution.
-/// Tundra has 0.3 weapons + 0.4 shields + 0.3 consumables.
+/// Tundra has 0.3 weapons + 0.4 shields + 0.1 armor + 0.2 consumables.
 #[test]
 fn test_tundra_distribution() {
     let terrain = BaseTerrain::Tundra;
@@ -167,6 +181,7 @@ fn test_tundra_distribution() {
     let mut weapon_count = 0;
     let mut shield_count = 0;
     let mut consumable_count = 0;
+    let mut armor_count = 0;
 
     // Use a larger sample so the 0.3/0.4/0.3 distribution stabilises
     // (n=100 regularly produced ties given the narrow shield margin).
@@ -176,6 +191,8 @@ fn test_tundra_distribution() {
             weapon_count += 1;
         } else if item.is_shield() {
             shield_count += 1;
+        } else if item.is_armor() {
+            armor_count += 1;
         } else {
             consumable_count += 1;
         }
@@ -184,10 +201,11 @@ fn test_tundra_distribution() {
     // Shields should be the plurality
     assert!(
         shield_count > weapon_count && shield_count > consumable_count,
-        "Tundra should favor shields: got {} shields, {} weapons, {} consumables",
+        "Tundra should favor shields: got {} shields, {} weapons, {} consumables, {} armor",
         shield_count,
         weapon_count,
-        consumable_count
+        consumable_count,
+        armor_count
     );
 }
 
@@ -254,7 +272,7 @@ fn test_item_weights_sum_to_one() {
 
     for terrain in terrains {
         let weights = terrain.item_weights();
-        let sum = weights.weapons + weights.shields + weights.consumables;
+        let sum = weights.weapons + weights.shields + weights.armor + weights.consumables;
 
         // Allow small floating point error
         assert!(
@@ -281,7 +299,7 @@ fn test_named_items_respect_terrain_weights() {
     let mut consumable_count = 0;
     for _ in 0..200 {
         let item = Item::new_random_with_terrain_and_rng(terrain, Some("Test Item"), &mut rng);
-        if !item.is_weapon() && !item.is_shield() {
+        if !item.is_weapon() && !item.is_shield() && !item.is_armor() {
             consumable_count += 1;
         }
     }

@@ -20,6 +20,11 @@ pub enum Harshness {
 pub struct ItemWeights {
     pub weapons: f32,
     pub shields: f32,
+    /// Armor spawn slice. WHY: carved from `consumables` as a fixed 0.1
+    /// everywhere — keeps every terrain's weapon/shield ratios (and the
+    /// distribution tests that pin them) untouched; per-terrain tuning
+    /// comes from playtest, not here.
+    pub armor: f32,
     pub consumables: f32,
 }
 
@@ -87,62 +92,74 @@ impl BaseTerrain {
             BaseTerrain::Desert => ItemWeights {
                 weapons: 0.2,
                 shields: 0.2,
-                consumables: 0.6,
+                armor: 0.1,
+                consumables: 0.5,
             },
             BaseTerrain::Tundra => ItemWeights {
                 weapons: 0.3,
                 shields: 0.4,
-                consumables: 0.3,
+                armor: 0.1,
+                consumables: 0.2,
             },
             BaseTerrain::UrbanRuins => ItemWeights {
                 weapons: 0.5,
                 shields: 0.3,
-                consumables: 0.2,
+                armor: 0.1,
+                consumables: 0.1,
             },
             BaseTerrain::Forest => ItemWeights {
                 weapons: 0.3,
                 shields: 0.2,
-                consumables: 0.5,
+                armor: 0.1,
+                consumables: 0.4,
             },
             BaseTerrain::Mountains => ItemWeights {
                 weapons: 0.4,
                 shields: 0.4,
-                consumables: 0.2,
+                armor: 0.1,
+                consumables: 0.1,
             },
             BaseTerrain::Wetlands => ItemWeights {
                 weapons: 0.25,
                 shields: 0.25,
-                consumables: 0.5,
+                armor: 0.1,
+                consumables: 0.4,
             },
             BaseTerrain::Jungle => ItemWeights {
                 weapons: 0.2,
                 shields: 0.3,
-                consumables: 0.5,
+                armor: 0.1,
+                consumables: 0.4,
             },
             BaseTerrain::Clearing => ItemWeights {
                 weapons: 0.33,
                 shields: 0.33,
-                consumables: 0.34,
+                armor: 0.1,
+                consumables: 0.24,
             },
             BaseTerrain::Grasslands => ItemWeights {
                 weapons: 0.30,
                 shields: 0.30,
-                consumables: 0.40,
+                armor: 0.1,
+                consumables: 0.30,
             },
             BaseTerrain::Badlands => ItemWeights {
                 weapons: 0.35,
                 shields: 0.30,
-                consumables: 0.35,
+                armor: 0.1,
+                consumables: 0.25,
             },
             BaseTerrain::Highlands => ItemWeights {
                 weapons: 0.30,
                 shields: 0.35,
-                consumables: 0.35,
+                armor: 0.1,
+                consumables: 0.25,
             },
             BaseTerrain::Geothermal => ItemWeights {
                 weapons: 0.30,
                 shields: 0.30,
-                consumables: 0.40,
+                armor: 0.1,
+                consumables: 0.30,
             },
         }
     }
