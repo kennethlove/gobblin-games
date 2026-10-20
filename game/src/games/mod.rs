@@ -862,7 +862,7 @@ impl Game {
                     AreaEvent::Avalanche | AreaEvent::Rockslide | AreaEvent::Earthquake
                 );
                 let has_item_bonus =
-                    is_physical_event && character.items.iter().any(|item| item.is_defensive());
+                    is_physical_event && character.items.iter().any(|item| item.is_shield());
 
                 let is_desperate = character.effective_health() < 30;
                 let current_health = character.effective_health();

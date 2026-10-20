@@ -378,7 +378,7 @@ fn attacker_winded_takes_attack_roll_penalty() {
         let mut a_winded = Character::new("AW".to_string(), None, None);
         // Roll-independent: trait AttrMods must not shift exact math.
         a_winded.traits.clear();
-        a_winded.stamina = 70; // post-cost: 45 → Winded
+        a_winded.stamina = 70; // post-cost: 45 -> Winded
         a_winded.max_stamina = 100;
         a_winded.attributes.strength = 5;
         let mut t1 = Character::new("T1".to_string(), None, None);
@@ -546,8 +546,8 @@ fn test_critical_fumble() {
 
 #[rstest]
 fn test_perfect_block() {
-    // First call (attacker roll): 0x7333_3334 → random_range(1..=20) == 10
-    // Second call (defender roll): 0xF333_3334 → random_range(1..=20) == 20
+    // First call (attacker roll): 0x7333_3334 -> random_range(1..=20) == 10
+    // Second call (defender roll): 0xF333_3334 -> random_range(1..=20) == 20
     struct BlockRng {
         call_count: std::cell::Cell<usize>,
     }
@@ -905,7 +905,7 @@ fn brittle_weapon(effect: i32) -> world::items::Item {
 fn brittle_shield(effect: i32) -> world::items::Item {
     world::items::Item::new(
         "Glass Buckler",
-        world::items::ItemType::Weapon,
+        world::items::ItemType::Shield,
         world::items::ItemRarity::Common,
         1,
         world::items::Attribute::Defense,

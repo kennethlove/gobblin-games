@@ -21,7 +21,7 @@ fn test_desert_favors_consumables() {
         let item = Item::new_random_with_terrain_and_rng(terrain, None, &mut rng);
         if item.is_weapon() {
             weapon_count += 1;
-        } else if item.is_defensive() {
+        } else if item.is_shield() {
             shield_count += 1;
         } else {
             consumable_count += 1;
@@ -58,7 +58,7 @@ fn test_urban_ruins_favors_weapons() {
         let item = Item::new_random_with_terrain_and_rng(terrain, None, &mut rng);
         if item.is_weapon() {
             weapon_count += 1;
-        } else if item.is_defensive() {
+        } else if item.is_shield() {
             shield_count += 1;
         } else {
             consumable_count += 1;
@@ -94,7 +94,7 @@ fn test_clearing_balanced_distribution() {
         let item = Item::new_random_with_terrain_and_rng(terrain, None, &mut rng);
         if item.is_weapon() {
             weapon_count += 1;
-        } else if item.is_defensive() {
+        } else if item.is_shield() {
             shield_count += 1;
         } else {
             consumable_count += 1;
@@ -135,7 +135,7 @@ fn test_mountains_favors_combat_gear() {
         let item = Item::new_random_with_terrain_and_rng(terrain, None, &mut rng);
         if item.is_weapon() {
             weapon_count += 1;
-        } else if item.is_defensive() {
+        } else if item.is_shield() {
             shield_count += 1;
         } else {
             consumable_count += 1;
@@ -174,7 +174,7 @@ fn test_tundra_distribution() {
         let item = Item::new_random_with_terrain_and_rng(terrain, None, &mut rng);
         if item.is_weapon() {
             weapon_count += 1;
-        } else if item.is_defensive() {
+        } else if item.is_shield() {
             shield_count += 1;
         } else {
             consumable_count += 1;
@@ -281,7 +281,7 @@ fn test_named_items_respect_terrain_weights() {
     let mut consumable_count = 0;
     for _ in 0..200 {
         let item = Item::new_random_with_terrain_and_rng(terrain, Some("Test Item"), &mut rng);
-        if !item.is_weapon() && !item.is_defensive() {
+        if !item.is_weapon() && !item.is_shield() {
             consumable_count += 1;
         }
     }

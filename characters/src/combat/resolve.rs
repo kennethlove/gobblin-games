@@ -66,7 +66,7 @@ pub(super) fn new_beat(
         shield: target
             .items
             .iter()
-            .rfind(|i| i.is_defensive() && i.current_durability > 0)
+            .rfind(|i| i.is_shield() && i.current_durability > 0)
             .map(iref),
         wear: Vec::new(),
         outcome: shared::combat_beat::BeatOutcome::Swing {
@@ -466,7 +466,7 @@ pub fn resolve(
     let shield = defender
         .items
         .iter()
-        .rfind(|i| i.is_defensive() && i.current_durability > 0)
+        .rfind(|i| i.is_shield() && i.current_durability > 0)
         .map(iref);
 
     // Run the attack contest (dice rolling, equipment wear, inflict lookup).
@@ -712,7 +712,7 @@ fn shield_injury_prevention(
     let shield_idx = match loser
         .items
         .iter()
-        .position(|i| i.is_defensive() && i.current_durability > 0)
+        .position(|i| i.is_shield() && i.current_durability > 0)
     {
         Some(idx) => idx,
         None => return Some(severity), // No shield → wound passes through

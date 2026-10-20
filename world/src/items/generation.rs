@@ -79,6 +79,8 @@ impl Item {
                 false => Self::new_random_weapon_with_rng(rng),
                 true => Self::new_random_shield_with_rng(rng),
             },
+            (ItemType::Shield, Some(name)) => Self::new_shield_with_rng(name, rng),
+            (ItemType::Shield, None) => Self::new_random_shield_with_rng(rng),
             (ItemType::Food(n), name) => Self::new_food(name, n),
             (ItemType::Water(n), name) => Self::new_water(name, n),
         }
@@ -211,7 +213,7 @@ impl Item {
     /// Build a named shield whose rarity and stats come from `rng`.
     pub fn new_shield_with_rng(name: &str, rng: &mut impl Rng) -> Item {
         let rarity = ItemRarity::random_with_rng(rng);
-        let item_type = ItemType::Weapon;
+        let item_type = ItemType::Shield;
         let attribute = Attribute::Defense;
         let (min, max) = rarity.effect_range();
         let effect = rng.random_range(min..=max);

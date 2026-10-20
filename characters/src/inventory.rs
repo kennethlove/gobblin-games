@@ -311,7 +311,7 @@ impl Character {
     pub(crate) fn equipped_shield_mut(&mut self) -> Option<&mut Item> {
         self.items
             .iter_mut()
-            .filter(|i| i.is_defensive() && i.current_durability > 0)
+            .filter(|i| i.is_shield() && i.current_durability > 0)
             .last()
     }
 }

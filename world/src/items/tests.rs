@@ -126,17 +126,17 @@ fn new_random_consumable() {
 #[test]
 fn new_shield() {
     let shield = Item::new_shield("Test shield");
-    assert_eq!(shield.item_type, ItemType::Weapon);
+    assert_eq!(shield.item_type, ItemType::Shield);
     assert_eq!(shield.attribute, Attribute::Defense);
-    assert!(shield.is_defensive());
+    assert!(shield.is_shield());
 }
 
 #[test]
 fn new_random_shield() {
     let shield = Item::new_random_shield();
-    assert_eq!(shield.item_type, ItemType::Weapon);
+    assert_eq!(shield.item_type, ItemType::Shield);
     assert!(!shield.name.is_empty());
-    assert!(shield.is_defensive());
+    assert!(shield.is_shield());
 }
 
 #[rstest]
