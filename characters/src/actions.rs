@@ -159,7 +159,7 @@ impl FromStr for Action {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AttackResult {
     AttackerWins,
     AttackerWinsDecisively,
