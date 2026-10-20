@@ -126,22 +126,40 @@ fn new_random_consumable() {
 #[test]
 fn new_shield() {
     let shield = Item::new_shield("Test shield");
-    assert_eq!(shield.item_type, ItemType::Weapon);
+    assert_eq!(shield.item_type, ItemType::Shield);
     assert_eq!(shield.attribute, Attribute::Defense);
-    assert!(shield.is_defensive());
+    assert!(shield.is_shield());
 }
 
 #[test]
 fn new_random_shield() {
     let shield = Item::new_random_shield();
-    assert_eq!(shield.item_type, ItemType::Weapon);
+    assert_eq!(shield.item_type, ItemType::Shield);
     assert!(!shield.name.is_empty());
-    assert!(shield.is_defensive());
+    assert!(shield.is_shield());
+}
+
+#[test]
+fn new_armor() {
+    let armor = Item::new_armor("Test armor");
+    assert_eq!(armor.item_type, ItemType::Armor);
+    assert_eq!(armor.attribute, Attribute::Defense);
+    assert!(armor.is_armor());
+}
+
+#[test]
+fn new_random_armor() {
+    let armor = Item::new_random_armor();
+    assert_eq!(armor.item_type, ItemType::Armor);
+    assert!(!armor.name.is_empty());
+    assert!(armor.is_armor());
 }
 
 #[rstest]
 #[case(ItemType::Consumable, "consumable")]
 #[case(ItemType::Weapon, "weapon")]
+#[case(ItemType::Shield, "shield")]
+#[case(ItemType::Armor, "armor")]
 fn item_type_to_string(#[case] item_type: ItemType, #[case] expected: &str) {
     assert_eq!(item_type.to_string(), expected);
 }
@@ -149,6 +167,8 @@ fn item_type_to_string(#[case] item_type: ItemType, #[case] expected: &str) {
 #[rstest]
 #[case("consumable", ItemType::Consumable)]
 #[case("weapon", ItemType::Weapon)]
+#[case("shield", ItemType::Shield)]
+#[case("armor", ItemType::Armor)]
 fn item_type_from_str(#[case] input: &str, #[case] item_type: ItemType) {
     assert_eq!(ItemType::from_str(input).unwrap(), item_type);
 }

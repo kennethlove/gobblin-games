@@ -66,7 +66,7 @@ pub(super) fn new_beat(
         shield: target
             .items
             .iter()
-            .rfind(|i| i.is_defensive() && i.current_durability > 0)
+            .rfind(|i| i.is_shield() && i.current_durability > 0)
             .map(iref),
         wear: Vec::new(),
         outcome: shared::combat_beat::BeatOutcome::Swing {
@@ -466,12 +466,12 @@ pub fn resolve(
     let shield = defender
         .items
         .iter()
-        .rfind(|i| i.is_defensive() && i.current_durability > 0)
+        .rfind(|i| i.is_shield() && i.current_durability > 0)
         .map(iref);
 
     // Run the attack contest (dice rolling, equipment wear, inflict lookup).
-    let contest = attack_contest(attacker, defender, rng, sub_events, tuning);
-    let result = &contest.result;
+    let mut contest = attack_contest(attacker, defender, rng, sub_events, tuning);
+    let result = contest.result;
 
     // Compute damage based on result (strength scale 0-50, result multipliers up to 3x).
     // Scale to blood system: multiply by 10 so damage is in the 0-1000 blood range.
@@ -499,7 +499,93 @@ pub fn resolve(
         | AttackResult::DefenderWinsDecisively => attacker.effective_toughness(),
         AttackResult::CriticalFumble | AttackResult::Miss => 0,
     };
-    let damage = mitigate_damage(raw_damage, victim_toughness);
+    // Armor soak + wear (wzk): armor feeds toughness-style mitigation at
+    // the damage step only — it never touches the success roll. A critical
+    // finds the gap: no soak, no wear. Pristine armor soaks its full effect,
+    // worn armor half; a break this hit forfeits the soak, like shield break
+    // forfeits its effect.
+    let is_counter = matches!(
+        result,
+        AttackResult::PerfectBlock
+            | AttackResult::DefenderWins
+            | AttackResult::DefenderWinsDecisively
+    );
+    let (armor_soak, armor_wear) = if raw_damage > 0 && !matches!(result, AttackResult::CriticalHit)
+    {
+        let taker = if is_counter {
+            &mut *attacker
+        } else {
+            &mut *defender
+        };
+        if let Some(armor) = taker.equipped_armor_mut() {
+            let effect = armor.effect;
+            let pristine = armor.current_durability * 2 > armor.max_durability;
+            let outcome = armor.wear(1);
+            let soak = match outcome {
+                world::items::WearOutcome::Broken => 0,
+                _ if pristine => effect,
+                _ => effect / 2,
+            };
+            match outcome {
+                world::items::WearOutcome::Pristine => (soak, None),
+                _ => (soak, Some((armor.clone(), outcome))),
+            }
+        } else {
+            (0, None)
+        }
+    } else {
+        (0, None)
+    };
+    let damage = mitigate_damage(raw_damage, victim_toughness + armor_soak);
+
+    if let Some((armor, outcome)) = armor_wear {
+        let taker = if is_counter {
+            &mut *attacker
+        } else {
+            &mut *defender
+        };
+        let owner = tref(taker);
+        let item_ref = ItemRef {
+            identifier: armor.identifier.clone().into(),
+            name: armor.name.clone(),
+        };
+        let item = MessagePayload::ItemUsed {
+            character: owner.clone(),
+            item: item_ref.clone(),
+        };
+        match outcome {
+            world::items::WearOutcome::Worn => {
+                sub_events.push(TaggedEvent::new(
+                    GameOutput::ArmorWear(taker.name.as_str(), armor.name.as_str()).to_string(),
+                    item,
+                ));
+                contest.wear.push(WearReport {
+                    owner,
+                    item: item_ref,
+                    outcome: WearOutcomeReport::Worn,
+                    forfeited_effect: None,
+                    mid_action_penalty: None,
+                });
+            }
+            world::items::WearOutcome::Broken => {
+                sub_events.push(TaggedEvent::new(
+                    GameOutput::ArmorBreak(taker.name.as_str(), armor.name.as_str()).to_string(),
+                    item,
+                ));
+                if let Err(err) = taker.remove_item(&armor) {
+                    eprintln!("Failed to remove armor: {}", err);
+                }
+                contest.wear.push(WearReport {
+                    owner,
+                    item: item_ref,
+                    outcome: WearOutcomeReport::Broken,
+                    forfeited_effect: Some(armor.effect),
+                    mid_action_penalty: None,
+                });
+            }
+            world::items::WearOutcome::Pristine => {}
+        }
+    }
 
     // Determine SwingOutcome from result and pre-damage health.
     let swing_outcome = match result {
@@ -512,12 +598,6 @@ pub fn resolve(
             }
         }
         _ => {
-            let is_counter = matches!(
-                result,
-                AttackResult::PerfectBlock
-                    | AttackResult::DefenderWins
-                    | AttackResult::DefenderWinsDecisively
-            );
             let victim_health = if is_counter {
                 attacker.blood
             } else {
@@ -592,7 +672,6 @@ pub fn resolve(
         significant: false,
     };
 
-    let mut contest = contest;
     contest.damage = damage;
 
     (contest, beat)
@@ -712,10 +791,10 @@ fn shield_injury_prevention(
     let shield_idx = match loser
         .items
         .iter()
-        .position(|i| i.is_defensive() && i.current_durability > 0)
+        .position(|i| i.is_shield() && i.current_durability > 0)
     {
         Some(idx) => idx,
-        None => return Some(severity), // No shield → wound passes through
+        None => return Some(severity), // No shield -> wound passes through
     };
 
     // Shield blocks: 40% chance to prevent wound entirely
@@ -733,7 +812,7 @@ fn shield_injury_prevention(
             WoundSeverity::Critical => WoundSeverity::Severe,
             WoundSeverity::Severe => WoundSeverity::Moderate,
             WoundSeverity::Moderate => WoundSeverity::Minor,
-            WoundSeverity::Minor => return None, // Minor → prevented
+            WoundSeverity::Minor => return None, // Minor -> prevented
         };
         return Some(mitigated);
     }

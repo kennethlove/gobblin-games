@@ -378,7 +378,7 @@ fn attacker_winded_takes_attack_roll_penalty() {
         let mut a_winded = Character::new("AW".to_string(), None, None);
         // Roll-independent: trait AttrMods must not shift exact math.
         a_winded.traits.clear();
-        a_winded.stamina = 70; // post-cost: 45 → Winded
+        a_winded.stamina = 70; // post-cost: 45 -> Winded
         a_winded.max_stamina = 100;
         a_winded.attributes.strength = 5;
         let mut t1 = Character::new("T1".to_string(), None, None);
@@ -546,8 +546,8 @@ fn test_critical_fumble() {
 
 #[rstest]
 fn test_perfect_block() {
-    // First call (attacker roll): 0x7333_3334 → random_range(1..=20) == 10
-    // Second call (defender roll): 0xF333_3334 → random_range(1..=20) == 20
+    // First call (attacker roll): 0x7333_3334 -> random_range(1..=20) == 10
+    // Second call (defender roll): 0xF333_3334 -> random_range(1..=20) == 20
     struct BlockRng {
         call_count: std::cell::Cell<usize>,
     }
@@ -905,7 +905,7 @@ fn brittle_weapon(effect: i32) -> world::items::Item {
 fn brittle_shield(effect: i32) -> world::items::Item {
     world::items::Item::new(
         "Glass Buckler",
-        world::items::ItemType::Weapon,
+        world::items::ItemType::Shield,
         world::items::ItemRarity::Common,
         1,
         world::items::Attribute::Defense,
@@ -1352,4 +1352,407 @@ fn attacking_sleeping_target_emits_ambush_wake(mut small_rng: SmallRng) {
         woke_idx, 0,
         "ambush wake must be emitted before damage resolution"
     );
+}
+
+/// Construct armor with the given effect and durability=1 (wears once, then breaks).
+fn brittle_armor(effect: i32) -> world::items::Item {
+    world::items::Item::new(
+        "Glass Plate",
+        world::items::ItemType::Armor,
+        world::items::ItemRarity::Common,
+        1,
+        world::items::Attribute::Defense,
+        effect,
+    )
+}
+
+/// Attacker with cleared traits and fixed strength — roll-independent stats.
+fn fighter(name: &str) -> Character {
+    let mut c = Character::new(name.into(), None, None);
+    c.traits.clear();
+    c.attributes.strength = 10;
+    c
+}
+
+/// Defender with cleared traits and fixed toughness — roll-independent stats.
+fn wall(name: &str) -> Character {
+    let mut c = Character::new(name.into(), None, None);
+    c.traits.clear();
+    c.attributes.toughness = 5;
+    c
+}
+
+fn first_beat(events: &[TaggedEvent]) -> Option<&shared::combat_beat::CombatBeat> {
+    events.iter().find_map(|e| match &e.payload {
+        MessagePayload::CombatBeat(b) => Some(b),
+        _ => None,
+    })
+}
+
+/// Damage of a plain landed hit (`SwingOutcome::Wound`); `None` for
+/// crits, misses, fumbles, kills, and counters.
+fn wound_damage(beat: &shared::combat_beat::CombatBeat) -> Option<u32> {
+    let shared::combat_beat::BeatOutcome::Swing { outcome, .. } = &beat.outcome else {
+        return None;
+    };
+    match outcome {
+        shared::combat_beat::SwingOutcome::Wound { damage } => Some(*damage),
+        _ => None,
+    }
+}
+
+#[test]
+fn armor_soak_scales_with_durability_tier() {
+    // Hunt a seed where the swing lands a plain (non-crit) hit. Re-running
+    // the same seed with armor equipped is roll-identical: armor never
+    // feeds the success roll (wzk: soak only), so only damage differs.
+    for seed in 0u64..2_000 {
+        let base_damage = {
+            let mut attacker = fighter("Atk");
+            let mut target = wall("Tgt");
+            let mut events: Vec<TaggedEvent> = Vec::new();
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let _ = attacker.attacks(
+                &mut target,
+                &mut rng,
+                &mut events,
+                shared::messages::Phase::DAY,
+                &CombatTuning::default(),
+            );
+            let Some(beat) = first_beat(&events) else {
+                continue;
+            };
+            let Some(damage) = wound_damage(beat) else {
+                continue;
+            };
+            damage
+        };
+
+        // Pristine armor: full-effect soak, wear leaves it still pristine
+        // (below the Worn threshold), so no WearReport is emitted.
+        let (pristine_damage, pristine_after) = {
+            let mut attacker = fighter("Atk");
+            let mut target = wall("Tgt");
+            let mut plate = world::items::Item::new(
+                "Hardened Plate",
+                world::items::ItemType::Armor,
+                world::items::ItemRarity::Common,
+                10,
+                world::items::Attribute::Defense,
+                6,
+            );
+            target.add_item(plate.clone());
+            let mut events: Vec<TaggedEvent> = Vec::new();
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let _ = attacker.attacks(
+                &mut target,
+                &mut rng,
+                &mut events,
+                shared::messages::Phase::DAY,
+                &CombatTuning::default(),
+            );
+            let Some(beat) = first_beat(&events) else {
+                continue;
+            };
+            let Some(damage) = wound_damage(beat) else {
+                continue;
+            };
+            assert!(
+                !beat.wear.iter().any(|w| w.item.name == plate.name),
+                "pristine plate must not emit a WearReport"
+            );
+            plate.current_durability = target
+                .items
+                .iter()
+                .find(|i| i.name == "Hardened Plate")
+                .map(|i| i.current_durability)
+                .expect("plate still equipped");
+            (damage, plate.current_durability)
+        };
+
+        // Already-worn armor: half-effect soak. No WearReport — `wear()`
+        // reports only the tier TRANSITION (same rule as shields), and this
+        // plate already crossed before the fight.
+        let (worn_damage, worn_report, worn_after) = {
+            let mut attacker = fighter("Atk");
+            let mut target = wall("Tgt");
+            let mut plate = world::items::Item::new(
+                "Worn Plate",
+                world::items::ItemType::Armor,
+                world::items::ItemRarity::Common,
+                10,
+                world::items::Attribute::Defense,
+                6,
+            );
+            plate.current_durability = 4;
+            target.add_item(plate.clone());
+            let mut events: Vec<TaggedEvent> = Vec::new();
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let _ = attacker.attacks(
+                &mut target,
+                &mut rng,
+                &mut events,
+                shared::messages::Phase::DAY,
+                &CombatTuning::default(),
+            );
+            let Some(beat) = first_beat(&events) else {
+                continue;
+            };
+            let Some(damage) = wound_damage(beat) else {
+                continue;
+            };
+            let report = beat
+                .wear
+                .iter()
+                .find(|w| w.item.name == plate.name)
+                .cloned();
+            let kept = target
+                .items
+                .iter()
+                .find(|i| i.name == plate.name)
+                .map(|i| i.current_durability)
+                .expect("worn plate still equipped");
+            (damage, report, kept)
+        };
+        assert!(
+            worn_report.is_none(),
+            "already-worn plate must not emit a WearReport"
+        );
+        assert_eq!(worn_after, 3, "worn plate must still take 1 wear");
+
+        // Crossing INTO worn (6/10 -> 5/10): full-effect soak (tier read
+        // pre-wear) and the Worn transition IS reported.
+        let (transition_damage, transition_after) = {
+            let mut attacker = fighter("Atk");
+            let mut target = wall("Tgt");
+            let mut plate = world::items::Item::new(
+                "Fresh Plate",
+                world::items::ItemType::Armor,
+                world::items::ItemRarity::Common,
+                10,
+                world::items::Attribute::Defense,
+                6,
+            );
+            plate.current_durability = 6;
+            target.add_item(plate.clone());
+            let mut events: Vec<TaggedEvent> = Vec::new();
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let _ = attacker.attacks(
+                &mut target,
+                &mut rng,
+                &mut events,
+                shared::messages::Phase::DAY,
+                &CombatTuning::default(),
+            );
+            let Some(beat) = first_beat(&events) else {
+                continue;
+            };
+            let Some(damage) = wound_damage(beat) else {
+                continue;
+            };
+            let report = beat
+                .wear
+                .iter()
+                .find(|w| w.item.name == plate.name)
+                .cloned()
+                .expect("tier-crossing plate must emit a WearReport");
+            assert_eq!(report.outcome, shared::combat_beat::WearOutcomeReport::Worn);
+            let kept = target
+                .items
+                .iter()
+                .find(|i| i.name == plate.name)
+                .map(|i| i.current_durability)
+                .expect("plate still equipped");
+            (damage, kept)
+        };
+        assert_eq!(transition_after, 5, "plate must cross into Worn at 5/10");
+        assert_eq!(
+            transition_damage, pristine_damage,
+            "6/10 is still above half: full-effect soak"
+        );
+        assert_eq!(pristine_after, 9, "pristine plate must take 1 wear");
+        assert!(
+            pristine_damage < worn_damage && worn_damage < base_damage,
+            "soak tiers must order damage: pristine {} < worn {} < none {}",
+            pristine_damage,
+            worn_damage,
+            base_damage
+        );
+        return;
+    }
+    panic!("no seed in 0..2000 produced a plain landed hit; widen the search");
+}
+
+#[test]
+fn critical_hit_gap_skips_armor_soak_and_wear() {
+    // The blade found a gap: no soak, no wear (wzk armor note).
+    for seed in 0u64..2_000 {
+        let base = {
+            let mut attacker = fighter("Atk");
+            let mut target = wall("Tgt");
+            let mut events: Vec<TaggedEvent> = Vec::new();
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let _ = attacker.attacks(
+                &mut target,
+                &mut rng,
+                &mut events,
+                shared::messages::Phase::DAY,
+                &CombatTuning::default(),
+            );
+            let Some(beat) = first_beat(&events) else {
+                continue;
+            };
+            let shared::combat_beat::BeatOutcome::Swing { outcome, .. } = &beat.outcome else {
+                continue;
+            };
+            match outcome {
+                shared::combat_beat::SwingOutcome::CriticalHitWound { damage } => Some(*damage),
+                _ => None,
+            }
+        };
+        let Some(base) = base else { continue };
+
+        let (crit_damage, plate_durability, plate_reported) = {
+            let mut attacker = fighter("Atk");
+            let mut target = wall("Tgt");
+            let plate = world::items::Item::new(
+                "Hardened Plate",
+                world::items::ItemType::Armor,
+                world::items::ItemRarity::Common,
+                10,
+                world::items::Attribute::Defense,
+                6,
+            );
+            target.add_item(plate.clone());
+            let mut events: Vec<TaggedEvent> = Vec::new();
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let _ = attacker.attacks(
+                &mut target,
+                &mut rng,
+                &mut events,
+                shared::messages::Phase::DAY,
+                &CombatTuning::default(),
+            );
+            let Some(beat) = first_beat(&events) else {
+                continue;
+            };
+            let shared::combat_beat::BeatOutcome::Swing { outcome, .. } = &beat.outcome else {
+                continue;
+            };
+            let damage = match outcome {
+                shared::combat_beat::SwingOutcome::CriticalHitWound { damage } => *damage,
+                _ => continue,
+            };
+            let reported = beat.wear.iter().any(|w| w.item.name == plate.name);
+            let kept = target
+                .items
+                .iter()
+                .find(|i| i.name == plate.name)
+                .map(|i| i.current_durability)
+                .expect("plate still equipped");
+            (damage, kept, reported)
+        };
+
+        assert_eq!(
+            crit_damage, base,
+            "crit must ignore armor soak (seed {seed})"
+        );
+        assert_eq!(
+            plate_durability, 10,
+            "crit must not wear armor (seed {seed})"
+        );
+        assert!(!plate_reported, "crit must not emit armor WearReport");
+        return;
+    }
+    panic!("no seed in 0..2000 produced a critical hit; widen the search");
+}
+
+#[test]
+fn armor_break_forfeits_soak_and_carries_no_penalty() {
+    // Broken armor forfeits its soak this contest (shield precedent) but,
+    // unlike shield/weapon, carries no roll penalty — it never fed a roll.
+    for seed in 0u64..2_000 {
+        let base_damage = {
+            let mut attacker = fighter("Atk");
+            let mut target = wall("Tgt");
+            let mut events: Vec<TaggedEvent> = Vec::new();
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let _ = attacker.attacks(
+                &mut target,
+                &mut rng,
+                &mut events,
+                shared::messages::Phase::DAY,
+                &CombatTuning::default(),
+            );
+            let Some(beat) = first_beat(&events) else {
+                continue;
+            };
+            let Some(damage) = wound_damage(beat) else {
+                continue;
+            };
+            damage
+        };
+
+        let mut attacker = fighter("Atk");
+        let mut target = wall("Tgt");
+        let plate = brittle_armor(4);
+        target.add_item(plate.clone());
+        let mut events: Vec<TaggedEvent> = Vec::new();
+        let mut rng = SmallRng::seed_from_u64(seed);
+        let _ = attacker.attacks(
+            &mut target,
+            &mut rng,
+            &mut events,
+            shared::messages::Phase::DAY,
+            &CombatTuning::default(),
+        );
+        let Some(beat) = first_beat(&events) else {
+            continue;
+        };
+        let Some(damage) = wound_damage(beat) else {
+            continue;
+        };
+
+        let report = beat
+            .wear
+            .iter()
+            .find(|w| w.item.name == plate.name)
+            .expect("broken plate must emit a WearReport");
+        assert_eq!(
+            report.outcome,
+            shared::combat_beat::WearOutcomeReport::Broken
+        );
+        assert_eq!(report.forfeited_effect, Some(4));
+        assert_eq!(
+            report.mid_action_penalty, None,
+            "armor break must not carry a roll penalty"
+        );
+        assert!(
+            !target.items.iter().any(|i| i.name == plate.name),
+            "broken plate must be removed"
+        );
+        assert!(
+            events.iter().any(|e| match &e.payload {
+                MessagePayload::Combat(eng) => eng
+                    .detail_lines
+                    .iter()
+                    .any(|l| l.contains("breaks their") && l.contains("Glass Plate")),
+                _ => false,
+            }),
+            "expected ArmorBreak narration in engagement detail lines; got {:?}",
+            events
+                .iter()
+                .filter_map(|e| match &e.payload {
+                    MessagePayload::Combat(eng) => Some(eng.detail_lines.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            damage, base_damage,
+            "armor broke before absorbing: soak forfeited this contest"
+        );
+        return;
+    }
+    panic!("no seed in 0..2000 produced a plain landed hit; widen the search");
 }

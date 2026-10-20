@@ -311,7 +311,18 @@ impl Character {
     pub(crate) fn equipped_shield_mut(&mut self) -> Option<&mut Item> {
         self.items
             .iter_mut()
-            .filter(|i| i.is_defensive() && i.current_durability > 0)
+            .filter(|i| i.is_shield() && i.current_durability > 0)
+            .last()
+    }
+
+    /// Get a mutable reference to the character's currently equipped armor.
+    ///
+    /// Returns the last armor with `current_durability > 0`. Used by combat
+    /// to apply wear directly to the equipped item rather than to a clone.
+    pub(crate) fn equipped_armor_mut(&mut self) -> Option<&mut Item> {
+        self.items
+            .iter_mut()
+            .filter(|i| i.is_armor() && i.current_durability > 0)
             .last()
     }
 }

@@ -136,9 +136,9 @@ pub fn translate(
             });
         }
         // Other variants intentionally not mapped in PR1.
-        // Future affliction specs add: TrappedEscaped → RescueAlly,
-        // AfflictionAcquired → AfflictionAcquired,
-        // surviving-AreaEvent → SurvivedAreaEvent.
+        // Future affliction specs add: TrappedEscaped -> RescueAlly,
+        // AfflictionAcquired -> AfflictionAcquired,
+        // surviving-AreaEvent -> SurvivedAreaEvent.
         _ => {}
     }
     out
@@ -362,7 +362,7 @@ fn item_kind_tag(item: &Item) -> ItemKindTag {
             world::items::Attribute::Defense => ItemKindTag::Antidote,
             _ => ItemKindTag::Bandage,
         },
-        ItemType::Weapon => {
+        ItemType::Weapon | ItemType::Shield | ItemType::Armor => {
             if item.rarity == world::items::ItemRarity::Rare
                 || item.rarity == world::items::ItemRarity::Legendary
             {

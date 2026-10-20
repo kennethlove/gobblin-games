@@ -1,5 +1,7 @@
 use super::*;
-use crate::items::name_generator::{generate_shield_name_with_rng, generate_weapon_name_with_rng};
+use crate::items::name_generator::{
+    generate_armor_name_with_rng, generate_shield_name_with_rng, generate_weapon_name_with_rng,
+};
 use crate::terrain::BaseTerrain;
 use rand::RngExt;
 use rand::prelude::*;
@@ -79,6 +81,10 @@ impl Item {
                 false => Self::new_random_weapon_with_rng(rng),
                 true => Self::new_random_shield_with_rng(rng),
             },
+            (ItemType::Shield, Some(name)) => Self::new_shield_with_rng(name, rng),
+            (ItemType::Shield, None) => Self::new_random_shield_with_rng(rng),
+            (ItemType::Armor, Some(name)) => Self::new_armor_with_rng(name, rng),
+            (ItemType::Armor, None) => Self::new_random_armor_with_rng(rng),
             (ItemType::Food(n), name) => Self::new_food(name, n),
             (ItemType::Water(n), name) => Self::new_water(name, n),
         }
@@ -132,6 +138,12 @@ impl Item {
             match name {
                 Some(n) => Self::new_shield_with_rng(n, rng),
                 None => Self::new_random_shield_with_rng(rng),
+            }
+        } else if roll < weights.weapons + weights.shields + weights.armor {
+            // Generate armor
+            match name {
+                Some(n) => Self::new_armor_with_rng(n, rng),
+                None => Self::new_random_armor_with_rng(rng),
             }
         } else {
             // Generate consumable
@@ -211,7 +223,7 @@ impl Item {
     /// Build a named shield whose rarity and stats come from `rng`.
     pub fn new_shield_with_rng(name: &str, rng: &mut impl Rng) -> Item {
         let rarity = ItemRarity::random_with_rng(rng);
-        let item_type = ItemType::Weapon;
+        let item_type = ItemType::Shield;
         let attribute = Attribute::Defense;
         let (min, max) = rarity.effect_range();
         let effect = rng.random_range(min..=max);
@@ -229,6 +241,40 @@ impl Item {
     pub fn new_random_shield_with_rng(rng: &mut impl Rng) -> Item {
         let name = generate_shield_name_with_rng(rng);
         Self::new_shield_with_rng(name.as_str(), rng)
+    }
+
+    pub fn new_armor(name: &str) -> Item {
+        Self::new_armor_with_rng(name, &mut rand::rng())
+    }
+
+    /// Build a named armor piece whose rarity and stats come from `rng`.
+    /// Armor mirrors shield: Defense attribute, same effect and durability
+    /// ranges (wzk: wears like shield).
+    pub fn new_armor_with_rng(name: &str, rng: &mut impl Rng) -> Item {
+        let rarity = ItemRarity::random_with_rng(rng);
+        let (min, max) = rarity.effect_range();
+        let effect = rng.random_range(min..=max);
+        let (dur_min, dur_max) = rarity.shield_durability_range();
+        let durability = rng.random_range(dur_min..=dur_max);
+
+        Item::new(
+            name,
+            ItemType::Armor,
+            rarity,
+            durability,
+            Attribute::Defense,
+            effect,
+        )
+    }
+
+    pub fn new_random_armor() -> Item {
+        Self::new_random_armor_with_rng(&mut rand::rng())
+    }
+
+    /// Build armor with a generated name, drawing everything from `rng`.
+    pub fn new_random_armor_with_rng(rng: &mut impl Rng) -> Item {
+        let name = generate_armor_name_with_rng(rng);
+        Self::new_armor_with_rng(name.as_str(), rng)
     }
 
     /// Construct a Food item carrying `value` hunger-debt relief. `name` is

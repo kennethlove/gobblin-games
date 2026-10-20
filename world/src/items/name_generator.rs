@@ -45,6 +45,14 @@ pub fn generate_shield_name_with_rng(rng: &mut impl Rng) -> String {
     format!("{} {}", adjective, "shield")
 }
 
+/// Generate an armor name. WHY: reuses the shield adjective pool — the
+/// durable/scavenged flavor words (bone, rusty, scrap) read the same for
+/// armor, and a third pool would only duplicate them.
+pub fn generate_armor_name_with_rng(rng: &mut impl Rng) -> String {
+    let adjective = SHIELD_ADJECTIVES.choose(rng).unwrap().to_owned();
+    format!("{} {}", adjective, "armor")
+}
+
 pub fn generate_weapon_name() -> String {
     generate_weapon_name_with_rng(&mut rand::rng())
 }
@@ -65,6 +73,12 @@ mod tests {
     fn shield_name() {
         let name = generate_shield_name();
         assert!(name.contains(" shield"));
+    }
+
+    #[test]
+    fn armor_name() {
+        let name = generate_armor_name_with_rng(&mut rand::rng());
+        assert!(name.contains(" armor"));
     }
 
     #[test]

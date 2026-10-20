@@ -59,19 +59,34 @@ impl CombatBeatExt for CombatBeat {
             return out;
         };
 
-        // 1. Wear lines.
+        // 1. Wear lines. Kind comes from the beat's pre-contest equipment
+        // snapshots: the worn item's identifier matches the weapon or the
+        // shield ref; armor matches neither. WHY not owner-vs-actor: a
+        // counter-victim's armor wear has the actor as owner and would
+        // otherwise render as weapon wear.
         for w in &self.wear {
+            let is_weapon_wear = self
+                .weapon
+                .as_ref()
+                .is_some_and(|i| i.identifier == w.item.identifier);
+            let is_shield_wear = self
+                .shield
+                .as_ref()
+                .is_some_and(|i| i.identifier == w.item.identifier);
             match w.outcome {
                 WearOutcomeReport::Pristine => {}
                 WearOutcomeReport::Worn => {
-                    if w.owner.identifier == self.actor.identifier {
-                        out.push(GameOutput::WeaponWear(&w.owner.name, &w.item.name).to_string());
+                    let line = if is_weapon_wear {
+                        GameOutput::WeaponWear(&w.owner.name, &w.item.name)
+                    } else if is_shield_wear {
+                        GameOutput::ShieldWear(&w.owner.name, &w.item.name)
                     } else {
-                        out.push(GameOutput::ShieldWear(&w.owner.name, &w.item.name).to_string());
-                    }
+                        GameOutput::ArmorWear(&w.owner.name, &w.item.name)
+                    };
+                    out.push(line.to_string());
                 }
                 WearOutcomeReport::Broken => {
-                    if w.owner.identifier == self.actor.identifier {
+                    if is_weapon_wear {
                         out.push(GameOutput::WeaponBreak(&w.owner.name, &w.item.name).to_string());
                         if let Some(penalty) = w.mid_action_penalty {
                             out.push(
@@ -83,7 +98,7 @@ impl CombatBeatExt for CombatBeat {
                                 .to_string(),
                             );
                         }
-                    } else {
+                    } else if is_shield_wear {
                         out.push(GameOutput::ShieldBreak(&w.owner.name, &w.item.name).to_string());
                         if let Some(penalty) = w.mid_action_penalty {
                             out.push(
@@ -95,6 +110,9 @@ impl CombatBeatExt for CombatBeat {
                                 .to_string(),
                             );
                         }
+                    } else {
+                        // Armor never feeds a roll: no mid-action penalty.
+                        out.push(GameOutput::ArmorBreak(&w.owner.name, &w.item.name).to_string());
                     }
                 }
             }
@@ -186,6 +204,13 @@ mod tests {
         }
     }
 
+    fn armor() -> shared::messages::ItemRef {
+        shared::messages::ItemRef {
+            identifier: "armor-1".into(),
+            name: "Chain Armor".into(),
+        }
+    }
+
     fn swing_beat(outcome: SwingOutcome) -> CombatBeat {
         CombatBeat {
             round: 1,
@@ -215,6 +240,53 @@ mod tests {
             lines[0].contains("missed") || lines[0].contains("miss"),
             "got: {}",
             lines[0]
+        );
+    }
+
+    #[test]
+    fn armor_wear_renders_armor_line() {
+        // The worn item matches neither the beat's weapon nor shield —
+        // the renderer must classify it as armor, not as shield wear.
+        let mut beat = swing_beat(SwingOutcome::Miss);
+        beat.wear.push(WearReport {
+            owner: t("Bob"),
+            item: armor(),
+            outcome: WearOutcomeReport::Worn,
+            forfeited_effect: None,
+            mid_action_penalty: None,
+        });
+        let lines = beat.to_log_lines();
+        assert!(
+            lines.iter().any(|l| l.contains("Chain Armor")
+                && l.contains("showing signs of wear")
+                && l.starts_with('🪖')),
+            "expected armor wear line; got {:?}",
+            lines
+        );
+        assert!(
+            !lines.iter().any(|l| l.starts_with("🛡️")),
+            "armor must not render as shield wear; got {:?}",
+            lines
+        );
+    }
+
+    #[test]
+    fn armor_break_renders_armor_break_line() {
+        let mut beat = swing_beat(SwingOutcome::Miss);
+        beat.wear.push(WearReport {
+            owner: t("Bob"),
+            item: armor(),
+            outcome: WearOutcomeReport::Broken,
+            forfeited_effect: Some(4),
+            mid_action_penalty: None,
+        });
+        let lines = beat.to_log_lines();
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.contains("breaks their") && l.contains("Chain Armor")),
+            "expected armor break line; got {:?}",
+            lines
         );
     }
 

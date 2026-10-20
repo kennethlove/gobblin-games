@@ -193,8 +193,12 @@ impl Item {
         self.item_type == ItemType::Weapon && self.attribute == Attribute::Strength
     }
 
-    pub fn is_defensive(&self) -> bool {
-        self.item_type == ItemType::Weapon && self.attribute == Attribute::Defense
+    pub fn is_shield(&self) -> bool {
+        self.item_type == ItemType::Shield
+    }
+
+    pub fn is_armor(&self) -> bool {
+        self.item_type == ItemType::Armor
     }
 
     pub fn is_consumable(&self) -> bool {
@@ -206,6 +210,8 @@ impl Item {
 pub enum ItemType {
     Consumable,
     Weapon,
+    Shield,
+    Armor,
     Food(u8),
     Water(u8),
 }
@@ -241,6 +247,8 @@ impl Display for ItemType {
         match self {
             ItemType::Consumable => write!(f, "consumable"),
             ItemType::Weapon => write!(f, "weapon"),
+            ItemType::Shield => write!(f, "shield"),
+            ItemType::Armor => write!(f, "armor"),
             ItemType::Food(n) => write!(f, "food({})", n),
             ItemType::Water(n) => write!(f, "water({})", n),
         }
@@ -273,6 +281,8 @@ impl FromStr for ItemType {
         match lower.as_str() {
             "consumable" => Ok(ItemType::Consumable),
             "weapon" => Ok(ItemType::Weapon),
+            "shield" => Ok(ItemType::Shield),
+            "armor" => Ok(ItemType::Armor),
             _ => Err("Invalid item type".to_string()),
         }
     }

@@ -83,6 +83,8 @@ pub enum GameOutput<'a> {
     WeaponWear(&'a str, &'a str),
     ShieldBreak(&'a str, &'a str),
     ShieldWear(&'a str, &'a str),
+    ArmorBreak(&'a str, &'a str),
+    ArmorWear(&'a str, &'a str),
     /// Character name, weapon name, penalty (1..=4 absolute value).
     WeaponShattersMidSwing(&'a str, &'a str, u32),
     /// Character name, shield name, penalty (1..=4 absolute value).
@@ -376,6 +378,12 @@ impl<'a> Display for GameOutput<'a> {
             }
             GameOutput::ShieldWear(character, shield) => {
                 write!(f, "🛡️ {}'s {} is showing signs of wear", character, shield)
+            }
+            GameOutput::ArmorBreak(character, armor) => {
+                write!(f, "🪖 {} breaks their {}", character, armor)
+            }
+            GameOutput::ArmorWear(character, armor) => {
+                write!(f, "🪖 {}'s {} is showing signs of wear", character, armor)
             }
             GameOutput::WeaponShattersMidSwing(character, weapon, penalty) => {
                 write!(
