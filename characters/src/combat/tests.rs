@@ -638,54 +638,67 @@ fn test_fumble_self_damage(_small_rng: SmallRng) {
     assert_eq!(attacker.blood, initial_blood - 50);
 }
 
-/// Regression test for the clone-mutation bug where weapon wear was
-/// applied to a cloned item from `weapons()` and silently lost.
-/// A weapon with durability 5 must survive 3 attack contests with
-/// reduced durability and remain in the attacker's inventory.
-#[rstest]
-fn weapon_survives_multiple_combats(mut small_rng: SmallRng) {
+/// cg9: clean hits never wear the blade — a landed hit on bare flesh (no
+/// armor, no shield margin, no fumble/perfect) leaves durability intact.
+/// Wear still applies when it fires: see weapon_break_records (armor).
+fn clean_hits_never_wear_weapon() {
     use world::items::{Attribute, Item, ItemRarity, ItemType};
 
-    let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+    for seed in 0..500u64 {
+        let mut attacker = Character::new("Snaggletooth".to_string(), None, None);
+        // Roll-independent: trait AttrMods must not shift exact math.
+        attacker.traits.clear();
+        let mut target = Character::new("Grubworm".to_string(), None, None);
+        // Roll-independent: trait AttrMods must not shift exact math.
+        target.traits.clear();
 
-    // Roll-independent: trait AttrMods must not shift exact math.
+        let weapon = Item::new(
+            "Test Bow",
+            ItemType::Weapon,
+            ItemRarity::Rare,
+            5,
+            Attribute::Strength,
+            3,
+        );
+        let weapon_id = weapon.identifier.clone();
+        attacker.items.push(weapon);
 
-    attacker.traits.clear();
-    let mut target = Character::new("Grubworm".to_string(), None, None);
-    // Roll-independent: trait AttrMods must not shift exact math.
-    target.traits.clear();
-
-    let weapon = Item::new(
-        "Test Bow",
-        ItemType::Weapon,
-        ItemRarity::Rare,
-        5,
-        Attribute::Strength,
-        3,
-    );
-    let weapon_id = weapon.identifier.clone();
-    attacker.items.push(weapon);
-
-    for _ in 0..3 {
-        attack_contest(
-            &mut attacker,
+        let mut events: Vec<TaggedEvent> = Vec::new();
+        let mut rng = SmallRng::seed_from_u64(seed);
+        let _ = attacker.attacks(
             &mut target,
-            &mut small_rng,
-            &mut Vec::new(),
+            &mut rng,
+            &mut events,
+            shared::messages::Phase::DAY,
             &CombatTuning::default(),
         );
-    }
+        let Some(beat) = first_beat(&events) else {
+            continue;
+        };
+        // Landed hit: the target took it (not a counter, crit, or fumble).
+        if wound_damage(beat).is_none() || target.blood == 1000 {
+            continue;
+        }
 
-    let stored = attacker
-        .items
-        .iter()
-        .find(|i| i.identifier == weapon_id)
-        .expect("weapon should still be in inventory after 3 combats");
-    assert_eq!(stored.max_durability, 5);
-    assert_eq!(
-        stored.current_durability, 2,
-        "weapon should have been worn 3 times (5 - 3 = 2)"
-    );
+        let stored = attacker
+            .items
+            .iter()
+            .find(|i| i.identifier == weapon_id)
+            .expect("weapon stays in inventory");
+        assert_eq!(
+            stored.current_durability, 5,
+            "clean hit must not wear the weapon (seed {seed})"
+        );
+        assert!(
+            !beat
+                .wear
+                .iter()
+                .any(|w| w.owner.identifier == beat.actor.identifier),
+            "no attacker wear reports on a clean hit (seed {seed})"
+        );
+        return;
+    }
+    panic!("no landed hit found in 500 seeds");
 }
 
 #[rstest]
@@ -915,37 +928,51 @@ fn brittle_shield(effect: i32) -> world::items::Item {
 
 #[test]
 fn weapon_break_records_forfeit_and_penalty_on_beat() {
-    let mut attacker = Character::new("Atk".into(), None, None);
-    // Roll-independent: trait AttrMods must not shift exact math.
-    attacker.traits.clear();
-    attacker.attributes.strength = 10;
-    let weapon = brittle_weapon(5);
-    attacker.add_item(weapon.clone());
+    // cg9: wear fires when a landed hit is absorbed by armor (middle tier),
+    // so the brittle blade breaks on exactly that outcome. Seed-hunt the hit;
+    // fresh characters per seed keep durability honest.
+    let mut hit_events: Option<Vec<TaggedEvent>> = None;
+    for seed in 0..500u64 {
+        let mut attacker = Character::new("Atk".into(), None, None);
+        // Roll-independent: trait AttrMods must not shift exact math.
+        attacker.traits.clear();
+        attacker.attributes.strength = 10;
+        attacker.add_item(brittle_weapon(5));
 
-    let mut target = Character::new("Tgt".into(), None, None);
+        let mut target = Character::new("Tgt".into(), None, None);
+        // Roll-independent: trait AttrMods must not shift exact math.
+        target.traits.clear();
+        target.attributes.toughness = 5;
+        target.add_item(world::items::Item::new(
+            "Armor Plate",
+            world::items::ItemType::Armor,
+            world::items::ItemRarity::Common,
+            10,
+            world::items::Attribute::Defense,
+            4,
+        ));
 
-    // Roll-independent: trait AttrMods must not shift exact math.
+        let mut events: Vec<TaggedEvent> = Vec::new();
+        let mut rng = SmallRng::seed_from_u64(seed);
+        let _ = attacker.attacks(
+            &mut target,
+            &mut rng,
+            &mut events,
+            shared::messages::Phase::DAY,
+            &CombatTuning::default(),
+        );
+        if let Some(beat) = first_beat(&events)
+            && wound_damage(beat).is_some()
+            && target.blood < 1000
+            && attacker.blood == 1000
+        {
+            hit_events = Some(events);
+            break;
+        }
+    }
+    let events = hit_events.expect("no landed hit found in 500 seeds");
 
-    target.traits.clear();
-    target.attributes.toughness = 5;
-
-    let mut events: Vec<TaggedEvent> = Vec::new();
-    let mut rng = SmallRng::seed_from_u64(42);
-    let _ = attacker.attacks(
-        &mut target,
-        &mut rng,
-        &mut events,
-        shared::messages::Phase::DAY,
-        &CombatTuning::default(),
-    );
-
-    let beat = events
-        .iter()
-        .find_map(|e| match &e.payload {
-            MessagePayload::CombatBeat(b) => Some(b),
-            _ => None,
-        })
-        .expect("expected one CombatBeat emission");
+    let beat = first_beat(&events).expect("expected one CombatBeat emission");
     let weapon_wear = beat
         .wear
         .iter()
@@ -1399,6 +1426,136 @@ fn wound_damage(beat: &shared::combat_beat::CombatBeat) -> Option<u32> {
         shared::combat_beat::SwingOutcome::Wound { damage } => Some(*damage),
         _ => None,
     }
+}
+
+/// cg9 tier hunt: a BlockWound (defender-won damage) exchange with a bare
+/// sidearm (dur 10 / effect 3) against a target that optionally carries a
+/// shield (dur 10 / given effect). Returns (events, weapon_dur, shield_dur)
+/// for the first seed matching the equipment-wear filter; shield_dur is 10
+/// when no shield was carried.
+fn hunt_block(
+    shield_effect: Option<i32>,
+    shield_wore: bool,
+    weapon_wore: bool,
+) -> Option<(Vec<TaggedEvent>, u32, u32)> {
+    for seed in 0..500u64 {
+        let mut attacker = Character::new("Atk".into(), None, None);
+        attacker.traits.clear();
+        attacker.attributes.strength = 10;
+        attacker.add_item(world::items::Item::new(
+            "Sidearm",
+            world::items::ItemType::Weapon,
+            world::items::ItemRarity::Common,
+            10,
+            world::items::Attribute::Strength,
+            3,
+        ));
+        let mut target = Character::new("Tgt".into(), None, None);
+        target.traits.clear();
+        target.attributes.toughness = 5;
+        if let Some(effect) = shield_effect {
+            target.add_item(world::items::Item::new(
+                "Oak Shield",
+                world::items::ItemType::Shield,
+                world::items::ItemRarity::Common,
+                10,
+                world::items::Attribute::Defense,
+                effect,
+            ));
+        }
+        let mut events: Vec<TaggedEvent> = Vec::new();
+        let mut rng = SmallRng::seed_from_u64(seed);
+        let _ = attacker.attacks(
+            &mut target,
+            &mut rng,
+            &mut events,
+            shared::messages::Phase::DAY,
+            &CombatTuning::default(),
+        );
+        let Some(beat) = first_beat(&events) else {
+            continue;
+        };
+        let shared::combat_beat::BeatOutcome::Swing { outcome, .. } = &beat.outcome else {
+            continue;
+        };
+        // Defender-won damage lands on the ACTOR: plain defender wins map to
+        // `Wound` (resolve.rs `_` arm), perfect blocks to `BlockWound`. Blood
+        // side decides — a counter drops the attacker's blood, a landed hit
+        // or crit drops the target's.
+        let defender_won = matches!(
+            outcome,
+            shared::combat_beat::SwingOutcome::Wound { .. }
+                | shared::combat_beat::SwingOutcome::BlockWound { .. }
+        ) && attacker.blood < 1000
+            && target.blood == 1000;
+        if !defender_won {
+            continue;
+        }
+        let weapon_dur = attacker
+            .items
+            .iter()
+            .find(|i| i.name == "Sidearm")
+            .map(|i| i.current_durability)
+            .unwrap_or(10);
+        let shield_dur = target
+            .items
+            .iter()
+            .find(|i| i.name == "Oak Shield")
+            .map(|i| i.current_durability)
+            .unwrap_or(10);
+        if (shield_dur < 10) == shield_wore && (weapon_dur < 10) == weapon_wore {
+            return Some((events, weapon_dur, shield_dur));
+        }
+    }
+    None
+}
+
+#[test]
+fn decisive_shield_block_wears_weapon_and_shield() {
+    // Blade struck the shield inside its margin: both take wear — weapon at
+    // the heavy tier, shield its single point.
+    let (events, weapon_dur, shield_dur) =
+        hunt_block(Some(4), true, true).expect("no decisive shield block in 500 seeds");
+    assert_eq!(
+        shield_dur, 9,
+        "shield wears exactly one point on its own block"
+    );
+    assert_eq!(
+        weapon_dur, 7,
+        "blade wears the full tier-3 against a decisive shield block"
+    );
+    let beat = first_beat(&events).expect("beat exists");
+    assert!(
+        beat.wear.is_empty(),
+        "both crossed no tier boundary: pristine wear is unreported (shield rule)"
+    );
+}
+
+#[test]
+fn defender_win_outside_shield_margin_spares_both() {
+    // Defender won without the shield's margin doing the work: nothing wears.
+    let (events, weapon_dur, shield_dur) =
+        hunt_block(Some(4), false, false).expect("no marginal defender win in 500 seeds");
+    assert_eq!(
+        weapon_dur, 10,
+        "blade untouched when the shield didn't matter"
+    );
+    assert_eq!(shield_dur, 10, "shield untouched when it didn't matter");
+    let beat = first_beat(&events).expect("beat exists");
+    assert!(beat.wear.is_empty(), "no wear reports for a clean block");
+}
+
+#[test]
+fn perfect_block_wears_weapon_heavily() {
+    // Natural 20 defense, no shield involved: the blade still rings off the
+    // guard — full tier on the weapon alone.
+    let (events, weapon_dur, shield_dur) =
+        hunt_block(None, false, true).expect("no perfect block in 500 seeds");
+    assert_eq!(
+        weapon_dur, 7,
+        "perfect block costs the weapon its full tier"
+    );
+    assert_eq!(shield_dur, 10, "no shield carried");
 }
 
 #[test]

@@ -140,10 +140,93 @@ pub fn attack_contest(
     let mut weapon_kind = WeaponKind::Unarmed;
     let mut weapon_broken = false;
 
-    // If the attacker has a weapon, use it
-    let weapon_outcome = if let Some(weapon) = attacker.equipped_weapon_mut() {
+    // If the attacker has a weapon, use it. The effect bonus always applies;
+    // wear is conditional (cg9) and runs in the wear phase below, gated on
+    // the pre-wear result. classify_weapon runs here because the emission
+    // path only exists when wear actually fires.
+    if let Some(weapon) = attacker.equipped_weapon_mut() {
+        weapon_kind = classify_weapon(weapon);
         attack_roll += weapon.effect; // Add weapon damage
-        let outcome = weapon.wear(1);
+    }
+
+    // Get defense roll and defense modifier
+    let base_defense_roll: i32 = rng.random_range(1..=20); // Base roll
+    let mut defense_roll = base_defense_roll;
+    defense_roll += target.effective_attribute(CharacterAttribute::Toughness) as i32; // Add defense
+    {
+        let band = stamina_band(target.stamina, target.max_stamina, tuning);
+        let penalty = match band {
+            StaminaBand::Fresh => 0,
+            StaminaBand::Winded => tuning.winded_roll_penalty,
+            StaminaBand::Exhausted => tuning.exhausted_roll_penalty,
+        };
+        defense_roll += penalty;
+    }
+
+    // Trapped characters cannot dodge effectively — halve defense
+    if target
+        .afflictions
+        .values()
+        .any(|a| matches!(a.kind, shared::afflictions::AfflictionKind::Trapped(_)))
+    {
+        defense_roll = (defense_roll as f32 / 2.0).ceil() as i32;
+    }
+
+    // Sleep ambush bonus (40t7): sleeping targets can't defend at all.
+    // They just woke up (was_ambushed flag set by attacks()) but haven't
+    // had time to react — treat as 0 defense.
+    if target.was_ambushed {
+        defense_roll = 0;
+    }
+
+    // TODO(dvd): apply patron_affinity_penalty(attacker, PATRON_PENALTY_ATTACK_TRAPPED)
+    //            when attacking a character with any AfflictionKind::Trapped(_)
+
+    // If the defender has a shield, use it — effect only; wear is conditional
+    // (cg9) and runs in the wear phase below. shield_effect is remembered so
+    // the wear gate can test the shield's decisive margin.
+    let mut shield_effect = 0;
+    if let Some(shield) = target.equipped_shield_mut() {
+        shield_effect = shield.effect;
+        defense_roll += shield.effect; // Add shield defense
+    }
+
+    // Pre-wear decision: gates the wear tiers. The final result is decided
+    // again below on break-modified rolls, so a shattering shield can still
+    // flip a block exactly as before — only wear is gated now.
+    let provisional_result = decide_result(
+        base_attack_roll,
+        base_defense_roll,
+        attack_roll,
+        defense_roll,
+        tuning,
+    );
+
+    // Wear phase (cg9): every amount can be zero, and zero means the item
+    // takes no wear this contest. Clean hits and plain misses wear nothing.
+    let weapon_wear_amount = weapon_wear_amount(
+        &provisional_result,
+        attack_roll,
+        defense_roll,
+        shield_effect,
+        target,
+        tuning,
+    );
+    let shield_wear_amount = if shield_block_was_decisive(
+        &provisional_result,
+        attack_roll,
+        defense_roll,
+        shield_effect,
+    ) {
+        tuning.shield_wear_on_decisive_block
+    } else {
+        0
+    };
+
+    let weapon_outcome = if weapon_wear_amount > 0
+        && let Some(weapon) = attacker.equipped_weapon_mut()
+    {
+        let outcome = weapon.wear(weapon_wear_amount);
         // Defer clone: only Worn/Broken paths need the snapshot.
         match outcome {
             world::items::WearOutcome::Pristine => None,
@@ -153,7 +236,6 @@ pub fn attack_contest(
         None
     };
     if let Some((weapon, outcome)) = weapon_outcome {
-        weapon_kind = classify_weapon(&weapon);
         let attacker_ref = tref(attacker);
         let item_ref = ItemRef {
             identifier: weapon.identifier.clone().into(),
@@ -221,43 +303,10 @@ pub fn attack_contest(
         }
     }
 
-    // Get defense roll and defense modifier
-    let base_defense_roll: i32 = rng.random_range(1..=20); // Base roll
-    let mut defense_roll = base_defense_roll;
-    defense_roll += target.effective_attribute(CharacterAttribute::Toughness) as i32; // Add defense
+    let shield_outcome = if shield_wear_amount > 0
+        && let Some(shield) = target.equipped_shield_mut()
     {
-        let band = stamina_band(target.stamina, target.max_stamina, tuning);
-        let penalty = match band {
-            StaminaBand::Fresh => 0,
-            StaminaBand::Winded => tuning.winded_roll_penalty,
-            StaminaBand::Exhausted => tuning.exhausted_roll_penalty,
-        };
-        defense_roll += penalty;
-    }
-
-    // Trapped characters cannot dodge effectively — halve defense
-    if target
-        .afflictions
-        .values()
-        .any(|a| matches!(a.kind, shared::afflictions::AfflictionKind::Trapped(_)))
-    {
-        defense_roll = (defense_roll as f32 / 2.0).ceil() as i32;
-    }
-
-    // Sleep ambush bonus (40t7): sleeping targets can't defend at all.
-    // They just woke up (was_ambushed flag set by attacks()) but haven't
-    // had time to react — treat as 0 defense.
-    if target.was_ambushed {
-        defense_roll = 0;
-    }
-
-    // TODO(dvd): apply patron_affinity_penalty(attacker, PATRON_PENALTY_ATTACK_TRAPPED)
-    //            when attacking a character with any AfflictionKind::Trapped(_)
-
-    // If the defender has a shield, use it
-    let shield_outcome = if let Some(shield) = target.equipped_shield_mut() {
-        defense_roll += shield.effect; // Add shield defense
-        let outcome = shield.wear(1);
+        let outcome = shield.wear(shield_wear_amount);
         match outcome {
             world::items::WearOutcome::Pristine => None,
             _ => Some((shield.clone(), outcome)),
@@ -333,40 +382,13 @@ pub fn attack_contest(
     }
 
     // Check for critical outcomes based on natural rolls (before modifiers)
-    let result = match (base_attack_roll, base_defense_roll) {
-        (1, _) => AttackResult::CriticalFumble, // Natural 1 on attack - fumble!
-        (20, _) => AttackResult::CriticalHit,   // Natural 20 on attack - crit!
-        (_, 20) => AttackResult::PerfectBlock,  // Natural 20 on defense - perfect block!
-        _ => {
-            // Normal combat resolution - compare attack vs. defense
-            match attack_roll.cmp(&defense_roll) {
-                Ordering::Less => {
-                    // If the defender wins
-                    let difference =
-                        defense_roll as f64 - (attack_roll as f64 * tuning.decisive_win_multiplier);
-                    if difference > 0.0 {
-                        // Defender wins significantly
-                        AttackResult::DefenderWinsDecisively
-                    } else {
-                        AttackResult::DefenderWins
-                    }
-                }
-                Ordering::Equal => AttackResult::Miss, // If they tie
-                Ordering::Greater => {
-                    // If the attacker wins
-                    let difference =
-                        attack_roll as f64 - (defense_roll as f64 * tuning.decisive_win_multiplier);
-
-                    if difference > 0.0 {
-                        // Attacker wins significantly
-                        AttackResult::AttackerWinsDecisively
-                    } else {
-                        AttackResult::AttackerWins
-                    }
-                }
-            }
-        }
-    };
+    let result = decide_result(
+        base_attack_roll,
+        base_defense_roll,
+        attack_roll,
+        defense_roll,
+        tuning,
+    );
 
     // D5: CriticalFumble clears attacker-side break-penalty fields on the
     // recorded wear report. The fumble path's catastrophic self-damage is the
@@ -414,6 +436,106 @@ pub fn attack_contest(
         wear,
         inflicts,
         attacker_inflicts,
+    }
+}
+
+/// Natural-roll priority plus decisive-margin comparison — extracted so the
+/// wear phase can see the outcome BEFORE wear/break mutations, while
+/// `attack_contest` decides again on the final break-modified rolls.
+fn decide_result(
+    base_attack_roll: i32,
+    base_defense_roll: i32,
+    attack_roll: i32,
+    defense_roll: i32,
+    tuning: &crate::combat_tuning::CombatTuning,
+) -> AttackResult {
+    match (base_attack_roll, base_defense_roll) {
+        (1, _) => AttackResult::CriticalFumble, // Natural 1 on attack - fumble!
+        (20, _) => AttackResult::CriticalHit,   // Natural 20 on attack - crit!
+        (_, 20) => AttackResult::PerfectBlock,  // Natural 20 on defense - perfect block!
+        _ => {
+            // Normal combat resolution - compare attack vs. defense
+            match attack_roll.cmp(&defense_roll) {
+                Ordering::Less => {
+                    // If the defender wins
+                    let difference =
+                        defense_roll as f64 - (attack_roll as f64 * tuning.decisive_win_multiplier);
+                    if difference > 0.0 {
+                        // Defender wins significantly
+                        AttackResult::DefenderWinsDecisively
+                    } else {
+                        AttackResult::DefenderWins
+                    }
+                }
+                Ordering::Equal => AttackResult::Miss, // If they tie
+                Ordering::Greater => {
+                    // If the attacker wins
+                    let difference =
+                        attack_roll as f64 - (defense_roll as f64 * tuning.decisive_win_multiplier);
+
+                    if difference > 0.0 {
+                        // Attacker wins significantly
+                        AttackResult::AttackerWinsDecisively
+                    } else {
+                        AttackResult::AttackerWins
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The block held because of the shield: the attack landed inside the
+/// shield's contribution — `defense_roll - shield_effect < attack_roll`,
+/// with DefenderWins already implying `attack_roll < defense_roll`.
+fn shield_block_was_decisive(
+    result: &AttackResult,
+    attack_roll: i32,
+    defense_roll: i32,
+    shield_effect: i32,
+) -> bool {
+    matches!(
+        result,
+        AttackResult::DefenderWins | AttackResult::DefenderWinsDecisively
+    ) && shield_effect > 0
+        && attack_roll > defense_roll - shield_effect
+}
+
+/// Weapon wear tier for this contest (cg9). Zero means no wear: a clean hit
+/// on bare flesh never dulls steel, and neither does a plain miss. Armor in
+/// the target's inventory means the blow was absorbed by plate (middle tier);
+/// DefenderWins outcomes consult the shield margin instead.
+fn weapon_wear_amount(
+    result: &AttackResult,
+    attack_roll: i32,
+    defense_roll: i32,
+    shield_effect: i32,
+    target: &Character,
+    tuning: &crate::combat_tuning::CombatTuning,
+) -> u32 {
+    use AttackResult::*;
+    match result {
+        PerfectBlock => tuning.weapon_wear_on_perfect_block,
+        CriticalFumble => tuning.weapon_wear_on_fumble,
+        AttackerWins | AttackerWinsDecisively => {
+            if target
+                .items
+                .iter()
+                .any(|i| i.is_armor() && i.current_durability > 0)
+            {
+                tuning.weapon_wear_on_armor_block
+            } else {
+                0
+            }
+        }
+        DefenderWins | DefenderWinsDecisively => {
+            if shield_block_was_decisive(result, attack_roll, defense_roll, shield_effect) {
+                tuning.weapon_wear_on_shield_block
+            } else {
+                0
+            }
+        }
+        _ => 0,
     }
 }
 

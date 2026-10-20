@@ -93,6 +93,21 @@ pub struct CombatTuning {
     pub brain_execute_treacherous_bonus: i32,
     /// Execute score for the Aggressive trait.
     pub brain_execute_aggressive_bonus: i32,
+
+    // --- Conditional weapon/shield wear tiers (cg9 balance pass) ---
+    // Wear fires only on gated outcomes; clean hits and plain misses wear
+    // nothing. Amounts are starting values, tuned during the balance pass.
+    /// Decisive shield block (attack landed inside the shield's margin):
+    /// heaviest wear — the blade struck the shield and the block held.
+    pub weapon_wear_on_shield_block: u32,
+    /// Hit absorbed by the target's armor: middle tier.
+    pub weapon_wear_on_armor_block: u32,
+    /// Natural 20 defense (perfect block): heavy, like the shield block.
+    pub weapon_wear_on_perfect_block: u32,
+    /// Natural 1 fumble: least wear.
+    pub weapon_wear_on_fumble: u32,
+    /// Shield wear amount; fires only on a decisive shield block.
+    pub shield_wear_on_decisive_block: u32,
 }
 
 impl Default for CombatTuning {
@@ -146,6 +161,12 @@ impl Default for CombatTuning {
             brain_spare_trait_bonus: 30,
             brain_execute_treacherous_bonus: 50,
             brain_execute_aggressive_bonus: 20,
+
+            weapon_wear_on_shield_block: 3,
+            weapon_wear_on_armor_block: 2,
+            weapon_wear_on_perfect_block: 3,
+            weapon_wear_on_fumble: 1,
+            shield_wear_on_decisive_block: 1,
         }
     }
 }
