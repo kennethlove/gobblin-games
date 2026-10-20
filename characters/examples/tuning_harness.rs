@@ -3,6 +3,11 @@
 //! `CombatTuning` values empirically; committed as a repeatable measuring tool.
 //!
 //! Run: `cargo run --example tuning_harness -- 2000`
+//! Gear mode (second arg `gear`): fighters carry weapon/shield/armor and the
+//! harness reports wear consumption and break rates — the instrument for
+//! tuning the weapon/shield/armor wear knobs:
+//!
+//! Run: `cargo run --example tuning_harness -- 2000 gear`
 
 use characters::Character;
 use characters::brains::combat::CombatBrain;
@@ -12,6 +17,7 @@ use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use shared::combat_beat::CombatActionKind;
 use shared::combat_beat::CombatResult;
+use world::items::OwnsItems;
 
 /// Brain wrapper so the loop uses real per-round decisions.
 struct BrainProvider(CombatBrain);
@@ -30,6 +36,8 @@ fn main() {
         .nth(1)
         .and_then(|a| a.parse().ok())
         .unwrap_or(2000);
+    // Gear mode: equip both fighters so the wear knobs actually fire.
+    let gear = std::env::args().any(|a| a == "gear");
     let tuning = CombatTuning::default();
 
     let mut rounds_hist: Vec<u32> = Vec::new();
@@ -47,6 +55,11 @@ fn main() {
     let mut one_round_kinds: std::collections::BTreeMap<&str, usize> =
         std::collections::BTreeMap::new();
     let mut sample_kill: Vec<String> = Vec::new();
+    // Wear accounting (gear mode): points consumed per slot and fights that
+    // ended with at least one item of that slot broken (durability 0 or gone).
+    let mut wear_points: [u32; 3] = [0, 0, 0]; // weapon, shield, armor
+    let mut slot_breaks: [usize; 3] = [0, 0, 0];
+    let mut any_break_fights = 0usize;
 
     for seed in 0..n as u64 {
         let mut rng = SmallRng::seed_from_u64(seed);
@@ -57,6 +70,34 @@ fn main() {
         b.traits.clear();
         a.items.clear();
         b.items.clear();
+        if gear {
+            for c in [&mut a, &mut b] {
+                c.add_item(world::items::Item::new(
+                    "Sidearm",
+                    world::items::ItemType::Weapon,
+                    world::items::ItemRarity::Common,
+                    4,
+                    world::items::Attribute::Strength,
+                    3,
+                ));
+                c.add_item(world::items::Item::new(
+                    "Oak Shield",
+                    world::items::ItemType::Shield,
+                    world::items::ItemRarity::Common,
+                    5,
+                    world::items::Attribute::Defense,
+                    4,
+                ));
+                c.add_item(world::items::Item::new(
+                    "Armor Plate",
+                    world::items::ItemType::Armor,
+                    world::items::ItemRarity::Common,
+                    5,
+                    world::items::Attribute::Defense,
+                    4,
+                ));
+            }
+        }
 
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_provider(
@@ -138,7 +179,7 @@ fn main() {
         }
 
         // Initiative spread: in round 1, did Alice (order 0's actor) or Bob
-        // (order 1) win initiative? Alice acts first ⇒ order-0 beat has her name.
+        // (order 1) win initiative? Alice acts first => order-0 beat has her name.
         if let Some(first_beat) = events.iter().find_map(|e| match &e.payload {
             shared::messages::MessagePayload::CombatBeat(b) if b.round == 1 && b.order == 0 => {
                 Some(b)
@@ -163,6 +204,35 @@ fn main() {
 
         if a.stamina == 0 || b.stamina == 0 {
             exhausted_end += 1;
+        }
+
+        if gear {
+            // Slots: weapon, shield, armor. Absent = broken mid-fight = all 10
+            // points consumed.
+            let names = ["Sidearm", "Oak Shield", "Armor Plate"];
+            let mut broke_this_fight = false;
+            for (slot, name) in names.iter().enumerate() {
+                let start = match slot {
+                    0 => 4,
+                    _ => 5,
+                };
+                for c in [&a, &b] {
+                    let dur = c
+                        .items
+                        .iter()
+                        .find(|i| i.name == *name)
+                        .map(|i| i.current_durability)
+                        .unwrap_or(0);
+                    wear_points[slot] += start - dur.min(start);
+                    if dur == 0 {
+                        slot_breaks[slot] += 1;
+                        broke_this_fight = true;
+                    }
+                }
+            }
+            if broke_this_fight {
+                any_break_fights += 1;
+            }
         }
     }
 
@@ -225,5 +295,18 @@ fn main() {
     println!("one-round beat kinds: {one_round_kinds:?}");
     for s in sample_kill.iter().take(5) {
         println!("kill sample: {s}");
+    }
+    if gear {
+        let names = ["weapon", "shield", "armor"];
+        println!("gear wear (per 100 fights):");
+        for (slot, label) in names.iter().enumerate() {
+            let points = 100.0 * wear_points[slot] as f64 / n as f64;
+            let breaks = 100.0 * slot_breaks[slot] as f64 / n as f64;
+            println!("  {label}: {points:6.1} pts  breaks {breaks:5.1}%");
+        }
+        println!(
+            "  fights with any break: {pct:5.1}%",
+            pct = pct(any_break_fights)
+        );
     }
 }
