@@ -62,6 +62,15 @@ pub struct GameBaseline {
     pub wins: u32,
     pub defeats: u32,
     pub draws: u32,
+    /// Lifetime revivals (additive with a serde default so legacy rows load).
+    #[serde(default)]
+    pub times_revived: u32,
+    /// Lifetime betrayals suffered (serde default so legacy rows load).
+    #[serde(default)]
+    pub betrayals_suffered: u32,
+    /// Lifetime betrayals committed (serde default so legacy rows load).
+    #[serde(default)]
+    pub betrayals_committed: u32,
 }
 
 impl GameBaseline {
@@ -74,6 +83,9 @@ impl GameBaseline {
             wins: character.statistics.wins,
             defeats: character.statistics.defeats,
             draws: character.statistics.draws,
+            times_revived: character.statistics.times_revived,
+            betrayals_suffered: character.statistics.betrayals_suffered,
+            betrayals_committed: character.statistics.betrayals_committed,
         }
     }
 
@@ -150,6 +162,24 @@ impl GameBaseline {
         character.statistics.draws = self
             .draws
             .saturating_add(character.statistics.draws.saturating_sub(self.draws));
+        character.statistics.times_revived = self.times_revived.saturating_add(
+            character
+                .statistics
+                .times_revived
+                .saturating_sub(self.times_revived),
+        );
+        character.statistics.betrayals_suffered = self.betrayals_suffered.saturating_add(
+            character
+                .statistics
+                .betrayals_suffered
+                .saturating_sub(self.betrayals_suffered),
+        );
+        character.statistics.betrayals_committed = self.betrayals_committed.saturating_add(
+            character
+                .statistics
+                .betrayals_committed
+                .saturating_sub(self.betrayals_committed),
+        );
     }
 }
 
@@ -223,6 +253,79 @@ mod tests {
         baseline.settle_into(&mut restored);
         assert_eq!(restored.statistics.kills, baseline.kills + 1);
         assert_eq!(restored.statistics.wins, baseline.wins + 1);
+    }
+
+    #[test]
+    fn settle_keeps_revival_count_increments() {
+        let mut c = clean_goblin("Boblin");
+        let baseline = GameBaseline::capture(&c);
+
+        c.statistics.times_revived += 1;
+
+        let mut restored = c.clone();
+        baseline.settle_into(&mut restored);
+        assert_eq!(
+            restored.statistics.times_revived,
+            baseline.times_revived + 1
+        );
+    }
+
+    #[test]
+    fn revival_count_survives_into_new_game() {
+        // Entry seam: settle carries the increment, then the new baseline
+        // captures the carried total (same seam as evolution settle).
+        let mut c = clean_goblin("Boblin");
+        c.statistics.times_revived = 1;
+
+        let entered = c.into_new_game();
+        assert_eq!(entered.statistics.times_revived, 1);
+        assert_eq!(
+            entered
+                .game_baseline
+                .as_ref()
+                .expect("entry captures a baseline")
+                .times_revived,
+            1
+        );
+    }
+
+    #[test]
+    fn settle_keeps_betrayal_count_increments() {
+        let mut c = clean_goblin("Boblin");
+        let baseline = GameBaseline::capture(&c);
+
+        c.statistics.betrayals_suffered += 1;
+        c.statistics.betrayals_committed += 1;
+
+        let mut restored = c.clone();
+        baseline.settle_into(&mut restored);
+        assert_eq!(
+            restored.statistics.betrayals_suffered,
+            baseline.betrayals_suffered + 1
+        );
+        assert_eq!(
+            restored.statistics.betrayals_committed,
+            baseline.betrayals_committed + 1
+        );
+    }
+
+    #[test]
+    fn betrayal_counters_survive_into_new_game() {
+        // Entry seam: settle carries the increments, then the new baseline
+        // captures the carried totals (same seam as revivals).
+        let mut c = clean_goblin("Boblin");
+        c.statistics.betrayals_suffered = 1;
+        c.statistics.betrayals_committed = 2;
+
+        let entered = c.into_new_game();
+        assert_eq!(entered.statistics.betrayals_suffered, 1);
+        assert_eq!(entered.statistics.betrayals_committed, 2);
+        let captured = entered
+            .game_baseline
+            .as_ref()
+            .expect("entry captures a baseline");
+        assert_eq!(captured.betrayals_suffered, 1);
+        assert_eq!(captured.betrayals_committed, 2);
     }
 
     #[test]

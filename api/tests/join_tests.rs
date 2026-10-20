@@ -106,7 +106,7 @@ async fn test_create_with_chosen_roster_skips_bots() {
     let teams = team_counts(&characters);
     assert_eq!(teams.keys().copied().collect::<Vec<_>>(), vec![1]);
 
-    // Creators may field several of their own goblins at once…
+    // Creators may field several of their own goblins at once...
     let second = create_owned_goblin(&server, &user, "Second").await;
     let third = create_owned_goblin(&server, &user, "Third").await;
     let response = server
@@ -129,7 +129,7 @@ async fn test_create_with_chosen_roster_skips_bots() {
         vec![1, 2]
     );
 
-    // …and keep adding after creation (the one-per-player gate skips the
+    // ...and keep adding after creation (the one-per-player gate skips the
     // creator; one active game per character still applies).
     let fourth = create_owned_goblin(&server, &user, "Fourth").await;
     server
@@ -220,13 +220,13 @@ async fn test_join_before_start_and_gates() {
         .as_str()
         .unwrap()
         .to_string();
-    // Unlisted: Bob can open Alice's private game by URL …
+    // Unlisted: Bob can open Alice's private game by URL ...
     server
         .get(&format!("/api/games/{}", game_id))
         .add_header("Authorization", bob.auth_header())
         .await
         .assert_status_ok();
-    // … but it must not show up in his game list.
+    // ... but it must not show up in his game list.
     let listing = server
         .get("/api/games")
         .add_header("Authorization", bob.auth_header())
@@ -241,7 +241,7 @@ async fn test_join_before_start_and_gates() {
         "private games must stay out of other players' lists"
     );
 
-    // Bob joins with his own goblin → balanced onto team 2.
+    // Bob joins with his own goblin -> balanced onto team 2.
     server
         .post(&format!("/api/games/{}/join", game_id))
         .add_header("Authorization", bob.auth_header())
@@ -254,7 +254,7 @@ async fn test_join_before_start_and_gates() {
     let teams = team_counts(&characters);
     assert_eq!(teams.keys().copied().collect::<Vec<_>>(), vec![1, 2]);
 
-    // A joined participant keeps the private game in their own list …
+    // A joined participant keeps the private game in their own list ...
     let joined_listing = server
         .get("/api/games")
         .add_header("Authorization", bob.auth_header())
@@ -269,7 +269,7 @@ async fn test_join_before_start_and_gates() {
         "a joined player must see the private game in their own list"
     );
 
-    // … and reaches every participation surface for it.
+    // ... and reaches every participation surface for it.
     let bob_roster = fetch_characters(&server, &bob, &game_id).await;
     assert_eq!(bob_roster.len(), 2, "joined player reads the roster");
     server
@@ -278,7 +278,7 @@ async fn test_join_before_start_and_gates() {
         .await
         .assert_status_ok();
 
-    // … but it stays invisible to a player who never joined.
+    // ... but it stays invisible to a player who never joined.
     let stranger = create_authenticated_user(&test_db, &server, "nosy").await;
     let stranger_listing = server
         .get("/api/games")
@@ -359,7 +359,7 @@ async fn test_join_rejects_started_and_full_games() {
         .await
         .assert_status_ok();
 
-    // Full roster (24 bots) rejects a join even before start elsewhere…
+    // Full roster (24 bots) rejects a join even before start elsewhere...
     server
         .post(&format!("/api/games/{}/join", game_id))
         .add_header("Authorization", bob.auth_header())
@@ -367,7 +367,7 @@ async fn test_join_rejects_started_and_full_games() {
         .await
         .assert_status(axum::http::StatusCode::CONFLICT);
 
-    // …and a not-started but full game rejects on the cap.
+    // ...and a not-started but full game rejects on the cap.
     let response = server
         .post("/api/games")
         .add_header("Authorization", alice.auth_header())
@@ -564,7 +564,7 @@ async fn test_custom_roster_size() {
 
     let user = create_authenticated_user(&test_db, &server, "roster_config").await;
 
-    // 4 teams × 2 goblins = 8-slot roster, bot-filled at creation.
+    // 4 teams x 2 goblins = 8-slot roster, bot-filled at creation.
     let response = server
         .post("/api/games")
         .add_header("Authorization", user.auth_header())
@@ -676,7 +676,7 @@ async fn test_roster_ceiling() {
 
     let user = create_authenticated_user(&test_db, &server, "roster_ceiling").await;
 
-    // The roster size ceilings both the per-player allowance…
+    // The roster size ceilings both the per-player allowance...
     server
         .post("/api/games")
         .add_header("Authorization", user.auth_header())
@@ -684,7 +684,7 @@ async fn test_roster_ceiling() {
         .await
         .assert_status(axum::http::StatusCode::BAD_REQUEST);
 
-    // …and the creator's chosen list (a 2-slot roster takes 2, not 3).
+    // ...and the creator's chosen list (a 2-slot roster takes 2, not 3).
     let g1 = create_owned_goblin(&server, &user, "One").await;
     let g2 = create_owned_goblin(&server, &user, "Two").await;
     let g3 = create_owned_goblin(&server, &user, "Three").await;
@@ -695,7 +695,7 @@ async fn test_roster_ceiling() {
         .await
         .assert_status(axum::http::StatusCode::BAD_REQUEST);
 
-    // 10 × 5 = exactly 50 is allowed and fills to the brim.
+    // 10 x 5 = exactly 50 is allowed and fills to the brim.
     let response = server
         .post("/api/games")
         .add_header("Authorization", user.auth_header())
@@ -737,7 +737,7 @@ async fn test_create_game_is_private_by_default() {
     let owner = create_authenticated_user(&test_db, &server, "priv_owner").await;
     let stranger = create_authenticated_user(&test_db, &server, "priv_stranger").await;
 
-    // No privacy field in the payload → must default to private.
+    // No privacy field in the payload -> must default to private.
     let create = server
         .post("/api/games")
         .add_header("Authorization", owner.auth_header())
@@ -751,7 +751,7 @@ async fn test_create_game_is_private_by_default() {
         "a game created without opting into public must be private"
     );
 
-    // … and it must not be listed for anyone but the creator.
+    // ... and it must not be listed for anyone but the creator.
     let stranger_listing = server
         .get("/api/games")
         .add_header("Authorization", stranger.auth_header())
@@ -842,7 +842,7 @@ async fn test_public_game_is_listable_but_join_goes_through_the_link() {
         .unwrap()
         .to_string();
 
-    // Before publish: not listed for the stranger (private → link is secret).
+    // Before publish: not listed for the stranger (private -> link is secret).
     let before = server
         .get("/api/games")
         .add_header("Authorization", stranger.auth_header())
@@ -856,7 +856,7 @@ async fn test_public_game_is_listable_but_join_goes_through_the_link() {
         "an unpublished game must stay out of strangers' lists"
     );
 
-    // Publish → public = listable.
+    // Publish -> public = listable.
     server
         .put(&format!("/api/games/{}/publish", game_id))
         .add_header("Authorization", owner.auth_header())
@@ -907,7 +907,7 @@ async fn test_join_redirects_away_from_a_full_team() {
     let b1 = create_owned_goblin(&server, &bob, "Billy Slick").await;
     let b2 = create_owned_goblin(&server, &bob, "Bob Spare").await;
 
-    // 2 teams × 2 goblins = 4 slots.
+    // 2 teams x 2 goblins = 4 slots.
     let response = server
         .post("/api/games")
         .add_header("Authorization", alice.auth_header())
@@ -1012,7 +1012,7 @@ async fn test_creator_join_exemption_is_still_capped_per_team() {
     let g4 = create_owned_goblin(&server, &alice, "Fourth").await;
     let g5 = create_owned_goblin(&server, &alice, "Fifth").await;
 
-    // 2 × 2 = 4 slots; the default one-per-player gate skips the
+    // 2 x 2 = 4 slots; the default one-per-player gate skips the
     // creator, so all four joins are hers to make.
     let response = server
         .post("/api/games")
@@ -1072,7 +1072,7 @@ async fn test_bot_fill_team_request_redirects_when_team_is_full() {
     let g1 = create_owned_goblin(&server, &alice, "Stinky").await;
     let g2 = create_owned_goblin(&server, &alice, "Second").await;
 
-    // 2 × 2 game with both goblins in: team 1 and team 2 hold one each.
+    // 2 x 2 game with both goblins in: team 1 and team 2 hold one each.
     let response = server
         .post("/api/games")
         .add_header("Authorization", alice.auth_header())
@@ -1137,7 +1137,7 @@ async fn test_ready_rule_requires_even_fill() {
 
     let user = create_authenticated_user(&test_db, &server, "ready_even").await;
 
-    // 3 × 2 = 6, bot-filled at creation: 2 per team, ready.
+    // 3 x 2 = 6, bot-filled at creation: 2 per team, ready.
     let response = server
         .post("/api/games")
         .add_header("Authorization", user.auth_header())
@@ -1201,7 +1201,7 @@ async fn test_fewest_team_with_space_rejects_when_all_teams_are_full() {
 
     let user = create_authenticated_user(&test_db, &server, "with_space").await;
 
-    // Full 2 × 2 roster, bot-filled at creation.
+    // Full 2 x 2 roster, bot-filled at creation.
     let response = server
         .post("/api/games")
         .add_header("Authorization", user.auth_header())
@@ -1237,6 +1237,74 @@ async fn test_fewest_team_with_space_rejects_when_all_teams_are_full() {
         .await
         .expect("roomy roster has space");
     assert_eq!(team, 2, "fewest team with room, not the occupied team 1");
+
+    test_db.cleanup().await;
+}
+
+#[tokio::test]
+async fn test_start_seeds_team_alliances_that_survive_reload() {
+    // w8k: bots are assigned teams, never chosen, so start seeds a mutual
+    // team mesh — and it must reach the DB, because this fetch reads
+    // characters back fresh (the next InProgress request does the same).
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let user = create_authenticated_user(&test_db, &server, "seed_mesh").await;
+    let goblin = create_owned_goblin(&server, &user, "Stinky").await;
+
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Seed Mesh", "characters": [goblin] }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    server
+        .put(&format!("/api/games/{}/next", game_id))
+        .add_header("Authorization", user.auth_header())
+        .await
+        .assert_status_ok();
+
+    // Fresh read from the DB — unsaved in-memory allies would vanish here.
+    let characters = fetch_characters(&server, &user, &game_id).await;
+    assert_eq!(characters.len(), 24, "start must bot-fill to 24");
+
+    let by_id: std::collections::HashMap<&str, u64> = characters
+        .iter()
+        .map(|c| {
+            (
+                c["identifier"].as_str().unwrap(),
+                c["team"].as_u64().unwrap(),
+            )
+        })
+        .collect();
+    for character in &characters {
+        let team = character["team"].as_u64().unwrap();
+        let allies = character["allies"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{} should carry seeded allies", character["identifier"]));
+        assert_eq!(allies.len(), 2, "3-per-team mesh holds 2 allies");
+        for ally in allies {
+            let ally_id = ally.as_str().unwrap();
+            assert_eq!(
+                by_id.get(ally_id),
+                Some(&team),
+                "allies stay inside the team"
+            );
+        }
+        // Armed cadence rides the same UPDATE — without it the timer
+        // reloads as 0 and day-1 betrayal is back to being turn 5.
+        assert_eq!(
+            character["turns_since_last_betrayal"].as_u64(),
+            Some(5),
+            "betrayal timer survives the reload armed"
+        );
+    }
 
     test_db.cleanup().await;
 }

@@ -69,6 +69,9 @@
                   {{ goblin.clan_name }}
                   · <span class="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded">{{ goblin.status | capitalize }}</span>
                 </p>
+                {% if goblin.traits_html %}
+                <div class="mt-2 text-sm text-gray-300">{{ goblin.traits_html | safe }}</div>
+                {% endif %}
                 <form
                   method="POST"
                   action="/api/characters/{{ goblin.identifier }}/avatar"

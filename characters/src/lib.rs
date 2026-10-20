@@ -8,6 +8,7 @@ pub mod combat;
 pub mod combat_beat;
 pub mod combat_tuning;
 pub mod events;
+pub mod evolution;
 mod helpers;
 pub mod incidents;
 pub mod inventory;
@@ -614,6 +615,10 @@ impl Character {
         } else {
             self.advancement_log.clear();
         }
+        // Trait evolution (dww.10): lifetime-record triggers earn durable
+        // gain/loss here — after settle (so lifetime totals are final),
+        // before capture (so the change lands in this game's baseline).
+        evolution::apply_evolution(&mut self);
         let baseline = baseline::GameBaseline::capture(&self);
         let Self {
             identifier,
@@ -656,6 +661,9 @@ impl Character {
                 wins: statistics.wins,
                 defeats: statistics.defeats,
                 draws: statistics.draws,
+                times_revived: statistics.times_revived,
+                betrayals_suffered: statistics.betrayals_suffered,
+                betrayals_committed: statistics.betrayals_committed,
             },
             ever_addicted_to,
             advancement_log,
@@ -926,6 +934,10 @@ impl Character {
                         betrayer: self.id,
                         victim: victim.id,
                     });
+                // Lifetime committed counter (dww.10.2): the betrayer
+                // records its own betrayal at the trigger site.
+                self.statistics.betrayals_committed =
+                    self.statistics.betrayals_committed.saturating_add(1);
             }
             self.turns_since_last_betrayal = 0;
         }
@@ -2277,6 +2289,18 @@ pub struct Statistics {
     /// Which game do these stats relate to?
     #[serde(default)]
     pub game: String,
+    /// How many times have they been revived? Lifetime total, carried
+    /// across game boundaries by the baseline settle.
+    #[serde(default)]
+    pub times_revived: u32,
+    /// How many betrayals have they suffered? Lifetime total, carried
+    /// across game boundaries by the baseline settle.
+    #[serde(default)]
+    pub betrayals_suffered: u32,
+    /// How many betrayals have they committed? Lifetime total, carried
+    /// across game boundaries by the baseline settle.
+    #[serde(default)]
+    pub betrayals_committed: u32,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -3198,6 +3222,67 @@ mod tests {
         // the documented contract is what matters and is asserted by the
         // single-side mutation: the function signature takes `&mut self`
         // and returns nothing, with no reference to the broken ally.
+    }
+
+    #[test]
+    fn betrayal_increments_committed_counter_at_trigger_site() {
+        // dww.10.2: the Treacherous betrayal site stamps the betrayer's
+        // own lifetime counter right where BetrayalRecorded is enqueued.
+        use crate::traits::Trait;
+        use crate::{EncounterContext, EnvironmentContext};
+        use areas::{Area, AreaDetails};
+
+        let mut betrayer = Character::new("Rendmaw".to_string(), Some(1), None);
+        betrayer.traits = vec![Trait::Treacherous];
+        let victim = Character::new("Gnawpaw".to_string(), Some(2), None);
+        betrayer.allies.push(victim.id);
+        betrayer.turns_since_last_betrayal = crate::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
+
+        let mut area_details = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
+        let all_areas = vec![AreaDetails::new(Some("Lake".to_string()), Area::Hub)];
+        let enemy_density = std::collections::HashMap::new();
+        let combat_tuning = crate::combat_tuning::CombatTuning::default();
+        let mut environment_details = EnvironmentContext {
+            is_day: true,
+            phase: shared::messages::Phase::DAY,
+            config: world::config::GameConfig::default(),
+            area_details: &mut area_details,
+            closed_areas: &[],
+            available_destinations: Vec::new(),
+            all_areas: &all_areas,
+            enemy_density: &enemy_density,
+            current_day: 1,
+            combat_tuning: &combat_tuning,
+            sleeping_nearby: Vec::new(),
+        };
+        let encounter_context = EncounterContext {
+            nearby_characters_count: 1,
+            potential_targets: vec![victim],
+            total_living_characters: 2,
+        };
+
+        let mut rng = SmallRng::seed_from_u64(419);
+        let mut events: Vec<TaggedEvent> = vec![];
+        betrayer.process_turn_phase(
+            None,
+            false,
+            &mut environment_details,
+            encounter_context,
+            &mut rng,
+            &mut events,
+        );
+
+        assert_eq!(
+            betrayer.statistics.betrayals_committed, 1,
+            "the betrayer counts its own lifetime betrayal"
+        );
+        assert!(
+            betrayer
+                .alliance_events
+                .iter()
+                .any(|e| matches!(e, crate::alliances::AllianceEvent::BetrayalRecorded { .. })),
+            "the drain event is still enqueued for the victim side"
+        );
     }
 
     #[test]

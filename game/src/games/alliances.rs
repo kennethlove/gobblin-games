@@ -37,6 +37,11 @@ impl Game {
                     if let Some(v) = self.characters.iter_mut().find(|t| t.id == victim) {
                         v.allies.retain(|x| *x != betrayer);
                         v.pending_trust_shock = true;
+                        // Lifetime suffered counter (dww.10.2): the victim
+                        // records the betrayal it took, same seam as the
+                        // win/defeat tallying pattern.
+                        v.statistics.betrayals_suffered =
+                            v.statistics.betrayals_suffered.saturating_add(1);
                     }
                     // Spec §7.5: betrayer is never enqueued for trust-shock.
                     if let (Some((b_id, b_name)), Some((v_id, v_name))) =

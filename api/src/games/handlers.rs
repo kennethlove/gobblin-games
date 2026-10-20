@@ -695,6 +695,32 @@ pub async fn next_step(
             let mut game = super::get_full_game(&id, &db).await?;
             game.status = GameStatus::InProgress;
 
+            // Seed the team mesh before the first cycle: teams are
+            // assigned, not chosen, so a Treacherous goblin would have no
+            // ally to betray until organic formation caught up (w8k).
+            game.seed_team_alliances();
+            // Persist the links — this branch has no save_game, and the
+            // InProgress branch reloads from the DB before the first
+            // cycle's save_game, so an in-memory seed alone would vanish
+            // on the very next request. The armed betrayal timer rides
+            // along for the same reason.
+            for character in &game.characters {
+                let allies: Vec<String> = character.allies.iter().map(|a| a.to_string()).collect();
+                db.query("UPDATE $rid SET allies = $allies, turns_since_last_betrayal = $armed")
+                    .bind((
+                        "rid",
+                        RecordId::new("character", character.identifier.as_str()),
+                    ))
+                    .bind(("allies", allies))
+                    .bind(("armed", character.turns_since_last_betrayal))
+                    .await
+                    .map_err(|e| {
+                        AppError::InternalServerError(format!(
+                            "Failed to persist seeded alliances: {e}"
+                        ))
+                    })?;
+            }
+
             // Broadcast game started
             let start_phase = shared::messages::Phase::from_hour(game.config.day_start_hour)
                 .unwrap_or(shared::messages::Phase::DAY_START);

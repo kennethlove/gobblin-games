@@ -354,6 +354,9 @@ pub fn restore(character: &mut Character) {
 /// happen in `Game::post_game_recovery` *before* this runs, so a fresh
 /// grant is never decremented in the boundary that granted it.
 pub fn revive<R: Rng + ?Sized>(character: &mut Character, rng: &mut R) -> RevivalOutcome {
+    // Lifetime counter (dww.10.1): every call here is one revival — the
+    // function has no non-revival exit — so the seam increments up front.
+    character.statistics.times_revived = character.statistics.times_revived.saturating_add(1);
     let outcome = roll(rng);
     match outcome {
         RevivalOutcome::Clean => {}
@@ -503,6 +506,19 @@ mod tests {
         assert_eq!(character.status, CharacterStatus::Healthy);
         assert!(character.blood > 0);
         assert!(character.wounds.is_empty());
+    }
+
+    #[rstest]
+    fn revive_increments_the_lifetime_counter(mut character: Character) {
+        character.traits.clear();
+        character.dies();
+        let mut rng = SmallRng::seed_from_u64(5);
+        assert_eq!(character.statistics.times_revived, 0);
+        revive(&mut character, &mut rng);
+        assert_eq!(character.statistics.times_revived, 1);
+        character.dies();
+        revive(&mut character, &mut rng);
+        assert_eq!(character.statistics.times_revived, 2);
     }
 
     #[rstest]
@@ -984,7 +1000,7 @@ mod tests {
         }
         assert!(filtered > 0, "filtered sample must not be empty");
         // Per-revival chance any event trait lands:
-        // 1 − (1 − boon)·(1 − boon·curse-persist).
+        // 1 − (1 − boon)·(1 - boon·curse-persist).
         let e = EVENT_ODDS as f64 / 100.0;
         let ep = e * EVENT_CURSE_PERSIST_ODDS as f64 / 100.0;
         let q = 1.0 - (1.0 - e) * (1.0 - ep);

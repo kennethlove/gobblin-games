@@ -451,6 +451,48 @@ impl Game {
         Ok(())
     }
 
+    /// Seeds every team as a mutual alliance mesh (w8k).
+    ///
+    /// Teams are assigned, not chosen, so nothing would otherwise form an
+    /// alliance before the first betrayal window — a Treacherous goblin
+    /// needs an ally to betray, and `TREACHEROUS_BETRAYAL_INTERVAL` starts
+    /// counting at turn 0. Every teammate gets a link to every other, no
+    /// cross-team links, idempotent on re-run.
+    ///
+    /// WHY: skips the `MAX_ALLIES` cap — that cap only weights the organic
+    /// `roll_chance` formation probability, never the stored invariant, and
+    /// at 3-per-team the mesh holds 2 allies anyway. Silent on purpose:
+    /// `FormationRecorded` for a full roster would spam the event feed.
+    /// Includes Paranoid/LoneWolf refusers: the team was assigned, not
+    /// chosen, and paranoia only pays off once someone actually betrays it.
+    ///
+    /// Also arms `turns_since_last_betrayal` to the cadence interval so a
+    /// Treacherous goblin can betray its seeded team on the very first
+    /// processed turn: `process_turn_phase` ticks the counter (+1) before
+    /// checking it, so an armed counter passes `>= behavior_sum` at once.
+    /// Left at 0 the first betrayal would land no earlier than turn 5 and
+    /// the seeded "betray at the start" window would never open.
+    pub fn seed_team_alliances(&mut self) {
+        for character in &mut self.characters {
+            character.turns_since_last_betrayal =
+                characters::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
+        }
+        for i in 0..self.characters.len() {
+            for j in (i + 1)..self.characters.len() {
+                if self.characters[i].team != self.characters[j].team {
+                    continue;
+                }
+                let (a, b) = (self.characters[i].id, self.characters[j].id);
+                if !self.characters[i].allies.contains(&b) {
+                    self.characters[i].allies.push(b);
+                }
+                if !self.characters[j].allies.contains(&a) {
+                    self.characters[j].allies.push(a);
+                }
+            }
+        }
+    }
+
     /// Returns the characters that are alive.
     pub fn living_characters(&self) -> Vec<Character> {
         self.characters
@@ -1008,7 +1050,7 @@ impl Game {
     pub fn run_full_day(&mut self) -> Result<(), GameError> {
         let next_day = self.day.unwrap_or(0) + 1;
         // Every game day runs the full 12-phase cycle from the day start
-        // (06 → 08 → … → 04); the day counter advances after 04.
+        // (06 -> 08 -> ... -> 04); the day counter advances after 04.
         for &p in &shared::messages::Phase::all() {
             self.run_phase(p)?;
         }
