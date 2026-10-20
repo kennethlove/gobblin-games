@@ -109,10 +109,37 @@ const THINGS: &[&str] = &[
 
 /// Opening nouns for the `Of the <Noun> ...` poetic patterns.
 const POETIC_NOUNS: &[&str] = &[
-    "Twilight", "Wind", "Lathe", "Wheel", "Dawn", "Dusk", "Storm", "Tide", "Ember", "Frost",
-    "Anvil", "Forge", "Thunder", "Rain", "Smoke", "Moon", "Ash", "Slag", "Steam", "Crucible",
-    "Mire", "Brine", "Furnace", "Rime", "Soot", "Char", "Pitch", "Tar",
-    "Happiness", "Sky", "Water",
+    "Twilight",
+    "Wind",
+    "Lathe",
+    "Wheel",
+    "Dawn",
+    "Dusk",
+    "Storm",
+    "Tide",
+    "Ember",
+    "Frost",
+    "Anvil",
+    "Forge",
+    "Thunder",
+    "Rain",
+    "Smoke",
+    "Moon",
+    "Ash",
+    "Slag",
+    "Steam",
+    "Crucible",
+    "Mire",
+    "Brine",
+    "Furnace",
+    "Rime",
+    "Soot",
+    "Char",
+    "Pitch",
+    "Tar",
+    "Happiness",
+    "Sky",
+    "Water",
 ];
 
 /// Adverb middles for the poetic pattern: "Of the Wind Regretfully Blown".
@@ -238,16 +265,7 @@ const GROUND_PHRASES: &[&str] = &[
 /// Sound heads for `The <Noun> of the <Thing>` names: "The Rattle of
 /// the Wheels".
 const THE_OF_NOUNS: &[&str] = &[
-    "Rattle",
-    "Rumble",
-    "Clatter",
-    "Creak",
-    "Ring",
-    "Chime",
-    "Hush",
-    "Groan",
-    "Hum",
-    "Whisper",
+    "Rattle", "Rumble", "Clatter", "Creak", "Ring", "Chime", "Hush", "Groan", "Hum", "Whisper",
 ];
 
 /// Adjectives for `The <Adjective> <Noun> <Verb>` names.
