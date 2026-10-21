@@ -54,6 +54,10 @@ pub struct CombatTuning {
     pub initiative_weapon_speed_divisor: i32,
     /// Safety cap on rounds; reaching it without a winner ends in a Draw.
     pub max_rounds: u32,
+    /// Total fight capacity: once both sides together hold this many
+    /// members, round-boundary joins are blocked. Never removes members
+    /// mid-fight (design §8/§10).
+    pub max_combatants: usize,
     /// Flee contest: fleer rolls `d20 + speed + band + flee_contest_modifier`
     /// against the chaser's `d20 + speed + band`. Negative: running is risky —
     /// tuned so roughly a fifth of flee attempts actually escape (measured
@@ -163,6 +167,7 @@ impl Default for CombatTuning {
             initiative_exhausted_bonus: -3,
             initiative_weapon_speed_divisor: 2,
             max_rounds: 12,
+            max_combatants: 8,
             flee_contest_modifier: -7,
 
             brain_attack_base: 40,

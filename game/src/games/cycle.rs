@@ -1086,10 +1086,11 @@ impl Game {
 
         // ── Resolve deferred multi-round fights ──
         // act_attack deferred real two-character fights here so we can drive
-        // them with split_at_mut access to both combatants. Each fight runs to
-        // completion (all rounds live inside this phase, per spec §2), emitting
-        // round/beat/end messages. Deterministic order: the order act_attack
-        // surfaced them.
+        // each one over a mutable pool of the whole world — allies in the
+        // fight's sub-tile join at round boundaries (design §8). Each fight
+        // runs to completion (all rounds live inside this phase, per spec §2),
+        // emitting round/join/beat/end messages. Deterministic order: the
+        // order act_attack surfaced them.
         for (attacker_idx, target_uuid) in &pending_attacks {
             let target_idx = match self.characters.iter().position(|t| t.id == *target_uuid) {
                 Some(i) => i,
@@ -1111,9 +1112,9 @@ impl Game {
                 continue;
             }
 
-            // Capture identity up front: once CombatRoundLoop borrows both
-            // combatants via split_at_mut we cannot read self.characters again
-            // until the loop drops.
+            // Capture identity up front: once CombatRoundLoop holds the
+            // character pool we cannot read self.characters again until
+            // the loop drops.
             let (attacker_ident, attacker_name, target_name, fight_location) = {
                 let a = &self.characters[*attacker_idx];
                 let t = &self.characters[target_idx];
@@ -1139,22 +1140,17 @@ impl Game {
                 None,
             ));
 
-            // split_at_mut for simultaneous mutable access to both combatants.
-            let (attacker, target) = if *attacker_idx < target_idx {
-                let (left, right) = self.characters.split_at_mut(target_idx);
-                (&mut left[*attacker_idx], &mut right[0])
-            } else {
-                let (left, right) = self.characters.split_at_mut(*attacker_idx);
-                (&mut right[0], &mut left[target_idx])
-            };
-
             let mut fight_events: Vec<world::messages::TaggedEvent> = Vec::new();
             let mut fight_killers: Vec<shared::messages::CharacterRef> = Vec::new();
             let mut fled_refs: Vec<shared::messages::CharacterRef> = Vec::new();
             let fight_result = {
-                let mut combat = CombatRoundLoop::with_provider(
-                    attacker,
-                    target,
+                // Whole-world pool: the pair starts `[[attacker],[target]]`;
+                // everyone else sits unsided until the round-boundary scan
+                // (or the public join hook) admits them.
+                let pool: Vec<&mut _> = self.characters.iter_mut().collect();
+                let mut combat = CombatRoundLoop::with_sides(
+                    pool,
+                    [vec![*attacker_idx], vec![target_idx]],
                     combat_id.clone(),
                     combat_tuning_snapshot.clone(),
                     Box::new(CombatBrain::new(combat_tuning_snapshot.clone())),
@@ -1200,7 +1196,7 @@ impl Game {
                 }
                 combat.result().cloned()
             };
-            // `combat` (and the split_at_mut borrows) dropped here.
+            // `combat` (and the character pool) dropped here.
 
             // Bookkeeping: each killer of the fight gains a kill.
             for killer in &fight_killers {

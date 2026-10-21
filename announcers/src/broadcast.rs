@@ -166,6 +166,26 @@ impl BroadcastPackageBuilder {
                 })
             }
 
+            MessagePayload::CombatJoined {
+                combat_id,
+                character,
+                side,
+                round,
+            } => {
+                let structured = serde_json::json!({
+                    "type": "combat_joined",
+                    "combat_id": combat_id,
+                    "character": { "id": character.identifier, "name": character.name },
+                    "side": side,
+                    "round": round,
+                });
+                Some(EventLine {
+                    kind: EventKind::Combat,
+                    prose,
+                    structured: Some(structured),
+                })
+            }
+
             MessagePayload::CombatEnded {
                 combat_id,
                 result,

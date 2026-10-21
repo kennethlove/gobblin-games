@@ -474,6 +474,16 @@ pub enum MessagePayload {
     },
     /// One combatant's action within a round (see `CombatBeat`).
     CombatBeat(crate::combat_beat::CombatBeat),
+    /// A combatant joins a live fight at a round boundary (design §9).
+    /// Separate payload so a join never distorts beat ordering.
+    CombatJoined {
+        combat_id: String,
+        character: CharacterRef,
+        /// `"side-1"` / `"side-2"`.
+        side: String,
+        /// The round the joiner starts fighting in.
+        round: u32,
+    },
     /// Emitted once when a fight terminates, carrying the terminal result.
     CombatEnded {
         combat_id: String,

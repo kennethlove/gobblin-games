@@ -51,6 +51,7 @@ impl MessagePayload {
                 ) => Importance::ServerLogOnly,
             CombatBeat(_) => Importance::Persist,
             CombatRoundStart { .. } => Importance::ServerLogOnly,
+            CombatJoined { .. } => Importance::Persist, // changes who fights
             CombatEnded { .. } => Importance::Persist,
             CycleStart { phase, .. }
                 if phase.hour() == Phase::DAY_START_HOUR
@@ -198,6 +199,7 @@ impl MessagePayload {
                 crate::combat_beat::CombatResult::Draw => {}
             },
             CombatRoundStart { .. } => {}
+            CombatJoined { character, .. } => refs.push(character),
             AllianceFormed { members } | AllianceDissolved { members, .. } => refs.extend(members),
             AllianceProposed { proposer, target } => {
                 refs.push(proposer);
