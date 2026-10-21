@@ -46,6 +46,7 @@ const PLURALS: &[&str] = &[
     "Ticks",
     "Patches",
     "Lumps",
+    "Wheels",
 ];
 
 /// Leading verbs for the `<Verb> on the <Thing>` pattern.
@@ -108,9 +109,37 @@ const THINGS: &[&str] = &[
 
 /// Opening nouns for the `Of the <Noun> ...` poetic patterns.
 const POETIC_NOUNS: &[&str] = &[
-    "Twilight", "Wind", "Lathe", "Wheel", "Dawn", "Dusk", "Storm", "Tide", "Ember", "Frost",
-    "Anvil", "Forge", "Thunder", "Rain", "Smoke", "Moon", "Ash", "Slag", "Steam", "Crucible",
-    "Mire", "Brine", "Furnace", "Rime", "Soot", "Char", "Pitch", "Tar",
+    "Twilight",
+    "Wind",
+    "Lathe",
+    "Wheel",
+    "Dawn",
+    "Dusk",
+    "Storm",
+    "Tide",
+    "Ember",
+    "Frost",
+    "Anvil",
+    "Forge",
+    "Thunder",
+    "Rain",
+    "Smoke",
+    "Moon",
+    "Ash",
+    "Slag",
+    "Steam",
+    "Crucible",
+    "Mire",
+    "Brine",
+    "Furnace",
+    "Rime",
+    "Soot",
+    "Char",
+    "Pitch",
+    "Tar",
+    "Happiness",
+    "Sky",
+    "Water",
 ];
 
 /// Adverb middles for the poetic pattern: "Of the Wind Regretfully Blown".
@@ -158,6 +187,9 @@ const POETIC_NOUN_FORMS: &[&str] = &[
     "Soot",
     "Grace",
     "Mercy",
+    "Heart",
+    "Rim",
+    "Crane",
 ];
 
 /// Poetic verb-forms after an adverb middle: "Of the Wind Regretfully Blown".
@@ -228,6 +260,12 @@ const GROUND_PHRASES: &[&str] = &[
     "Sandy Loam",
     "Ashen Soil",
     "Soggy Peat",
+];
+
+/// Sound heads for `The <Noun> of the <Thing>` names: "The Rattle of
+/// the Wheels".
+const THE_OF_NOUNS: &[&str] = &[
+    "Rattle", "Rumble", "Clatter", "Creak", "Ring", "Chime", "Hush", "Groan", "Hum", "Whisper",
 ];
 
 /// Adjectives for `The <Adjective> <Noun> <Verb>` names.
@@ -327,6 +365,8 @@ pub enum GoblinNamePattern<'a> {
     SenseOn(&'a str, &'a str, &'a str),
     /// `The <Adjective> <Noun> <Verb>` — "The Cold Bone Wakes".
     TheNounVerb(&'a str, &'a str, &'a str),
+    /// `The <Noun> of the <Thing>` — "The Rattle of the Wheels".
+    TheNounOf(&'a str, &'a str),
     /// A one-word goblin nickname — "Stinky".
     Nickname(&'a str),
     /// A rare human-style name — "Billy Slick".
@@ -351,6 +391,7 @@ pub fn build_goblin_name(pattern: GoblinNamePattern<'_>) -> String {
         GoblinNamePattern::TheNounVerb(adjective, noun, verb) => {
             format!("The {adjective} {noun} {verb}")
         }
+        GoblinNamePattern::TheNounOf(noun, thing) => format!("The {noun} of the {thing}"),
         GoblinNamePattern::Nickname(nickname) => nickname.to_string(),
         GoblinNamePattern::Human(first, last) => format!("{first} {last}"),
     }
@@ -388,12 +429,13 @@ pub fn goblin_name(rng: &mut impl Rng) -> String {
             let (sense, nouns) = SENSE_POOLS[rng.random_range(0..SENSE_POOLS.len())];
             GoblinNamePattern::SenseOn(sense, pick(nouns, rng), pick(GROUND_PHRASES, rng))
         }
-        80..=89 => GoblinNamePattern::TheNounVerb(
+        80..=86 => GoblinNamePattern::TheNounVerb(
             pick(THE_ADJECTIVES, rng),
             pick(THINGS, rng),
             pick(THE_VERBS, rng),
         ),
-        90..=96 => GoblinNamePattern::Nickname(pick(NICKNAMES, rng)),
+        87..=91 => GoblinNamePattern::TheNounOf(pick(THE_OF_NOUNS, rng), pick(PLURALS, rng)),
+        92..=96 => GoblinNamePattern::Nickname(pick(NICKNAMES, rng)),
         _ => return human_name(rng),
     };
     build_goblin_name(pattern)
@@ -434,8 +476,8 @@ mod tests {
     fn names_follow_one_of_the_supported_patterns() {
         let mut rng = SmallRng::seed_from_u64(7);
         // [nickname, human, the-noun-verb, noun-of, verb-on,
-        //  poetic-article, poetic-adverb, sense-on]
-        let mut seen = [false; 8];
+        //  poetic-article, poetic-adverb, sense-on, the-noun-of]
+        let mut seen = [false; 9];
         for _ in 0..200 {
             let name = goblin_name(&mut rng);
             let parts: Vec<&str> = name.split_whitespace().collect();
@@ -474,6 +516,13 @@ mod tests {
                     }
                     other => panic!("unexpected middle word {other:?} in {name}"),
                 },
+                (5, "The") => {
+                    assert_eq!(parts[2], "of", "{name}");
+                    assert_eq!(parts[3], "the", "{name}");
+                    assert!(THE_OF_NOUNS.contains(&parts[1]), "{name}");
+                    assert!(PLURALS.contains(&parts[4]), "{name}");
+                    seen[8] = true;
+                }
                 (5, "Of") => {
                     assert_eq!(parts[1], "the", "{name}");
                     assert!(POETIC_NOUNS.contains(&parts[2]), "{name}");
@@ -598,6 +647,34 @@ mod tests {
         assert_eq!(
             build_goblin_name(GoblinNamePattern::PoeticArticle("Twilight", "Darkness")),
             "Of the Twilight the Darkness"
+        );
+
+        assert!(THE_OF_NOUNS.contains(&"Rattle"));
+        assert!(PLURALS.contains(&"Wheels"));
+        assert_eq!(
+            build_goblin_name(GoblinNamePattern::TheNounOf("Rattle", "Wheels")),
+            "The Rattle of the Wheels"
+        );
+
+        assert!(POETIC_NOUNS.contains(&"Happiness"));
+        assert!(POETIC_NOUN_FORMS.contains(&"Heart"));
+        assert_eq!(
+            build_goblin_name(GoblinNamePattern::PoeticArticle("Happiness", "Heart")),
+            "Of the Happiness the Heart"
+        );
+
+        assert!(POETIC_NOUNS.contains(&"Sky"));
+        assert!(POETIC_NOUN_FORMS.contains(&"Rim"));
+        assert_eq!(
+            build_goblin_name(GoblinNamePattern::PoeticArticle("Sky", "Rim")),
+            "Of the Sky the Rim"
+        );
+
+        assert!(POETIC_NOUNS.contains(&"Water"));
+        assert!(POETIC_NOUN_FORMS.contains(&"Crane"));
+        assert_eq!(
+            build_goblin_name(GoblinNamePattern::PoeticArticle("Water", "Crane")),
+            "Of the Water the Crane"
         );
 
         assert_eq!(
