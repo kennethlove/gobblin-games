@@ -19,15 +19,24 @@ use rand::RngExt;
 use rand::prelude::*;
 use shared::combat_beat::{BeatOutcome, CombatActionKind, CombatBeat, CombatResult, CombatRound};
 use shared::messages::MessagePayload;
+use uuid::Uuid;
 use world::messages::TaggedEvent;
 
 use super::resolve::tref;
 use crate::traits::CharacterAttribute;
 
-/// Chooses a combatant's action for a round. The combat brain implements this
-/// later; the loop only needs the chosen [`CombatActionKind`].
+/// Chooses a combatant's action for a round against the opposing side.
+///
+/// The attack target rides along: `None` falls back to the first live
+/// opposing member (pair behavior), an id no longer in the fight skips the
+/// beat (design 2026-10-20 §8). Flee's defender is computed by the loop
+/// (fastest living opponent), not the provider.
 pub trait CombatActionProvider {
-    fn action(&mut self, actor: &Character, opponent: &Character) -> CombatActionKind;
+    fn action(
+        &mut self,
+        actor: &Character,
+        opposing_side: &[&Character],
+    ) -> (CombatActionKind, Option<Uuid>);
 
     /// Forced Spare/Execute verdict when `actor` faces an opponent who has
     /// cowered (spec §7). Defaults to `Execute` — hostile strangers get no
@@ -46,8 +55,12 @@ pub trait CombatActionProvider {
 pub struct AttackOnlyProvider;
 
 impl CombatActionProvider for AttackOnlyProvider {
-    fn action(&mut self, _actor: &Character, _opponent: &Character) -> CombatActionKind {
-        CombatActionKind::Attack
+    fn action(
+        &mut self,
+        _actor: &Character,
+        _side: &[&Character],
+    ) -> (CombatActionKind, Option<Uuid>) {
+        (CombatActionKind::Attack, None)
     }
 }
 
@@ -108,9 +121,10 @@ pub struct CombatRoundLoop<'a> {
     combat_id: String,
     round: u32,
     result: Option<CombatResult>,
-    /// Set once a combatant cowers: their later beats are suppressed; the
-    /// next opposing actor's action resolves as a forced verdict.
-    cowering: Option<usize>,
+    /// Pending cowerers, FIFO by cower order: their beats are suppressed and
+    /// the next opposing actor answers the head of the queue with the forced
+    /// verdict (design §7).
+    cowering: Vec<usize>,
     tuning: CombatTuning,
     provider: Box<dyn CombatActionProvider + 'a>,
 }
@@ -141,13 +155,31 @@ impl<'a> CombatRoundLoop<'a> {
         tuning: CombatTuning,
         provider: Box<dyn CombatActionProvider + 'a>,
     ) -> Self {
+        Self::with_sides(
+            vec![first, second],
+            [vec![0], vec![1]],
+            combat_id,
+            tuning,
+            provider,
+        )
+    }
+
+    /// Build a fight over explicit side membership (indices into `chars`,
+    /// join order). Tests use it for multi-member sides; joins need it too.
+    fn with_sides(
+        chars: Vec<&'a mut Character>,
+        sides: [Vec<usize>; 2],
+        combat_id: String,
+        tuning: CombatTuning,
+        provider: Box<dyn CombatActionProvider + 'a>,
+    ) -> Self {
         Self {
-            chars: vec![first, second],
-            sides: [vec![0], vec![1]],
+            chars,
+            sides,
             combat_id,
             round: 0,
             result: None,
-            cowering: None,
+            cowering: Vec::new(),
             tuning,
             provider,
         }
@@ -274,51 +306,62 @@ impl<'a> CombatRoundLoop<'a> {
         events: &mut Vec<TaggedEvent>,
         beats: &mut Vec<CombatBeat>,
     ) {
-        // Once someone has cowered: suppress their beats and turn the
-        // next opposing actor's action into the forced verdict (spec §7).
-        if let Some(cowerer) = self.cowering {
-            if actor_idx == cowerer || self.side_of(actor_idx) == self.side_of(cowerer) {
-                return; // the cowerer (or a side mate) — no verdict, no repeat beat
-            }
+        // Pending cowerer: their own beat is suppressed, the next opposing
+        // actor answers with the forced verdict (design §7). Their side-mates
+        // keep fighting.
+        if self.cowering.contains(&actor_idx) {
+            return;
+        }
+        let actor_side = self.side_of(actor_idx);
+        if let Some(&cowerer) = self
+            .cowering
+            .iter()
+            .find(|&&i| self.side_of(i) != actor_side)
+        {
             self.resolve_verdict(chars, round_no, order, actor_idx, cowerer, events, beats);
             return;
         }
 
-        // Pick the action against one of the opposing side (design §4.3;
-        // pairs have exactly one opponent).
-        let actor_side = self.side_of(actor_idx);
-        let Some(&opponent_idx) = self.active_on(1 - actor_side, chars).first() else {
+        // The opposing side, as refs for the provider — never contains a
+        // cowerer: the verdict interception above fires first (design §7).
+        let opposing = self.active_on(1 - actor_side, chars);
+        if opposing.is_empty() {
             // Opposing side already gone — the beat that emptied it set the
             // result; nothing left to do.
             return;
+        }
+        let (action, target) = {
+            let side: Vec<&Character> = opposing.iter().map(|&i| &*chars[i]).collect();
+            self.provider.action(&*chars[actor_idx], &side)
         };
-        let action = self
-            .provider
-            .action(&*chars[actor_idx], &*chars[opponent_idx]);
 
         match action {
             CombatActionKind::Attack => {
+                // Provider target: `None` falls back to the first live
+                // member (pair behavior); an id no longer in the fight
+                // skips the beat (design §8).
+                let target_idx = match target {
+                    Some(id) => match opposing.iter().find(|&&i| chars[i].id == id) {
+                        Some(&t) => t,
+                        None => return,
+                    },
+                    None => opposing[0],
+                };
                 self.resolve_attack(
-                    chars,
-                    round_no,
-                    order,
-                    actor_idx,
-                    opponent_idx,
-                    rng,
-                    events,
-                    beats,
+                    chars, round_no, order, actor_idx, target_idx, rng, events, beats,
                 );
             }
             CombatActionKind::Flee => {
+                // Contested against the fastest living opponent (design §5);
+                // a pair has exactly one.
+                let Some(&defender) = opposing
+                    .iter()
+                    .max_by_key(|&&i| initiative_roll(&*chars[i], &self.tuning, rng))
+                else {
+                    return;
+                };
                 self.resolve_flee(
-                    chars,
-                    round_no,
-                    order,
-                    actor_idx,
-                    opponent_idx,
-                    rng,
-                    events,
-                    beats,
+                    chars, round_no, order, actor_idx, defender, rng, events, beats,
                 );
             }
             CombatActionKind::UseItem { item } => {
@@ -327,7 +370,7 @@ impl<'a> CombatRoundLoop<'a> {
             CombatActionKind::Cower => {
                 // Record the cower and emit its beat; the fight continues until
                 // an opposing actor answers with Spare/Execute.
-                self.cowering = Some(actor_idx);
+                self.cowering.push(actor_idx);
                 let beat = CombatBeat {
                     round: round_no,
                     order,
@@ -402,8 +445,8 @@ impl<'a> CombatRoundLoop<'a> {
         events: &mut Vec<TaggedEvent>,
         beats: &mut Vec<CombatBeat>,
     ) {
-        // Contested: fleer d20 + speed + band vs the opposing defender (a
-        // pair has exactly one; design §5 generalizes later).
+        // Contested: fleer d20 + speed + band vs the fastest living
+        // opponent (a pair has exactly one; design §5).
         let (fleer_roll, chaser_roll) = {
             let (fleer, chaser) = two_refs(chars, actor_idx, opponent_idx);
             (
@@ -462,7 +505,8 @@ impl<'a> CombatRoundLoop<'a> {
             let (actor, cowerer) = two_refs(chars, verdict_idx, cowerer_idx);
             self.provider.verdict(&*actor, &*cowerer)
         };
-        self.cowering = None;
+        // Head of the queue resolved; side-mates that cowered later stay.
+        self.cowering.retain(|&i| i != cowerer_idx);
 
         if matches!(verdict, CombatActionKind::Spare) {
             let (winner, spared) = (tref(&*chars[verdict_idx]), tref(&*chars[cowerer_idx]));
@@ -705,8 +749,12 @@ mod tests {
 
         struct FleeProvider;
         impl CombatActionProvider for FleeProvider {
-            fn action(&mut self, _a: &Character, _o: &Character) -> CombatActionKind {
-                CombatActionKind::Flee
+            fn action(
+                &mut self,
+                _a: &Character,
+                _side: &[&Character],
+            ) -> (CombatActionKind, Option<Uuid>) {
+                (CombatActionKind::Flee, None)
             }
         }
 
@@ -750,12 +798,17 @@ mod tests {
         // Only Alice flees (and loses); Bob keeps fighting so the fight runs on.
         struct AliceFlees;
         impl CombatActionProvider for AliceFlees {
-            fn action(&mut self, a: &Character, _o: &Character) -> CombatActionKind {
-                if a.name == "Alice" {
+            fn action(
+                &mut self,
+                a: &Character,
+                _side: &[&Character],
+            ) -> (CombatActionKind, Option<Uuid>) {
+                let kind = if a.name == "Alice" {
                     CombatActionKind::Flee
                 } else {
                     CombatActionKind::Attack
-                }
+                };
+                (kind, None)
             }
         }
 
@@ -865,12 +918,17 @@ mod tests {
     fn cower_then_spare_produces_both_beats_and_spared_result() {
         struct AliceCowers;
         impl CombatActionProvider for AliceCowers {
-            fn action(&mut self, a: &Character, _o: &Character) -> CombatActionKind {
-                if a.name == "Alice" {
+            fn action(
+                &mut self,
+                a: &Character,
+                _side: &[&Character],
+            ) -> (CombatActionKind, Option<Uuid>) {
+                let kind = if a.name == "Alice" {
                     CombatActionKind::Cower
                 } else {
                     CombatActionKind::Attack
-                }
+                };
+                (kind, None)
             }
             fn verdict(&mut self, _a: &Character, _c: &Character) -> CombatActionKind {
                 CombatActionKind::Spare
@@ -917,12 +975,17 @@ mod tests {
     fn cower_then_execute_kills_and_ends_fight() {
         struct AliceCowers;
         impl CombatActionProvider for AliceCowers {
-            fn action(&mut self, a: &Character, _o: &Character) -> CombatActionKind {
-                if a.name == "Alice" {
+            fn action(
+                &mut self,
+                a: &Character,
+                _side: &[&Character],
+            ) -> (CombatActionKind, Option<Uuid>) {
+                let kind = if a.name == "Alice" {
                     CombatActionKind::Cower
                 } else {
                     CombatActionKind::Attack
-                }
+                };
+                (kind, None)
             }
         }
 
@@ -970,12 +1033,17 @@ mod tests {
     fn verdict_arrives_on_opponents_next_action_even_across_rounds() {
         struct AliceCowersBobAttacks;
         impl CombatActionProvider for AliceCowersBobAttacks {
-            fn action(&mut self, a: &Character, _o: &Character) -> CombatActionKind {
-                if a.name == "Alice" {
+            fn action(
+                &mut self,
+                a: &Character,
+                _side: &[&Character],
+            ) -> (CombatActionKind, Option<Uuid>) {
+                let kind = if a.name == "Alice" {
                     CombatActionKind::Cower
                 } else {
                     CombatActionKind::Attack
-                }
+                };
+                (kind, None)
             }
             fn verdict(&mut self, _a: &Character, _c: &Character) -> CombatActionKind {
                 CombatActionKind::Spare
@@ -1026,12 +1094,17 @@ mod tests {
     fn cowerer_never_recowers_across_seeds() {
         struct AliceCowers;
         impl CombatActionProvider for AliceCowers {
-            fn action(&mut self, a: &Character, _o: &Character) -> CombatActionKind {
-                if a.name == "Alice" {
+            fn action(
+                &mut self,
+                a: &Character,
+                _side: &[&Character],
+            ) -> (CombatActionKind, Option<Uuid>) {
+                let kind = if a.name == "Alice" {
                     CombatActionKind::Cower
                 } else {
                     CombatActionKind::Attack
-                }
+                };
+                (kind, None)
             }
             fn verdict(&mut self, _a: &Character, _c: &Character) -> CombatActionKind {
                 CombatActionKind::Spare
@@ -1210,23 +1283,13 @@ mod tests {
             a.attributes = Attributes::from_rng(&mut rng);
             b.attributes = Attributes::from_rng(&mut rng);
 
-            struct Brain(CombatBrain);
-            impl CombatActionProvider for Brain {
-                fn action(&mut self, actor: &Character, opponent: &Character) -> CombatActionKind {
-                    self.0.action(actor, opponent)
-                }
-                fn verdict(&mut self, actor: &Character, cowerer: &Character) -> CombatActionKind {
-                    self.0.verdict(actor, cowerer)
-                }
-            }
-
             let mut events = Vec::new();
             let mut combat = CombatRoundLoop::with_provider(
                 &mut a,
                 &mut b,
                 format!("c{seed}"),
                 tuning.clone(),
-                Box::new(Brain(CombatBrain::new(tuning.clone()))),
+                Box::new(CombatBrain::new(tuning.clone())),
             );
 
             let mut rounds = 0u32;
@@ -1296,5 +1359,241 @@ mod tests {
             (40..=60).contains(&init_pct),
             "initiative should be near-even: {init_pct}%"
         );
+    }
+
+    // --- Melee v2: side targeting & the cower queue (design §7-§8) ---
+
+    /// A scripted explicit target is honored: Bob's fallback would hit the
+    /// first-listed member (Alice), but he hits Carol.
+    #[test]
+    fn explicit_target_is_honored() {
+        struct TargetByName;
+        impl CombatActionProvider for TargetByName {
+            fn action(
+                &mut self,
+                a: &Character,
+                side: &[&Character],
+            ) -> (CombatActionKind, Option<Uuid>) {
+                if a.name == "Bob" {
+                    let carol = side
+                        .iter()
+                        .find(|c| c.name == "Carol")
+                        .expect("Carol on the opposing side");
+                    (CombatActionKind::Attack, Some(carol.id))
+                } else {
+                    (CombatActionKind::Attack, None)
+                }
+            }
+        }
+
+        let mut a = char_named("Alice");
+        a.attributes.strength = 0;
+        let mut b = char_named("Bob");
+        b.attributes.strength = 0;
+        let mut c = char_named("Carol");
+        c.attributes.strength = 0;
+
+        let mut rng = SmallRng::seed_from_u64(41);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut b, &mut c],
+            // Bob alone vs Alice+Carol: his fallback would be Alice.
+            [vec![1], vec![0, 2]],
+            "t1".into(),
+            CombatTuning {
+                max_rounds: 1,
+                ..CombatTuning::default()
+            },
+            Box::new(TargetByName),
+        );
+
+        let round = combat.advance_round(&mut rng, &mut events);
+        assert!(
+            round
+                .beats
+                .iter()
+                .any(|beat| beat.actor.name == "Bob"
+                    && matches!(beat.action, CombatActionKind::Attack)),
+            "Bob must land an attack"
+        );
+        for beat in round.beats.iter().filter(|beat| beat.actor.name == "Bob") {
+            if matches!(beat.action, CombatActionKind::Attack) {
+                assert_eq!(
+                    beat.target.as_ref().map(|t| t.name.as_str()),
+                    Some("Carol"),
+                    "Bob's chosen target must be honored"
+                );
+            }
+        }
+    }
+
+    /// An id nobody in the fight owns skips the beat; the fight runs on.
+    #[test]
+    fn stale_target_skips_the_beat() {
+        struct AliceHitsNobody;
+        impl CombatActionProvider for AliceHitsNobody {
+            fn action(
+                &mut self,
+                a: &Character,
+                _side: &[&Character],
+            ) -> (CombatActionKind, Option<Uuid>) {
+                if a.name == "Alice" {
+                    (CombatActionKind::Attack, Some(Uuid::nil()))
+                } else {
+                    (CombatActionKind::Attack, None)
+                }
+            }
+        }
+
+        let mut a = char_named("Alice");
+        a.attributes.strength = 0;
+        let mut b = char_named("Bob");
+        b.attributes.strength = 0;
+
+        let mut rng = SmallRng::seed_from_u64(43);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_provider(
+            &mut a,
+            &mut b,
+            "t2".into(),
+            CombatTuning::default(),
+            Box::new(AliceHitsNobody),
+        );
+
+        let round = combat.advance_round(&mut rng, &mut events);
+        assert!(
+            !round.beats.iter().any(|beat| beat.actor.name == "Alice"),
+            "stale target skips Alice's beat"
+        );
+        assert!(
+            round.beats.iter().any(|beat| beat.actor.name == "Bob"),
+            "Bob still acts"
+        );
+        assert!(!combat.is_over(), "a skipped beat is not terminal");
+    }
+
+    /// A cower only stops the cowerer: their side-mate keeps attacking and
+    /// the opposing actor answers with the verdict (design §7).
+    #[test]
+    fn side_mates_keep_fighting_while_mate_cowers() {
+        struct AliceCowersOthersFight;
+        impl CombatActionProvider for AliceCowersOthersFight {
+            fn action(
+                &mut self,
+                a: &Character,
+                _side: &[&Character],
+            ) -> (CombatActionKind, Option<Uuid>) {
+                if a.name == "Alice" {
+                    (CombatActionKind::Cower, None)
+                } else {
+                    (CombatActionKind::Attack, None)
+                }
+            }
+            fn verdict(&mut self, _a: &Character, _c: &Character) -> CombatActionKind {
+                CombatActionKind::Spare
+            }
+        }
+
+        let mut a = char_named("Alice");
+        a.attributes.speed = 100;
+        a.attributes.strength = 0;
+        let mut d = char_named("Dave");
+        d.attributes.speed = 100;
+        d.attributes.strength = 0;
+        let mut b = char_named("Bob");
+        b.attributes.speed = 0;
+        b.attributes.strength = 0;
+
+        let mut rng = SmallRng::seed_from_u64(47);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut d, &mut b],
+            [vec![0, 1], vec![2]],
+            "t3".into(),
+            CombatTuning::default(),
+            Box::new(AliceCowersOthersFight),
+        );
+
+        let round = combat.advance_round(&mut rng, &mut events);
+        assert!(
+            round
+                .beats
+                .iter()
+                .any(|beat| beat.actor.name == "Alice" && beat.action == CombatActionKind::Cower),
+            "Alice cowers"
+        );
+        assert!(
+            round
+                .beats
+                .iter()
+                .any(|beat| beat.actor.name == "Dave" && beat.action == CombatActionKind::Attack),
+            "Dave (side-mate of the cowerer) keeps fighting"
+        );
+        assert!(
+            round.beats.iter().any(|beat| beat.actor.name == "Bob"
+                && beat.action == CombatActionKind::Spare
+                && beat.target.as_ref().is_some_and(|t| t.name == "Alice")),
+            "Bob's verdict spares Alice"
+        );
+    }
+
+    /// Two cowerers are resolved FIFO by cower order — one verdict per turn,
+    /// queue order preserved across rounds.
+    #[test]
+    fn multiple_cowerers_get_verdicts_in_cower_order() {
+        struct AliceDaveCower;
+        impl CombatActionProvider for AliceDaveCower {
+            fn action(
+                &mut self,
+                a: &Character,
+                _side: &[&Character],
+            ) -> (CombatActionKind, Option<Uuid>) {
+                if a.name == "Bob" {
+                    (CombatActionKind::Attack, None)
+                } else {
+                    (CombatActionKind::Cower, None)
+                }
+            }
+            fn verdict(&mut self, _a: &Character, _c: &Character) -> CombatActionKind {
+                CombatActionKind::Spare
+            }
+        }
+
+        let mut a = char_named("Alice");
+        a.attributes.speed = 100;
+        a.attributes.strength = 0;
+        let mut d = char_named("Dave");
+        d.attributes.speed = 0; // Alice (speed 100) always cowers first
+        d.attributes.strength = 0;
+        let mut b = char_named("Bob");
+        b.attributes.speed = 0;
+        b.attributes.strength = 0;
+        let bob = tref(&b);
+
+        let mut rng = SmallRng::seed_from_u64(53);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut d, &mut b],
+            [vec![0, 1], vec![2]],
+            "t4".into(),
+            CombatTuning::default(),
+            Box::new(AliceDaveCower),
+        );
+
+        let r1 = combat.advance_round(&mut rng, &mut events);
+        assert!(!combat.is_over(), "first verdict only frees Alice");
+        let r2 = combat.advance_round(&mut rng, &mut events);
+        assert!(combat.is_over());
+        let spare_targets: Vec<&str> = r1
+            .beats
+            .iter()
+            .chain(r2.beats.iter())
+            .filter(|beat| beat.action == CombatActionKind::Spare)
+            .filter_map(|beat| beat.target.as_ref().map(|t| t.name.as_str()))
+            .collect();
+        assert_eq!(spare_targets, ["Alice", "Dave"], "FIFO cower order");
+        let result = combat.result().cloned();
+        drop(combat);
+        assert_eq!(result, Some(CombatResult::Victory { victors: vec![bob] }));
     }
 }
