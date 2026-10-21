@@ -5,6 +5,16 @@
   </div>
   <div class="card-body">
     <span style="font-weight:600;">{{ title }}</span> — <span class="combat-result">{{ result_text }}</span>
+    {% if sides %}
+    <div class="combat-sides" style="display:flex;gap:6px;margin-top:4px;">
+      {% for s in sides %}
+      <span style="background:{{ color }};color:#fff;padding:1px 6px;border-radius:3px;font-size:0.85em;">{{ s.label }}: {{ s.names }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% for j in joins %}
+    <div style="color:{{ color }};font-size:0.9em;margin-top:2px;">{{ j }}</div>
+    {% endfor %}
   </div>
   <div class="combat-rounds-list">
     {% for round in rounds %}

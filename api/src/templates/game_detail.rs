@@ -326,9 +326,10 @@ fn render_plain_event_card(msg: &shared::messages::GameMessage) -> String {
 }
 
 /// Render a whole message slice for the timeline: contiguous runs of
-/// combat messages (`CombatBeat` / `CombatEnded`; `CombatRoundStart` is
+/// combat messages (`CombatBeat` / `CombatEnded` / `CombatJoined`; `CombatRoundStart` is
 /// server-log-only and never reaches persisted timelines) collapse into one
-/// grouped fight card keyed by `combat_id`, everything else renders as a
+/// grouped fight card keyed by `combat_id` — joins stay inside the fight
+/// they join — everything else renders as a
 /// plain event card. Beats carry `round`/`order`/`significant`, so the
 /// grouped card is also the replay surface — the persisted beat stream is
 /// the full fight, round by round (§10). Significance down-ranking: significant
@@ -340,21 +341,25 @@ pub fn render_event_cards(msgs: &[shared::messages::GameMessage]) -> String {
 
     let mut html = String::new();
     let mut fight_beats: Vec<&shared::messages::GameMessage> = Vec::new();
+    let mut fight_joins: Vec<&shared::messages::GameMessage> = Vec::new();
     let mut fight_result: Option<(&String, &shared::combat_beat::CombatResult)> = None;
 
     let flush_fight = |beats: &mut Vec<&shared::messages::GameMessage>,
+                       joins: &mut Vec<&shared::messages::GameMessage>,
                        result: &mut Option<(&String, &shared::combat_beat::CombatResult)>,
                        html: &mut String| {
-        if beats.is_empty() && result.is_none() {
+        if beats.is_empty() && joins.is_empty() && result.is_none() {
             return;
         }
-        html.push_str(&render_combat_card(beats, result.take()));
+        html.push_str(&render_combat_card(beats, joins, result.take()));
         beats.clear();
+        joins.clear();
     };
 
     for msg in msgs {
         match &msg.payload {
             MessagePayload::CombatBeat(_) => fight_beats.push(msg),
+            MessagePayload::CombatJoined { .. } => fight_joins.push(msg),
             MessagePayload::CombatEnded {
                 combat_id, result, ..
             } => {
@@ -364,12 +369,22 @@ pub fn render_event_cards(msgs: &[shared::messages::GameMessage]) -> String {
                 // Server-log-only; skip if it ever reaches a persisted slice.
             }
             _ => {
-                flush_fight(&mut fight_beats, &mut fight_result, &mut html);
+                flush_fight(
+                    &mut fight_beats,
+                    &mut fight_joins,
+                    &mut fight_result,
+                    &mut html,
+                );
                 html.push_str(&render_event_card(msg));
             }
         }
     }
-    flush_fight(&mut fight_beats, &mut fight_result, &mut html);
+    flush_fight(
+        &mut fight_beats,
+        &mut fight_joins,
+        &mut fight_result,
+        &mut html,
+    );
     html
 }
 
@@ -398,6 +413,7 @@ fn join_names(victors: &[shared::messages::CharacterRef], plural: &str, singular
 /// compact — replay = open every round.
 fn render_combat_card(
     beats: &[&shared::messages::GameMessage],
+    joins: &[&shared::messages::GameMessage],
     result: Option<(&String, &shared::combat_beat::CombatResult)>,
 ) -> String {
     use shared::combat_beat::CombatResult;
@@ -488,6 +504,40 @@ fn render_combat_card(
     ctx.insert("title", &title);
     ctx.insert("result_text", &result_text);
     ctx.insert("rounds", &rounds_ctx);
+
+    // Sides reconstruct from the persisted stream: a fight opens a fresh
+    // 1v1 pair (design §4), so the first beat's actor is side-1 and its
+    // target side-2; each join declares its own side. Beats carry no side.
+    let mut sides: [Vec<String>; 2] = [vec![], vec![]];
+    if let Some(shared::messages::MessagePayload::CombatBeat(first)) =
+        beats.first().map(|m| &m.payload)
+    {
+        sides[0].push(first.actor.name.clone());
+        if let Some(t) = &first.target {
+            sides[1].push(t.name.clone());
+        }
+    }
+    let mut join_lines: Vec<String> = Vec::new();
+    for m in joins {
+        if let shared::messages::MessagePayload::CombatJoined {
+            character, side, ..
+        } = &m.payload
+        {
+            let slot = if side == "side-1" { 0 } else { 1 };
+            if !sides[slot].contains(&character.name) {
+                sides[slot].push(character.name.clone());
+            }
+            join_lines.push(format!("{} joins the fight ({})", character.name, side));
+        }
+    }
+    let sides_ctx: Vec<serde_json::Value> = ["side-1", "side-2"]
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !sides[*i].is_empty())
+        .map(|(i, label)| serde_json::json!({ "label": label, "names": sides[i].join(", ") }))
+        .collect();
+    ctx.insert("sides", &sides_ctx);
+    ctx.insert("joins", &join_lines);
     crate::templates::tera_engine::render("combat_card.html", &ctx)
 }
 
@@ -1412,6 +1462,56 @@ mod day_summary_card_tests {
     fn combat_ongoing_fight_renders_placeholder_result() {
         let html = render_event_cards(&[beat(1, "Boblin", "Stinky", swing_miss(), false)]);
         assert!(html.contains("fight in progress"), "{html}");
+    }
+
+    fn joined(round: u32, name: &str, side: &str) -> GameMessage {
+        GameMessage::new(
+            MessageSource::Game("g".into()),
+            2,
+            Phase::DAY_START,
+            5,
+            round,
+            "game:g".into(),
+            format!("{name} joins the fight!"),
+            MessagePayload::CombatJoined {
+                combat_id: "c1".into(),
+                character: cref(name),
+                side: side.into(),
+                round,
+            },
+        )
+    }
+
+    #[test]
+    fn combat_joined_stays_inside_the_fight_card() {
+        let msgs = vec![
+            beat(1, "Boblin", "Stinky", swing_miss(), false),
+            joined(2, "Carol", "side-1"),
+            beat(2, "Boblin", "Stinky", swing_miss(), false),
+            ended(CombatResult::Victory {
+                victors: vec![cref("Boblin")],
+            }),
+        ];
+        let html = render_event_cards(&msgs);
+        assert_eq!(
+            html.matches("event-card combat").count(),
+            1,
+            "join must not split the fight card: {html}"
+        );
+        assert!(
+            html.contains("Carol joins the fight (side-1)"),
+            "join line: {html}"
+        );
+        assert!(html.contains("side-1: Boblin, Carol"), "side-1: {html}");
+        assert!(html.contains("side-2: Stinky"), "side-2: {html}");
+    }
+
+    #[test]
+    fn combat_card_without_beats_renders_joins_and_placeholder() {
+        let html = render_event_cards(&[joined(1, "Carol", "side-2")]);
+        assert_eq!(html.matches("event-card combat").count(), 1, "{html}");
+        assert!(html.contains("fight in progress"), "{html}");
+        assert!(html.contains("side-2: Carol"), "{html}");
     }
 
     #[test]
