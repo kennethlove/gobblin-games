@@ -6,7 +6,8 @@ name: CI
 # and reports an immediate success under the same workflow + job name.
 on:
   pull_request:
-    branches: [main]
+    # Stacked PR bases (pi-jj), same as ci.yml.
+    branches: [main, 'push-*']
     paths:
       - '**.md'
       - 'docs/**'
