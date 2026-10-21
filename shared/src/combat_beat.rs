@@ -182,7 +182,9 @@ pub enum CombatResult {
 // (v1 derived with default external tagging — PascalCase variant names).
 #[allow(dead_code)]
 enum CombatResultCompat {
-    Winner { character: CharacterRef },
+    Winner {
+        character: CharacterRef,
+    },
     Fled {
         fled: CharacterRef,
         remaining: CharacterRef,
@@ -191,7 +193,9 @@ enum CombatResultCompat {
         winner: CharacterRef,
         spared: CharacterRef,
     },
-    Victory { victors: Vec<CharacterRef> },
+    Victory {
+        victors: Vec<CharacterRef>,
+    },
     Draw,
 }
 
@@ -201,15 +205,15 @@ impl<'de> Deserialize<'de> for CombatResult {
         D: serde::Deserializer<'de>,
     {
         Ok(match CombatResultCompat::deserialize(deserializer)? {
-            CombatResultCompat::Winner { character } => {
-                CombatResult::Victory { victors: vec![character] }
-            }
-            CombatResultCompat::Fled { remaining, .. } => {
-                CombatResult::Victory { victors: vec![remaining] }
-            }
-            CombatResultCompat::Spared { winner, .. } => {
-                CombatResult::Victory { victors: vec![winner] }
-            }
+            CombatResultCompat::Winner { character } => CombatResult::Victory {
+                victors: vec![character],
+            },
+            CombatResultCompat::Fled { remaining, .. } => CombatResult::Victory {
+                victors: vec![remaining],
+            },
+            CombatResultCompat::Spared { winner, .. } => CombatResult::Victory {
+                victors: vec![winner],
+            },
             CombatResultCompat::Victory { victors } => CombatResult::Victory { victors },
             CombatResultCompat::Draw => CombatResult::Draw,
         })
@@ -327,7 +331,9 @@ mod tests {
             combatants: vec![t("A"), t("B")],
             sides: Some([vec![t("A")], vec![t("B")]]),
             rounds: vec![round.clone()],
-            result: Some(CombatResult::Victory { victors: vec![t("A")] }),
+            result: Some(CombatResult::Victory {
+                victors: vec![t("A")],
+            }),
         };
         let json = serde_json::to_string(&combat).unwrap();
         let back: Combat = serde_json::from_str(&json).unwrap();
@@ -338,7 +344,9 @@ mod tests {
     #[test]
     fn combat_result_roundtrips() {
         let results = [
-            CombatResult::Victory { victors: vec![t("A")] },
+            CombatResult::Victory {
+                victors: vec![t("A")],
+            },
             CombatResult::Victory {
                 victors: vec![t("A"), t("B")],
             },

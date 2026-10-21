@@ -215,7 +215,15 @@ impl<'a> CombatRoundLoop<'a> {
             if self.result.is_some() {
                 break; // fight ended on the prior beat — skip the rest of the round
             }
-            self.resolve_one_action(chars, round_no, order as u8, actor_idx, rng, events, &mut beats);
+            self.resolve_one_action(
+                chars,
+                round_no,
+                order as u8,
+                actor_idx,
+                rng,
+                events,
+                &mut beats,
+            );
         }
 
         // Round cap: a pathological stalemate terminates in a Draw (spec §6).
@@ -595,7 +603,8 @@ impl<'a> CombatRoundLoop<'a> {
             self.result = Some(CombatResult::Victory {
                 victors: a.iter().map(|&i| tref(&*chars[i])).collect(),
             });
-        } else if a.iter().all(|&i| chars[i].stamina == 0) && b.iter().all(|&i| chars[i].stamina == 0)
+        } else if a.iter().all(|&i| chars[i].stamina == 0)
+            && b.iter().all(|&i| chars[i].stamina == 0)
         {
             // Both sides stamina-empty with no kill possible: disengage (§6).
             self.result = Some(CombatResult::Draw);

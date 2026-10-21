@@ -1185,10 +1185,7 @@ impl Game {
                             fight_killers.push(k.clone());
                         }
                         if let MessagePayload::CombatBeat(beat) = &ev.payload
-                            && matches!(
-                                beat.outcome,
-                                shared::combat_beat::BeatOutcome::Fled
-                            )
+                            && matches!(beat.outcome, shared::combat_beat::BeatOutcome::Fled)
                         {
                             fled_refs.push(beat.actor.clone());
                         }

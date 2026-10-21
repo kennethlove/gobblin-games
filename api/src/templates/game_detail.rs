@@ -374,11 +374,7 @@ pub fn render_event_cards(msgs: &[shared::messages::GameMessage]) -> String {
 }
 
 /// "Name" or "A & B" with the right verb form ("X wins" / "X & Y win").
-fn join_names(
-    victors: &[shared::messages::CharacterRef],
-    plural: &str,
-    singular: &str,
-) -> String {
+fn join_names(victors: &[shared::messages::CharacterRef], plural: &str, singular: &str) -> String {
     match victors {
         [] => "The fight ends".to_string(),
         [one] => format!("{} {}", one.name, singular),
@@ -439,10 +435,9 @@ fn render_combat_card(
 
     // Result line for the header (plain text; the template escapes it).
     let result_text = match result.map(|(_, r)| r) {
-        Some(CombatResult::Victory { victors }) => format!(
-            "{} the fight",
-            join_names(victors, "win", "wins")
-        ),
+        Some(CombatResult::Victory { victors }) => {
+            format!("{} the fight", join_names(victors, "win", "wins"))
+        }
         Some(CombatResult::Draw) => "A draw — both break off".to_string(),
         None => "fight in progress…".to_string(),
     };
