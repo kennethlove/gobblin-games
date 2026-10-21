@@ -85,6 +85,13 @@ fn initiative_roll(c: &Character, tuning: &CombatTuning, rng: &mut impl Rng) -> 
     d20 + speed_mod + band_mod + weapon_speed
 }
 
+/// Symmetric-ally check (design §7): alliances are stored one way per
+/// character (cap `MAX_ALLIES`), so a missing
+/// record on one side must not read as "not allied".
+fn is_ally(a: &Character, b: &Character) -> bool {
+    a.allies.contains(&b.id) || b.allies.contains(&a.id)
+}
+
 /// Two mutable borrows from the combatant vec, by index (indices differ).
 ///
 /// Outer/inner lifetimes stay separate: the returned borrows only live as
@@ -125,6 +132,9 @@ pub struct CombatRoundLoop<'a> {
     /// the next opposing actor answers the head of the queue with the forced
     /// verdict (design §7).
     cowering: Vec<usize>,
+    /// Indices that left the fight (fled or spared): never active, and the
+    /// round-boundary scan will not re-admit them (design §5/§7).
+    exited: Vec<usize>,
     tuning: CombatTuning,
     provider: Box<dyn CombatActionProvider + 'a>,
 }
@@ -165,8 +175,9 @@ impl<'a> CombatRoundLoop<'a> {
     }
 
     /// Build a fight over explicit side membership (indices into `chars`,
-    /// join order). Tests use it for multi-member sides; joins need it too.
-    fn with_sides(
+    /// join order). Tests use it for multi-member sides; the cycle passes
+    /// the whole world so the round-boundary scan can see join candidates.
+    pub fn with_sides(
         chars: Vec<&'a mut Character>,
         sides: [Vec<usize>; 2],
         combat_id: String,
@@ -180,6 +191,7 @@ impl<'a> CombatRoundLoop<'a> {
             round: 0,
             result: None,
             cowering: Vec::new(),
+            exited: Vec::new(),
             tuning,
             provider,
         }
@@ -225,6 +237,10 @@ impl<'a> CombatRoundLoop<'a> {
         rng: &mut impl Rng,
         events: &mut Vec<TaggedEvent>,
     ) -> CombatRound {
+        // Round boundary first (design §8): joiners are admitted before
+        // initiative so they beat in the round starting right now — the
+        // "next round" from the round they joined at.
+        self.scan_joins(chars, events);
         self.round += 1;
         let round_no = self.round;
 
@@ -291,6 +307,107 @@ impl<'a> CombatRoundLoop<'a> {
 
     fn side_of(&self, idx: usize) -> usize {
         if self.sides[0].contains(&idx) { 0 } else { 1 }
+    }
+
+    /// Round-boundary join scan (design §8): a living character outside the
+    /// fight, in the fight's sub-tile, allied to exactly one side joins that
+    /// side; an ally of both sides sits out. Capacity blocks joins, never
+    /// kicks members. Strangers are not auto-invited — the public
+    /// [`CombatRoundLoop::join_member`] hook is theirs.
+    fn scan_joins(&mut self, chars: &[&mut Character], events: &mut Vec<TaggedEvent>) {
+        let total = self.sides[0].len() + self.sides[1].len();
+        if total >= self.tuning.max_combatants {
+            return;
+        }
+        let Some(&home) = self.sides[0].first().or(self.sides[1].first()) else {
+            return; // nobody in the fight — nothing to anchor a sub-tile to
+        };
+        let home_at = chars[home].location;
+        for idx in 0..chars.len() {
+            if self.sides[0].contains(&idx)
+                || self.sides[1].contains(&idx)
+                || self.exited.contains(&idx)
+            {
+                continue;
+            }
+            let cand = &*chars[idx];
+            if !cand.is_alive() || cand.location != home_at {
+                continue;
+            }
+            let on0 = self.sides[0].iter().any(|&m| is_ally(&*chars[m], cand));
+            let on1 = self.sides[1].iter().any(|&m| is_ally(&*chars[m], cand));
+            let side = match (on0, on1) {
+                (true, true) => continue, // ambiguous ally sits out (design §4.1)
+                (true, false) => 0,
+                (false, true) => 1,
+                (false, false) => continue, // stranger: waits for the hook
+            };
+            self.add_join(idx, side, chars, events);
+            if self.sides[0].len() + self.sides[1].len() >= self.tuning.max_combatants {
+                break;
+            }
+        }
+    }
+
+    /// Public join hook (design §4.1/§12.3): put pool index `idx` on
+    /// `side` for the round starting next — a joined ally goes on their
+    /// sponsor's side, an uninvited fighter on the side opposite their
+    /// target. Callers own that choice; the hook owns capacity and
+    /// idempotence. Call between rounds (`advance_round` not running):
+    /// `idx` indexes the pool the loop was built with — the cycle's
+    /// `self.characters` order.
+    pub fn join_member(&mut self, idx: usize, side: usize, events: &mut Vec<TaggedEvent>) {
+        let Some(character) = self.chars.get(idx).map(|c| tref(c)) else {
+            return; // not in the pool — nothing to admit
+        };
+        if self.sides[0].contains(&idx)
+            || self.sides[1].contains(&idx)
+            || self.exited.contains(&idx)
+            || self.sides[0].len() + self.sides[1].len() >= self.tuning.max_combatants
+        {
+            return;
+        }
+        self.sides[side].push(idx);
+        events.push(TaggedEvent::new(
+            format!("{} joins the fight!", character.name),
+            MessagePayload::CombatJoined {
+                combat_id: self.combat_id.clone(),
+                character,
+                side: format!("side-{}", side + 1),
+                // Boundary semantics match the scan's.
+                round: self.round + 1,
+            },
+        ));
+    }
+
+    fn add_join(
+        &mut self,
+        idx: usize,
+        side: usize,
+        chars: &[&mut Character],
+        events: &mut Vec<TaggedEvent>,
+    ) {
+        if self.sides[0].contains(&idx)
+            || self.sides[1].contains(&idx)
+            || self.exited.contains(&idx)
+            || self.sides[0].len() + self.sides[1].len() >= self.tuning.max_combatants
+        {
+            return;
+        }
+        self.sides[side].push(idx);
+        let joined = tref(&*chars[idx]);
+        let line = format!("{} joins the fight!", joined.name);
+        events.push(TaggedEvent::new(
+            line,
+            MessagePayload::CombatJoined {
+                combat_id: self.combat_id.clone(),
+                character: joined,
+                side: format!("side-{}", side + 1),
+                // Scan runs before the round increments; an external caller
+                // sits at the boundary. Both mean "round starting next".
+                round: self.round + 1,
+            },
+        ));
     }
 
     /// Resolve a single combatant's action for this round, appending its beat
@@ -483,6 +600,7 @@ impl<'a> CombatRoundLoop<'a> {
             // whole side is gone (design §5/§6). A pair: the other side wins.
             let side = self.side_of(actor_idx);
             self.sides[side].retain(|&i| i != actor_idx);
+            self.exited.push(actor_idx); // stays out — cycle relocates them only post-fight
         }
         self.check_termination_after_beat(chars);
     }
@@ -531,6 +649,7 @@ impl<'a> CombatRoundLoop<'a> {
             // the whole one (design §7). A pair: the spare wins it.
             let side = self.side_of(cowerer_idx);
             self.sides[side].retain(|&i| i != cowerer_idx);
+            self.exited.push(cowerer_idx);
             self.check_termination_after_beat(chars);
             return;
         }
@@ -1595,5 +1714,209 @@ mod tests {
         let result = combat.result().cloned();
         drop(combat);
         assert_eq!(result, Some(CombatResult::Victory { victors: vec![bob] }));
+    }
+
+    // --- Melee v2: round-boundary joins (design §8) ---
+
+    /// `(name, side, round)` for every join in this run.
+    fn joined(events: &[TaggedEvent]) -> Vec<(String, String, u32)> {
+        events
+            .iter()
+            .filter_map(|ev| match &ev.payload {
+                MessagePayload::CombatJoined {
+                    character,
+                    side,
+                    round,
+                    ..
+                } => Some((character.name.clone(), side.clone(), *round)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// An ally of a fighter, in the same sub-tile, joins at the boundary and
+    /// beats in the round that starts there (design §8).
+    #[test]
+    fn ally_same_subtile_joins_and_gets_a_beat() {
+        let mut a = char_named("Alice");
+        a.attributes.strength = 0;
+        let mut b = char_named("Bob");
+        b.attributes.strength = 0;
+        let mut c = char_named("Carol");
+        c.attributes.strength = 0;
+        a.allies = vec![c.id];
+
+        let mut rng = SmallRng::seed_from_u64(7);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut b, &mut c],
+            [vec![0], vec![1]],
+            "t3".into(),
+            CombatTuning {
+                max_rounds: 1,
+                ..CombatTuning::default()
+            },
+            Box::new(AttackOnlyProvider),
+        );
+
+        let round = combat.advance_round(&mut rng, &mut events);
+        assert_eq!(
+            joined(&events),
+            vec![("Carol".into(), "side-1".into(), 1)],
+            "the joiner lands on their ally's side for round 1"
+        );
+        assert!(
+            round.beats.iter().any(|beat| beat.actor.name == "Carol"),
+            "the joiner must fight in the round that follows the boundary"
+        );
+    }
+
+    /// Capacity is a join-time cap: once the sides hold `max_combatants`,
+    /// the scan admits nobody (design §8c/§10).
+    #[test]
+    fn capacity_blocks_the_join_scan() {
+        let mut a = char_named("Alice");
+        let mut b = char_named("Bob");
+        let mut c = char_named("Carol");
+        c.attributes.strength = 0;
+        a.allies = vec![c.id];
+
+        let mut rng = SmallRng::seed_from_u64(8);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut b, &mut c],
+            [vec![0], vec![1]],
+            "t4".into(),
+            CombatTuning {
+                max_combatants: 2,
+                ..CombatTuning::default()
+            },
+            Box::new(AttackOnlyProvider),
+        );
+
+        let round = combat.advance_round(&mut rng, &mut events);
+        assert!(joined(&events).is_empty(), "the cap holds: nobody joins");
+        assert!(
+            !round.beats.iter().any(|beat| beat.actor.name == "Carol"),
+            "a blocked joiner never beats"
+        );
+    }
+
+    /// An ally of BOTH sides sits out (design §4.1); a stranger to both
+    /// waits for the public hook instead of self-inviting.
+    #[test]
+    fn ambiguous_and_unrelated_neighbours_sit_out() {
+        // (ambiguous: allied to Alice and Bob)
+        let mut a = char_named("Alice");
+        let mut b = char_named("Bob");
+        let mut c = char_named("Carol");
+        c.attributes.strength = 0;
+        a.allies = vec![c.id];
+        b.allies = vec![c.id];
+
+        let mut rng = SmallRng::seed_from_u64(11);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut b, &mut c],
+            [vec![0], vec![1]],
+            "t5".into(),
+            CombatTuning {
+                max_rounds: 1,
+                ..CombatTuning::default()
+            },
+            Box::new(AttackOnlyProvider),
+        );
+        combat.advance_round(&mut rng, &mut events);
+        assert!(
+            joined(&events).is_empty(),
+            "an ambiguous ally must not pick a side"
+        );
+
+        // (stranger: allied to neither fighter)
+        let mut a = char_named("Alice");
+        let mut b = char_named("Bob");
+        let mut c = char_named("Carol");
+        c.attributes.strength = 0;
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut b, &mut c],
+            [vec![0], vec![1]],
+            "t5b".into(),
+            CombatTuning {
+                max_rounds: 1,
+                ..CombatTuning::default()
+            },
+            Box::new(AttackOnlyProvider),
+        );
+        let mut rng = SmallRng::seed_from_u64(12);
+        combat.advance_round(&mut rng, &mut events);
+        assert!(
+            joined(&events).is_empty(),
+            "strangers join only through the public hook"
+        );
+    }
+
+    /// An ally in a different sub-tile is out of reach of the scan (§8).
+    #[test]
+    fn ally_in_another_subtile_does_not_join() {
+        let mut a = char_named("Alice");
+        let mut b = char_named("Bob");
+        let mut c = char_named("Carol");
+        c.location = areas::location::Location::center(areas::Area::Sector1);
+        c.attributes.strength = 0;
+        a.allies = vec![c.id];
+
+        let mut rng = SmallRng::seed_from_u64(13);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut b, &mut c],
+            [vec![0], vec![1]],
+            "t6".into(),
+            CombatTuning {
+                max_rounds: 1,
+                ..CombatTuning::default()
+            },
+            Box::new(AttackOnlyProvider),
+        );
+        combat.advance_round(&mut rng, &mut events);
+        assert!(joined(&events).is_empty(), "distance blocks the scan");
+    }
+
+    /// The public hook admits a pool member between rounds (design §12.3);
+    /// they beat in the round starting next.
+    #[test]
+    fn join_member_hook_admits_between_rounds() {
+        let mut a = char_named("Alice");
+        a.attributes.strength = 0;
+        let mut b = char_named("Bob");
+        b.attributes.strength = 0;
+        let mut c = char_named("Carol");
+        c.attributes.strength = 0;
+
+        let mut rng = SmallRng::seed_from_u64(17);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut b, &mut c],
+            [vec![0], vec![1]],
+            "t7".into(),
+            CombatTuning::default(),
+            Box::new(AttackOnlyProvider),
+        );
+
+        combat.advance_round(&mut rng, &mut events);
+        assert!(joined(&events).is_empty(), "no ally to auto-join yet");
+
+        combat.join_member(2, 0, &mut events);
+        assert_eq!(
+            joined(&events),
+            vec![("Carol".into(), "side-1".into(), 2)],
+            "the hook admits Carol for round 2"
+        );
+
+        let round2 = combat.advance_round(&mut rng, &mut events);
+        assert!(
+            round2.beats.iter().any(|beat| beat.actor.name == "Carol"),
+            "the hooked-in member fights in round 2"
+        );
     }
 }

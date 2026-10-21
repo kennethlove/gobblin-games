@@ -213,6 +213,17 @@ impl CharacterHistories {
                 // Round markers and fight conclusions: the per-character beat
                 // events above already carry the detail; nothing to add here.
                 MessagePayload::CombatRoundStart { .. } => {}
+                MessagePayload::CombatJoined {
+                    character,
+                    side,
+                    round,
+                    ..
+                } => {
+                    self.push_event(
+                        &character.identifier,
+                        &format!("Joined a fight ({side}, round {round})"),
+                    );
+                }
                 MessagePayload::CombatEnded { result, .. } => {
                     if let shared::combat_beat::CombatResult::Victory { victors } = result {
                         for v in victors {
