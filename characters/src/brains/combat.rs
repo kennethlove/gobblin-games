@@ -19,6 +19,7 @@ use crate::stamina_band::stamina_band;
 use crate::traits::{BehaviorAxis, CharacterAttribute, behavior_sum};
 use shared::combat_beat::CombatActionKind;
 use shared::messages::{ItemRef, StaminaBand};
+use uuid::Uuid;
 use world::items::Attribute;
 
 /// Blood at or below this counts as wounded (blood scale is 0..=1000).
@@ -27,7 +28,7 @@ const WOUNDED_BLOOD: u32 = 500;
 const HOPELESS_BLOOD: u32 = 150;
 
 /// Per-round combat decision-maker. Holds a copy of the fight's tuning so the
-/// provider signature stays `(actor, opponent)` as the round loop expects.
+/// provider signature stays `(actor, opposing_side)` as the round loop expects.
 pub struct CombatBrain {
     tuning: CombatTuning,
 }
@@ -37,8 +38,13 @@ impl CombatBrain {
         Self { tuning }
     }
 
-    /// Score and pick this round's action for `actor` against `opponent`.
-    pub fn choose_action(&self, actor: &Character, opponent: &Character) -> CombatActionKind {
+    /// Score and pick this round's action for `actor` against the opposing
+    /// side (design §4.3; a pair passes its one member).
+    pub fn choose_action(
+        &self,
+        actor: &Character,
+        opposing_side: &[&Character],
+    ) -> CombatActionKind {
         let t = &self.tuning;
         let wounded = actor.blood <= WOUNDED_BLOOD;
         let exhausted = stamina_band(actor.stamina, actor.max_stamina, t) == StaminaBand::Exhausted;
@@ -84,9 +90,14 @@ impl CombatBrain {
         if behavior_sum(&actor.traits, BehaviorAxis::FleeCowardice) > 0 {
             flee += t.brain_flee_cautious_bonus;
         }
-        if opponent.effective_attribute(CharacterAttribute::Strength)
-            > actor.effective_attribute(CharacterAttribute::Strength)
-        {
+        // Outmatched against the strongest member — one weak ally must not
+        // make a losing fight look winnable.
+        let strongest = opposing_side
+            .iter()
+            .map(|m| m.effective_attribute(CharacterAttribute::Strength))
+            .max()
+            .unwrap_or(0);
+        if strongest > actor.effective_attribute(CharacterAttribute::Strength) {
             flee += t.brain_flee_outmatched_bonus;
         }
 
@@ -113,6 +124,39 @@ impl CombatBrain {
             let _ = best_score;
         }
         best_kind
+    }
+
+    /// Pick this round's attack target among `opposing_side` (design §4.3):
+    /// wounded members score up, aggressive actors favor the strongest,
+    /// cowards the weakest. Ties keep slice order (join order). Returns
+    /// `None` only for an empty side.
+    pub fn choose_target(&self, actor: &Character, opposing_side: &[&Character]) -> Option<Uuid> {
+        let t = &self.tuning;
+        let strength_pref = if behavior_sum(&actor.traits, BehaviorAxis::AttackPosture) > 0 {
+            1
+        } else if behavior_sum(&actor.traits, BehaviorAxis::FleeCowardice) > 0 {
+            -1
+        } else {
+            0
+        };
+
+        let mut best: Option<(Uuid, i32)> = None;
+        for m in opposing_side {
+            let mut score = 0;
+            if m.blood <= WOUNDED_BLOOD {
+                score += t.brain_target_wounded_bonus;
+            }
+            // Attribute points scale into the weight's magnitude so one
+            // strength point stays a fraction of the wounded bonus.
+            score += strength_pref
+                * (m.effective_attribute(CharacterAttribute::Strength) as i32 / 10)
+                * t.brain_target_strong_bonus;
+            // Strict `>`: ties keep the earlier (join-order) member.
+            if best.is_none_or(|(_, best_score)| score > best_score) {
+                best = Some((m.id, score));
+            }
+        }
+        best.map(|(id, _)| id)
     }
 
     /// Forced Spare/Execute verdict after `cowerer` begged (spec §7).
@@ -148,8 +192,19 @@ impl CombatBrain {
 }
 
 impl CombatActionProvider for CombatBrain {
-    fn action(&mut self, actor: &Character, opponent: &Character) -> CombatActionKind {
-        self.choose_action(actor, opponent)
+    fn action(
+        &mut self,
+        actor: &Character,
+        opposing_side: &[&Character],
+    ) -> (CombatActionKind, Option<Uuid>) {
+        let kind = self.choose_action(actor, opposing_side);
+        // Only an attack consumes a target; flee/UseItem/cower ignore it.
+        let target = if matches!(kind, CombatActionKind::Attack) {
+            self.choose_target(actor, opposing_side)
+        } else {
+            None
+        };
+        (kind, target)
     }
 
     fn verdict(&mut self, actor: &Character, cowerer: &Character) -> CombatActionKind {
@@ -191,7 +246,7 @@ mod tests {
     fn healthy_goblin_attacks() {
         let a = char_named("Alice");
         let o = char_named("Bob");
-        assert_eq!(brain().choose_action(&a, &o), CombatActionKind::Attack);
+        assert_eq!(brain().choose_action(&a, &[&o]), CombatActionKind::Attack);
     }
 
     #[test]
@@ -201,7 +256,7 @@ mod tests {
         a.items.push(potion());
         let o = char_named("Bob");
         assert!(matches!(
-            brain().choose_action(&a, &o),
+            brain().choose_action(&a, &[&o]),
             CombatActionKind::UseItem { .. }
         ));
     }
@@ -212,7 +267,7 @@ mod tests {
         a.blood = 300;
         a.stamina = 10; // Exhausted band (default threshold 20% of max)
         let o = char_named("Bob");
-        assert_eq!(brain().choose_action(&a, &o), CombatActionKind::Flee);
+        assert_eq!(brain().choose_action(&a, &[&o]), CombatActionKind::Flee);
     }
 
     #[test]
@@ -221,7 +276,7 @@ mod tests {
         a.blood = 100; // near-dead
         a.stamina = 10; // Exhausted
         let o = char_named("Bob");
-        assert_eq!(brain().choose_action(&a, &o), CombatActionKind::Cower);
+        assert_eq!(brain().choose_action(&a, &[&o]), CombatActionKind::Cower);
     }
 
     #[test]
@@ -230,7 +285,63 @@ mod tests {
         a.blood = 400;
         a.traits.push(Trait::Cautious);
         let o = char_named("Bob");
-        assert_eq!(brain().choose_action(&a, &o), CombatActionKind::Flee);
+        assert_eq!(brain().choose_action(&a, &[&o]), CombatActionKind::Flee);
+    }
+
+    #[test]
+    fn wounded_member_is_preferred_target() {
+        let mut actor = char_named("Alice");
+        actor.traits.clear(); // no strength preference — the wound decides
+        let mut fresh = char_named("Bob");
+        fresh.blood = 1000;
+        let mut hurt = char_named("Carol");
+        hurt.blood = 200; // <= WOUNDED_BLOOD
+        let side = [&fresh, &hurt];
+        assert_eq!(brain().choose_target(&actor, &side), Some(hurt.id));
+    }
+
+    #[test]
+    fn target_tie_keeps_join_order() {
+        let mut actor = char_named("Alice");
+        actor.traits.clear();
+        let mut first = char_named("Bob");
+        first.traits.clear();
+        first.attributes.strength = 10;
+        let mut second = char_named("Carol");
+        second.traits.clear();
+        second.attributes.strength = 10;
+        let side = [&first, &second];
+        assert_eq!(brain().choose_target(&actor, &side), Some(first.id));
+    }
+
+    #[test]
+    fn aggressive_actor_prefers_strongest() {
+        let mut actor = char_named("Alice");
+        actor.traits.clear();
+        actor.traits.push(Trait::Aggressive);
+        let mut weak = char_named("Bob");
+        weak.attributes.strength = 1;
+        weak.blood = 200;
+        let mut strong = char_named("Carol");
+        strong.attributes.strength = 50;
+        strong.blood = 200; // equal wounds — strength alone decides
+        let side = [&weak, &strong];
+        assert_eq!(brain().choose_target(&actor, &side), Some(strong.id));
+    }
+
+    #[test]
+    fn cowardly_actor_prefers_weakest() {
+        let mut actor = char_named("Alice");
+        actor.traits.clear();
+        actor.traits.push(Trait::Cautious);
+        let mut weak = char_named("Bob");
+        weak.attributes.strength = 1;
+        weak.blood = 200;
+        let mut strong = char_named("Carol");
+        strong.attributes.strength = 50;
+        strong.blood = 200;
+        let side = [&strong, &weak]; // strongest listed first
+        assert_eq!(brain().choose_target(&actor, &side), Some(weak.id));
     }
 
     #[test]

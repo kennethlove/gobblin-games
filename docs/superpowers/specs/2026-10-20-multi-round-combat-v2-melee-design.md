@@ -113,6 +113,7 @@ The combat brain picks a target among **living members of the opposing side**.
 Scoring (placeholder weights in `CombatTuning`):
 
 - **Threat** — who damaged me most recently / most this fight (they're on me).
+  *Deferred to a follow-up: the loop tracks no per-fight damage memory.*
 - **Finishing** — wounded targets score up (goblins finish the weak).
 - **Traits** — Aggressive/Reckless push toward the strongest target; cowardly
   traits push toward the weakest.
@@ -243,8 +244,8 @@ Consumers to update: `announcers/src/history.rs` (matches `Winner`),
 ## 10. Tuning additions (`CombatTuning`)
 
 - `max_combatants` — total fight capacity (join cap)
-- Target-scoring weights: `brain_target_threat_bonus`,
-  `brain_target_wounded_bonus`, `brain_target_strong_bonus`, etc.
+- Target-scoring weights: `brain_target_wounded_bonus`,
+  `brain_target_strong_bonus`; `brain_target_threat_bonus` deferred with §4.3.
 - Flee defender rule constant if it becomes configurable (fastest-opponent
   selection is a rule, not a number — likely no new field)
 - All placeholders; a tuning pass follows observability (v1 §14 PR 4 pattern).
@@ -255,8 +256,8 @@ Consumers to update: `announcers/src/history.rs` (matches `Winner`),
 
 - Round model: 3-combatant initiative orders by roll, tie falls to join order;
   pair fight under N-loop reproduces v1 beat order exactly
-- Targeting: never targets own side or a cowerer; threat bonus picks the recent
-  attacker; deterministic tie-break
+- Targeting: never targets own side or a cowerer; deterministic tie-break
+  (threat bonus deferred with §4.3)
 - Joins: ally in same sub-tile joins at boundary and gets a beat in the *next*
   round; ally in a different sub-tile doesn't; capacity blocks; ambiguous ally
   (both sides) sits out

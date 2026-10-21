@@ -94,6 +94,14 @@ pub struct CombatTuning {
     /// Execute score for the Aggressive trait.
     pub brain_execute_aggressive_bonus: i32,
 
+    // --- Melee v2 target choice (design 2026-10-20 §4.3) ---
+    /// Wounded members score up when picking a target (goblins finish the
+    /// weak).
+    pub brain_target_wounded_bonus: i32,
+    /// Strength preference weight: added for aggressive actors, subtracted
+    /// for cowards (aggressive -> strongest, cowardly -> weakest).
+    pub brain_target_strong_bonus: i32,
+
     // --- Conditional weapon/shield wear tiers (cg9 balance pass) ---
     // Wear fires only on gated outcomes; clean hits and plain misses wear
     // nothing. Tuned with `tuning_harness` gear mode (2000 fights, Common
@@ -173,6 +181,9 @@ impl Default for CombatTuning {
             brain_spare_trait_bonus: 30,
             brain_execute_treacherous_bonus: 50,
             brain_execute_aggressive_bonus: 20,
+
+            brain_target_wounded_bonus: 15,
+            brain_target_strong_bonus: 5,
 
             weapon_wear_on_shield_block: 2,
             weapon_wear_on_armor_block: 1,

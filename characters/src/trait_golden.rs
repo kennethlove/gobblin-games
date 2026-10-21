@@ -133,7 +133,7 @@ pub fn captured_lines() -> Vec<String> {
             opponent.traits = set.clone();
             out.push(format!(
                 "action:{sname}:{name} -> {:?}",
-                brain.choose_action(&actor, &opponent)
+                brain.choose_action(&actor, &[&opponent])
             ));
         }
     }

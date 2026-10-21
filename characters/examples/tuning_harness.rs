@@ -11,25 +11,13 @@
 
 use characters::Character;
 use characters::brains::combat::CombatBrain;
-use characters::combat::round_loop::{CombatActionProvider, CombatRoundLoop};
+use characters::combat::round_loop::CombatRoundLoop;
 use characters::combat_tuning::CombatTuning;
 use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use shared::combat_beat::CombatActionKind;
 use shared::combat_beat::CombatResult;
 use world::items::OwnsItems;
-
-/// Brain wrapper so the loop uses real per-round decisions.
-struct BrainProvider(CombatBrain);
-
-impl CombatActionProvider for BrainProvider {
-    fn action(&mut self, actor: &Character, opponent: &Character) -> CombatActionKind {
-        self.0.action(actor, opponent)
-    }
-    fn verdict(&mut self, actor: &Character, cowerer: &Character) -> CombatActionKind {
-        self.0.verdict(actor, cowerer)
-    }
-}
 
 fn main() {
     let n: usize = std::env::args()
@@ -105,7 +93,7 @@ fn main() {
             &mut b,
             format!("c{seed}"),
             tuning.clone(),
-            Box::new(BrainProvider(CombatBrain::new(tuning.clone()))),
+            Box::new(CombatBrain::new(tuning.clone())),
         );
 
         let mut rounds = 0u32;
