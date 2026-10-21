@@ -373,6 +373,26 @@ pub fn render_event_cards(msgs: &[shared::messages::GameMessage]) -> String {
     html
 }
 
+/// "Name" or "A & B" with the right verb form ("X wins" / "X & Y win").
+fn join_names(
+    victors: &[shared::messages::CharacterRef],
+    plural: &str,
+    singular: &str,
+) -> String {
+    match victors {
+        [] => "The fight ends".to_string(),
+        [one] => format!("{} {}", one.name, singular),
+        many => format!(
+            "{} {}",
+            many.iter()
+                .map(|v| v.name.as_str())
+                .collect::<Vec<_>>()
+                .join(" & "),
+            plural
+        ),
+    }
+}
+
 /// One grouped fight card, rendered through the `combat_card.html` /
 /// `combat_round.html` Tera partials (Tera autoescapes `.html`, so names
 /// and message content below are plain text — never HTML). All grouping,
@@ -410,13 +430,7 @@ fn render_combat_card(
     // happen, but keeps the card titled).
     let title = if combatants == "Combat" {
         match result.map(|(_, r)| r) {
-            Some(CombatResult::Winner { character }) => format!("{} wins", character.name),
-            Some(CombatResult::Fled { fled, remaining }) => {
-                format!("{} vs {}", remaining.name, fled.name)
-            }
-            Some(CombatResult::Spared { winner, spared }) => {
-                format!("{} vs {}", winner.name, spared.name)
-            }
+            Some(CombatResult::Victory { victors }) => join_names(victors, "win", "wins"),
             Some(CombatResult::Draw) | None => combatants,
         }
     } else {
@@ -425,11 +439,10 @@ fn render_combat_card(
 
     // Result line for the header (plain text; the template escapes it).
     let result_text = match result.map(|(_, r)| r) {
-        Some(CombatResult::Winner { character }) => format!("{} wins the fight", character.name),
-        Some(CombatResult::Fled { fled, .. }) => format!("{} flees — fight over", fled.name),
-        Some(CombatResult::Spared { winner, spared }) => {
-            format!("{} spares {}", winner.name, spared.name)
-        }
+        Some(CombatResult::Victory { victors }) => format!(
+            "{} the fight",
+            join_names(victors, "win", "wins")
+        ),
         Some(CombatResult::Draw) => "A draw — both break off".to_string(),
         None => "fight in progress…".to_string(),
     };
@@ -1308,8 +1321,8 @@ mod day_summary_card_tests {
             beat(1, "Boblin", "Stinky", swing_miss(), false),
             beat(1, "Stinky", "Boblin", swing_miss(), false),
             beat(2, "Boblin", "Stinky", swing_kill(), true),
-            ended(CombatResult::Winner {
-                character: cref("Boblin"),
+            ended(CombatResult::Victory {
+                victors: vec![cref("Boblin")],
             }),
         ];
         let html = render_event_cards(&msgs);
@@ -1366,8 +1379,8 @@ mod day_summary_card_tests {
         let msgs = vec![
             plain,
             beat(1, "Boblin", "Stinky", swing_kill(), true),
-            ended(CombatResult::Winner {
-                character: cref("Boblin"),
+            ended(CombatResult::Victory {
+                victors: vec![cref("Boblin")],
             }),
         ];
         let html = render_event_cards(&msgs);
@@ -1381,18 +1394,17 @@ mod day_summary_card_tests {
     fn combat_result_variants_render() {
         for (result, expected) in [
             (
-                CombatResult::Fled {
-                    fled: cref("Boblin"),
-                    remaining: cref("Stinky"),
+                CombatResult::Victory {
+                    victors: vec![cref("Boblin")],
                 },
-                "Boblin flees",
+                "Boblin wins the fight",
             ),
             (
-                CombatResult::Spared {
-                    winner: cref("Boblin"),
-                    spared: cref("Stinky"),
+                CombatResult::Victory {
+                    victors: vec![cref("Boblin"), cref("Stinky")],
                 },
-                "Boblin spares Stinky",
+                // Tera escapes the joiner: raw "&" becomes "&amp;".
+                "Boblin &amp; Stinky win the fight",
             ),
             (CombatResult::Draw, "A draw"),
         ] {

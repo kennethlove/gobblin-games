@@ -1430,7 +1430,7 @@ fn smoke_involves_matches_character_refs_for_all_variants() {
         (
             CombatEnded {
                 combat_id: "fight-1".into(),
-                result: CombatResult::Winner { character: t("w") },
+                result: CombatResult::Victory { victors: vec![t("w")] },
                 location: None,
             },
             vec!["id-w"],

@@ -1149,6 +1149,8 @@ impl Game {
             };
 
             let mut fight_events: Vec<world::messages::TaggedEvent> = Vec::new();
+            let mut fight_killers: Vec<shared::messages::CharacterRef> = Vec::new();
+            let mut fled_refs: Vec<shared::messages::CharacterRef> = Vec::new();
             let fight_result = {
                 let mut combat = CombatRoundLoop::with_provider(
                     attacker,
@@ -1172,6 +1174,24 @@ impl Game {
                         None,
                     ));
                     for ev in fight_events.drain(..) {
+                        // Collect bookkeeping while the events flow by: one
+                        // kill per CharacterKilled (attack kills and
+                        // executions; self-inflicted deaths carry no killer)
+                        // and any combatant who fled (relocated below).
+                        if let MessagePayload::CharacterKilled {
+                            killer: Some(k), ..
+                        } = &ev.payload
+                        {
+                            fight_killers.push(k.clone());
+                        }
+                        if let MessagePayload::CombatBeat(beat) = &ev.payload
+                            && matches!(
+                                beat.outcome,
+                                shared::combat_beat::BeatOutcome::Fled
+                            )
+                        {
+                            fled_refs.push(beat.actor.clone());
+                        }
                         collected_events.push((
                             attacker_ident.clone(),
                             attacker_name.clone(),
@@ -1185,52 +1205,65 @@ impl Game {
             };
             // `combat` (and the split_at_mut borrows) dropped here.
 
-            // Bookkeeping: winner gains a kill (attacks() already set
-            // RecentlyDead/recently_killed_by on the real target).
-            if let Some(winner) = fight_result.as_ref().and_then(|result| match result {
-                shared::combat_beat::CombatResult::Winner { character } => self
+            // Bookkeeping: each killer of the fight gains a kill.
+            for killer in &fight_killers {
+                if let Some(c) = self
                     .characters
                     .iter_mut()
-                    .find(|c| character.identifier == c.identifier),
-                _ => None,
-            }) {
-                winner.statistics.kills += 1;
+                    .find(|ch| killer.identifier == ch.identifier)
+                {
+                    c.statistics.kills += 1;
+                }
             }
 
-            // Emit the terminal result. A successful flee is the only
-            // outcome that moves a goblin: resolve the fleer into an
-            // adjacent sub-tile (within-parent ring neighbors preferred,
-            // cross-parent facing door as fallback).
+            // Emit the terminal result. A successful flee relocates the
+            // fleer into an adjacent sub-tile (within-parent ring neighbors
+            // preferred, cross-parent facing door as fallback) — the fight
+            // itself ends only when a whole side is gone (design §5/§6).
             if let Some(result) = fight_result {
-                let mut fled_to: Option<areas::location::Location> = None;
-                if let shared::combat_beat::CombatResult::Fled { fled, .. } = &result
-                    && let Some(fleer) = self
+                for fled in &fled_refs {
+                    let Some(fleer) = self
                         .characters
                         .iter_mut()
                         .find(|c| fled.identifier == c.identifier)
-                {
+                    else {
+                        continue;
+                    };
                     let from = fleer.location;
-                    if let Some(destination) = flee_destination(from, rng) {
-                        fleer.location = destination;
-                        fled_to = Some(destination);
-                    }
+                    let line = match flee_destination(from, rng) {
+                        Some(dest) => {
+                            fleer.location = dest;
+                            format!(
+                                "{} flees the fight to {} sub-tile {}!",
+                                fled.name,
+                                dest.area,
+                                dest.sub.index()
+                            )
+                        }
+                        None => format!("{} flees the fight!", fled.name),
+                    };
+                    collected_events.push((
+                        attacker_ident.clone(),
+                        attacker_name.clone(),
+                        line,
+                        None,
+                        None,
+                    ));
                 }
 
                 let summary = match &result {
-                    shared::combat_beat::CombatResult::Winner { character } => {
-                        format!("{} wins the fight!", character.name)
-                    }
-                    shared::combat_beat::CombatResult::Fled { fled, .. } => match fled_to {
-                        Some(dest) => format!(
-                            "{} flees the fight to {} sub-tile {}!",
-                            fled.name,
-                            dest.area,
-                            dest.sub.index()
-                        ),
-                        None => format!("{} flees the fight!", fled.name),
-                    },
-                    shared::combat_beat::CombatResult::Spared { winner, spared } => {
-                        format!("{} spares {}!", winner.name, spared.name)
+                    shared::combat_beat::CombatResult::Victory { victors } => {
+                        match victors.as_slice() {
+                            [] => "The fight ends.".to_string(),
+                            [one] => format!("{} wins the fight!", one.name),
+                            many => format!(
+                                "{} win the fight!",
+                                many.iter()
+                                    .map(|v| v.name.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(" and ")
+                            ),
+                        }
                     }
                     shared::combat_beat::CombatResult::Draw => {
                         "The fight ends in a draw.".to_string()

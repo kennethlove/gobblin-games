@@ -118,11 +118,21 @@ fn main() {
         let result = combat.result().cloned();
         drop(combat); // release &mut a/b before reading stamina
 
+        // Fight flavor (flee/spare) now lives in the beats, not the result.
+        let fight_fled = events.iter().any(|ev| {
+            matches!(&ev.payload, shared::messages::MessagePayload::CombatBeat(b)
+                if matches!(b.outcome, shared::combat_beat::BeatOutcome::Fled))
+        });
+        let fight_spared = events.iter().any(|ev| {
+            matches!(&ev.payload, shared::messages::MessagePayload::CombatBeat(b)
+                if matches!(b.outcome, shared::combat_beat::BeatOutcome::Spared))
+        });
+
         if rounds <= 1 {
             let kind = match &result {
-                Some(CombatResult::Winner { .. }) => "winner",
-                Some(CombatResult::Fled { .. }) => "fled",
-                Some(CombatResult::Spared { .. }) => "spared",
+                Some(CombatResult::Victory { .. }) if fight_fled => "fled",
+                Some(CombatResult::Victory { .. }) if fight_spared => "spared",
+                Some(CombatResult::Victory { .. }) => "winner",
                 Some(CombatResult::Draw) => "draw",
                 None => "none",
             };
@@ -164,9 +174,9 @@ fn main() {
         }
 
         match result {
-            Some(CombatResult::Winner { .. }) => winner += 1,
-            Some(CombatResult::Fled { .. }) => fled += 1,
-            Some(CombatResult::Spared { .. }) => spared += 1,
+            Some(CombatResult::Victory { .. }) if fight_fled => fled += 1,
+            Some(CombatResult::Victory { .. }) if fight_spared => spared += 1,
+            Some(CombatResult::Victory { .. }) => winner += 1,
             Some(CombatResult::Draw) => {
                 draw += 1;
                 if a.stamina == 0 && b.stamina == 0 {

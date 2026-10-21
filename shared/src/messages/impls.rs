@@ -24,10 +24,10 @@ impl MessagePayload {
     /// Rules of thumb:
     /// - deaths, injuries, traps, state-changing item use, alliances,
     ///   betrayals, affliction acquisition/escalation, roster and arena
-    ///   state changes, day summaries → [`Importance::Persist`]
+    ///   state changes, day summaries -> [`Importance::Persist`]
     /// - anything derivable from current character/area data (HP, sanity,
     ///   bands, position, plain rest/sleep bookkeeping) or pure observers
-    ///   and decay → [`Importance::ServerLogOnly`]
+    ///   and decay -> [`Importance::ServerLogOnly`]
     /// - combat tiers by outcome: landed swings/flees persist, misses and
     ///   stalemates do not
     /// - `CycleStart` persists only at the day-start and nightfall hours
@@ -194,15 +194,7 @@ impl MessagePayload {
                 }
             }
             CombatEnded { result, .. } => match result {
-                crate::combat_beat::CombatResult::Winner { character } => refs.push(character),
-                crate::combat_beat::CombatResult::Fled { fled, remaining } => {
-                    refs.push(fled);
-                    refs.push(remaining);
-                }
-                crate::combat_beat::CombatResult::Spared { winner, spared } => {
-                    refs.push(winner);
-                    refs.push(spared);
-                }
+                crate::combat_beat::CombatResult::Victory { victors } => refs.extend(victors),
                 crate::combat_beat::CombatResult::Draw => {}
             },
             CombatRoundStart { .. } => {}
