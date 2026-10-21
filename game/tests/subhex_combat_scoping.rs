@@ -168,16 +168,16 @@ fn successful_flee_relocates_fleer_into_adjacent_sub() {
 
     game.run_phase(Phase::DAY).expect("day phase ran");
 
-    let fled_result = game.messages.iter().any(|m| {
+    // The successful flee beat: the fleer exits the fight (and the pair's
+    // other side therefore stands), then relocates below.
+    let fled_beat = game.messages.iter().any(|m| {
         matches!(
-            m.payload,
-            MessagePayload::CombatEnded {
-                result: shared::combat_beat::CombatResult::Fled { .. },
-                ..
-            }
+            &m.payload,
+            MessagePayload::CombatBeat(beat)
+                if matches!(beat.outcome, shared::combat_beat::BeatOutcome::Fled)
         )
     });
-    assert!(fled_result, "tuned fight must end with a flee");
+    assert!(fled_beat, "tuned fight must end with a flee");
 
     let original = hub_sub0;
     let adjacent: Vec<Location> = areas::location::sub_neighbors(original)

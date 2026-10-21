@@ -18,7 +18,7 @@ use crate::stamina_band::stamina_band;
 use rand::RngExt;
 use rand::prelude::*;
 use shared::combat_beat::{BeatOutcome, CombatActionKind, CombatBeat, CombatResult, CombatRound};
-use shared::messages::{CharacterRef, MessagePayload};
+use shared::messages::MessagePayload;
 use world::messages::TaggedEvent;
 
 use super::resolve::tref;
@@ -72,21 +72,45 @@ fn initiative_roll(c: &Character, tuning: &CombatTuning, rng: &mut impl Rng) -> 
     d20 + speed_mod + band_mod + weapon_speed
 }
 
-/// State machine driving one fight between two borrowed combatants.
+/// Two mutable borrows from the combatant vec, by index (indices differ).
 ///
+/// Outer/inner lifetimes stay separate: the returned borrows only live as
+/// long as this borrow of the vec, not as the elements' original lifetime.
+fn two_refs<'o>(
+    chars: &'o mut [&mut Character],
+    i: usize,
+    j: usize,
+) -> (&'o mut Character, &'o mut Character) {
+    if i < j {
+        let (left, right) = chars.split_at_mut(j);
+        (&mut *left[i], &mut *right[0])
+    } else {
+        let (left, right) = chars.split_at_mut(i);
+        (&mut *right[0], &mut *left[j])
+    }
+}
+
+/// State machine driving one fight among a set of borrowed combatants.
+///
+/// Melee v2 substrate (design 2026-10-20 §8): the loop owns the combatants
+/// as a set with side membership instead of exactly two borrowed references.
+/// A pair fight is the two-entry set `[[0], [1]]`; joins push more later.
 /// The game cycle builds this over `split_at_mut` indices and calls
 /// [`CombatRoundLoop::advance_round`] once per step until
 /// [`CombatRoundLoop::is_over`] is true, emitting the returned beats.
 pub struct CombatRoundLoop<'a> {
-    first: &'a mut Character,
-    second: &'a mut Character,
+    /// Combatants, in join order. Taken out during each `advance_round` and
+    /// put back before it returns.
+    chars: Vec<&'a mut Character>,
+    /// Side membership by index into `chars`, in join order. A pair starts
+    /// `[[0], [1]]`. Flee and a spare verdict remove the index from its side.
+    sides: [Vec<usize>; 2],
     combat_id: String,
     round: u32,
     result: Option<CombatResult>,
-    /// Set once a combatant cowers: `Some(true)` when the first (initiative-
-    /// side) character is the cowerer. The cowerer's later beats are
-    /// suppressed; the opponent's next action resolves as a forced verdict.
-    cowering: Option<bool>,
+    /// Set once a combatant cowers: their later beats are suppressed; the
+    /// next opposing actor's action resolves as a forced verdict.
+    cowering: Option<usize>,
     tuning: CombatTuning,
     provider: Box<dyn CombatActionProvider + 'a>,
 }
@@ -118,8 +142,8 @@ impl<'a> CombatRoundLoop<'a> {
         provider: Box<dyn CombatActionProvider + 'a>,
     ) -> Self {
         Self {
-            first,
-            second,
+            chars: vec![first, second],
+            sides: [vec![0], vec![1]],
             combat_id,
             round: 0,
             result: None,
@@ -142,8 +166,8 @@ impl<'a> CombatRoundLoop<'a> {
     }
 
     /// Advance one round. Returns the resolved [`CombatRound`] (possibly with
-    /// fewer than two beats if the fight ended mid-round) and appends this
-    /// round's message events to `events`.
+    /// fewer beats than combatants if combatants dropped out mid-round) and
+    /// appends this round's message events to `events`.
     pub fn advance_round(
         &mut self,
         rng: &mut impl Rng,
@@ -155,25 +179,51 @@ impl<'a> CombatRoundLoop<'a> {
                 beats: vec![],
             };
         }
+        // Take the combatants out for the round so `self` methods can use
+        // tuning/provider/result alongside them; put back before returning.
+        let mut chars = std::mem::take(&mut self.chars);
+        let round = self.advance_round_with(&mut chars, rng, events);
+        self.chars = chars;
+        round
+    }
 
+    fn advance_round_with(
+        &mut self,
+        chars: &mut Vec<&'a mut Character>,
+        rng: &mut impl Rng,
+        events: &mut Vec<TaggedEvent>,
+    ) -> CombatRound {
         self.round += 1;
         let round_no = self.round;
 
-        // Initiative decides who acts first; ties keep stable (first-then-second)
-        // order so resolution stays deterministic.
-        let first_init = initiative_roll(self.first, &self.tuning, rng);
-        let second_init = initiative_roll(self.second, &self.tuning, rng);
-        let first_goes_first = first_init >= second_init;
+        // Initiative decides who acts first; ties keep join order so
+        // resolution stays deterministic (and for a pair reproduces the old
+        // first-then-second order).
+        let mut actives = self.active_indices(chars);
+        let rolls: Vec<i32> = actives
+            .iter()
+            .map(|&i| initiative_roll(&*chars[i], &self.tuning, rng))
+            .collect();
+        let mut ordered: Vec<(usize, i32)> = actives.into_iter().zip(rolls).collect();
+        ordered.sort_by_key(|&(_, roll)| std::cmp::Reverse(roll)); // stable: ties keep join order
+        actives = ordered.into_iter().map(|(i, _)| i).collect();
 
-        let mut beats: Vec<CombatBeat> = Vec::with_capacity(2);
+        let mut beats: Vec<CombatBeat> = Vec::with_capacity(actives.len());
 
-        // Resolve in initiative order. `order` is the beat position (0/1);
-        // `actor_is_first` selects which borrowed character acts.
-        for (order, actor_is_first) in [(0u8, first_goes_first), (1u8, !first_goes_first)] {
+        // Resolve in initiative order. `order` is the beat position.
+        for (order, &actor_idx) in actives.iter().enumerate() {
             if self.result.is_some() {
                 break; // fight ended on the prior beat — skip the rest of the round
             }
-            self.resolve_one_action(round_no, order, actor_is_first, rng, events, &mut beats);
+            self.resolve_one_action(
+                chars,
+                round_no,
+                order as u8,
+                actor_idx,
+                rng,
+                events,
+                &mut beats,
+            );
         }
 
         // Round cap: a pathological stalemate terminates in a Draw (spec §6).
@@ -187,63 +237,101 @@ impl<'a> CombatRoundLoop<'a> {
         }
     }
 
+    /// Indices into `chars` still on a side and alive — the combatants whose
+    /// beats remain.
+    fn active_indices(&self, chars: &[&mut Character]) -> Vec<usize> {
+        self.sides[0]
+            .iter()
+            .chain(self.sides[1].iter())
+            .copied()
+            .filter(|&i| chars[i].is_alive())
+            .collect()
+    }
+
+    /// Live members of one side, by index into `chars`.
+    fn active_on(&self, side: usize, chars: &[&mut Character]) -> Vec<usize> {
+        self.sides[side]
+            .iter()
+            .copied()
+            .filter(|&i| chars[i].is_alive())
+            .collect()
+    }
+
+    fn side_of(&self, idx: usize) -> usize {
+        if self.sides[0].contains(&idx) { 0 } else { 1 }
+    }
+
     /// Resolve a single combatant's action for this round, appending its beat
     /// to `beats` and any message events to `events`.
     #[allow(clippy::too_many_arguments)]
     fn resolve_one_action(
         &mut self,
+        chars: &mut Vec<&'a mut Character>,
         round_no: u32,
         order: u8,
-        actor_is_first: bool,
+        actor_idx: usize,
         rng: &mut impl Rng,
         events: &mut Vec<TaggedEvent>,
         beats: &mut Vec<CombatBeat>,
     ) {
         // Once someone has cowered: suppress their beats and turn the
-        // opponent's next action into the forced verdict (spec §7).
-        if let Some(cowerer_is_first) = self.cowering {
-            if actor_is_first == cowerer_is_first {
-                return; // already begging — no repeat cower beat
+        // next opposing actor's action into the forced verdict (spec §7).
+        if let Some(cowerer) = self.cowering {
+            if actor_idx == cowerer || self.side_of(actor_idx) == self.side_of(cowerer) {
+                return; // the cowerer (or a side mate) — no verdict, no repeat beat
             }
-            self.resolve_verdict(round_no, order, actor_is_first, events, beats);
+            self.resolve_verdict(chars, round_no, order, actor_idx, cowerer, events, beats);
             return;
         }
 
-        // Pick the action against the opponent. The provider borrows the two
-        // characters immutably; pick which pair based on who acts.
-        let action = if actor_is_first {
-            let actor = &*self.first;
-            let opponent = &*self.second;
-            self.provider.action(actor, opponent)
-        } else {
-            let actor = &*self.second;
-            let opponent = &*self.first;
-            self.provider.action(actor, opponent)
+        // Pick the action against one of the opposing side (design §4.3;
+        // pairs have exactly one opponent).
+        let actor_side = self.side_of(actor_idx);
+        let Some(&opponent_idx) = self.active_on(1 - actor_side, chars).first() else {
+            // Opposing side already gone — the beat that emptied it set the
+            // result; nothing left to do.
+            return;
         };
+        let action = self
+            .provider
+            .action(&*chars[actor_idx], &*chars[opponent_idx]);
 
         match action {
             CombatActionKind::Attack => {
-                self.resolve_attack(round_no, order, actor_is_first, rng, events, beats);
+                self.resolve_attack(
+                    chars,
+                    round_no,
+                    order,
+                    actor_idx,
+                    opponent_idx,
+                    rng,
+                    events,
+                    beats,
+                );
             }
             CombatActionKind::Flee => {
-                self.resolve_flee(round_no, order, actor_is_first, rng, events, beats);
+                self.resolve_flee(
+                    chars,
+                    round_no,
+                    order,
+                    actor_idx,
+                    opponent_idx,
+                    rng,
+                    events,
+                    beats,
+                );
             }
             CombatActionKind::UseItem { item } => {
-                self.resolve_use_item(round_no, order, actor_is_first, item, events, beats);
+                self.resolve_use_item(chars, round_no, order, actor_idx, item, events, beats);
             }
             CombatActionKind::Cower => {
                 // Record the cower and emit its beat; the fight continues until
-                // the opponent answers with Spare/Execute.
-                self.cowering = Some(actor_is_first);
-                let actor_ref = if actor_is_first {
-                    tref(self.first)
-                } else {
-                    tref(self.second)
-                };
+                // an opposing actor answers with Spare/Execute.
+                self.cowering = Some(actor_idx);
                 let beat = CombatBeat {
                     round: round_no,
                     order,
-                    actor: actor_ref,
+                    actor: tref(&*chars[actor_idx]),
                     action: CombatActionKind::Cower,
                     target: None,
                     weapon: None,
@@ -266,9 +354,11 @@ impl<'a> CombatRoundLoop<'a> {
     #[allow(clippy::too_many_arguments)]
     fn resolve_attack(
         &mut self,
+        chars: &mut Vec<&'a mut Character>,
         round_no: u32,
         order: u8,
-        actor_is_first: bool,
+        actor_idx: usize,
+        target_idx: usize,
         rng: &mut impl Rng,
         events: &mut Vec<TaggedEvent>,
         beats: &mut Vec<CombatBeat>,
@@ -276,18 +366,10 @@ impl<'a> CombatRoundLoop<'a> {
         // Scratch buffer so we can re-stamp round/order on the beat `attacks()`
         // emits before forwarding the rest of the swing's events.
         let mut scratch: Vec<TaggedEvent> = Vec::new();
-
-        if actor_is_first {
-            let _ = self.first.attacks(
-                self.second,
-                rng,
-                &mut scratch,
-                shared::messages::Phase::DAY,
-                &self.tuning,
-            );
-        } else {
-            let _ = self.second.attacks(
-                self.first,
+        {
+            let (actor, target) = two_refs(chars, actor_idx, target_idx);
+            let _ = actor.attacks(
+                target,
                 rng,
                 &mut scratch,
                 shared::messages::Phase::DAY,
@@ -305,38 +387,36 @@ impl<'a> CombatRoundLoop<'a> {
         }
         events.extend(scratch);
 
-        self.check_termination_after_beat();
+        self.check_termination_after_beat(chars);
     }
 
     #[allow(clippy::too_many_arguments)]
     fn resolve_flee(
         &mut self,
+        chars: &mut Vec<&'a mut Character>,
         round_no: u32,
         order: u8,
-        actor_is_first: bool,
+        actor_idx: usize,
+        opponent_idx: usize,
         rng: &mut impl Rng,
         events: &mut Vec<TaggedEvent>,
         beats: &mut Vec<CombatBeat>,
     ) {
-        // Contested: fleer d20 + speed + band vs chaser d20 + speed + band.
-        let (fleer, chaser, fleer_is_first) = if actor_is_first {
-            (&*self.first, &*self.second, true)
-        } else {
-            (&*self.second, &*self.first, false)
+        // Contested: fleer d20 + speed + band vs the opposing defender (a
+        // pair has exactly one; design §5 generalizes later).
+        let (fleer_roll, chaser_roll) = {
+            let (fleer, chaser) = two_refs(chars, actor_idx, opponent_idx);
+            (
+                initiative_roll(&*fleer, &self.tuning, rng) + self.tuning.flee_contest_modifier,
+                initiative_roll(&*chaser, &self.tuning, rng),
+            )
         };
-
-        let fleer_roll =
-            initiative_roll(fleer, &self.tuning, rng) + self.tuning.flee_contest_modifier;
-        let chaser_roll = initiative_roll(chaser, &self.tuning, rng);
         let fled = fleer_roll > chaser_roll;
-
-        let actor_ref: CharacterRef = tref(fleer);
-        let target_ref: CharacterRef = tref(chaser);
 
         let beat = CombatBeat {
             round: round_no,
             order,
-            actor: actor_ref.clone(),
+            actor: tref(&*chars[actor_idx]),
             action: CombatActionKind::Flee,
             target: None,
             weapon: None,
@@ -356,47 +436,42 @@ impl<'a> CombatRoundLoop<'a> {
         ));
 
         if fled {
-            let (fled_ref, remaining_ref) = if fleer_is_first {
-                (actor_ref, target_ref)
-            } else {
-                (target_ref, actor_ref)
-            };
-            self.result = Some(CombatResult::Fled {
-                fled: fled_ref,
-                remaining: remaining_ref,
-            });
+            // The fleer leaves the fight — the fight itself only ends when a
+            // whole side is gone (design §5/§6). A pair: the other side wins.
+            let side = self.side_of(actor_idx);
+            self.sides[side].retain(|&i| i != actor_idx);
         }
+        self.check_termination_after_beat(chars);
     }
 
-    /// The cowerer's opponent answers with the provider's forced verdict
-    /// (spec §7): `Spare` ends the fight with both alive, `Execute` kills the
-    /// cowerer and ends it with a winner.
+    /// The cowerer's opposing actor answers with the provider's forced
+    /// verdict (spec §7, design §7): `Spare` frees the cowerer from the fight
+    /// alive, `Execute` kills them.
+    #[allow(clippy::too_many_arguments)]
     fn resolve_verdict(
         &mut self,
+        chars: &mut Vec<&'a mut Character>,
         round_no: u32,
         order: u8,
-        actor_is_first: bool,
+        verdict_idx: usize,
+        cowerer_idx: usize,
         events: &mut Vec<TaggedEvent>,
         beats: &mut Vec<CombatBeat>,
     ) {
-        let verdict = if actor_is_first {
-            self.provider.verdict(&*self.first, &*self.second)
-        } else {
-            self.provider.verdict(&*self.second, &*self.first)
+        let verdict = {
+            let (actor, cowerer) = two_refs(chars, verdict_idx, cowerer_idx);
+            self.provider.verdict(&*actor, &*cowerer)
         };
+        self.cowering = None;
 
         if matches!(verdict, CombatActionKind::Spare) {
-            let (winner, spared) = if actor_is_first {
-                (tref(self.first), tref(self.second))
-            } else {
-                (tref(self.second), tref(self.first))
-            };
+            let (winner, spared) = (tref(&*chars[verdict_idx]), tref(&*chars[cowerer_idx]));
             let beat = CombatBeat {
                 round: round_no,
                 order,
-                actor: winner.clone(),
+                actor: winner,
                 action: CombatActionKind::Spare,
-                target: Some(spared.clone()),
+                target: Some(spared),
                 weapon: None,
                 shield: None,
                 wear: vec![],
@@ -408,21 +483,23 @@ impl<'a> CombatRoundLoop<'a> {
                 String::new(),
                 MessagePayload::CombatBeat(beat),
             ));
-            self.result = Some(CombatResult::Spared { winner, spared });
+            // The spared cowerer leaves the fight alive — their fight, not
+            // the whole one (design §7). A pair: the spare wins it.
+            let side = self.side_of(cowerer_idx);
+            self.sides[side].retain(|&i| i != cowerer_idx);
+            self.check_termination_after_beat(chars);
             return;
         }
 
         // Execute: the verdict kills the cowerer outright. Drain their blood
         // (same observable death state an attack kill leaves behind for the
         // cycle's death processing) and report the kill.
-        let (killer, victim) = if actor_is_first {
-            (&*self.first, &mut *self.second)
-        } else {
-            (&*self.second, &mut *self.first)
+        let (killer_ref, victim_ref, damage) = {
+            let (killer, victim) = two_refs(chars, verdict_idx, cowerer_idx);
+            let damage = victim.blood;
+            victim.blood = 0;
+            (tref(&*killer), tref(&*victim), damage)
         };
-        let (killer_ref, victim_ref) = (tref(killer), tref(victim));
-        let damage = victim.blood;
-        victim.blood = 0;
 
         events.push(TaggedEvent::new(
             String::new(),
@@ -436,9 +513,9 @@ impl<'a> CombatRoundLoop<'a> {
         let beat = CombatBeat {
             round: round_no,
             order,
-            actor: killer_ref.clone(),
+            actor: killer_ref,
             action: CombatActionKind::Execute,
-            target: Some(victim_ref.clone()),
+            target: Some(victim_ref),
             weapon: None,
             shield: None,
             wear: vec![],
@@ -450,48 +527,46 @@ impl<'a> CombatRoundLoop<'a> {
             String::new(),
             MessagePayload::CombatBeat(beat),
         ));
-        self.result = Some(CombatResult::Winner {
-            character: killer_ref,
-        });
+        self.check_termination_after_beat(chars);
     }
 
     /// Consume a health/relevant consumable (brain-chosen `UseItem`). A failed
     /// use produces no beat — the actor simply loses their action.
+    #[allow(clippy::too_many_arguments)]
     fn resolve_use_item(
         &mut self,
+        chars: &mut Vec<&'a mut Character>,
         round_no: u32,
         order: u8,
-        actor_is_first: bool,
+        actor_idx: usize,
         item: shared::messages::ItemRef,
         events: &mut Vec<TaggedEvent>,
         beats: &mut Vec<CombatBeat>,
     ) {
-        let actor: &mut Character = if actor_is_first {
-            &mut *self.first
-        } else {
-            &mut *self.second
-        };
-        let Some(chosen) = actor
-            .consumables()
-            .into_iter()
-            .find(|i| item.identifier == i.identifier)
-        else {
-            return;
-        };
-
         let mut scratch: Vec<TaggedEvent> = Vec::new();
-        if actor
-            .try_use_consumable(&chosen, &mut scratch, None)
-            .is_err()
-        {
-            return;
-        }
+        let actor_ref = {
+            let actor: &mut Character = &mut *chars[actor_idx];
+            let Some(chosen) = actor
+                .consumables()
+                .into_iter()
+                .find(|i| item.identifier == i.identifier)
+            else {
+                return;
+            };
+            if actor
+                .try_use_consumable(&chosen, &mut scratch, None)
+                .is_err()
+            {
+                return;
+            }
+            tref(actor)
+        };
         events.extend(scratch);
 
         let beat = CombatBeat {
             round: round_no,
             order,
-            actor: tref(actor),
+            actor: actor_ref,
             action: CombatActionKind::UseItem { item },
             target: None,
             weapon: None,
@@ -505,30 +580,33 @@ impl<'a> CombatRoundLoop<'a> {
             String::new(),
             MessagePayload::CombatBeat(beat),
         ));
-        self.check_termination_after_beat();
+        self.check_termination_after_beat(chars);
     }
 
-    /// Check kill / stamina-draw after an attack beat and set `result` if the
-    /// fight ended.
-    fn check_termination_after_beat(&mut self) {
+    /// Check side-empty / stamina-draw after a beat and set `result` if the
+    /// fight ended (design §6): a side with no living members left loses;
+    /// everyone stamina-empty on both sides draws.
+    fn check_termination_after_beat(&mut self, chars: &[&mut Character]) {
         if self.result.is_some() {
             return;
         }
-        let first_dead = !self.first.is_alive();
-        let second_dead = !self.second.is_alive();
-        if first_dead && !second_dead {
-            self.result = Some(CombatResult::Winner {
-                character: tref(self.second),
-            });
-        } else if second_dead && !first_dead {
-            self.result = Some(CombatResult::Winner {
-                character: tref(self.first),
-            });
-        } else if first_dead && second_dead {
-            // Mutual kill — treat as a draw (both down, no survivor).
+        let a = self.active_on(0, chars);
+        let b = self.active_on(1, chars);
+        if a.is_empty() && b.is_empty() {
+            // Both sides gone (e.g. mutual kill) — no survivor.
             self.result = Some(CombatResult::Draw);
-        } else if self.first.stamina == 0 && self.second.stamina == 0 {
-            // Both stamina-empty with no kill possible: disengage alive (§6).
+        } else if a.is_empty() {
+            self.result = Some(CombatResult::Victory {
+                victors: b.iter().map(|&i| tref(&*chars[i])).collect(),
+            });
+        } else if b.is_empty() {
+            self.result = Some(CombatResult::Victory {
+                victors: a.iter().map(|&i| tref(&*chars[i])).collect(),
+            });
+        } else if a.iter().all(|&i| chars[i].stamina == 0)
+            && b.iter().all(|&i| chars[i].stamina == 0)
+        {
+            // Both sides stamina-empty with no kill possible: disengage (§6).
             self.result = Some(CombatResult::Draw);
         }
     }
@@ -569,7 +647,7 @@ mod tests {
         // Pin initiative: Alice must act first so the kill skips beat 2.
         // (Default agility left this test flaky on d20 variance.)
         b.attributes.speed = 0;
-        b.stamina = 1; // Exhausted band → initiative −2, always behind Alice
+        b.stamina = 1; // Exhausted band -> initiative -2, always behind Alice
 
         let mut rng = SmallRng::seed_from_u64(7);
         let mut events = Vec::new();
@@ -585,10 +663,11 @@ mod tests {
         );
         assert!(combat.is_over());
         match combat.result() {
-            Some(CombatResult::Winner { character }) => {
-                assert_eq!(character.name, "Alice");
+            Some(CombatResult::Victory { victors }) => {
+                assert_eq!(victors.len(), 1);
+                assert_eq!(victors[0].name, "Alice");
             }
-            other => panic!("expected Winner(Alice), got {other:?}"),
+            other => panic!("expected Victory(Alice), got {other:?}"),
         }
     }
 
@@ -598,7 +677,7 @@ mod tests {
         let mut a = char_named("Alice");
         a.stamina = 0;
         a.max_stamina = 100;
-        a.attributes.strength = 0; // no damage → no kill
+        a.attributes.strength = 0; // no damage -> no kill
 
         let mut b = char_named("Bob");
         b.stamina = 0;
@@ -614,9 +693,10 @@ mod tests {
         assert_eq!(combat.result(), Some(&CombatResult::Draw));
     }
 
-    /// A successful flee ends the fight with a Fled result and a significant beat.
+    /// A successful flee exits the fleer from the fight; in a pair that ends
+    /// it with the opponent standing and a significant beat.
     #[test]
-    fn successful_flee_ends_fight_with_fled_result() {
+    fn successful_flee_exits_fleer_and_opponent_stands() {
         let mut a = char_named("Alice");
         a.attributes.speed = 100; // wins the contested flee roll
 
@@ -632,6 +712,7 @@ mod tests {
 
         let mut rng = SmallRng::seed_from_u64(11);
         let mut events = Vec::new();
+        let bob = tref(&b);
         let mut combat = CombatRoundLoop::with_provider(
             &mut a,
             &mut b,
@@ -642,15 +723,13 @@ mod tests {
 
         let round = combat.advance_round(&mut rng, &mut events);
         assert!(combat.is_over());
-        let fled = match combat.result() {
-            Some(CombatResult::Fled { fled, remaining }) => {
-                assert_eq!(fled.name, "Alice");
-                assert_eq!(remaining.name, "Bob");
-                true
-            }
-            _ => false,
-        };
-        assert!(fled, "expected a Fled result");
+        let result = combat.result().cloned();
+        drop(combat);
+        assert_eq!(
+            result,
+            Some(CombatResult::Victory { victors: vec![bob] }),
+            "fleer exits; Bob stands"
+        );
         // The fleeing beat is significant.
         assert!(round.beats.iter().any(|b| b.significant));
     }
@@ -802,7 +881,7 @@ mod tests {
         a.attributes.speed = 100;
         let mut b = char_named("Bob");
         b.attributes.speed = 0;
-        let (alice, bob) = (tref(&a), tref(&b));
+        let bob = tref(&b);
 
         let mut rng = SmallRng::seed_from_u64(13);
         let mut events = Vec::new();
@@ -820,10 +899,8 @@ mod tests {
         drop(combat);
         assert_eq!(
             result,
-            Some(CombatResult::Spared {
-                winner: bob,
-                spared: alice,
-            })
+            Some(CombatResult::Victory { victors: vec![bob] }),
+            "spare ends the cowerer's fight; Bob stands"
         );
         assert_eq!(round.beats.len(), 2);
         assert_eq!(round.beats[0].action, CombatActionKind::Cower);
@@ -869,7 +946,7 @@ mod tests {
         assert!(combat.is_over());
         let result = combat.result().cloned();
         drop(combat);
-        assert_eq!(result, Some(CombatResult::Winner { character: bob }));
+        assert_eq!(result, Some(CombatResult::Victory { victors: vec![bob] }));
         assert_eq!(round.beats.len(), 2);
         assert_eq!(round.beats[1].action, CombatActionKind::Execute);
         assert_eq!(
@@ -984,7 +1061,7 @@ mod tests {
                 beats += combat.advance_round(&mut rng, &mut events).beats.len();
             }
             assert!(
-                matches!(combat.result(), Some(CombatResult::Spared { .. })),
+                matches!(combat.result(), Some(CombatResult::Victory { .. })),
                 "seed {seed}: spared"
             );
             assert!(
@@ -1068,7 +1145,7 @@ mod tests {
         let mut b = char_named("Bob");
         b.attributes.speed = 0;
         b.attributes.strength = 0; // can't land damage; Alice's flee decides
-        let (alice, bob) = (tref(&a), tref(&b));
+        let bob = tref(&b);
 
         let mut rng = SmallRng::seed_from_u64(31);
         let mut events = Vec::new();
@@ -1093,10 +1170,8 @@ mod tests {
         drop(combat);
         assert_eq!(
             result,
-            Some(CombatResult::Fled {
-                fled: alice,
-                remaining: bob,
-            })
+            Some(CombatResult::Victory { victors: vec![bob] }),
+            "fleer exits; Bob stands"
         );
     }
 
@@ -1162,10 +1237,15 @@ mod tests {
             if (2..=6).contains(&rounds) {
                 rounds_2_6 += 1;
             }
-            match combat.result() {
-                Some(CombatResult::Draw) => draws += 1,
-                Some(CombatResult::Fled { .. }) => fled_fights += 1,
-                _ => {}
+            let fight_fled = events.iter().any(|ev| {
+                matches!(&ev.payload, MessagePayload::CombatBeat(b)
+                    if matches!(b.outcome, BeatOutcome::Fled))
+            });
+            if fight_fled {
+                fled_fights += 1;
+            }
+            if let Some(CombatResult::Draw) = combat.result() {
+                draws += 1;
             }
             for ev in &events {
                 if let MessagePayload::CombatBeat(beat) = &ev.payload {

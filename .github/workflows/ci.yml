@@ -2,7 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    # WHY: push-* = stacked PR bases (pi-jj stack flow) — each stacked PR
+    # targets its parent branch, so CI must fire there, not only on main.
+    branches: [main, 'push-*']
     paths-ignore:
       - '**.md'
       - 'docs/**'

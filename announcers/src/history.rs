@@ -214,8 +214,10 @@ impl CharacterHistories {
                 // events above already carry the detail; nothing to add here.
                 MessagePayload::CombatRoundStart { .. } => {}
                 MessagePayload::CombatEnded { result, .. } => {
-                    if let shared::combat_beat::CombatResult::Winner { character } = result {
-                        self.push_highlight(&character.identifier, "Won a fight");
+                    if let shared::combat_beat::CombatResult::Victory { victors } = result {
+                        for v in victors {
+                            self.push_highlight(&v.identifier, "Won a fight");
+                        }
                     }
                 }
 

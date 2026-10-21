@@ -1,9 +1,9 @@
 //! Typed payloads describing one multi-round combat.
 //!
-//! A fight is a [`Combat`] — a sequence of [`CombatRound`]s, each holding up
-//! to two [`CombatBeat`]s (one per combatant). A beat records a single
-//! combatant's chosen action and its outcome. The data lives in `shared` so it
-//! can ride `MessagePayload::CombatRoundStart` / `CombatBeat` / `CombatEnded`.
+//! A fight is a [`Combat`] — a sequence of [`CombatRound`]s, each holding one
+//! [`CombatBeat`] per active combatant. A beat records a single combatant's
+//! chosen action and its outcome. The data lives in `shared` so it can ride
+//! `MessagePayload::CombatRoundStart` / `CombatBeat` / `CombatEnded`.
 //! The narration `to_log_lines()` lives in the `game` crate, since it depends
 //! on `GameOutput` rendering.
 //!
@@ -151,33 +151,73 @@ pub struct CombatBeat {
     pub significant: bool,
 }
 
-/// One round of a fight: at most two beats, in initiative order.
+/// One round of a fight: one beat per active combatant, in initiative order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CombatRound {
     /// 1-based round number.
     pub number: u32,
-    /// Beats in the order they resolved. May be shorter than two when the
-    /// fight terminated mid-round (kill or successful flee skips the rest).
+    /// Beats in the order they resolved. Shorter than the combatant count when
+    /// the fight terminated mid-round or combatants dropped out (death,
+    /// flee, verdict) before their beat.
     pub beats: Vec<CombatBeat>,
 }
 
 /// The terminal result of a whole fight.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum CombatResult {
-    /// One combatant killed the other.
-    Winner { character: CharacterRef },
-    /// One combatant fled successfully; `remaining` is the one left standing.
+    /// One side stands when the opposing side is gone (killed, fled, or
+    /// spared out). A 1v1 kill, a fight-ending flee, and a spare all land
+    /// here — the fight's beats carry which.
+    Victory { victors: Vec<CharacterRef> },
+    /// Neither side can continue (e.g. everyone stamina-empty); both
+    /// disengage alive.
+    Draw,
+}
+
+/// v1 result shapes, accepted on deserialize so persisted history keeps
+/// decoding. Mapped per the v2 design doc §9: the standing side becomes
+/// `Victory.victors`.
+#[derive(Deserialize)]
+// Decoding-only compat shape: the dropped names mirror v1 JSON exactly
+// (v1 derived with default external tagging — PascalCase variant names).
+#[allow(dead_code)]
+enum CombatResultCompat {
+    Winner {
+        character: CharacterRef,
+    },
     Fled {
         fled: CharacterRef,
         remaining: CharacterRef,
     },
-    /// A cowerer was spared; both survive.
     Spared {
         winner: CharacterRef,
         spared: CharacterRef,
     },
-    /// Neither could continue (e.g. both stamina-empty); both disengage alive.
+    Victory {
+        victors: Vec<CharacterRef>,
+    },
     Draw,
+}
+
+impl<'de> Deserialize<'de> for CombatResult {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(match CombatResultCompat::deserialize(deserializer)? {
+            CombatResultCompat::Winner { character } => CombatResult::Victory {
+                victors: vec![character],
+            },
+            CombatResultCompat::Fled { remaining, .. } => CombatResult::Victory {
+                victors: vec![remaining],
+            },
+            CombatResultCompat::Spared { winner, .. } => CombatResult::Victory {
+                victors: vec![winner],
+            },
+            CombatResultCompat::Victory { victors } => CombatResult::Victory { victors },
+            CombatResultCompat::Draw => CombatResult::Draw,
+        })
+    }
 }
 
 /// The whole fight: combatants, every round, and the terminal result.
@@ -185,8 +225,11 @@ pub enum CombatResult {
 pub struct Combat {
     /// Stable identifier so the UI can group this fight's beats into one card.
     pub combat_id: String,
-    /// The two combatants, in stable (deterministic) order.
-    pub combatants: [CharacterRef; 2],
+    /// All combatants, in stable (deterministic) join order.
+    pub combatants: Vec<CharacterRef>,
+    /// Side membership. `None` for v1 history (implicit first-vs-second).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sides: Option<[Vec<CharacterRef>; 2]>,
     /// Every round that resolved, in order.
     pub rounds: Vec<CombatRound>,
     /// The terminal result. `None` while the fight is still running.
@@ -200,8 +243,12 @@ mod tests {
     use crate::messages::ItemRef;
 
     fn t(name: &str) -> CharacterRef {
+        t_id("id", name)
+    }
+
+    fn t_id(identifier: &str, name: &str) -> CharacterRef {
         CharacterRef {
-            identifier: "id".into(),
+            identifier: identifier.into(),
             name: name.into(),
         }
     }
@@ -281,9 +328,12 @@ mod tests {
         };
         let combat = Combat {
             combat_id: "combat-1".into(),
-            combatants: [t("A"), t("B")],
+            combatants: vec![t("A"), t("B")],
+            sides: Some([vec![t("A")], vec![t("B")]]),
             rounds: vec![round.clone()],
-            result: Some(CombatResult::Winner { character: t("A") }),
+            result: Some(CombatResult::Victory {
+                victors: vec![t("A")],
+            }),
         };
         let json = serde_json::to_string(&combat).unwrap();
         let back: Combat = serde_json::from_str(&json).unwrap();
@@ -292,16 +342,13 @@ mod tests {
     }
 
     #[test]
-    fn combat_result_all_variants_roundtrip() {
+    fn combat_result_roundtrips() {
         let results = [
-            CombatResult::Winner { character: t("A") },
-            CombatResult::Fled {
-                fled: t("A"),
-                remaining: t("B"),
+            CombatResult::Victory {
+                victors: vec![t("A")],
             },
-            CombatResult::Spared {
-                winner: t("A"),
-                spared: t("B"),
+            CombatResult::Victory {
+                victors: vec![t("A"), t("B")],
             },
             CombatResult::Draw,
         ];
@@ -310,6 +357,52 @@ mod tests {
             let back: CombatResult = serde_json::from_str(&json).unwrap();
             assert_eq!(r, back);
         }
+    }
+
+    #[test]
+    fn legacy_v1_results_decode_into_victory() {
+        let cases = [
+            (
+                r#"{"Winner":{"character":{"identifier":"a","name":"A"}}}"#,
+                vec![t_id("a", "A")],
+            ),
+            (
+                r#"{"Fled":{"fled":{"identifier":"a","name":"A"},"remaining":{"identifier":"b","name":"B"}}}"#,
+                vec![t_id("b", "B")],
+            ),
+            (
+                r#"{"Spared":{"winner":{"identifier":"a","name":"A"},"spared":{"identifier":"b","name":"B"}}}"#,
+                vec![t_id("a", "A")],
+            ),
+        ];
+        for (json, victors) in cases {
+            let back: CombatResult = serde_json::from_str(json).unwrap();
+            assert_eq!(back, CombatResult::Victory { victors });
+        }
+        let draw: CombatResult = serde_json::from_str(r#""Draw""#).unwrap();
+        assert_eq!(draw, CombatResult::Draw);
+    }
+
+    #[test]
+    fn legacy_v1_combat_decodes_with_no_sides() {
+        let json = r#"{
+            "combat_id": "combat-old",
+            "combatants": [
+                {"identifier":"a","name":"A"},
+                {"identifier":"b","name":"B"}
+            ],
+            "rounds": [],
+            "result": {"Winner":{"character":{"identifier":"a","name":"A"}}}
+        }"#;
+        let combat: Combat = serde_json::from_str(json).unwrap();
+        assert_eq!(combat.combatants.len(), 2);
+        assert_eq!(combat.sides, None);
+        assert_eq!(
+            combat.result,
+            Some(CombatResult::Victory {
+                victors: vec![t_id("a", "A")]
+            })
+        );
     }
 
     #[test]
