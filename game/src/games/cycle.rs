@@ -1156,43 +1156,57 @@ impl Game {
                     Box::new(CombatBrain::new(combat_tuning_snapshot.clone())),
                 );
 
+                // Collect bookkeeping while the events flow by: one kill per
+                // CharacterKilled (attack kills and executions; self-inflicted
+                // deaths carry no killer) and any combatant who fled (relocated
+                // below). The round-start event rides the same closure so the
+                // fight block holds exactly one borrow of `collected_events`.
+                let mut collect_fight =
+                    |fight_events: &mut Vec<world::messages::TaggedEvent>, round: Option<u32>| {
+                        if let Some(number) = round {
+                            collected_events.push((
+                                attacker_ident.clone(),
+                                attacker_name.clone(),
+                                format!("⚔️ round {number}"),
+                                Some(MessagePayload::CombatRoundStart {
+                                    combat_id: combat_id.clone(),
+                                    round: number,
+                                    location: Some(fight_location.clone()),
+                                }),
+                                None,
+                            ));
+                        }
+                        for ev in fight_events.drain(..) {
+                            if let MessagePayload::CharacterKilled {
+                                killer: Some(k), ..
+                            } = &ev.payload
+                            {
+                                fight_killers.push(k.clone());
+                            }
+                            if let MessagePayload::CombatBeat(beat) = &ev.payload
+                                && matches!(beat.outcome, shared::combat_beat::BeatOutcome::Fled)
+                            {
+                                fled_refs.push(beat.actor.clone());
+                            }
+                            collected_events.push((
+                                attacker_ident.clone(),
+                                attacker_name.clone(),
+                                ev.content,
+                                Some(ev.payload),
+                                None,
+                            ));
+                        }
+                    };
+
+                // §14 (7si): the ambush opener — one swing before round 1 when
+                // the target still sleeps. An opener kill settles the fight
+                // here, so the loop below never starts.
+                combat.resolve_opener(rng, &mut fight_events);
+                collect_fight(&mut fight_events, None);
+
                 while !combat.is_over() {
                     let round = combat.advance_round(rng, &mut fight_events);
-                    collected_events.push((
-                        attacker_ident.clone(),
-                        attacker_name.clone(),
-                        format!("⚔️ round {}", round.number),
-                        Some(MessagePayload::CombatRoundStart {
-                            combat_id: combat_id.clone(),
-                            round: round.number,
-                            location: Some(fight_location.clone()),
-                        }),
-                        None,
-                    ));
-                    for ev in fight_events.drain(..) {
-                        // Collect bookkeeping while the events flow by: one
-                        // kill per CharacterKilled (attack kills and
-                        // executions; self-inflicted deaths carry no killer)
-                        // and any combatant who fled (relocated below).
-                        if let MessagePayload::CharacterKilled {
-                            killer: Some(k), ..
-                        } = &ev.payload
-                        {
-                            fight_killers.push(k.clone());
-                        }
-                        if let MessagePayload::CombatBeat(beat) = &ev.payload
-                            && matches!(beat.outcome, shared::combat_beat::BeatOutcome::Fled)
-                        {
-                            fled_refs.push(beat.actor.clone());
-                        }
-                        collected_events.push((
-                            attacker_ident.clone(),
-                            attacker_name.clone(),
-                            ev.content,
-                            Some(ev.payload),
-                            None,
-                        ));
-                    }
+                    collect_fight(&mut fight_events, Some(round.number));
                 }
                 combat.result().cloned()
             };
