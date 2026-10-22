@@ -562,6 +562,7 @@ fn beat_line(beat: &shared::combat_beat::CombatBeat, content: &str) -> (String, 
         (CombatActionKind::Attack, BeatOutcome::Swing { .. }) => false,
         (CombatActionKind::Flee, BeatOutcome::Fled) => true,
         (CombatActionKind::Cower, BeatOutcome::Cowered) => true,
+        (CombatActionKind::CallAlly, _) => true,
         (CombatActionKind::Spare, _) | (CombatActionKind::Execute, _) => true,
         _ => false,
     };
@@ -1300,6 +1301,7 @@ mod day_summary_card_tests {
                     name: "Potion".into(),
                 },
             },
+            BeatOutcome::CalledAlly => CombatActionKind::CallAlly,
         };
         let msg = format!("{actor} beat content");
         GameMessage::new(
