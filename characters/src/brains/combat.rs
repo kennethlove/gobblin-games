@@ -108,11 +108,13 @@ impl CombatBrain {
             cower += t.brain_cower_hopeless_bonus;
         }
 
-        // Call Ally — outmatched with a recorded ally: shout for backup
-        // instead of trading blows. No trait axis yet; the round loop
-        // drops the call when no ally can actually arrive.
+        // Call Ally — a recorded ally plus EITHER being outmatched or the
+        // GangUp drive (gangers summon even from the winning side; the size
+        // rule itself is enforced by the loop). No ally, no call.
         let mut call_ally = i32::MIN / 2;
-        if outmatched && !actor.allies.is_empty() {
+        if !actor.allies.is_empty()
+            && (outmatched || behavior_sum(&actor.traits, BehaviorAxis::GangUp) > 0)
+        {
             call_ally = t.brain_call_ally_base;
         }
 
@@ -428,5 +430,19 @@ mod tests {
         let mut o = char_named("Bob");
         o.attributes.strength = 10; // `>` is strict: equal strength is not outmatched
         assert_eq!(brain().choose_action(&a, &[&o]), CombatActionKind::Attack);
+    }
+
+    #[test]
+    fn gang_up_actor_calls_even_when_strongest() {
+        // Big team's strongest goblin: not outmatched, no pressure — but
+        // the GangUp drive summons anyway. Legal only while ahead; the
+        // loop enforces that side rule, the brain never sees side sizes.
+        let mut a = char_named("Alice");
+        a.attributes.strength = 50;
+        a.traits.push(Trait::Aggressive);
+        a.allies.push(Uuid::new_v4());
+        let mut o = char_named("Bob");
+        o.attributes.strength = 1;
+        assert_eq!(brain().choose_action(&a, &[&o]), CombatActionKind::CallAlly);
     }
 }

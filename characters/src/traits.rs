@@ -139,6 +139,9 @@ pub enum BehaviorAxis {
     SpareInclination,
     ExecuteFromTreachery,
     ExecuteFromAggression,
+    /// Positive while a trait drives ganging up: reinforcements when the
+    /// actor's side already outnumbers (gangs legal only for such traits).
+    GangUp,
     // Phobia/fixation severity (afflictions/phobia/reaction.rs,
     // brains/fixation_override.rs)
     SeverityTier,
@@ -287,6 +290,10 @@ impl Trait {
                 axis: ExecuteFromAggression,
                 delta: 1,
             },
+            W {
+                axis: GangUp,
+                delta: 1,
+            },
         ];
         const DEFENSIVE: &[Effect] = &[
             W {
@@ -347,6 +354,10 @@ impl Trait {
             },
             W {
                 axis: FreezeImmunity,
+                delta: 1,
+            },
+            W {
+                axis: GangUp,
                 delta: 1,
             },
         ];
