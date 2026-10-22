@@ -312,8 +312,9 @@ impl<'a> CombatRoundLoop<'a> {
     /// Round-boundary join scan (design §8): a living character outside the
     /// fight, in the fight's sub-tile, allied to exactly one side joins that
     /// side; an ally of both sides sits out. Capacity blocks joins, never
-    /// kicks members. Strangers are not auto-invited — the public
-    /// [`CombatRoundLoop::join_member`] hook is theirs.
+    /// kicks members. A stranger may still throw in uninvited via
+    /// [`Self::self_invite_side`] (ck7); anyone else waits for the public
+    /// [`CombatRoundLoop::join_member`] hook.
     fn scan_joins(&mut self, chars: &[&mut Character], events: &mut Vec<TaggedEvent>) {
         let total = self.sides[0].len() + self.sides[1].len();
         if total >= self.tuning.max_combatants {
@@ -340,13 +341,60 @@ impl<'a> CombatRoundLoop<'a> {
                 (true, true) => continue, // ambiguous ally sits out (design §4.1)
                 (true, false) => 0,
                 (false, true) => 1,
-                (false, false) => continue, // stranger: waits for the hook
+                // Uninvited bystander (ck7): the side falls out of the
+                // fighter they pick on; `None` means they sit this round out.
+                (false, false) => match self.self_invite_side(cand, chars) {
+                    Some(side) => side,
+                    None => continue,
+                },
             };
             self.add_join(idx, side, chars, events);
             if self.sides[0].len() + self.sides[1].len() >= self.tuning.max_combatants {
                 break;
             }
         }
+    }
+
+    /// Which side an uninvited bystander throws in with (ck7): nobody
+    /// vouches for them, so the side falls out of the fighter they pick a
+    /// fight with — the strongest living fighter, the way an aggressive
+    /// actor scores targets (design §3 "side opposite their chosen target",
+    /// §4.3). `None` when they don't join:
+    ///
+    /// - only bullies invite themselves (`AttackPosture`); calm bystanders
+    ///   watch,
+    /// - a strictly ahead side never grows from a self-invite: the GangUp
+    ///   size rule (PR #91) lets the *drive* summon allies onto a winning
+    ///   side, but a volunteer with no sponsor is exactly the opportunistic
+    ///   pile-on that rule keeps rare — the drive cannot reach it,
+    /// - nobody living left to pick on means no target, hence no side.
+    fn self_invite_side(&self, cand: &Character, chars: &[&mut Character]) -> Option<usize> {
+        if crate::traits::behavior_sum(&cand.traits, crate::traits::BehaviorAxis::AttackPosture)
+            <= 0
+        {
+            return None;
+        }
+        // Chosen target: the strongest living fighter; strength ties keep
+        // join order (strict `>` walking both sides in join order).
+        let members = self.sides[0].iter().chain(self.sides[1].iter()).copied();
+        let mut target: Option<usize> = None;
+        let mut best: u32 = 0;
+        for i in members {
+            if !chars[i].is_alive() {
+                continue;
+            }
+            let strength = chars[i].effective_attribute(CharacterAttribute::Strength);
+            if target.is_none() || strength > best {
+                target = Some(i);
+                best = strength;
+            }
+        }
+        let target = target?;
+        let side = 1 - self.side_of(target);
+        if self.sides[side].len() > self.sides[1 - side].len() {
+            return None;
+        }
+        Some(side)
     }
 
     /// Public join hook (design §4.1/§12.3): put pool index `idx` on
@@ -1914,11 +1962,12 @@ mod tests {
             "an ambiguous ally must not pick a side"
         );
 
-        // (stranger: allied to neither fighter)
+        // (calm stranger: allied to neither fighter, no bully streak)
         let mut a = char_named("Alice");
         let mut b = char_named("Bob");
         let mut c = char_named("Carol");
         c.attributes.strength = 0;
+        c.traits.clear(); // no AttackPosture: bystander, not intervener
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
             vec![&mut a, &mut b, &mut c],
@@ -1934,7 +1983,7 @@ mod tests {
         combat.advance_round(&mut rng, &mut events);
         assert!(
             joined(&events).is_empty(),
-            "strangers join only through the public hook"
+            "a calm stranger sits out; only bullies self-invite (ck7)"
         );
     }
 
@@ -2235,6 +2284,118 @@ mod tests {
             joined(&events),
             vec![("Carol".into(), "side-1".into(), 2)],
             "mid-round join: round 1's initiative is fixed, Carol fights from round 2"
+        );
+    }
+
+    // --- Uninvited third parties (ck7): bully bystanders self-invite ---
+
+    /// A bully stranger in the fight's sub-tile picks the strongest fighter
+    /// as their target and joins the side opposing them, fighting from the
+    /// round they join (design §3 "side opposite their chosen target").
+    #[test]
+    fn bully_stranger_self_invites_against_the_strongest() {
+        let mut a = char_named("Alice");
+        a.attributes.strength = 50; // the strongest fighter in the room
+        let mut b = char_named("Bob");
+        b.attributes.strength = 0;
+        let mut c = char_named("Carol");
+        c.attributes.strength = 0;
+        c.traits.clear();
+        c.traits.push(Trait::Aggressive); // AttackPosture: the bully gate
+
+        let mut rng = SmallRng::seed_from_u64(37);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut b, &mut c],
+            [vec![0], vec![1]],
+            "t13".into(),
+            CombatTuning {
+                max_rounds: 1,
+                ..CombatTuning::default()
+            },
+            Box::new(AttackOnlyProvider),
+        );
+
+        let round = combat.advance_round(&mut rng, &mut events);
+        assert_eq!(
+            joined(&events),
+            vec![("Carol".into(), "side-2".into(), 1)],
+            "uninvited: no sponsor, so Carol lands opposite her target Alice"
+        );
+        assert!(
+            round.beats.iter().any(|beat| beat.actor.name == "Carol"),
+            "the intervener fights in the round that follows the boundary"
+        );
+    }
+
+    /// The GangUp size rule reaches self-invites too: a bully whose chosen
+    /// side is strictly ahead sits out — a volunteer with no sponsor never
+    /// piles onto the winning side (PR #91's invariant, minus the drive).
+    #[test]
+    fn size_rule_blocks_a_self_invite_onto_the_ahead_side() {
+        let mut a = char_named("Alice");
+        a.attributes.strength = 50; // strongest: Carol would pick her
+        let mut b = char_named("Bob");
+        b.attributes.strength = 0;
+        let mut carl = char_named("Carl");
+        carl.attributes.strength = 0;
+        let mut e = char_named("Eve");
+        e.attributes.strength = 0;
+        e.traits.clear();
+        e.traits.push(Trait::Aggressive);
+
+        let mut rng = SmallRng::seed_from_u64(41);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut b, &mut carl, &mut e],
+            [vec![0], vec![1, 2]],
+            "t14".into(),
+            CombatTuning {
+                max_rounds: 1,
+                ..CombatTuning::default()
+            },
+            Box::new(AttackOnlyProvider),
+        );
+
+        combat.advance_round(&mut rng, &mut events);
+        assert!(
+            joined(&events).is_empty(),
+            "Bob+Carl already outnumber Alice: the pile-on stays illegal"
+        );
+    }
+
+    /// An aggressive ALLY is still an ally first: the sponsor's side wins
+    /// over the self-invite's target rule.
+    #[test]
+    fn bully_ally_joins_their_sponsors_side_not_the_self_invite_side() {
+        let mut a = char_named("Alice");
+        a.attributes.strength = 50; // strongest: self-invite would say side-2
+        let mut b = char_named("Bob");
+        b.attributes.strength = 0;
+        let mut c = char_named("Carol");
+        c.attributes.strength = 0;
+        c.traits.clear();
+        c.traits.push(Trait::Aggressive);
+        a.allies = vec![c.id]; // but Alice sponsored her first
+
+        let mut rng = SmallRng::seed_from_u64(43);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut b, &mut c],
+            [vec![0], vec![1]],
+            "t15".into(),
+            CombatTuning {
+                max_rounds: 1,
+                ..CombatTuning::default()
+            },
+            Box::new(AttackOnlyProvider),
+        );
+
+        combat.advance_round(&mut rng, &mut events);
+        assert_eq!(
+            joined(&events),
+            vec![("Carol".into(), "side-1".into(), 1)],
+            "alliance outranks the bully rule: Carol lands with her ally"
         );
     }
 }
