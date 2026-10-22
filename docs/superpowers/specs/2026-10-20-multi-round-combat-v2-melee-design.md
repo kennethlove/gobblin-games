@@ -310,3 +310,28 @@ PR 1 is the risky one (borrow restructure + wire change), same shape as v1's PR 
 - **Ambiguity:** flee-defender choice (fastest opponent) and ambiguous-ally
   sit-out are decisions made here, flagged as tunable; exact target-score
   formulas deferred to plan/implementation as v1 did with `BeatOutcome`.
+
+## 14. Ambush opener (7si, decided 2026-10-22)
+
+**Decision: a free first swing, sleeping targets only.** An ambush is one
+swing resolved *before* round 1 — then the fight is fair.
+
+- **Trigger:** fight entry whose target is asleep (`Character.sleeping`).
+  The existing sleep-ambush path already does the right things:
+  `attacks()` sets `was_ambushed` (attack_contest: 0 defense) and emits
+  `InterruptionKind::Ambush` before damage. The opener reuses it as-is.
+- **Mechanic:** resolve that swing as one `CombatBeat` with `round: 0`,
+  emitted by the cycle at fight entry, *before* the round loop starts.
+  Round 1 then rolls initiative normally — the victim is awake, wounded,
+  and fighting from there. No new beat type is required; a `round: 0`
+  beat fits the existing wire.
+- **Termination check before round 1:** if the opener kills the victim,
+  the fight ends before the loop: `Combat.result` records the victory,
+  the beats are `[opener]`, and no `round_loop` work runs.
+- **Ordering vs joins:** the round-1 top join scan runs after the opener
+  (present allies join an already-started fight) — no interaction.
+- **Rejected:** a first-round initiative bonus (option A) — an ambush
+  that can lose the punch misleads; and "unaware but awake" targets —
+  they need an awareness signal the game does not have. The sleep
+  window itself (four-phase Night) is the gate; no extra phase check.
+- **Tuning:** none new — the opener is a normal swing.

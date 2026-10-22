@@ -231,6 +231,29 @@ impl<'a> CombatRoundLoop<'a> {
         round
     }
 
+    /// §14 (7si): the ambush opener — the entry swing resolves before round 1
+    /// while the target still sleeps; round 1 then rolls initiative normally.
+    /// The beat carries round 0 (it rides `events`, same as any round's beats).
+    /// `resolve_attack` runs the termination check, so an opener kill settles
+    /// the fight here and [`Self::advance_round`] never starts. No-op when the
+    /// target is awake — an awake fight opens with round 1 as before.
+    pub fn resolve_opener(&mut self, rng: &mut impl Rng, events: &mut Vec<TaggedEvent>) {
+        // Entry order is fixed by the cycle: sides[0] = attacker, sides[1] = target.
+        let Some(&target) = self.sides[1].first() else {
+            return;
+        };
+        let Some(&attacker) = self.sides[0].first() else {
+            return;
+        };
+        if !self.chars[target].sleeping {
+            return;
+        }
+        let mut chars = std::mem::take(&mut self.chars);
+        let mut beats = Vec::new();
+        self.resolve_attack(&mut chars, 0, 0, attacker, target, rng, events, &mut beats);
+        self.chars = chars;
+    }
+
     fn advance_round_with(
         &mut self,
         chars: &mut Vec<&'a mut Character>,
@@ -2396,6 +2419,98 @@ mod tests {
             joined(&events),
             vec![("Carol".into(), "side-1".into(), 1)],
             "alliance outranks the bully rule: Carol lands with her ally"
+        );
+    }
+
+    /// §14 (7si): the entry swing resolves before round 1 while the target
+    /// sleeps — beat at round 0, wake, damage — then initiative rolls.
+    #[test]
+    fn ambush_opener_swings_before_round_one() {
+        let mut a = char_named("Alice");
+        let mut b = char_named("Bob");
+        a.attributes.strength = 50;
+        b.sleeping = true;
+        b.blood = 900;
+
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut b],
+            [vec![0], vec![1]],
+            "amb".into(),
+            CombatTuning::default(),
+            Box::new(AttackOnlyProvider),
+        );
+        let mut rng = SmallRng::seed_from_u64(7);
+        let mut events = Vec::new();
+
+        combat.resolve_opener(&mut rng, &mut events);
+
+        assert!(
+            events.iter().any(|ev| matches!(
+                &ev.payload,
+                MessagePayload::CombatBeat(beat) if beat.round == 0
+            )),
+            "the opener beat carries round 0"
+        );
+        assert!(!combat.is_over(), "900 blood survives one swing");
+        drop(combat);
+        assert!(!b.sleeping, "the wake fired");
+        assert!(b.blood < 900, "the swing landed");
+    }
+
+    #[test]
+    fn opener_is_a_no_op_when_the_target_is_awake() {
+        let mut a = char_named("Alice");
+        let mut b = char_named("Bob");
+        b.blood = 900;
+
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut b],
+            [vec![0], vec![1]],
+            "amb2".into(),
+            CombatTuning::default(),
+            Box::new(AttackOnlyProvider),
+        );
+        let mut rng = SmallRng::seed_from_u64(7);
+        let mut events = Vec::new();
+
+        combat.resolve_opener(&mut rng, &mut events);
+
+        assert!(events.is_empty(), "no opener against an awake target");
+        assert!(!combat.is_over(), "the fight still needs its rounds");
+        drop(combat);
+        assert_eq!(b.blood, 900, "nobody touched the awake fighter");
+    }
+
+    /// An opener kill settles the fight before round 1: the loop never starts,
+    /// the victim never acts.
+    #[test]
+    fn opener_kill_ends_the_fight_before_round_one() {
+        let mut a = char_named("Alice");
+        let mut b = char_named("Bob");
+        a.attributes.strength = 50;
+        b.sleeping = true;
+        b.blood = 1;
+
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut b],
+            [vec![0], vec![1]],
+            "amb3".into(),
+            CombatTuning::default(),
+            Box::new(AttackOnlyProvider),
+        );
+        let mut rng = SmallRng::seed_from_u64(7);
+        let mut events = Vec::new();
+
+        combat.resolve_opener(&mut rng, &mut events);
+
+        assert!(combat.is_over(), "the opener decided the fight");
+        let result = combat.result().cloned();
+        drop(combat);
+        assert_eq!(b.blood, 0, "the victim died before round 1");
+        assert!(
+            matches!(&result, Some(CombatResult::Victory { victors })
+                if victors.iter().any(|v| v.identifier == a.identifier)),
+            "the ambusher wins: {result:?}"
         );
     }
 }
