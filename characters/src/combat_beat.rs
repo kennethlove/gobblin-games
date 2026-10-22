@@ -48,6 +48,14 @@ impl CombatBeatExt for CombatBeat {
             CombatActionKind::UseItem { item } => {
                 return vec![format!("{a} uses {} in the fight.", item.name)];
             }
+            CombatActionKind::CallAlly => {
+                let who = self
+                    .target
+                    .as_ref()
+                    .map(|c| c.name.as_str())
+                    .unwrap_or("an ally");
+                return vec![format!("{a} calls {who} into the fight!")];
+            }
             CombatActionKind::Attack => {}
         }
 

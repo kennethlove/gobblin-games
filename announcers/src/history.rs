@@ -194,6 +194,7 @@ impl CharacterHistories {
                         BeatOutcome::Cowered => "cowered",
                         BeatOutcome::Spared => "spared",
                         BeatOutcome::Executed { .. } => "executed",
+                        BeatOutcome::CalledAlly => "called for backup",
                     };
                     self.push_event(
                         &beat.actor.identifier,

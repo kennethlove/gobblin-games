@@ -88,6 +88,9 @@ pub enum CombatActionKind {
     Flee,
     /// Stop fighting and beg for mercy.
     Cower,
+    /// Call an absent same-sub-tile ally into the fight; the round loop
+    /// joins them (design §8) — no contest, they beat from the next round.
+    CallAlly,
     /// Winner's verdict after a cower: let them live.
     Spare,
     /// Winner's verdict after a cower: kill them.
@@ -122,6 +125,8 @@ pub enum BeatOutcome {
     Spared,
     /// An `Execute` beat — the cowerer was killed.
     Executed { damage: u32 },
+    /// A `CallAlly` beat — the summoned ally arrives from the next round.
+    CalledAlly,
 }
 
 /// Full record of one combatant's action within a round.
@@ -414,6 +419,7 @@ mod tests {
             BeatOutcome::ItemUsed,
             BeatOutcome::Fled,
             BeatOutcome::FailedFlee,
+            BeatOutcome::CalledAlly,
         ];
         for outcome in outcomes {
             let json = serde_json::to_string(&outcome).unwrap();

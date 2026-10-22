@@ -97,7 +97,8 @@ impl CombatBrain {
             .map(|m| m.effective_attribute(CharacterAttribute::Strength))
             .max()
             .unwrap_or(0);
-        if strongest > actor.effective_attribute(CharacterAttribute::Strength) {
+        let outmatched = strongest > actor.effective_attribute(CharacterAttribute::Strength);
+        if outmatched {
             flee += t.brain_flee_outmatched_bonus;
         }
 
@@ -105,6 +106,14 @@ impl CombatBrain {
         let mut cower = t.brain_cower_base;
         if hopeless {
             cower += t.brain_cower_hopeless_bonus;
+        }
+
+        // Call Ally — outmatched with a recorded ally: shout for backup
+        // instead of trading blows. No trait axis yet; the round loop
+        // drops the call when no ally can actually arrive.
+        let mut call_ally = i32::MIN / 2;
+        if outmatched && !actor.allies.is_empty() {
+            call_ally = t.brain_call_ally_base;
         }
 
         let mut best_kind = CombatActionKind::Attack;
@@ -121,7 +130,11 @@ impl CombatBrain {
         }
         if cower > best_score {
             best_kind = CombatActionKind::Cower;
-            let _ = best_score;
+            best_score = cower;
+        }
+        // Checked last: a hopeless actor's cower wins any tie with a call.
+        if call_ally > best_score {
+            best_kind = CombatActionKind::CallAlly;
         }
         best_kind
     }
@@ -386,5 +399,34 @@ mod tests {
         let o = char_named("Bob");
         a.allies.push(o.id);
         assert_eq!(brain().choose_verdict(&a, &o), CombatActionKind::Spare);
+    }
+
+    #[test]
+    fn outmatched_with_an_ally_calls_for_backup() {
+        let mut a = char_named("Alice");
+        a.attributes.strength = 1;
+        a.allies.push(Uuid::new_v4()); // presence is all the brain checks
+        let mut o = char_named("Bob");
+        o.attributes.strength = 50;
+        assert_eq!(brain().choose_action(&a, &[&o]), CombatActionKind::CallAlly);
+    }
+
+    #[test]
+    fn outmatched_without_an_ally_keeps_fighting() {
+        let mut a = char_named("Alice");
+        a.attributes.strength = 1;
+        let mut o = char_named("Bob");
+        o.attributes.strength = 50;
+        assert_eq!(brain().choose_action(&a, &[&o]), CombatActionKind::Attack);
+    }
+
+    #[test]
+    fn not_outmatched_never_calls() {
+        let mut a = char_named("Alice");
+        a.attributes.strength = 10;
+        a.allies.push(Uuid::new_v4());
+        let mut o = char_named("Bob");
+        o.attributes.strength = 10; // `>` is strict: equal strength is not outmatched
+        assert_eq!(brain().choose_action(&a, &[&o]), CombatActionKind::Attack);
     }
 }

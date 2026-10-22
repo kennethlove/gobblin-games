@@ -410,6 +410,32 @@ impl<'a> CombatRoundLoop<'a> {
         ));
     }
 
+    /// Who a `CallAlly` can actually bring in: an alive ally of the caller
+    /// within one sub-hop — `sub_neighbors` of the caller's own triangle
+    /// (same-area ring neighbors plus the cross-area door). The round scan
+    /// covers the caller's own triangle at the round top, so only the
+    /// neighborhood is the call's job; anything further needs a walk, not
+    /// a shout (wpe).
+    fn find_call_target(&self, actor_idx: usize, chars: &[&'a mut Character]) -> Option<usize> {
+        if self.sides[0].len() + self.sides[1].len() >= self.tuning.max_combatants {
+            return None;
+        }
+        let actor = &*chars[actor_idx];
+        let near: Vec<areas::location::Location> = areas::location::sub_neighbors(actor.location)
+            .into_iter()
+            .flatten()
+            .collect();
+        (0..chars.len()).find(|&i| {
+            i != actor_idx
+                && !self.sides[0].contains(&i)
+                && !self.sides[1].contains(&i)
+                && !self.exited.contains(&i)
+                && chars[i].is_alive()
+                && near.contains(&chars[i].location)
+                && is_ally(actor, &*chars[i])
+        })
+    }
+
     /// Resolve a single combatant's action for this round, appending its beat
     /// to `beats` and any message events to `events`.
     #[allow(clippy::too_many_arguments)]
@@ -447,10 +473,29 @@ impl<'a> CombatRoundLoop<'a> {
             // result; nothing left to do.
             return;
         }
-        let (action, target) = {
+        let (mut action, mut target) = {
             let side: Vec<&Character> = opposing.iter().map(|&i| &*chars[i]).collect();
             self.provider.action(&*chars[actor_idx], &side)
         };
+        // A call only works when an ally can arrive; otherwise it is
+        // satisfied (allies already fighting) and the beat carries on.
+        let mut called: Option<usize> = None;
+        if matches!(action, CombatActionKind::CallAlly) {
+            if let Some(idx) = self.find_call_target(actor_idx, chars) {
+                // The ally runs over: relocate them onto the caller's own
+                // triangle — members share the fight's location (pair
+                // members start together; called allies land here), so
+                // the world state after the fight reads true.
+                let at = chars[actor_idx].location;
+                chars[idx].location = at;
+                let side = self.side_of(actor_idx);
+                self.add_join(idx, side, chars, events);
+                called = Some(idx);
+            } else {
+                action = CombatActionKind::Attack;
+                target = None;
+            }
+        }
 
         match action {
             CombatActionKind::Attack => {
@@ -498,6 +543,31 @@ impl<'a> CombatRoundLoop<'a> {
                     shield: None,
                     wear: vec![],
                     outcome: BeatOutcome::Cowered,
+                    significant: true,
+                };
+                beats.push(beat.clone());
+                events.push(TaggedEvent::new(
+                    String::new(),
+                    MessagePayload::CombatBeat(beat),
+                ));
+            }
+            CombatActionKind::CallAlly => {
+                // The join is already recorded (CombatJoined above); emit the
+                // beat naming who is coming — they beat from the next round
+                // (the initiative list for this one is fixed).
+                let Some(called) = called else {
+                    return;
+                };
+                let beat = CombatBeat {
+                    round: round_no,
+                    order,
+                    actor: tref(&*chars[actor_idx]),
+                    action: CombatActionKind::CallAlly,
+                    target: Some(tref(&*chars[called])),
+                    weapon: None,
+                    shield: None,
+                    wear: vec![],
+                    outcome: BeatOutcome::CalledAlly,
                     significant: true,
                 };
                 beats.push(beat.clone());
@@ -1918,5 +1988,152 @@ mod tests {
             round2.beats.iter().any(|beat| beat.actor.name == "Carol"),
             "the hooked-in member fights in round 2"
         );
+    }
+
+    /// Scripted: Alice calls for backup, everyone else attacks.
+    struct AliceCalls;
+    impl CombatActionProvider for AliceCalls {
+        fn action(
+            &mut self,
+            a: &Character,
+            _side: &[&Character],
+        ) -> (CombatActionKind, Option<Uuid>) {
+            if a.name == "Alice" {
+                (CombatActionKind::CallAlly, None)
+            } else {
+                (CombatActionKind::Attack, None)
+            }
+        }
+    }
+
+    #[test]
+    fn call_ally_brings_a_neighbor_in() {
+        let mut a = char_named("Alice");
+        a.location = areas::location::Location::center(areas::Area::Hub);
+        a.attributes.strength = 0;
+        a.attributes.speed = 100;
+        let mut b = char_named("Bob");
+        b.attributes.strength = 0;
+        b.attributes.speed = 0;
+        let mut c = char_named("Carol");
+        c.attributes.strength = 0;
+        c.attributes.speed = 0;
+        // One sub-hop from Alice: her first occupied neighbor triangle (the
+        // round scan only covers her own triangle, so the call must).
+        c.location = areas::location::sub_neighbors(a.location)
+            .into_iter()
+            .flatten()
+            .next()
+            .expect("Alice's triangle has neighbors");
+        a.allies = vec![c.id];
+
+        let mut rng = SmallRng::seed_from_u64(19);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut b, &mut c],
+            [vec![0], vec![1]],
+            "t8".into(),
+            CombatTuning::default(),
+            Box::new(AliceCalls),
+        );
+
+        let round1 = combat.advance_round(&mut rng, &mut events);
+        assert!(
+            round1.beats.iter().any(|beat| {
+                beat.action == CombatActionKind::CallAlly
+                    && beat.target.as_ref().is_some_and(|t| t.name == "Carol")
+            }),
+            "Alice's call beat names Carol: {:?}",
+            round1.beats.iter().map(|b| &b.action).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            joined(&events),
+            vec![("Carol".into(), "side-1".into(), 2)],
+            "mid-round join: round 1's initiative is fixed, she fights from round 2"
+        );
+
+        let round2 = combat.advance_round(&mut rng, &mut events);
+        assert!(
+            round2.beats.iter().any(|beat| beat.actor.name == "Carol"),
+            "the called ally beats from round 2"
+        );
+        drop(combat);
+        assert_eq!(c.location, a.location, "the called ally ran to the fight");
+    }
+
+    #[test]
+    fn call_without_an_arriving_ally_falls_back_to_attack() {
+        let mut a = char_named("Alice");
+        a.attributes.strength = 0;
+        a.attributes.speed = 100;
+        let mut b = char_named("Bob");
+        b.attributes.strength = 0;
+        b.attributes.speed = 0;
+
+        let mut rng = SmallRng::seed_from_u64(21);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut b],
+            [vec![0], vec![1]],
+            "t9".into(),
+            CombatTuning::default(),
+            Box::new(AliceCalls),
+        );
+
+        let round1 = combat.advance_round(&mut rng, &mut events);
+        assert!(
+            round1
+                .beats
+                .iter()
+                .any(|beat| beat.action == CombatActionKind::Attack && beat.actor.name == "Alice"),
+            "nobody to call: Alice swings instead"
+        );
+        assert!(
+            joined(&events).is_empty(),
+            "no CombatJoined without an arriving ally"
+        );
+    }
+
+    #[test]
+    fn call_ignores_allies_beyond_one_hop() {
+        let mut a = char_named("Alice");
+        a.location = areas::location::Location::center(areas::Area::Hub);
+        a.attributes.strength = 0;
+        a.attributes.speed = 100;
+        let mut b = char_named("Bob");
+        b.attributes.strength = 0;
+        b.attributes.speed = 0;
+        let mut c = char_named("Carol");
+        c.location = areas::location::Location::center(areas::Area::Sector3);
+        c.attributes.strength = 0;
+        c.attributes.speed = 0;
+        a.allies = vec![c.id]; // an ally, but past the one-hop reach
+
+        let mut rng = SmallRng::seed_from_u64(23);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut b, &mut c],
+            [vec![0], vec![1]],
+            "t10".into(),
+            CombatTuning::default(),
+            Box::new(AliceCalls),
+        );
+
+        let round1 = combat.advance_round(&mut rng, &mut events);
+        assert!(
+            round1
+                .beats
+                .iter()
+                .all(|beat| beat.action != CombatActionKind::CallAlly),
+            "Carol is out of shouting range: no call beat"
+        );
+        assert!(
+            round1
+                .beats
+                .iter()
+                .any(|beat| beat.action == CombatActionKind::Attack && beat.actor.name == "Alice"),
+            "Alice swings instead"
+        );
+        assert!(joined(&events).is_empty(), "Carol never joins");
     }
 }
