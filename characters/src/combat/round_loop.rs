@@ -481,14 +481,25 @@ impl<'a> CombatRoundLoop<'a> {
         // satisfied (allies already fighting) and the beat carries on.
         let mut called: Option<usize> = None;
         if matches!(action, CombatActionKind::CallAlly) {
-            if let Some(idx) = self.find_call_target(actor_idx, chars) {
+            // Gangs are legal but uncommon: when ahead, only the GangUp
+            // drive may summon (behind or tied, anyone may call).
+            let side = self.side_of(actor_idx);
+            let ahead = self.sides[side].len() > self.sides[1 - side].len();
+            if ahead
+                && crate::traits::behavior_sum(
+                    &chars[actor_idx].traits,
+                    crate::traits::BehaviorAxis::GangUp,
+                ) <= 0
+            {
+                action = CombatActionKind::Attack;
+                target = None;
+            } else if let Some(idx) = self.find_call_target(actor_idx, chars) {
                 // The ally runs over: relocate them onto the caller's own
                 // triangle — members share the fight's location (pair
                 // members start together; called allies land here), so
                 // the world state after the fight reads true.
                 let at = chars[actor_idx].location;
                 chars[idx].location = at;
-                let side = self.side_of(actor_idx);
                 self.add_join(idx, side, chars, events);
                 called = Some(idx);
             } else {
@@ -849,6 +860,7 @@ impl<'a> CombatRoundLoop<'a> {
 mod tests {
     use super::*;
     use crate::Character;
+    use crate::traits::Trait;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
 
@@ -2135,5 +2147,94 @@ mod tests {
             "Alice swings instead"
         );
         assert!(joined(&events).is_empty(), "Carol never joins");
+    }
+
+    #[test]
+    fn bigger_side_needs_gang_up_to_summon() {
+        // 2v1 and ahead: plain goblin's call falls back to a swing.
+        let mut a = char_named("Alice");
+        a.attributes.strength = 0;
+        a.attributes.speed = 100;
+        a.allies.push(Uuid::new_v4()); // a third ally exists somewhere
+        let mut d = char_named("Dave");
+        d.attributes.strength = 0;
+        d.attributes.speed = 90;
+        let mut b = char_named("Bob");
+        b.attributes.strength = 0;
+        b.attributes.speed = 0;
+
+        let mut rng = SmallRng::seed_from_u64(29);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut d, &mut b],
+            [vec![0, 1], vec![2]],
+            "t11".into(),
+            CombatTuning::default(),
+            Box::new(AliceCalls),
+        );
+
+        let round1 = combat.advance_round(&mut rng, &mut events);
+        assert!(
+            round1.beats.iter().any(|beat| {
+                beat.action == CombatActionKind::Attack && beat.actor.name == "Alice"
+            }),
+            "ahead and unganged: Alice swings instead of summoning"
+        );
+        assert!(
+            joined(&events).is_empty(),
+            "no join while ahead without the GangUp drive"
+        );
+    }
+
+    #[test]
+    fn ganger_on_the_bigger_side_summons() {
+        // Same 2v1, Alice carries the drive (Aggressive's GangUp row): legal.
+        let mut a = char_named("Alice");
+        a.attributes.strength = 0;
+        a.attributes.speed = 100;
+        a.traits.push(Trait::Aggressive);
+        // The ally must sit OUTSIDE the fight — members are never summon
+        // candidates — and in this fight's pool (find scans the pool).
+        let mut c = char_named("Carol");
+        c.attributes.strength = 0;
+        // One sub-hop away: the round scan covers only Alice's own triangle,
+        // so an in-triangle ally would already be a member by round top.
+        c.location = areas::location::sub_neighbors(a.location)
+            .into_iter()
+            .flatten()
+            .next()
+            .expect("Alice's triangle has neighbors");
+        a.allies = vec![c.id];
+        let mut d = char_named("Dave");
+        d.attributes.strength = 0;
+        d.attributes.speed = 90;
+        let mut b = char_named("Bob");
+        b.attributes.strength = 0;
+        b.attributes.speed = 0;
+
+        let mut rng = SmallRng::seed_from_u64(31);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_sides(
+            vec![&mut a, &mut d, &mut b, &mut c],
+            [vec![0, 1], vec![2]],
+            "t12".into(),
+            CombatTuning::default(),
+            Box::new(AliceCalls),
+        );
+
+        let round1 = combat.advance_round(&mut rng, &mut events);
+        assert!(
+            round1.beats.iter().any(|beat| {
+                beat.action == CombatActionKind::CallAlly
+                    && beat.target.as_ref().is_some_and(|t| t.name == "Carol")
+            }),
+            "ahead but ganged: the summon stands: {:?}",
+            round1.beats.iter().map(|b| &b.action).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            joined(&events),
+            vec![("Carol".into(), "side-1".into(), 2)],
+            "mid-round join: round 1's initiative is fixed, Carol fights from round 2"
+        );
     }
 }

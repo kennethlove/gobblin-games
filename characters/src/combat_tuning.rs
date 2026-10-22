@@ -83,7 +83,10 @@ pub struct CombatTuning {
     pub brain_flee_cautious_bonus: i32,
     /// Added to Flee when the opponent has the higher strength.
     pub brain_flee_outmatched_bonus: i32,
-    /// Baseline score for Call Ally (outmatched with a recorded ally).
+    /// Baseline score for Call Ally (outmatched — or the GangUp drive —
+    /// with a recorded ally). Beats Attack's worst case (40+10 aggressive)
+    /// so a ganger's summon outranks their swing; a hopeless Cower (60)
+    /// still wins.
     pub brain_call_ally_base: i32,
     /// Baseline score for Cower.
     pub brain_cower_base: i32,
@@ -181,7 +184,7 @@ impl Default for CombatTuning {
             brain_flee_exhausted_bonus: 20,
             brain_flee_cautious_bonus: 15,
             brain_flee_outmatched_bonus: 10,
-            brain_call_ally_base: 45,
+            brain_call_ally_base: 55,
             brain_cower_base: 0,
             brain_cower_hopeless_bonus: 60,
             brain_spare_ally_bonus: 100,
