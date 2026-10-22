@@ -188,7 +188,7 @@
           </div>
         </div>
         <div class="feed-scroll" id="feedScroll"
-          hx-trigger="sse:{{ sse_events }}"
+          hx-trigger="{{ sse_events }}"
           hx-get="/api/games/{{ game.identifier }}/log"
           hx-target="#feedScroll"
           hx-swap="innerHTML">

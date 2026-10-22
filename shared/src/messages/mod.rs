@@ -439,11 +439,25 @@ pub struct GoblinDaySummary {
     pub sanity: u32,
 }
 
+/// Payload names for the live-feed SSE triggers: the serde tag of every
+/// `MessagePayload` variant (mirrored by `MessageKind`), minus
+/// `CombatBeat` — beats refresh through structural events so a fight
+/// paints as one grouped card growing round by round instead of a
+/// full-log refetch per swing.
+pub fn sse_payload_event_names() -> Vec<String> {
+    use strum::IntoEnumIterator;
+    MessageKind::iter()
+        .filter_map(|k| serde_json::to_value(k).ok())
+        .filter_map(|v| v.as_str().map(str::to_owned))
+        .filter(|n| n != "CombatBeat")
+        .collect()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 #[derive(strum::EnumDiscriminants)]
 #[strum_discriminants(name(MessageKind))]
-#[strum_discriminants(derive(Serialize, Deserialize))]
+#[strum_discriminants(derive(Serialize, Deserialize, strum::EnumIter))]
 pub enum MessagePayload {
     /// Generic narrative event — prose-only, no structured payload consumers.
     Generic,
