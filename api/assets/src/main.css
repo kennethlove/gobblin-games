@@ -1990,5 +1990,12 @@ h1, h2, h3, h4 { text-wrap: balance; }
 }
 @media (max-width: 860px) {
   .tl-layout { grid-template-columns: minmax(0, 1fr); }
-  .tl-rail { max-height: 34vh; }
+  .tl-rail { max-height: 22vh; }
+  /* Content leads on small screens: the period's cards come before the
+     filter chip groups, and counts tuck beside their label so a wider
+     page (the shared header at 390px) cannot clip them off-screen. */
+  .tl-main { display: flex; flex-direction: column; }
+  .tl-main > .tl-filters { order: 9; }
+  .tl-period .tl-count { margin-left: var(--gap-sm); }
+  .tl-period .tl-label { flex: 0 1 auto; }
 }
