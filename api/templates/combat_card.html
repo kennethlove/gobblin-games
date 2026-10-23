@@ -4,7 +4,7 @@
     <span class="card-timestamp">{{ ts }}</span>
   </div>
   <div class="card-body">
-    <span style="font-weight:600;">{{ title }}</span> — <span class="combat-result">{{ result_text }}</span>
+    <span style="font-weight:600;">{{ title }}</span>
     {% if sides %}
     <div class="combat-sides" style="display:flex;gap:6px;margin-top:4px;">
       {% for s in sides %}
@@ -15,6 +15,9 @@
     {% for j in joins %}
     <div style="color:{{ color }};font-size:0.9em;margin-top:2px;">{{ j }}</div>
     {% endfor %}
+    {% if result_text %}
+    <div class="fight-verdict" style="border-left-color:{{ color }};">{{ result_text }}</div>
+    {% endif %}
   </div>
   <div class="combat-rounds-list">
     {% for round in rounds %}

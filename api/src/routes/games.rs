@@ -862,6 +862,13 @@ pub async fn timeline_handler(
     ctx.insert("rendered_events", &rendered_events);
     ctx.insert("selected_day", &selected_day);
     ctx.insert("selected_phase", &selected_phase.map(|p| p.to_string()));
+    // The selected period's summary (event/death counts) for the timeline
+    // header band; null when no period is selected.
+    let selected_period = match (selected_day, selected_phase) {
+        (Some(day), Some(phase)) => periods.iter().find(|p| p.day == day && p.phase == phase),
+        _ => None,
+    };
+    ctx.insert("selected_period", &selected_period);
 
     let filter_options = vec![
         serde_json::json!({"value": "", "label": "All", "icon_name": "list"}),
