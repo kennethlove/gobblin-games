@@ -5,6 +5,7 @@
 **/.vscode
 **/.idea
 **/dist
+!api/assets/dist/**
 **/*.md
 .env
 .env.*
