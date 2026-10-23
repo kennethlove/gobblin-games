@@ -1,4 +1,4 @@
-<details class="combat-rounds"{% if round.open %} open{% endif %}>
+<details class="combat-rounds"{% if anchor %} id="{{ anchor }}-r{{ round.number }}"{% endif %}{% if round.open %} open{% endif %}>
   <summary>Round {{ round.number }}</summary>
   {% for beat in round.significant %}
   <div class="beat beat-significant">{% if beat.prominent %}<strong>{{ beat.text }}</strong>{% else %}{{ beat.text }}{% endif %}</div>

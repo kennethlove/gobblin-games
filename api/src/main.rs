@@ -419,6 +419,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/games/{id}/log", axum::routing::get(game_log_handler))
         .route("/games/{id}/timeline", axum::routing::get(timeline_handler))
         .route(
+            "/games/{id}/fights",
+            axum::routing::get(game_replay_handler),
+        )
+        .route(
             "/games/{id}/characters",
             axum::routing::get(game_characters_handler),
         )
@@ -487,7 +491,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn surreal_jwt(State(state): State<AppState>, request: Request, next: Next) -> Response {
     // Prefer the HttpOnly `gg_session` cookie (browsers attach it on every
     // same-site request, including the WebSocket upgrade). Fall back to
-    // `Authorization: Bearer …` so non-browser clients (tests, scripts) still
+    // `Authorization: Bearer ...` so non-browser clients (tests, scripts) still
     // work.
     let token = api::cookies::read_cookie(request.headers(), api::cookies::SESSION_COOKIE)
         .map(|s| s.to_owned())

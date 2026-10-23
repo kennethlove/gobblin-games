@@ -6,9 +6,12 @@
     Back to Game
   </a>
 
-  <div style="margin-bottom: var(--gap-md);">
-    <h1 style="font-family: var(--font-display); font-size: var(--fs-h3); font-weight: 600; color: var(--broad-accent);">Timeline</h1>
-    <p style="font-size: var(--fs-xs); color: var(--muted);">Day {{ current_day }} · {{ current_phase | phase_label }}</p>
+  <div style="margin-bottom: var(--gap-md); display: flex; justify-content: space-between; align-items: baseline; gap: var(--gap-md);">
+    <div>
+      <h1 style="font-family: var(--font-display); font-size: var(--fs-h3); font-weight: 600; color: var(--broad-accent);">Timeline</h1>
+      <p style="font-size: var(--fs-xs); color: var(--muted);">Day {{ current_day }} · {{ current_phase | phase_label }}</p>
+    </div>
+    <a href="/games/{{ game_id }}/fights" style="font-size: var(--fs-xs); letter-spacing: 0.08em; color: var(--broad-accent); text-decoration: none; white-space: nowrap;">Fight replay</a>
   </div>
 
   <div class="tl-layout{% if not periods %} is-single{% endif %}">

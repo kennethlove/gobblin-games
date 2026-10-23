@@ -336,55 +336,194 @@ fn render_plain_event_card(msg: &shared::messages::GameMessage) -> String {
 /// beats (kills, cower, verdicts, fled, equipment breaks) render as full
 /// narrative lines; ordinary swings/misses collapse into a compact muted
 /// list per round.
-pub fn render_event_cards(msgs: &[shared::messages::GameMessage]) -> String {
+/// "D2 12 T50" header timestamp for a fight (from its first beat).
+fn fight_ts(beats: &[&shared::messages::GameMessage]) -> String {
+    beats
+        .first()
+        .map(|m| {
+            // Phase's Display is the hour ("12"); its Debug is "Phase(12)".
+            format!("D{} {} T{}", m.game_day, m.phase, m.tick)
+        })
+        .unwrap_or_default()
+}
+
+/// "A vs B" from the fight's first beat; falls back to the join sides
+/// (a join-only fragment whose beats landed in another group) and then to
+/// the result line when all else fails.
+fn fight_title(
+    beats: &[&shared::messages::GameMessage],
+    joins: &[&shared::messages::GameMessage],
+    result: Option<(&String, &shared::combat_beat::CombatResult)>,
+) -> String {
+    use shared::combat_beat::CombatResult;
     use shared::messages::MessagePayload;
 
-    let mut html = String::new();
-    let mut fight_beats: Vec<&shared::messages::GameMessage> = Vec::new();
-    let mut fight_joins: Vec<&shared::messages::GameMessage> = Vec::new();
-    let mut fight_result: Option<(&String, &shared::combat_beat::CombatResult)> = None;
-
-    let flush_fight = |beats: &mut Vec<&shared::messages::GameMessage>,
-                       joins: &mut Vec<&shared::messages::GameMessage>,
-                       result: &mut Option<(&String, &shared::combat_beat::CombatResult)>,
-                       html: &mut String| {
-        if beats.is_empty() && joins.is_empty() && result.is_none() {
-            return;
+    let combatants = match beats.first().map(|m| &m.payload) {
+        Some(MessagePayload::CombatBeat(first)) => match &first.target {
+            Some(t) => format!("{} vs {}", first.actor.name, t.name),
+            None => first.actor.name.clone(),
+        },
+        _ => {
+            let side1 = joins.iter().find_map(|m| match &m.payload {
+                MessagePayload::CombatJoined {
+                    side, character, ..
+                } if side == "side-1" => Some(character.name.clone()),
+                _ => None,
+            });
+            let side2 = joins.iter().find_map(|m| match &m.payload {
+                MessagePayload::CombatJoined {
+                    side, character, ..
+                } if side == "side-2" => Some(character.name.clone()),
+                _ => None,
+            });
+            match (side1, side2) {
+                (Some(a), Some(b)) => format!("{a} vs {b}"),
+                _ => "Combat".to_string(),
+            }
         }
-        html.push_str(&render_combat_card(beats, joins, result.take()));
-        beats.clear();
-        joins.clear();
     };
+    if combatants == "Combat" {
+        match result.map(|(_, r)| r) {
+            Some(CombatResult::Victory { victors }) => join_names(victors, "win", "wins"),
+            Some(CombatResult::Draw) | None => combatants,
+        }
+    } else {
+        combatants
+    }
+}
 
-    for msg in msgs {
+/// Header/verdict result line (plain text; templates escape it).
+fn fight_result_text(result: Option<(&String, &shared::combat_beat::CombatResult)>) -> String {
+    use shared::combat_beat::CombatResult;
+
+    match result.map(|(_, r)| r) {
+        Some(CombatResult::Victory { victors }) => {
+            format!("{} the fight", join_names(victors, "win", "wins"))
+        }
+        Some(CombatResult::Draw) => "A draw — both break off".to_string(),
+        None => "fight in progress…".to_string(),
+    }
+}
+
+/// One contiguous run of combat payloads (beats, joins, the closing
+/// result) delimited the way the event stream renders it: any non-combat
+/// message ends the run. Shared by the timeline card and the dedicated
+/// replay view (vt9).
+pub struct FightGroup<'a> {
+    /// Index of the run's first combat message — its placement in the stream.
+    pub start: usize,
+    pub beats: Vec<&'a shared::messages::GameMessage>,
+    pub joins: Vec<&'a shared::messages::GameMessage>,
+    pub result: Option<(&'a String, &'a shared::combat_beat::CombatResult)>,
+}
+
+/// Split a message stream into fight groups (combat runs) in stream order.
+pub fn group_fights(msgs: &[shared::messages::GameMessage]) -> Vec<FightGroup<'_>> {
+    use shared::messages::MessagePayload;
+
+    let mut groups: Vec<FightGroup<'_>> = Vec::new();
+    let mut beats: Vec<&shared::messages::GameMessage> = Vec::new();
+    let mut joins: Vec<&shared::messages::GameMessage> = Vec::new();
+    let mut result: Option<(&String, &shared::combat_beat::CombatResult)> = None;
+    let mut start = 0usize;
+
+    for (i, msg) in msgs.iter().enumerate() {
         match &msg.payload {
-            MessagePayload::CombatBeat(_) => fight_beats.push(msg),
-            MessagePayload::CombatJoined { .. } => fight_joins.push(msg),
-            MessagePayload::CombatEnded {
-                combat_id, result, ..
-            } => {
-                fight_result = Some((combat_id, result));
+            MessagePayload::CombatBeat(_)
+            | MessagePayload::CombatJoined { .. }
+            | MessagePayload::CombatEnded { .. } => {
+                if beats.is_empty() && joins.is_empty() && result.is_none() {
+                    start = i;
+                }
+                match &msg.payload {
+                    MessagePayload::CombatBeat(_) => beats.push(msg),
+                    MessagePayload::CombatJoined { .. } => joins.push(msg),
+                    MessagePayload::CombatEnded {
+                        combat_id,
+                        result: r,
+                        ..
+                    } => result = Some((combat_id, r)),
+                    _ => unreachable!(),
+                }
             }
             MessagePayload::CombatRoundStart { .. } => {
-                // Server-log-only; skip if it ever reaches a persisted slice.
+                // Server-log-only pass-through: never starts a run, never
+                // flushes — mirrors the old render_event_cards arm.
             }
             _ => {
-                flush_fight(
-                    &mut fight_beats,
-                    &mut fight_joins,
-                    &mut fight_result,
-                    &mut html,
-                );
-                html.push_str(&render_event_card(msg));
+                if !beats.is_empty() || !joins.is_empty() || result.is_some() {
+                    groups.push(FightGroup {
+                        start,
+                        beats: std::mem::take(&mut beats),
+                        joins: std::mem::take(&mut joins),
+                        result: result.take(),
+                    });
+                }
             }
         }
     }
-    flush_fight(
-        &mut fight_beats,
-        &mut fight_joins,
-        &mut fight_result,
-        &mut html,
-    );
+    if !beats.is_empty() || !joins.is_empty() || result.is_some() {
+        groups.push(FightGroup {
+            start,
+            beats,
+            joins,
+            result,
+        });
+    }
+    groups
+}
+
+/// Fight sections for the dedicated replay view (vt9): nav facts plus the
+/// full card with EVERY round open — the timeline down-ranks, replay inspects.
+pub fn replay_sections(msgs: &[shared::messages::GameMessage]) -> Vec<serde_json::Value> {
+    group_fights(msgs)
+        .iter()
+        .enumerate()
+        .map(|(i, g)| {
+            let anchor = format!("f{}", i + 1);
+            let mut rounds: Vec<u32> = g
+                .beats
+                .iter()
+                .filter_map(|m| match &m.payload {
+                    shared::messages::MessagePayload::CombatBeat(b) => Some(b.round),
+                    _ => None,
+                })
+                .collect();
+            rounds.sort_unstable();
+            rounds.dedup();
+            serde_json::json!({
+                "id": anchor,
+                "title": fight_title(&g.beats, &g.joins, g.result),
+                "result_short": fight_result_text(g.result),
+                "ts": fight_ts(&g.beats),
+                "rounds": rounds,
+                "card": render_combat_card(&g.beats, &g.joins, g.result, &anchor, true),
+            })
+        })
+        .collect()
+}
+
+pub fn render_event_cards(msgs: &[shared::messages::GameMessage]) -> String {
+    use shared::messages::MessagePayload;
+
+    let groups = group_fights(msgs);
+    let mut html = String::new();
+    let mut gi = 0usize;
+    for (i, msg) in msgs.iter().enumerate() {
+        if gi < groups.len() && groups[gi].start == i {
+            let g = &groups[gi];
+            html.push_str(&render_combat_card(&g.beats, &g.joins, g.result, "", false));
+            gi += 1;
+            continue;
+        }
+        match &msg.payload {
+            MessagePayload::CombatBeat(_)
+            | MessagePayload::CombatJoined { .. }
+            | MessagePayload::CombatEnded { .. }
+            | MessagePayload::CombatRoundStart { .. } => continue,
+            _ => html.push_str(&render_event_card(msg)),
+        }
+    }
     html
 }
 
@@ -415,48 +554,12 @@ fn render_combat_card(
     beats: &[&shared::messages::GameMessage],
     joins: &[&shared::messages::GameMessage],
     result: Option<(&String, &shared::combat_beat::CombatResult)>,
+    anchor: &str,
+    open_all: bool,
 ) -> String {
-    use shared::combat_beat::CombatResult;
-
-    let ts = beats
-        .first()
-        .map(|m| {
-            format!(
-                "D{} {} T{}",
-                m.game_day,
-                format!("{:?}", m.phase).to_uppercase(),
-                m.tick
-            )
-        })
-        .unwrap_or_default();
-
-    // Combatants: first beat's actor and (first) target.
-    let combatants = match beats.first().map(|m| &m.payload) {
-        Some(shared::messages::MessagePayload::CombatBeat(first)) => match &first.target {
-            Some(t) => format!("{} vs {}", first.actor.name, t.name),
-            None => first.actor.name.clone(),
-        },
-        _ => "Combat".to_string(),
-    };
-    // Fallback title from the result when the fight has no beats (shouldn't
-    // happen, but keeps the card titled).
-    let title = if combatants == "Combat" {
-        match result.map(|(_, r)| r) {
-            Some(CombatResult::Victory { victors }) => join_names(victors, "win", "wins"),
-            Some(CombatResult::Draw) | None => combatants,
-        }
-    } else {
-        combatants
-    };
-
-    // Result line for the header (plain text; the template escapes it).
-    let result_text = match result.map(|(_, r)| r) {
-        Some(CombatResult::Victory { victors }) => {
-            format!("{} the fight", join_names(victors, "win", "wins"))
-        }
-        Some(CombatResult::Draw) => "A draw — both break off".to_string(),
-        None => "fight in progress…".to_string(),
-    };
+    let ts = fight_ts(beats);
+    let title = fight_title(beats, joins, result);
+    let result_text = fight_result_text(result);
 
     // Group beats into rounds (algorithm unchanged; feeds template data).
     let mut rounds: Vec<(
@@ -491,7 +594,7 @@ fn render_combat_card(
             }
             serde_json::json!({
                 "number": round_no,
-                "open": list.iter().any(|(_, b)| b.significant),
+                "open": open_all || list.iter().any(|(_, b)| b.significant),
                 "significant": significant,
                 "ordinary": ordinary,
             })
@@ -499,6 +602,7 @@ fn render_combat_card(
         .collect();
 
     let mut ctx = tera::Context::new();
+    ctx.insert("anchor", anchor);
     ctx.insert("color", "var(--waiting)");
     ctx.insert("ts", &ts);
     ctx.insert("title", &title);
@@ -566,7 +670,16 @@ fn beat_line(beat: &shared::combat_beat::CombatBeat, content: &str) -> (String, 
         (CombatActionKind::Spare, _) | (CombatActionKind::Execute, _) => true,
         _ => false,
     };
-    (content.to_string(), prominent)
+    let text = if content.is_empty() {
+        // WHY: the engine pushes CombatBeat events with EMPTY content — the
+        // narrative lives in the payload. Derive it here; the old "engine
+        // content narrates" assumption left every round body blank.
+        use characters::combat_beat::CombatBeatExt;
+        beat.to_log_lines().join(" · ")
+    } else {
+        content.to_string()
+    };
+    (text, prominent)
 }
 
 pub fn render_commentary_card(seg: &announcers::CommentarySegment) -> String {
@@ -1343,6 +1456,87 @@ mod day_summary_card_tests {
             actor_stamina_cost: 5,
             target_stamina_cost: 2,
         }
+    }
+
+    /// vt9 replay: every round open, round anchors present, nav facts right.
+    #[test]
+    fn replay_opens_every_round_and_anchors_them() {
+        let msgs = vec![
+            beat(1, "Boblin", "Stinky", swing_miss(), false),
+            beat(2, "Boblin", "Stinky", swing_kill(), true),
+            ended(CombatResult::Victory {
+                victors: vec![cref("Boblin")],
+            }),
+        ];
+        let sections = replay_sections(&msgs);
+        assert_eq!(sections.len(), 1, "one fight group");
+        let fight = &sections[0];
+        assert_eq!(fight["id"].as_str(), Some("f1"));
+        assert_eq!(fight["title"].as_str(), Some("Boblin vs Stinky"));
+        assert_eq!(
+            fight["result_short"].as_str(),
+            Some("Boblin wins the fight")
+        );
+        assert_eq!(fight["rounds"].as_array().map(|a| a.len()), Some(2));
+        let card = fight["card"].as_str().unwrap();
+        // Both rounds open — replay inspects, the timeline down-ranks.
+        assert!(card.contains(r#"id="f1-r1" open"#), "r1 open: {card}");
+        assert!(card.contains(r#"id="f1-r2" open"#), "r2 open: {card}");
+
+        let auth = crate::templates::AuthState::Guest {
+            csrf_token: "csrf".into(),
+        };
+        let mut ctx = crate::templates::tera_engine::base_context("Fight replay", &auth);
+        ctx.insert("game_id", "g");
+        ctx.insert("fights", &sections);
+        let html = crate::templates::tera_engine::render("replay.html", &ctx);
+        assert!(html.contains(r#"id="f1""#), "fight section: {html}");
+        assert!(html.contains("href=\"#f1-r2\""), "round scrub link");
+    }
+
+    /// Stream order: a non-combat message closes a fight; the next run is
+    /// its own section, and the timeline card keeps its position.
+    #[test]
+    fn replay_lists_fights_in_stream_order() {
+        let plain = GameMessage::new(
+            MessageSource::Game("g".into()),
+            1,
+            Phase::DAY_START,
+            1,
+            0,
+            "game:g".into(),
+            "someone fell".into(),
+            MessagePayload::CharacterBledOut {
+                character: CharacterRef {
+                    identifier: "c".into(),
+                    name: "C".into(),
+                },
+            },
+        );
+        let msgs = vec![
+            beat(1, "A", "B", swing_miss(), false),
+            ended(CombatResult::Draw),
+            plain,
+            beat(1, "D", "E", swing_miss(), false),
+        ];
+        let sections = replay_sections(&msgs);
+        assert_eq!(sections.len(), 2, "flushed at the plain message");
+        assert_eq!(sections[0]["title"].as_str(), Some("A vs B"));
+        assert_eq!(
+            sections[0]["result_short"].as_str(),
+            Some("A draw — both break off")
+        );
+        assert_eq!(sections[1]["id"].as_str(), Some("f2"));
+        assert_eq!(
+            sections[1]["result_short"].as_str(),
+            Some("fight in progress…")
+        );
+        // Timeline order unchanged: the fight card lands before the plain
+        // message that closed it.
+        let html = render_event_cards(&msgs);
+        let card_at = html.find("A vs B").expect("fight card");
+        let plain_at = html.find("someone fell").expect("plain card");
+        assert!(card_at < plain_at, "card before closer: {html}");
     }
 
     fn ended(result: CombatResult) -> GameMessage {

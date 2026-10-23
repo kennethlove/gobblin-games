@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container" style="padding-top: var(--gap-lg); padding-bottom: var(--gap-xl); display: flex; flex-direction: column; gap: var(--gap-lg);">
+  <a href="/games/{{ game_id }}" style="font-size: var(--fs-xs); letter-spacing: 0.08em; color: var(--muted); text-decoration: none;">← BACK TO GAME</a>
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <h1 style="font-family: var(--font-display); font-size: var(--fs-h2); font-weight: 600; color: var(--broad-fg); margin: 0;">Fight replay</h1>
+    <p style="font-size: var(--fs-xs); color: var(--muted); margin: 0;">Every fight, every round open. Fight links jump between fights; R# links scrub rounds inside one.</p>
+  </div>
+
+  {% if fights %}
+  <nav style="display: flex; flex-wrap: wrap; gap: 6px;">
+    {% for f in fights %}
+    <a href="#{{ f.id }}"
+       style="padding: 4px 10px; border-radius: 9999px; font-size: var(--fs-xs); font-weight: 500; text-decoration: none; background: var(--broad-surface); color: var(--muted); border-left: 3px solid var(--waiting);">{{ f.title }}</a>
+    {% endfor %}
+  </nav>
+
+  {% for f in fights %}
+  <section id="{{ f.id }}" style="display: flex; flex-direction: column; gap: var(--gap-sm); scroll-margin-top: var(--gap-lg);">
+    <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline;">
+      <span style="font-family: var(--font-display); font-size: var(--fs-sm); font-weight: 600; color: var(--broad-fg);">{{ f.title }}</span>
+      {% for n in f.rounds %}
+      <a href="#{{ f.id }}-r{{ n }}"
+         style="padding: 1px 8px; border-radius: 9999px; font-size: var(--fs-xs); font-weight: 500; text-decoration: none; background: var(--broad-surface); color: var(--muted); font-variant-numeric: tabular-nums;">R{{ n }}</a>
+      {% endfor %}
+    </div>
+    {{ f.card | safe }}
+  </section>
+  {% endfor %}
+
+  {% else %}
+  <div class="tl-empty" style="display: flex; flex-direction: column; align-items: center; gap: var(--gap-xl); padding: var(--gap-xl) 0; color: var(--muted);">
+    {{ "swords" | icon | safe }}
+    <p style="font-size: var(--fs-sm); margin: 0;">No fights in this game yet.</p>
+    <a href="/games/{{ game_id }}/timeline" style="padding: 6px 14px; border-radius: 9999px; font-size: var(--fs-sm); font-weight: 500; text-decoration: none; background: var(--broad-accent); color: var(--broad-bg);">Open the timeline</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
