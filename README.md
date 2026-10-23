@@ -95,8 +95,8 @@ The application will be available at:
 If you don't have `just` installed:
 
 ```bash
-# Install dependencies
-cd api/assets && npm install && cd ../..
+# Install dependencies from the committed lockfile
+cd api/assets && npm ci && cd ../..
 
 # Build Tailwind CSS
 cd api/assets

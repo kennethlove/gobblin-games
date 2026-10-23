@@ -135,25 +135,19 @@ jobs:
         run: cargo test --package api --tests
 
   css:
-    # Rebuild the committed Tailwind artifact and fail on drift, so a
-    # src/main.css edit without `just build-css` can't ship stale styles
-    # green. Interim guard: bead gobblin-games-9g7 builds dist in the
-    # pipeline and untracks it.
+    # Build the Tailwind artifact in CI. dist/ is untracked generated
+    # output (gobblin-games-9g7): the repo pins sources and the lockfile;
+    # this job proves a fresh clone produces the stylesheet.
     name: CSS
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Rebuild dist and require it committed in sync
+      - name: Build dist from source
         run: |
           cd api/assets
-          npm install --silent
+          npm ci --silent
           npx @tailwindcss/cli -i ./src/main.css -o ./dist/main.css
-          cd ../..
-          git diff --exit-code api/assets/dist/ || {
-            echo "::error::api/assets/dist/ is stale —" \
-              "run 'just build-css' and commit the result."
-            exit 1
-          }
+          test -s ./dist/main.css
 
   quality:
     # Aggregate gate so branch protection can keep requiring a single
