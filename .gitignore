@@ -38,6 +38,14 @@ history.txt
 # Cate IDE
 .cate/
 package-lock.json
+# The Tailwind lockfile is committed so `npm ci` (CI and just build-css)
+# pins the same devDep versions the pipeline built with.
+!api/assets/package-lock.json
+
+# Tailwind output is generated (`just build-css` / CI) — untracked per
+# gobblin-games-9g7. dist/broadcast.js is hand-written source and stays
+# tracked beside it.
+api/assets/dist/main.css
 
 # Beads / Dolt files (added by bd init)
 .beads/proxieddb/
