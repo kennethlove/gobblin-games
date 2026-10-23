@@ -204,6 +204,61 @@ pub async fn game_join_post_handler(
 }
 
 /// GET /games/{id} — game detail page (broadcast interface).
+/// SSE trigger list for the live feed (`hx-trigger` on the event feed and
+/// the game log).
+///
+/// Names must match `sse.rs`'s `payload_event_name`: the serde tag = the
+/// `MessageKind` variant name. The old hardcoded semantic list ("death",
+/// "cycle_start", ...) matched none of them, and hx-trigger only gave its
+/// first token the `sse:` prefix — so the live feed never refreshed on
+/// game events. Every token carries its own prefix, and `CombatBeat` stays
+/// out: beats refresh through the structural events (round start, joins,
+/// fight end), so a fight paints as one grouped card growing round by
+/// round instead of a full-log refetch per swing.
+pub fn sse_trigger_list() -> String {
+    let mut names: Vec<String> = shared::messages::sse_payload_event_names()
+        .into_iter()
+        .map(|n| format!("sse:{n}"))
+        .collect();
+    // Commentary segments broadcast under a fixed event name (sse.rs).
+    names.push("sse:Commentary".to_owned());
+    names.join(", ")
+}
+
+#[cfg(test)]
+mod sse_trigger_tests {
+    use super::sse_trigger_list;
+
+    #[test]
+    fn every_token_is_prefixed_with_its_own_sse() {
+        let list = sse_trigger_list();
+        for token in list.split(", ") {
+            assert!(token.starts_with("sse:"), "bare trigger token: {token}");
+        }
+        assert!(list.contains("sse:Commentary"));
+        assert!(list.contains("sse:CombatRoundStart"));
+        assert!(list.contains("sse:CombatEnded"));
+    }
+
+    #[test]
+    fn beats_wait_for_structural_events() {
+        let list = sse_trigger_list();
+        assert!(!list.contains("sse:CombatBeat"));
+        // Drift guard: every payload kind lands in the list (serde name ==
+        // the SSE event name), beats excepted.
+        for name in shared::messages::sse_payload_event_names() {
+            if name == "CombatBeat" {
+                unreachable!("beats are filtered at the source");
+            }
+            assert!(
+                list.contains(&format!("sse:{name}")),
+                "missing trigger for {name}"
+            );
+        }
+        assert!(!list.contains("sse:CombatBeat"));
+    }
+}
+
 pub async fn game_detail_handler(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
@@ -411,8 +466,9 @@ SELECT (
     // Build hex arena map SVG
     let hex_map = game_detail::render_hex_map(&areas, &sorted_characters);
 
-    // SSE events string
-    let sse_events = "death,wound,attack,combat,alliance_formed,alliance_proposed,alliance_dissolved,betrayal,trust_shock_break,patron_gift,movement,hidden,area_closed,area_event,item_found,item_used,item_dropped,rested,starved,dehydrated,sanity_break,hunger_band_changed,thirst_band_changed,stamina_band_changed,shelter_sought,foraged,drank,ate,cycle_start,cycle_end,phase_started,phase_ended,slept,woke,game_ended,wounded,attacked,affliction_acquired,affliction_progressed,affliction_healed,affliction_cascaded,trauma_acquired,trauma_reinforced,trauma_escalated,trauma_flashback,trauma_avoidance,trauma_observed,trauma_forgotten,trauma_habituated,phobia_acquired,phobia_triggered,phobia_escalated,phobia_habituated,phobia_observed,phobia_forgotten,fixation_acquired,fixation_escalated,fixation_fired,fixation_consummated,fixation_thwarted,fixation_faded,generic,trapped,struggling,trapped_escaped,died_while_trapped,trap_set,trap_triggered,rescue_attempted,sleep_incident,partial_rescue_progress";
+    // SSE triggers: derived from MessageKind so they always match the
+    // event names sse.rs actually emits (see sse_trigger_list).
+    let sse_events = sse_trigger_list();
 
     // Team victory: label of the only team with living members, if exactly
     // one team stands (the engine ends the game at that point).
@@ -450,7 +506,7 @@ SELECT (
     ctx.insert("day_numbers", &day_numbers);
     ctx.insert("current_day", &current_day);
     ctx.insert("current_phase", current_phase);
-    ctx.insert("sse_events", sse_events);
+    ctx.insert("sse_events", &sse_events);
     ctx.insert("character_rows", &character_rows);
     ctx.insert("hex_map", &hex_map);
     ctx.insert("event_cards", &event_cards);
@@ -599,6 +655,7 @@ pub async fn game_log_handler(
     let mut ctx = tera_engine::base_context("Event Log", &auth);
     ctx.insert("game_id", &identifier);
     ctx.insert("event_cards", &event_cards);
+    ctx.insert("sse_events", &sse_trigger_list());
     html_with_csrf(tera_engine::render("log.html", &ctx), &csrf)
 }
 

@@ -6,7 +6,7 @@
 
   <div id="log-entries"
     class="log-container"
-    hx-trigger="sse:{{ sse_events | default(value='*') }}"
+    hx-trigger="{{ sse_events | default(value='sse:*') }}"
     hx-get="/games/{{ game_id }}/log"
     hx-target="#log-entries"
     hx-swap="innerHTML">
