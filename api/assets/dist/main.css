@@ -2638,7 +2638,20 @@ h1, h2, h3, h4 {
     grid-template-columns: minmax(0, 1fr);
   }
   .tl-rail {
-    max-height: 34vh;
+    max-height: 22vh;
+  }
+  .tl-main {
+    display: flex;
+    flex-direction: column;
+  }
+  .tl-main > .tl-filters {
+    order: 9;
+  }
+  .tl-period .tl-count {
+    margin-left: var(--gap-sm);
+  }
+  .tl-period .tl-label {
+    flex: 0 1 auto;
   }
 }
 @property --tw-rotate-x {

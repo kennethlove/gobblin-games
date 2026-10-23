@@ -40,7 +40,7 @@
     {% endif %}
 
     <div class="tl-main">
-      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--gap-sm);">
+      <div class="tl-filters" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--gap-sm);">
         {% for f in filter_options %}
         {% set is_active = f.value == filter %}
         {% if is_active %}
@@ -60,7 +60,7 @@
       </div>
 
       {% if characters %}
-      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--gap-md);">
+      <div class="tl-filters" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--gap-md);">
         {% set is_all = character_filter == "" %}
         {% if is_all %}
         {% set all_style = "background: var(--info); color: #fff;" %}
