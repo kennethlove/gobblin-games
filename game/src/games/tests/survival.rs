@@ -141,7 +141,6 @@ fn test_random_open_area() {
     let area2 = AreaDetails::new(Some("Forest".to_string()), Area::Sector4);
     game.areas.push(area1);
     game.areas.push(area2.clone());
-    assert!(game.random_area().is_some());
     let mut rng = rand::rng();
     let event = AreaEvent::random(&mut rng);
     game.areas[0].events.push(event.clone());
@@ -468,18 +467,11 @@ fn test_run_character_cycle() {
     let mut game = create_test_game_with_characters(vec![character1.clone(), character2.clone()]);
     let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
     game.areas.push(area);
-    let closed_areas = game
-        .areas
-        .iter()
-        .filter(|ad| ad.area.is_some() & !ad.is_open())
-        .map(|ad| ad.area.unwrap())
-        .collect::<Vec<Area>>();
 
     let mut rng = SmallRng::seed_from_u64(42);
     let _ = game.run_character_cycle(
         shared::messages::Phase::DAY,
         &mut rng,
-        closed_areas,
         vec![character1.clone(), character2.clone()],
         2,
     );
@@ -488,6 +480,28 @@ fn test_run_character_cycle() {
     let new_character2 = game.characters[1].clone();
     assert_ne!(character1, new_character1);
     assert_ne!(character2, new_character2);
+}
+
+#[test]
+fn hazard_lasts_three_blocks_then_wipes() {
+    let mut game = Game::new("Test Game");
+    game.areas
+        .push(AreaDetails::new(Some("Lake".to_string()), Area::Sector1));
+    let mut rng = SmallRng::seed_from_u64(4);
+    game.areas[0].events.push(AreaEvent::random(&mut rng));
+    game.areas[0].hazard_blocks = Some(3);
+
+    game.hazard_survival(&mut rng).unwrap();
+    assert_eq!(game.areas[0].hazard_blocks, Some(2));
+    assert!(!game.areas[0].events.is_empty());
+    game.hazard_survival(&mut rng).unwrap();
+    game.hazard_survival(&mut rng).unwrap();
+    assert_eq!(game.areas[0].hazard_blocks, Some(0));
+    assert!(!game.areas[0].events.is_empty());
+
+    game.hazard_survival(&mut rng).unwrap();
+    assert!(game.areas[0].events.is_empty());
+    assert_eq!(game.areas[0].hazard_blocks, None);
 }
 
 #[test]
@@ -506,26 +520,6 @@ fn test_open_and_closed_areas() {
 
     assert_eq!(game.open_areas().len(), 1);
     assert_eq!(game.closed_areas().len(), 1);
-}
-
-#[test]
-fn test_ensure_open_area() {
-    let mut game = Game::new("Test Game");
-    let area1 = AreaDetails::new(Some("Lake".to_string()), Area::Sector1);
-    let area2 = AreaDetails::new(Some("Forest".to_string()), Area::Sector4);
-    game.areas.push(area1);
-    game.areas.push(area2);
-
-    assert!(game.random_open_area().is_some());
-
-    let mut rng = rand::rng();
-    game.areas[0].events.push(AreaEvent::random(&mut rng));
-    game.areas[1].events.push(AreaEvent::random(&mut rng));
-
-    assert!(game.random_open_area().is_none());
-
-    game.ensure_open_area();
-    assert!(game.random_open_area().is_some());
 }
 
 #[test]
@@ -714,7 +708,7 @@ fn sleeping_character_naturally_wakes_after_duration_emits_character_woke() {
     let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
     game.areas.push(area);
     let mut rng = SmallRng::seed_from_u64(42);
-    let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![], vec![t], 1);
+    let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![t], 1);
 
     let woken = &game.characters[0];
     assert!(!woken.sleeping, "character should be awake");
@@ -747,7 +741,7 @@ fn sleeping_character_regenerates_stamina_each_phase() {
     let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
     game.areas.push(area);
     let mut rng = SmallRng::seed_from_u64(42);
-    let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![], vec![t], 1);
+    let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![t], 1);
 
     let after = &game.characters[0];
     assert!(after.sleeping, "still mid-sleep");
@@ -787,7 +781,7 @@ fn sleeping_wounded_character_does_not_regen_hp() {
     let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
     game.areas.push(area);
     let mut rng = SmallRng::seed_from_u64(42);
-    let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![], vec![t], 1);
+    let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![t], 1);
     assert_eq!(
         game.characters[0].effective_health(),
         prior_hp,
@@ -807,7 +801,7 @@ fn cycles_awake_does_not_increment_while_sleeping() {
     let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
     game.areas.push(area);
     let mut rng = SmallRng::seed_from_u64(42);
-    let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![], vec![t], 1);
+    let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![t], 1);
     assert_eq!(game.characters[0].cycles_awake, 4);
 }
 
@@ -826,7 +820,7 @@ fn area_event_interrupts_sleeping_character() {
     area.events.push(AreaEvent::Wildfire);
     game.areas.push(area);
     let mut rng = SmallRng::seed_from_u64(42);
-    let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![], vec![t], 1);
+    let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![t], 1);
 
     let woken = &game.characters[0];
     assert!(!woken.sleeping, "area-event should wake sleeper");

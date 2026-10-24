@@ -252,7 +252,6 @@ impl Brain {
         nearby_characters: u32,
         available_destinations: &[areas::DestinationInfo],
         all_areas: &[AreaDetails],
-        closed_areas: &[Area],
         enemy_density: &HashMap<Area, u32>,
         phase: shared::messages::Phase,
         rng: &mut impl Rng,
@@ -288,7 +287,6 @@ impl Brain {
                     character,
                     available_destinations,
                     all_areas,
-                    closed_areas,
                     enemy_density,
                 );
                 match destination {
@@ -336,7 +334,6 @@ impl Brain {
         character: &Character,
         available_destinations: &[areas::DestinationInfo],
         all_areas: &[AreaDetails],
-        closed_areas: &[Area],
         enemy_density: &HashMap<Area, u32>,
     ) -> Option<Location> {
         // Multi-hop pathfinding (8pq): score every known area (not
@@ -354,13 +351,9 @@ impl Brain {
             if best_goal == character.location.area {
                 return Some(Location::center(best_goal));
             }
-            if let Some((path, _cost)) = crate::path::plan_path(
-                all_areas,
-                closed_areas,
-                character,
-                character.location.area,
-                best_goal,
-            ) && path.len() >= 2
+            if let Some((path, _cost)) =
+                crate::path::plan_path(all_areas, character, character.location.area, best_goal)
+                && path.len() >= 2
             {
                 return Some(Location::center(path[1]));
             }
@@ -407,7 +400,6 @@ impl Brain {
         character: &Character,
         available_destinations: &[areas::DestinationInfo],
         all_areas: &[AreaDetails],
-        closed_areas: &[Area],
         enemy_density: &HashMap<Area, u32>,
     ) -> [Action; 2] {
         let destination = || {
@@ -415,7 +407,6 @@ impl Brain {
                 character,
                 available_destinations,
                 all_areas,
-                closed_areas,
                 enemy_density,
             ))
         };

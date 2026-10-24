@@ -30,7 +30,6 @@ impl Game {
     pub(super) fn build_cycle_context(
         &self,
         phase: shared::messages::Phase,
-        closed_areas: Vec<Area>,
         living_characters: Vec<Character>,
         living_characters_count: usize,
     ) -> CycleContext {
@@ -78,7 +77,6 @@ impl Game {
             enemy_density,
             combat_tuning_snapshot: self.combat_tuning.clone(),
             all_areas_snapshot: self.areas.clone(),
-            closed_areas,
             living_characters_count,
         }
     }
@@ -103,7 +101,6 @@ impl Game {
             enemy_density,
             combat_tuning_snapshot,
             all_areas_snapshot,
-            closed_areas,
             living_characters_count,
         } = ctx;
 
@@ -938,7 +935,6 @@ impl Game {
                 phase,
                 config: self.config.clone(),
                 area_details,
-                closed_areas: &closed_areas,
                 available_destinations,
                 all_areas: &all_areas_snapshot,
                 enemy_density: &enemy_density,
@@ -1459,7 +1455,6 @@ impl Game {
         &mut self,
         phase: shared::messages::Phase,
         rng: &mut SmallRng,
-        closed_areas: Vec<Area>,
         living_characters: Vec<Character>,
         living_characters_count: usize,
     ) -> Result<(), GameError> {
@@ -1468,12 +1463,7 @@ impl Game {
             self.spawn_patrons(rng);
         }
 
-        let ctx = self.build_cycle_context(
-            phase,
-            closed_areas,
-            living_characters,
-            living_characters_count,
-        );
+        let ctx = self.build_cycle_context(phase, living_characters, living_characters_count);
 
         // Snapshot message count so we can isolate this cycle's payloads for
         // the patronship translator.
@@ -1530,8 +1520,9 @@ impl Game {
     /// Runs a cycle of the game, either day or night.
     /// 1. Announce area events.
     /// 2. Open an area if there are no open areas.
-    /// 3. Trigger any events for this cycle if we're past the first three days.
-    /// 4. Close more areas by spawning more events if the characters are getting low.
+    /// 3. Trigger hazards for this cycle; each active hazard re-runs
+    ///    survival and ages one block (wipes at 0).
+    /// 4. If the characters are getting low, force hazards into open areas.
     /// 5. Run the character cycle.
     /// 6. Update the characters in the game.
     pub(super) fn do_a_cycle(&mut self, phase: shared::messages::Phase) -> Result<(), GameError> {
@@ -1540,32 +1531,17 @@ impl Game {
         // Announce area events
         self.announce_area_events()?;
 
-        // If there are no open areas, we need to open one.
-        self.ensure_open_area();
-
         // Trigger any events for this cycle
         self.trigger_cycle_events(phase, &mut rng)?;
 
-        // If the character count is low, constrain them by closing areas.
+        // If the character count is low, force hazards into open areas.
         self.constrain_areas(&mut rng)?;
 
         self.characters.shuffle(&mut rng);
-        let closed_areas: Vec<Area> = self
-            .closed_areas()
-            .iter()
-            .filter_map(|ad| ad.area)
-            .clone()
-            .collect();
         let living_characters = self.living_characters();
         let living_characters_count: usize = living_characters.len();
 
-        self.run_character_cycle(
-            phase,
-            &mut rng,
-            closed_areas,
-            living_characters,
-            living_characters_count,
-        )?;
+        self.run_character_cycle(phase, &mut rng, living_characters, living_characters_count)?;
         Ok(())
     }
 

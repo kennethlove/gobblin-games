@@ -2,14 +2,13 @@
 //! and exposes a path-planning helper for characters.
 //!
 //! Edge stamina cost is a composite per the design decision (8pq Q2):
-//! `crossing_stamina_cost + harshness_penalty + closed_penalty`.
+//! `crossing_stamina_cost + harshness_penalty`.
 //! - `crossing_stamina_cost`: per-character, per-terrain — half the
 //!   source area's standard move cost plus half the destination's,
 //!   each rounded up (same crossing price the sub-hop engine charges)
 //! - `harshness_penalty`: 0/10/20 for Mild/Moderate/Harsh
-//! - `closed_penalty`: high additive cost (`CLOSED_PENALTY`) so closed
-//!   areas are routed around when alternatives exist, but still
-//!   traversable as a last resort (8pq Q4 = K, "high penalty").
+//!   (closed_penalty deleted with area closure — q7k: hazards never
+//!   block or penalise pathing; avoidance is soft, in the brain.)
 
 use super::actions::Action;
 use super::{Character, calculate_stamina_cost, crossing_stamina_cost};
@@ -19,11 +18,6 @@ use std::collections::HashMap;
 use strum::IntoEnumIterator;
 use world::pathfinding::{Graph, astar};
 use world::terrain::Harshness;
-
-/// Penalty added to any edge entering a closed area. Picked so that even
-/// the cheapest detour through 2 open areas is preferred over a single
-/// closed-area hop (typical edge costs are ~20-50).
-pub const CLOSED_PENALTY: u32 = 1000;
 
 /// Snapshot of the area graph from one character's perspective at one
 /// moment in time. Built per planning call — do not cache across cycles.
@@ -36,12 +30,10 @@ pub struct AreaGraph<'a> {
     pub character: &'a Character,
     /// Per-area details lookup (terrain, items, etc.).
     pub details: HashMap<Area, &'a AreaDetails>,
-    /// Set of areas currently closed (e.g., due to area events).
-    pub closed: std::collections::HashSet<Area>,
 }
 
 impl<'a> AreaGraph<'a> {
-    pub fn new(areas: &'a [AreaDetails], closed: &[Area], character: &'a Character) -> Self {
+    pub fn new(areas: &'a [AreaDetails], character: &'a Character) -> Self {
         let mut details: HashMap<Area, &AreaDetails> = HashMap::new();
         for ad in areas {
             if let Some(a) = ad.area {
@@ -52,7 +44,6 @@ impl<'a> AreaGraph<'a> {
             areas: Area::iter().collect(),
             character,
             details,
-            closed: closed.iter().copied().collect(),
         }
     }
 
@@ -86,12 +77,7 @@ impl<'a> AreaGraph<'a> {
         } else {
             0
         };
-        let closed = if self.closed.contains(&to) {
-            CLOSED_PENALTY
-        } else {
-            0
-        };
-        stamina + harshness + closed
+        stamina + harshness
     }
 }
 
@@ -120,12 +106,11 @@ impl<'a> Graph for AreaGraph<'a> {
 /// since the graph is fully connected via Hub).
 pub fn plan_path(
     areas: &[AreaDetails],
-    closed: &[Area],
     character: &Character,
     start: Area,
     goal: Area,
 ) -> Option<(Vec<Area>, u32)> {
-    let g = AreaGraph::new(areas, closed, character);
+    let g = AreaGraph::new(areas, character);
     astar(&g, start, goal)
 }
 
@@ -162,7 +147,7 @@ mod tests {
     fn plan_to_self_returns_singleton() {
         let areas = standard_areas();
         let t = fresh_character();
-        let (path, cost) = plan_path(&areas, &[], &t, Area::Hub, Area::Hub).unwrap();
+        let (path, cost) = plan_path(&areas, &t, Area::Hub, Area::Hub).unwrap();
         assert_eq!(path, vec![Area::Hub]);
         assert_eq!(cost, 0);
     }
@@ -171,7 +156,7 @@ mod tests {
     fn plan_neighbor_is_two_node_path() {
         let areas = standard_areas();
         let t = fresh_character();
-        let (path, _) = plan_path(&areas, &[], &t, Area::Hub, Area::Sector1).unwrap();
+        let (path, _) = plan_path(&areas, &t, Area::Hub, Area::Sector1).unwrap();
         assert_eq!(path, vec![Area::Hub, Area::Sector1]);
     }
 
@@ -181,45 +166,10 @@ mod tests {
         // The fastest route is Sector1 -> Hub -> Sector4.
         let areas = standard_areas();
         let t = fresh_character();
-        let (path, _) = plan_path(&areas, &[], &t, Area::Sector1, Area::Sector4).unwrap();
+        let (path, _) = plan_path(&areas, &t, Area::Sector1, Area::Sector4).unwrap();
         assert_eq!(path.len(), 3);
         assert_eq!(path[0], Area::Sector1);
         assert_eq!(path[1], Area::Hub);
         assert_eq!(path[2], Area::Sector4);
-    }
-
-    #[test]
-    fn plan_routes_around_closed_area_when_possible() {
-        // Sector1 -> Sector4 normally goes via Hub. If Hub
-        // is closed, the routing must wrap around the ring (e.g. through
-        // Sector2 + Sector3).
-        let areas = standard_areas();
-        let t = fresh_character();
-        let closed = [Area::Hub];
-        let (path, cost) = plan_path(&areas, &closed, &t, Area::Sector1, Area::Sector4).unwrap();
-        assert!(
-            !path.contains(&Area::Hub),
-            "path detoured around closed hub: {path:?}"
-        );
-        assert!(
-            cost < CLOSED_PENALTY,
-            "should not pay closed-penalty when an open route exists"
-        );
-    }
-
-    #[test]
-    fn plan_traverses_closed_area_as_last_resort() {
-        // Close every ring sector, leaving only the path Hub -><br/>
-        // closed sector. Then Hub -> Sector1 must traverse a
-        // closed area and pay the penalty.
-        let areas = standard_areas();
-        let t = fresh_character();
-        let closed = [Area::Sector1];
-        let (path, cost) = plan_path(&areas, &closed, &t, Area::Hub, Area::Sector1).unwrap();
-        assert_eq!(path, vec![Area::Hub, Area::Sector1]);
-        assert!(
-            cost >= CLOSED_PENALTY,
-            "expected closed-penalty in cost, got {cost}"
-        );
     }
 }
