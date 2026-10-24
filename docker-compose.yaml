@@ -13,8 +13,10 @@ services:
         - ${REGISTRY_URL:-localhost}/gg_backend:latest
     image: ${REGISTRY_URL:-localhost}/gg_backend:latest
     restart: unless-stopped
-    ports:
-      - "${SERVICE_PORT_BACKEND:-3000}:3000"
+    # No host-port mapping on purpose: the container is reachable only on the
+    # compose network, and Coolify's reverse proxy routes by domain to the
+    # app's internal port (3000). Publishing a host port is what causes
+    # per-app conflicts on a shared server.
     environment:
       - SERVICE_FQDN_BACKEND_3000
       - 'SERVICE_FQDN_BACKEND=${SERVICE_FQDN_BACKEND:-http://backend:3000}'

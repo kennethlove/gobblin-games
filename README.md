@@ -219,7 +219,21 @@ just docker-down
 
 Services:
 - **surrealdb**: Database (port 8000)
-- **api**: REST API + HTMX UI (port 3000)
+- **api**: REST API + HTMX UI (internal port 3000)
+
+### Coolify deploys
+
+The compose file deliberately publishes **no host port** for `api`. That is
+what makes N apps on one server never collide: a host port only binds when a
+`ports:` mapping exists, and there is none.
+
+On Coolify, set the resource's **Exposed Port** to `3000` (the app's internal
+listen port) and route traffic to it through a domain/reverse proxy. Never add
+a host-port mapping.
+
+Local development keeps `localhost:3000`: `just docker-up` passes the
+non-standard `docker-compose.local.yaml`, which maps the host port back for
+that command only.
 
 ##  Testing
 
