@@ -403,6 +403,11 @@ pub async fn join_game(
     let mut character = character.into_new_game();
     character.team = team;
     character.statistics.game = game_identifier.to_owned();
+    // Spawn (0s6): a joining goblin starts fresh in THIS game's arena
+    // — the same uniform draw as roster creation. Joins are pre-start
+    // only (guarded above), so no mid-run placement exists.
+    let spawn_areas = game_spawn_areas(db, game_identifier).await?;
+    character.location = areas::location::random_spawn_location(&mut rand::rng(), &spawn_areas);
     let starter = Item::new_random(None);
     let mut character_without_items = character.clone();
     character_without_items.items = vec![];
@@ -434,6 +439,28 @@ pub async fn join_game(
         .map_err(|e| AppError::InternalServerError(format!("Failed to enter game: {e}")))?;
 
     Ok(())
+}
+
+/// The game's area list for spawn placement, read from the arena
+/// snapshot on the game row (default preset when absent/unreadable).
+async fn game_spawn_areas(
+    db: &Surreal<Any>,
+    game_identifier: &str,
+) -> Result<Vec<areas::Area>, AppError> {
+    let mut response = db
+        .query("SELECT arena FROM game WHERE identifier = $game")
+        .bind(("game", game_identifier.to_owned()))
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to load arena: {e}")))?;
+    let rows: Vec<serde_json::Value> = response
+        .take(0)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to read arena: {e}")))?;
+    let preset: areas::preset::ArenaPreset = rows
+        .first()
+        .and_then(|row| row.get("arena").cloned())
+        .and_then(|value| serde_json::from_value(value).ok())
+        .unwrap_or_else(areas::preset::default_preset);
+    Ok(preset.areas.iter().map(|slot| slot.area).collect())
 }
 
 pub async fn create_character(
@@ -472,6 +499,10 @@ pub async fn create_character(
     }
 
     let mut character = character.unwrap_or_else(Character::random);
+    // Spawn (0s6): one uniform draw per goblin across the game's own
+    // areas x 6 triangles, at creation only — no mid-run joins exist.
+    let spawn_areas = game_spawn_areas(db, game_identifier).await?;
+    character.location = areas::location::random_spawn_location(&mut rand::rng(), &spawn_areas);
     // Per-team capacity: the requested team (0-indexed) takes the
     // goblin only while it has room; a full or out-of-range request
     // redirects to the fewest-member team with space, and no team with

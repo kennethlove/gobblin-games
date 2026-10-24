@@ -25,6 +25,7 @@
 use crate::Area;
 use crate::AreaDetails;
 use crate::hex::{Axial, SubTriangle, default_layout};
+use rand::{Rng, RngExt};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use world::terrain::BaseTerrain;
@@ -100,6 +101,21 @@ pub fn all_locations() -> impl Iterator<Item = Location> {
     default_layout()
         .into_iter()
         .flat_map(|(area, _)| sub_slots(area))
+}
+
+/// Uniformly random occupied cell across `areas` — one draw per goblin
+/// in the spawn pass at game creation (no mid-run joins exist, so this
+/// is the only placement rule). Empty list falls back to the canonical
+/// Hub triangle 0.
+pub fn random_spawn_location<R: Rng + ?Sized>(rng: &mut R, areas: &[Area]) -> Location {
+    if areas.is_empty() {
+        return Location::center(Area::Hub);
+    }
+    let area = areas[rng.random_range(0..areas.len())];
+    Location::new(
+        area,
+        SubTriangle::new(rng.random_range(0..SubTriangle::COUNT as u8)),
+    )
 }
 
 /// Axial coordinate of an area-hex in the top-level layout.
@@ -279,6 +295,22 @@ mod tests {
 
     fn at(area: Area, index: u8) -> Location {
         Location::new(area, SubTriangle::new(index))
+    }
+
+    // ---- spawn (0s6) ----------------------------------------------
+
+    #[test]
+    fn random_spawn_stays_in_the_requested_areas() {
+        use rand::SeedableRng;
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(7);
+        let areas = vec![Area::Hub, Area::Sector3];
+        for _ in 0..64 {
+            let loc = random_spawn_location(&mut rng, &areas);
+            assert!(areas.contains(&loc.area));
+            assert!(loc.sub.index() < SubTriangle::COUNT as u8);
+        }
+        // Empty area list falls back to the canonical Hub triangle 0.
+        assert_eq!(random_spawn_location(&mut rng, &[]), hub(0));
     }
 
     // ---- serde contract ----------------------------------------------
