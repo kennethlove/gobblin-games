@@ -16,7 +16,7 @@ db:
 # Build Tailwind CSS for HTMX pages
 build-css:
     #!/usr/bin/env bash
-    cd api/assets && npm install --silent && npx @tailwindcss/cli -i ./src/main.css -o ./dist/main.css
+    cd api/assets && npm ci --silent && npx @tailwindcss/cli -i ./src/main.css -o ./dist/main.css
 
 # Watch Tailwind CSS for changes and auto-rebuild
 watch-css:
@@ -35,7 +35,7 @@ dev:
     MAILPIT_PID=$!
 
     echo "==> Building Tailwind CSS..."
-    (cd api/assets && npm install && npx @tailwindcss/cli -i ./src/main.css -o ./dist/main.css)
+    (cd api/assets && npm ci && npx @tailwindcss/cli -i ./src/main.css -o ./dist/main.css)
     echo "==> Starting Tailwind watcher..."
     (cd api/assets && npx @tailwindcss/cli -i ./src/main.css -o ./dist/main.css --watch) &
     CSS_PID=$!
@@ -69,7 +69,7 @@ dev-watch:
     MAILPIT_PID=$!
 
     echo "==> Building Tailwind CSS..."
-    (cd api/assets && npm install && npx @tailwindcss/cli -i ./src/main.css -o ./dist/main.css)
+    (cd api/assets && npm ci && npx @tailwindcss/cli -i ./src/main.css -o ./dist/main.css)
     echo "==> Starting Tailwind watcher..."
     (cd api/assets && npx @tailwindcss/cli -i ./src/main.css -o ./dist/main.css --watch) &
     CSS_PID=$!
@@ -112,7 +112,7 @@ open:
 install-deps:
     #!/usr/bin/env bash
     echo "==> Installing Node dependencies..."
-    cd api/assets && npm install
+    cd api/assets && npm ci
     echo "==> Installing Mailpit..."
     if command -v brew &> /dev/null; then
         brew install mailpit 2>/dev/null || echo "   Mailpit already installed"
@@ -196,7 +196,7 @@ quality: fmt check clippy test
 
 # Install Node dependencies for Tailwind CSS
 setup-node:
-    cd api/assets && npm install
+    cd api/assets && npm ci
 
 # Run all setup tasks (commentary needs no model setup — The Chronicler is built in)
 setup: setup-node
