@@ -659,6 +659,40 @@ pub async fn game_log_handler(
     html_with_csrf(tera_engine::render("log.html", &ctx), &csrf)
 }
 
+/// GET /games/{id}/fights — dedicated fight-replay view (vt9): every fight
+/// in stream order with ALL rounds open, fight + round anchors to scrub.
+pub async fn game_replay_handler(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    axum::extract::Path(game_identifier): axum::extract::Path<uuid::Uuid>,
+) -> Response {
+    let (auth, csrf) = extract_auth(&headers);
+    let identifier = game_identifier.to_string();
+    let messages = match state
+        .db
+        .query(
+            r#"SELECT * FROM message
+            WHERE string::starts_with(subject, $identifier)
+            ORDER BY game_day, phase, tick, emit_index;"#,
+        )
+        .bind(("identifier", identifier.clone()))
+        .await
+    {
+        Ok(mut logs) => {
+            let rows: Vec<SerdeWrapper<api::games::GameLog>> = logs.take(0).unwrap_or_default();
+            rows.into_iter()
+                .map(|w| shared::messages::GameMessage::from(w.0))
+                .collect()
+        }
+        Err(_) => vec![],
+    };
+
+    let mut ctx = tera_engine::base_context("Fight replay", &auth);
+    ctx.insert("game_id", &identifier);
+    ctx.insert("fights", &game_detail::replay_sections(&messages));
+    html_with_csrf(tera_engine::render("replay.html", &ctx), &csrf)
+}
+
 #[derive(Deserialize)]
 pub struct TimelineQuery {
     pub filter: Option<String>,
