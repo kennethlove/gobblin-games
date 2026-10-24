@@ -67,6 +67,9 @@ USER api_user
 WORKDIR /app/api
 ENV CARGO_MANIFEST_DIR=/app/api
 ENV STORAGE_PATH=/app/api/uploads
+# The container listens on 3001; local `cargo run` still defaults to 3000
+# (api/src/main.rs reads API_PORT, default 3000).
+ENV API_PORT=3001
 
 RUN mkdir -p /app/api/uploads
 
@@ -79,7 +82,7 @@ COPY --from=builder /app/api/assets/dist /app/api/assets/dist
 COPY --from=builder /app/api/assets/icons /app/api/assets/icons
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl --fail http://localhost:3000/health || exit 1
+    CMD curl --fail http://localhost:3001/health || exit 1
 
-EXPOSE 3000
+EXPOSE 3001
 ENTRYPOINT ["/usr/local/bin/gg_api"]

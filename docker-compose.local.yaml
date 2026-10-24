@@ -1,8 +1,0 @@
-# Local-dev overlay: puts the host port back for `just docker-up`.
-# WHY: the base compose publishes no host port (Coolify overlap rule — see
-# README "Coolify deploys"). This file deliberately has a non-standard name
-# so Compose never auto-merges it; only the justfile passes it with -f.
-services:
-  backend:
-    ports:
-      - "${SERVICE_PORT_BACKEND:-3000}:3000"

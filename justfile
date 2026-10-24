@@ -234,7 +234,7 @@ docker-build:
 
 # Start production environment with Docker Compose
 docker-up:
-    docker-compose -f docker-compose.yaml -f docker-compose.local.yaml up -d
+    docker-compose up -d
 
 # Stop Docker Compose services
 docker-down:

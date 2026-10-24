@@ -13,13 +13,11 @@ services:
         - ${REGISTRY_URL:-localhost}/gg_backend:latest
     image: ${REGISTRY_URL:-localhost}/gg_backend:latest
     restart: unless-stopped
-    # No host-port mapping on purpose: the container is reachable only on the
-    # compose network, and Coolify's reverse proxy routes by domain to the
-    # app's internal port (3000). Publishing a host port is what causes
-    # per-app conflicts on a shared server.
+    ports:
+      - "${SERVICE_PORT_BACKEND:-3001}:3001"
     environment:
-      - SERVICE_FQDN_BACKEND_3000
-      - 'SERVICE_FQDN_BACKEND=${SERVICE_FQDN_BACKEND:-http://backend:3000}'
+      - SERVICE_FQDN_BACKEND_3001
+      - 'SERVICE_FQDN_BACKEND=${SERVICE_FQDN_BACKEND:-http://backend:3001}'
       - 'SURREAL_HOST=${SURREAL_HOST:-surrealdb}'
       - 'SURREAL_USER=${SURREAL_USER:-root}'
       - 'SURREAL_PASS=${SURREAL_PASS:-root}'
@@ -27,7 +25,7 @@ services:
     labels:
       - "coolify.managed=true"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 30s
       timeout: 10s
       retries: 5
