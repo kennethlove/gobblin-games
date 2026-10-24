@@ -64,31 +64,34 @@
   --band-danger: oklch(45% 0.22 25);
   --error-banner-border: oklch(60% 0.22 25);
   --error-banner-bg: oklch(60% 0.22 25 / 0.1);
+  /* WHY: primary CTAs need white text that clears APCA 75 — the plain
+     accent is too light for that (audit: .quickstart-btn Lc 69). */
+  --accent-strong: oklch(42% 0.10 225);
 }
 
 /* Dark theme */
 [data-theme="dark"] {
-  --bg:      #0b0e14;
-  --surface: #141a26;
-  --surface-alt: #1c2438;
-  --surface-hover: #222c44;
-  --fg:      #e8ecf4;
-  --muted:   #7982a0;
-  --border:  #283044;
-  --border-strong: #3d4866;
-  --accent:  #00b8d9;
+  --bg:      oklch(16.346% 0.0136 264.09);
+  --surface: oklch(21.774% 0.0254 263.83);
+  --surface-alt: oklch(26.278% 0.0394 267.02);
+  --surface-hover: oklch(29.580% 0.0461 266.35);
+  --fg:      oklch(94.236% 0.0116 264.51);
+  --muted:   oklch(61.006% 0.0468 271.89);
+  --border:  oklch(31.095% 0.0378 267.38);
+  --border-strong: oklch(40.519% 0.0527 268.51);
+  --accent:  oklch(72.149% 0.1287 216.76);
   --accent-soft: rgba(0,184,217,0.15);
   --fg-soft: rgba(232,236,244,0.05);
-  --running:   #22c55e;
-  --waiting:   #f97316;
-  --finished:  #5b6370;
-  --success:   #22c55e;
-  --danger:    #ef4455;
-  --warning:   #f97316;
-  --info:      #3b82f6;
-  --purple:    #8b5cf6;
-  --gold:      #f0b429;
-  --topnav-gradient-start: #0f1522;
+  --running:   oklch(72.275% 0.1920 149.58);
+  --waiting:   oklch(70.487% 0.1867 47.60);
+  --finished:  oklch(49.747% 0.0230 260.14);
+  --success:   oklch(72.275% 0.1920 149.58);
+  --danger:    oklch(63.945% 0.2064 19.98);
+  --warning:   oklch(70.487% 0.1867 47.60);
+  --info:      oklch(62.308% 0.1880 259.81);
+  --purple:    oklch(60.563% 0.2189 292.72);
+  --gold:      oklch(80.448% 0.1558 82.54);
+  --topnav-gradient-start: oklch(19.657% 0.0280 264.93);
   --commentary-bg: oklch(25% 0.03 260);
   --commentary-border: oklch(35% 0.06 260);
   --commentary-header: oklch(75% 0.12 260);
@@ -114,25 +117,25 @@
 
 /* Light theme */
 [data-theme="light"] {
-  --bg:      #eef1f5;
-  --surface: #ffffff;
-  --fg:      #111318;
-  --muted:   #5b6370;
-  --border:  #d1d5db;
-  --border-strong: #9ca3af;
-  --accent:  #0891b2;
+  --bg:      oklch(95.700% 0.0063 255.48);
+  --surface: oklch(100% 0 0);
+  --fg:      oklch(18.687% 0.0107 268.11);
+  --muted:   oklch(49.747% 0.0230 260.14);
+  --border:  oklch(87.168% 0.0093 258.34);
+  --border-strong: oklch(71.366% 0.0192 261.32);
+  --accent:  oklch(60.891% 0.1109 221.72);
   --accent-soft: color-mix(in oklab, var(--accent), transparent 90%);
   --fg-soft: color-mix(in oklab, var(--fg), transparent 95%);
-  --running:   #16a34a;
-  --waiting:   #d97706;
-  --finished:  #5b6370;
-  --success:   #16a34a;
-  --danger:    #dc2626;
-  --warning:   #f97316;
-  --info:      #3b82f6;
-  --purple:    #8b5cf6;
-  --gold:      #d97706;
-  --topnav-gradient-start: #e2e5ea;
+  --running:   oklch(62.705% 0.1699 149.21);
+  --waiting:   oklch(66.584% 0.1574 58.32);
+  --finished:  oklch(49.747% 0.0230 260.14);
+  --success:   oklch(62.705% 0.1699 149.21);
+  --danger:    oklch(57.710% 0.2152 27.33);
+  --warning:   oklch(70.487% 0.1867 47.60);
+  --info:      oklch(62.308% 0.1880 259.81);
+  --purple:    oklch(60.563% 0.2189 292.72);
+  --gold:      oklch(66.584% 0.1574 58.32);
+  --topnav-gradient-start: oklch(92.105% 0.0075 260.73);
   --commentary-bg: oklch(96% 0.01 260);
   --commentary-border: oklch(85% 0.03 260);
   --commentary-header: oklch(30% 0.08 260);
@@ -168,6 +171,13 @@ body > main { flex: 1; display: flex; flex-direction: column; }
 img, svg { display: block; max-width: 100%; }
 a { color: inherit; text-decoration: none; }
 button { font: inherit; cursor: pointer; }
+button:disabled,
+.quickstart-btn:disabled,
+.reveal-btn:disabled,
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 p { text-wrap: pretty; }
 h1, h2, h3, h4 { text-wrap: balance; }
 .container { max-width: var(--container); margin-inline: auto; padding-inline: var(--gutter); }
@@ -276,8 +286,8 @@ h1, h2, h3, h4 { text-wrap: balance; }
 }
 .quickstart-btn {
   padding: 18px 24px;
-  background: var(--accent);
-  color: #fff;
+  background: var(--accent-strong);
+  color: oklch(100% 0 0);
   border: none;
   border-radius: var(--radius);
   font-family: var(--font-display);
@@ -375,7 +385,7 @@ h1, h2, h3, h4 { text-wrap: balance; }
   transition: opacity 0.15s;
 }
 .btn:hover { opacity: 0.85; }
-.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary { background: var(--accent); color: oklch(100% 0 0); }
 .btn-ghost { background: transparent; color: var(--fg); border: 1px solid var(--border); }
 .btn-ghost:hover { background: var(--fg-soft); }
 .btn-sm { padding: 8px 16px; font-size: 13px; }
@@ -454,9 +464,17 @@ h1, h2, h3, h4 { text-wrap: balance; }
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.status-pill.running { background: var(--running); color: #fff; }
-.status-pill.waiting { background: var(--waiting); color: #fff; }
-.status-pill.finished { background: var(--finished); color: #fff; }
+.status-pill.running {
+  /* WHY: mid-brightness green can't clear APCA 75 under white text or
+     over dark — derive a chip dark enough from the theme token instead. */
+  background: color-mix(in oklab, var(--running) 62%, black);
+  color: oklch(100% 0 0);
+}
+.status-pill.waiting {
+  background: color-mix(in oklab, var(--waiting) 62%, black);
+  color: oklch(100% 0 0);
+}
+.status-pill.finished { background: var(--finished); color: oklch(100% 0 0); }
 
 /* Footer */
 .pagefoot { padding-block: var(--gap-md); color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); }
@@ -509,7 +527,7 @@ h1, h2, h3, h4 { text-wrap: balance; }
 .survivor-avatar {
   width: 20px; height: 20px; display: grid; place-items: center;
   border-radius: var(--radius-sm); background: var(--accent);
-  color: #fff; font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+  color: oklch(100% 0 0); font-family: var(--font-mono); font-size: 9px; font-weight: 700;
 }
 
 /* Reveal actions */
@@ -525,11 +543,11 @@ h1, h2, h3, h4 { text-wrap: balance; }
 }
 .reveal-btn {
   padding: 5px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
-  font-size: var(--fs-xs); font-weight: 500; background: var(--bg); color: var(--muted);
+  font-size: var(--fs-xs); font-weight: 500; background: var(--bg); color: var(--fg);
   cursor: pointer; transition: background 0.12s, color 0.12s;
 }
 .reveal-btn:hover { background: var(--fg); color: var(--surface); }
-.reveal-btn.danger:hover { background: var(--danger); color: #fff; }
+.reveal-btn.danger:hover { background: var(--danger); color: oklch(100% 0 0); }
 
 /* Finished grid */
 .finished-grid {
@@ -1186,22 +1204,22 @@ h1, h2, h3, h4 { text-wrap: balance; }
 
 /* Light broadcast tokens */
 [data-theme="light"] .broadcast-theme {
-  --broad-bg: #eef1f5;
-  --broad-surface: #ffffff;
-  --broad-surface-alt: #f3f5f8;
-  --broad-surface-hover: #e8ecf0;
-  --broad-fg: #111318;
-  --broad-fg-muted: #5b6370;
-  --broad-border: #d1d5db;
-  --broad-border-strong: #9ca3af;
+  --broad-bg: oklch(95.700% 0.0063 255.48);
+  --broad-surface: oklch(100% 0 0);
+  --broad-surface-alt: oklch(96.948% 0.0045 258.32);
+  --broad-surface-hover: oklch(94.119% 0.0069 247.90);
+  --broad-fg: oklch(18.687% 0.0107 268.11);
+  --broad-fg-muted: oklch(49.747% 0.0230 260.14);
+  --broad-border: oklch(87.168% 0.0093 258.34);
+  --broad-border-strong: oklch(71.366% 0.0192 261.32);
 
-  --broad-accent: #0891b2;
-  --broad-gold: #d97706;
-  --broad-danger: #dc2626;
-  --broad-success: #16a34a;
-  --broad-warning: #d97706;
-  --broad-info: #3b82f6;
-  --broad-purple: #7c3aed;
+  --broad-accent: oklch(60.891% 0.1109 221.72);
+  --broad-gold: oklch(66.584% 0.1574 58.32);
+  --broad-danger: oklch(57.710% 0.2152 27.33);
+  --broad-success: oklch(62.705% 0.1699 149.21);
+  --broad-warning: oklch(66.584% 0.1574 58.32);
+  --broad-info: oklch(62.308% 0.1880 259.81);
+  --broad-purple: oklch(54.134% 0.2466 293.01);
 
   --phase-dawn: oklch(60% 0.15 85);
   --phase-day: oklch(60% 0.15 95);
@@ -1229,13 +1247,13 @@ h1, h2, h3, h4 { text-wrap: balance; }
 
 /* Light broadcast tokens on body so nav/footer can inherit */
 [data-theme="light"] body.broadcast {
-  --bg: #eef1f5;
-  --surface: #ffffff;
-  --fg: #111318;
-  --muted: #5b6370;
-  --border: #d1d5db;
-  --accent: #0891b2;
-  background: #eef1f5;
+  --bg: oklch(95.700% 0.0063 255.48);
+  --surface: oklch(100% 0 0);
+  --fg: oklch(18.687% 0.0107 268.11);
+  --muted: oklch(49.747% 0.0230 260.14);
+  --border: oklch(87.168% 0.0093 258.34);
+  --accent: oklch(60.891% 0.1109 221.72);
+  background: oklch(95.700% 0.0063 255.48);
 }
 
 /* 2. Main Grid — 50/50 Layout */
@@ -1998,4 +2016,17 @@ h1, h2, h3, h4 { text-wrap: balance; }
   .tl-main > .tl-filters { order: 9; }
   .tl-period .tl-count { margin-left: var(--gap-sm); }
   .tl-period .tl-label { flex: 0 1 auto; }
+}
+
+/* Every transition above answers an action; a user who asks for reduced
+   motion gets the end state instantly, everywhere. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
