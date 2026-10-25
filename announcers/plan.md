@@ -134,7 +134,7 @@ pub trait Commentator: Send + Sync {
 **Prompt structure (inside OllamaCommentator):**
 
 ```
-System: You are a live sports broadcast team covering the Gobblin' Games...
+System: You are a live sports broadcast team covering the Gobblin Games...
 (prompts for Verity play-by-play + Rex color commentary format)
 
 User: [BroadcastPackage serialized as compact text]

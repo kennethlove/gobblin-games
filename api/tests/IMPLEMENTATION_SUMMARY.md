@@ -2,7 +2,7 @@
 
 ## Overview
 
-Added comprehensive integration tests for the Gobblin' Games API covering authentication, game management, characters, and simulation.
+Added comprehensive integration tests for the Gobblin Games API covering authentication, game management, characters, and simulation.
 
 ## Files Created
 

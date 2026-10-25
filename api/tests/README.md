@@ -1,6 +1,6 @@
 # API Integration Tests
 
-This directory contains integration tests for the Gobblin' Games API.
+This directory contains integration tests for the Gobblin Games API.
 
 ## Test Structure
 

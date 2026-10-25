@@ -1,8 +1,8 @@
-# Repository Atlas: Gobblin' Games
+# Repository Atlas: Gobblin Games
 
 ## Project Responsibility
 
-**Gobblin' Games** is a browser-based goblin battle royale built with Rust. It provides a complete stack for creating, managing, and watching autonomous goblins compete in procedurally-generated arena battles with deterministic commentary. The project demonstrates a pure Rust backend architecture: REST API (Axum + SurrealDB), stateless game engine, and template-based narration.
+**Gobblin Games** is a browser-based goblin battle royale built with Rust. It provides a complete stack for creating, managing, and watching autonomous goblins compete in procedurally-generated arena battles with deterministic commentary. The project demonstrates a pure Rust backend architecture: REST API (Axum + SurrealDB), stateless game engine, and template-based narration.
 
 ## System Architecture
 
@@ -106,7 +106,7 @@ just api  # API server only (http://localhost:3000) - requires SurrealDB running
 | Directory | Responsibility Summary | Detailed Map |
 |-----------|------------------------|--------------|
 | **`game/`** | Pure Rust simulation engine - stateless game logic with no I/O dependencies | [game/codemap.md](game/codemap.md) |
-| **`game/src/`** | Core game engine implementing turn-based Gobblin' Games simulation with event sourcing | [game/src/codemap.md](game/src/codemap.md) |
+| **`game/src/`** | Core game engine implementing turn-based Gobblin Games simulation with event sourcing | [game/src/codemap.md](game/src/codemap.md) |
 | **`characters/`** | Autonomous AI characters with d20 combat, status effects, and context-aware decision-making (extracted from game/) | [characters/codemap.md](characters/codemap.md) |
 | **`areas/`** | 5-region arena topology (Hub + cardinals) with item inventory and dynamic closures (extracted from game/) | [areas/codemap.md](areas/codemap.md) |
 | **`game/src/items/`** | Procedurally-generated weapons, shields, and consumables with factory pattern creation | [game/src/items/codemap.md](game/src/items/codemap.md) |
@@ -360,5 +360,5 @@ Services defined in `docker-compose.yml`:
 ---
 
 **Last Updated**: 2026-05-19
-**Purpose**: Definitive entry point for understanding the Gobblin' Games repository
+**Purpose**: Definitive entry point for understanding the Gobblin Games repository
 **Maintenance**: Update when adding new crates or changing architecture

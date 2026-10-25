@@ -1,4 +1,4 @@
-# Gobblin' Games
+# Gobblin Games
 
 > A browser-based goblin battle royale built with Rust: twenty-four goblins enter, one walks out. Autonomous goblins, procedurally generated arenas, and deterministic commentary.
 

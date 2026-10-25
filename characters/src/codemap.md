@@ -2,7 +2,7 @@
 
 ## Responsibility
 
-The `characters` module implements the core game characters and their behavior in the Gobblin' Games simulation. It manages:
+The `characters` module implements the core game characters and their behavior in the Gobblin Games simulation. It manages:
 
 - **Character entities**: Character state, attributes, and statistics
 - **AI decision-making**: Context-aware action selection based on health, sanity, enemies, and inventory

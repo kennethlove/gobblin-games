@@ -69,7 +69,7 @@ pub async fn send_verification_email(to: &str, token: &str) -> Result<(), EmailE
 <html>
 <head><meta charset="utf-8"><title>Verify your email</title></head>
 <body style="font-family: sans-serif; padding: 20px;">
-    <h1>Welcome to Gobblin' Games!</h1>
+    <h1>Welcome to Gobblin Games!</h1>
     <p>Thanks for signing up. Click the link below to verify your email address:</p>
     <p><a href="{}" style="display: inline-block; padding: 12px 24px; background: #4f46e5; color: white; text-decoration: none; border-radius: 6px;">Verify Email</a></p>
     <p>Or copy this link into your browser:</p>
@@ -86,7 +86,7 @@ pub async fn send_verification_email(to: &str, token: &str) -> Result<(), EmailE
             send_via_mailpit(
                 to,
                 &EMAIL_FROM,
-                "Verify your Gobblin' Games account",
+                "Verify your Gobblin Games account",
                 &html_body,
             )
             .await
@@ -95,7 +95,7 @@ pub async fn send_verification_email(to: &str, token: &str) -> Result<(), EmailE
             send_via_resend(
                 to,
                 &EMAIL_FROM,
-                "Verify your Gobblin' Games account",
+                "Verify your Gobblin Games account",
                 &html_body,
             )
             .await
@@ -105,7 +105,7 @@ pub async fn send_verification_email(to: &str, token: &str) -> Result<(), EmailE
             send_via_mailpit(
                 to,
                 &EMAIL_FROM,
-                "Verify your Gobblin' Games account",
+                "Verify your Gobblin Games account",
                 &html_body,
             )
             .await
@@ -135,7 +135,7 @@ pub async fn send_password_reset_email(to: &str, token: &str) -> Result<(), Emai
 <head><meta charset="utf-8"><title>Reset your password</title></head>
 <body style="font-family: sans-serif; padding: 20px;">
     <h1>Password Reset</h1>
-    <p>We received a request to reset the password for your Gobblin' Games account.</p>
+    <p>We received a request to reset the password for your Gobblin Games account.</p>
     <p><a href="{}" style="display: inline-block; padding: 12px 24px; background: #4f46e5; color: white; text-decoration: none; border-radius: 6px;">Reset Password</a></p>
     <p>Or copy this link into your browser:</p>
     <p style="word-break: break-all; color: #666;">{}</p>
@@ -151,7 +151,7 @@ pub async fn send_password_reset_email(to: &str, token: &str) -> Result<(), Emai
             send_via_mailpit(
                 to,
                 &EMAIL_FROM,
-                "Reset your Gobblin' Games password",
+                "Reset your Gobblin Games password",
                 &html_body,
             )
             .await
@@ -160,7 +160,7 @@ pub async fn send_password_reset_email(to: &str, token: &str) -> Result<(), Emai
             send_via_resend(
                 to,
                 &EMAIL_FROM,
-                "Reset your Gobblin' Games password",
+                "Reset your Gobblin Games password",
                 &html_body,
             )
             .await
@@ -170,7 +170,7 @@ pub async fn send_password_reset_email(to: &str, token: &str) -> Result<(), Emai
             send_via_mailpit(
                 to,
                 &EMAIL_FROM,
-                "Reset your Gobblin' Games password",
+                "Reset your Gobblin Games password",
                 &html_body,
             )
             .await
