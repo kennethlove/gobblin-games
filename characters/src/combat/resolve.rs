@@ -593,8 +593,12 @@ pub fn resolve(
     let mut contest = attack_contest(attacker, defender, rng, sub_events, tuning);
     let result = contest.result;
 
-    // Compute damage based on result (strength scale 0-50, result multipliers up to 3x).
-    // Scale to blood system: multiply by 10 so damage is in the 0-1000 blood range.
+    // Compute damage based on result (strength scale 0-50; crit 3x,
+    // decisive 2x, plain 1x). The tail multiplier tunes fight length against
+    // the 1000-blood pool: h26 swept it with `tuning_harness` (2000 seeds)
+    // and one-round kills fell 22% (x10) -> 10% (x7) -> 6.5% (x6), with
+    // stamina-empty draws growing 7.6% -> 12.7% -> 14.6%. x7 keeps the
+    // median fight at two rounds without pushing draws into the majority.
     let attack_strength = attacker.effective_attribute(CharacterAttribute::Strength);
     let defend_strength = defender.effective_attribute(CharacterAttribute::Strength);
     let raw_damage: u32 = match result {
@@ -605,7 +609,7 @@ pub fn resolve(
         AttackResult::DefenderWins => defend_strength,
         AttackResult::DefenderWinsDecisively => defend_strength * 2,
         AttackResult::CriticalFumble | AttackResult::Miss => 0,
-    } * 10;
+    } * 6;
 
     // Toughness mitigation: the character taking the hit absorbs part of it
     // through effective toughness (wound penalties included). The dodge roll
