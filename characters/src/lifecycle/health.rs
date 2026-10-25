@@ -13,14 +13,17 @@ const MAX_BRAVERY: u32 = 100;
 const DEFAULT_HEAL: u32 = 5;
 const DEFAULT_MENTAL_HEAL: u32 = 5;
 
-/// `(base + flat) x percent`, floored at 0 (spec §2, §4).
+/// `(base + flat) x percent`, floored at 1: every scale bottom is 1+.
+/// A floor of 0 let a heavily wounded goblin's strength reach 0, and 0
+/// strength means 0 damage on every hit — a fight it can never win by
+/// striking (h26-era review catch).
 ///
 /// Flat modifiers sum under the multiply; percentages accumulate additively
 /// and apply to the flat-adjusted base. Exposed so the formula can be tested
 /// without constructing a whole character.
 pub fn apply_attribute_modifiers(base: u32, flat: i32, percent: f64) -> u32 {
     let value = (base as f64 + flat as f64) * (1.0 + percent / 100.0);
-    value.max(0.0).round() as u32
+    value.max(1.0).round() as u32
 }
 
 /// Fresh stamina pool for a trait set: the base 100 bent by every
@@ -260,7 +263,8 @@ impl Character {
         (flat, percent)
     }
 
-    /// `(base + flat) x percent`, floored at 0 (spec §2, §4). The one path
+    /// `(base + flat) x percent`, floored at 1 (scales are 1+, not 0+ —
+    /// see `apply_attribute_modifiers`). The one path
     /// every mechanic reads attributes through, so a permanent limp and a
     /// fresh sprain are indistinguishable to a consumer.
     pub fn effective_attribute(&self, attr: CharacterAttribute) -> u32 {
@@ -408,9 +412,9 @@ mod tests {
 
     #[test]
     fn effective_value_floors_at_zero() {
-        assert_eq!(apply_attribute_modifiers(10, -30, 0.0), 0);
-        assert_eq!(apply_attribute_modifiers(10, 0, -150.0), 0);
-        assert_eq!(apply_attribute_modifiers(0, 0, 0.0), 0);
+        assert_eq!(apply_attribute_modifiers(10, -30, 0.0), 1);
+        assert_eq!(apply_attribute_modifiers(10, 0, -150.0), 1);
+        assert_eq!(apply_attribute_modifiers(0, 0, 0.0), 1);
     }
 
     #[test]
@@ -476,8 +480,8 @@ mod tests {
                 BodyPart::LeftArm,
             ));
         }
-        // 6 x -20% = -120% -> floored at 0, never negative.
-        assert_eq!(c.effective_strength(), 0);
-        assert_eq!(c.effective_attribute(CharacterAttribute::Strength), 0);
+        // 6 x -20% = -120% -> floored at 1, never 0 or negative.
+        assert_eq!(c.effective_strength(), 1);
+        assert_eq!(c.effective_attribute(CharacterAttribute::Strength), 1);
     }
 }
