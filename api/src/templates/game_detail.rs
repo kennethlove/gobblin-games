@@ -1211,10 +1211,38 @@ pub fn render_hex_map(
             .filter(|t| t.is_alive() && *area_type == t.location.area)
             .count();
 
+        // Hazards (q7k): an area with events is a hazard zone — mark it
+        // with a danger stroke, a dashed rim, and the active events plus
+        // how many blocks it has left.
+        let hazard_line: String = area_map
+            .get(area_type)
+            .filter(|a| !a.is_open())
+            .map(|a| {
+                let names: Vec<String> = a
+                    .events
+                    .iter()
+                    .map(|e| e.to_string().to_uppercase())
+                    .collect();
+                let blocks = a
+                    .hazard_blocks
+                    .map(|b| format!(" · {b} BLK"))
+                    .unwrap_or_default();
+                format!(
+                    r#"<text x="{cx}" y="{cy:.1}" text-anchor="middle" dominant-baseline="middle" fill="var(--danger)" font-size="7" font-family="var(--font-condensed)" dy="21" font-weight="700" letter-spacing="0.5">{}{blocks}</text>"#,
+                    names.join(" · ")
+                )
+            })
+            .unwrap_or_default();
+        let (stroke, dash) = if hazard_line.is_empty() {
+            ("var(--broad-border-strong)", "")
+        } else {
+            ("var(--danger)", r#" stroke-dasharray="5 3""#)
+        };
+
         hexes.push_str(&format!(
-            r#"<polygon points="{points}" fill="{fill}" stroke="var(--broad-border-strong)" stroke-width="2" opacity="0.85"/>
+            r#"<polygon points="{points}" fill="{fill}" stroke="{stroke}"{dash} stroke-width="2" opacity="0.85"/>
             <text x="{cx}" y="{cy:.1}" text-anchor="middle" dominant-baseline="middle" fill="rgba(255,255,255,0.9)" font-size="9" font-family="var(--font-condensed)" font-weight="600" letter-spacing="1">{terrain_label}</text>
-            <text x="{cx}" y="{cy:.1}" text-anchor="middle" dominant-baseline="middle" fill="rgba(255,255,255,0.5)" font-size="7" font-family="var(--font-condensed)" dy="12">{area_name}</text>"#,
+            <text x="{cx}" y="{cy:.1}" text-anchor="middle" dominant-baseline="middle" fill="rgba(255,255,255,0.5)" font-size="7" font-family="var(--font-condensed)" dy="12">{area_name}</text>{hazard_line}"#,
         ));
 
         // Character dots in this hex

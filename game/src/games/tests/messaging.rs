@@ -33,7 +33,7 @@ fn test_announce_area_events() {
     assert!(!game.areas[0].is_open());
     let _ = game.announce_area_events();
 
-    assert_eq!(game.messages.len(), 3);
+    assert_eq!(game.messages.len(), 2);
     let area_name = Area::Hub.to_string();
     for msg in &game.messages {
         assert_eq!(
@@ -44,6 +44,18 @@ fn test_announce_area_events() {
             msg.subject,
             format!("{}:area:{}", game.identifier, area_name)
         );
+        // Typed AreaEvent payload (q7k): kind parsed from the event
+        // name (all 11 hazard names map to a bucket) and description
+        // carries the rendered line.
+        match &msg.payload {
+            shared::messages::MessagePayload::AreaEvent {
+                kind, description, ..
+            } => {
+                assert!(!matches!(kind, shared::messages::AreaEventKind::Other));
+                assert!(!description.is_empty());
+            }
+            other => panic!("expected typed AreaEvent payload, got {other:?}"),
+        }
     }
 }
 

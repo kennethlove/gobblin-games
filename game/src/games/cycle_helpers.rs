@@ -14,13 +14,15 @@ impl Game {
         crate::trauma_producers::run_trauma_producers(self);
     }
 
-    /// Announce events in closed areas.
+    /// Announce the hazards active in an area.
     ///
-    /// Emits one `MessageSource::Area` line per active event (using
-    /// `GameOutput::AreaEvent`) plus a closing `GameOutput::AreaClose`
-    /// summary so consumers know the area is currently uninhabitable.
+    /// Emits one `MessageSource::Area` line per active hazard with a typed
+    /// `MessagePayload::AreaEvent` (kind parsed from the event name,
+    /// `description` = the rendered line). Hazards persist for
+    /// `MAX_HAZARD_BLOCKS` cycles (q7k), so an active area re-announces
+    /// each cycle; there is no close summary — nothing closes anymore.
     pub(super) fn announce_area_events(&mut self) -> Result<(), GameError> {
-        // Snapshot to avoid borrow conflicts with self.log_output below.
+        // Snapshot to avoid borrow conflicts with self.messages below.
         let snapshots: Vec<(String, Vec<String>)> = self
             .areas
             .iter()
@@ -38,24 +40,45 @@ impl Game {
         for (area_name, event_names) in snapshots {
             let subject = format!("area:{}", area_name);
             for event_name in &event_names {
-                self.log_event(
+                let content = crate::events::GameEvent::AreaEvent {
+                    area_event: event_name.clone(),
+                    area_name: area_name.clone(),
+                }
+                .to_string();
+                let payload = shared::messages::MessagePayload::AreaEvent {
+                    area: shared::messages::AreaRef {
+                        identifier: area_name.clone().into(),
+                        name: area_name.clone(),
+                    },
+                    kind: Self::area_event_kind(event_name),
+                    description: content.clone(),
+                };
+                self.push_message(
                     shared::messages::MessageSource::Area(area_name.clone()),
                     subject.clone(),
-                    crate::events::GameEvent::AreaEvent {
-                        area_event: event_name.clone(),
-                        area_name: area_name.clone(),
-                    },
+                    content,
+                    payload,
+                    self.tick_counter.boundary(),
                 );
             }
-            self.log_event(
-                shared::messages::MessageSource::Area(area_name.clone()),
-                subject,
-                crate::events::GameEvent::AreaClose {
-                    area_name: area_name.clone(),
-                },
-            );
         }
         Ok(())
+    }
+
+    /// Coarse kind carried on a hazard's typed payload — the bucket the
+    /// feed groups by; the exact event name rides in `description`.
+    fn area_event_kind(event_name: &str) -> shared::messages::AreaEventKind {
+        use shared::messages::AreaEventKind;
+        match event_name {
+            "earthquake" => AreaEventKind::Earthquake,
+            "flood" => AreaEventKind::Flood,
+            "wildfire" => AreaEventKind::Fire,
+            "blizzard" | "avalanche" | "sandstorm" => AreaEventKind::Storm,
+            "landslide" | "heatwave" | "drought" | "rockslide" | "sinkhole" => {
+                AreaEventKind::Hazard
+            }
+            _ => AreaEventKind::Other,
+        }
     }
 
     /// Hazards (q7k): every active hazard re-runs its survival pass
