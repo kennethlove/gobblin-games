@@ -174,6 +174,11 @@ pub struct AreaDetails {
     pub items: Vec<Item>,
     #[serde(default)]
     pub events: Vec<AreaEvent>,
+    /// Blocks (time blocks) this area's hazards stay active; None =
+    /// no hazards. Set when an event arrives, aged down each cycle,
+    /// and cleared with `events` at 0 (q7k: max 3 blocks lifetime).
+    #[serde(default)]
+    pub hazard_blocks: Option<u8>,
     #[serde(default = "default_terrain")]
     pub terrain: TerrainType,
     /// Authored sub-tile atmosphere from the arena preset snapshot, in
@@ -201,6 +206,7 @@ impl Default for AreaDetails {
             area: None,
             items: vec![],
             events: vec![],
+            hazard_blocks: None,
             placed_traps: vec![],
             terrain: TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap(),
             sub_tiles: vec![],
@@ -250,6 +256,7 @@ impl AreaDetails {
             area: Some(area),
             items: vec![],
             events: vec![],
+            hazard_blocks: None,
             placed_traps: vec![],
             terrain: TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap(),
             sub_tiles: vec![],
@@ -263,6 +270,7 @@ impl AreaDetails {
             area: Some(area),
             items: vec![],
             events: vec![],
+            hazard_blocks: None,
             placed_traps: vec![],
             terrain,
             sub_tiles: vec![],

@@ -148,7 +148,6 @@ pub struct EnvironmentContext<'a> {
     /// (phase redesign — one source of truth for day/night classification).
     pub config: world::config::GameConfig,
     pub area_details: &'a mut AreaDetails,
-    pub closed_areas: &'a [Area],
     pub available_destinations: Vec<areas::DestinationInfo>,
     /// All known areas (read-only snapshot). Used by multi-hop
     /// pathfinding so the planner can reason about non-neighbor goals.
@@ -976,7 +975,6 @@ impl Character {
                 number_of_nearby_characters,
                 &environment_details.available_destinations,
                 environment_details.all_areas,
-                environment_details.closed_areas,
                 environment_details.enemy_density,
                 environment_details.phase,
                 rng,
@@ -991,11 +989,8 @@ impl Character {
             self,
             &environment_details.available_destinations,
             environment_details.all_areas,
-            environment_details.closed_areas,
             environment_details.enemy_density,
         );
-
-        let closed_areas = environment_details.closed_areas;
 
         for beat in beats {
             // Move beat pre-gates (owner decision C): (a) silently
@@ -1030,12 +1025,7 @@ impl Character {
 
             match beat {
                 Action::Move(destination) => {
-                    self.act_move(
-                        &destination,
-                        closed_areas,
-                        environment_details.all_areas,
-                        events,
-                    );
+                    self.act_move(&destination, environment_details.all_areas, events);
                 }
                 Action::Rest => {
                     self.act_rest(events);
@@ -1276,7 +1266,6 @@ impl Character {
     fn act_move(
         &mut self,
         destination: &Option<Location>,
-        closed_areas: &[Area],
         all_areas: &[AreaDetails],
         events: &mut Vec<TaggedEvent>,
     ) {
@@ -1284,7 +1273,7 @@ impl Character {
         // crossing price (half the source's cost plus half the
         // destination's, each rounded up). Failure (no options, or too
         // broke for hop 1) falls back to a short rest.
-        if let TravelResult::Failure = self.travels(closed_areas, *destination, all_areas, events) {
+        if let TravelResult::Failure = self.travels(*destination, all_areas, events) {
             self.short_rests();
         }
     }
@@ -3247,7 +3236,6 @@ mod tests {
             phase: shared::messages::Phase::DAY,
             config: world::config::GameConfig::default(),
             area_details: &mut area_details,
-            closed_areas: &[],
             available_destinations: Vec::new(),
             all_areas: &all_areas,
             enemy_density: &enemy_density,

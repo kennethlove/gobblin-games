@@ -4,6 +4,11 @@ use areas::{Area, AreaDetails};
 use rand::rngs::SmallRng;
 use std::collections::HashMap;
 
+/// Blocks (time cycles) a hazard stays active after arrival; each
+/// cycle re-runs the survival pass and ages by one, then it wipes.
+/// (q7k: config knob comes later.)
+const MAX_HAZARD_BLOCKS: u8 = 3;
+
 impl Game {
     pub(super) fn run_trauma_producers(&mut self, _phase: shared::messages::Phase) {
         crate::trauma_producers::run_trauma_producers(self);
@@ -53,13 +58,39 @@ impl Game {
         Ok(())
     }
 
-    /// Ensures at least one area is open. If not, opens a random area by clearing its events.
-    pub(super) fn ensure_open_area(&mut self) {
-        if self.random_open_area().is_none()
-            && let Some(area) = self.random_area()
-        {
-            area.events.clear();
+    /// Hazards (q7k): every active hazard re-runs its survival pass
+    /// for this cycle, then ages one block. At 0 blocks it wipes.
+    /// Replaces `ensure_open_area`: no movement block exists anymore,
+    /// so an all-hazard map is a legitimate state.
+    pub(super) fn hazard_survival(&mut self, rng: &mut SmallRng) -> Result<(), GameError> {
+        // Two-phase: gather first so `process_event_for_area` can take
+        // `&mut self` without fighting the areas borrow (E0499 — same
+        // trap as the cycle event closure).
+        let mut active: Vec<(Area, Vec<AreaEvent>)> = Vec::new();
+        for area_details in self.areas.iter_mut() {
+            match area_details.hazard_blocks {
+                Some(blocks) if blocks > 0 => {
+                    active.push((area_details.area.unwrap(), area_details.events.clone()));
+                    area_details.hazard_blocks = Some(blocks - 1);
+                }
+                // Rows written before the TTL field: treat as a fresh
+                // hazard so they age out instead of sticking forever.
+                None if !area_details.events.is_empty() => {
+                    active.push((area_details.area.unwrap(), area_details.events.clone()));
+                    area_details.hazard_blocks = Some(MAX_HAZARD_BLOCKS - 1);
+                }
+                _ => {
+                    area_details.events.clear();
+                    area_details.hazard_blocks = None;
+                }
+            }
         }
+        for (area, events) in active {
+            for event in events {
+                self.process_event_for_area(&area, &event, rng)?;
+            }
+        }
+        Ok(())
     }
 
     /// Triggers events for the current cycle.
@@ -84,8 +115,6 @@ impl Game {
         let day = !self.config.is_night_phase(phase);
 
         // Collect events to trigger (avoid borrow conflicts)
-        let mut events_to_process: Vec<(Area, AreaEvent)> = Vec::new();
-
         // If it's nighttime, trigger an event
         // If it is daytime and not day #1 or day #3, trigger an event
         if !day || ![1, 3].contains(&self.day.unwrap_or(1)) {
@@ -93,31 +122,27 @@ impl Game {
                 if rng.random_bool(frequency) {
                     // Generate terrain-appropriate event
                     let area_event = AreaEvent::random_for_terrain(&area_details.terrain.base, rng);
-                    let area = area_details.area.unwrap();
 
                     // Add event to area
                     area_details.events.push(area_event.clone());
 
-                    // Announce event
-                    let _event_name = area_event.to_string();
-                    let _area_name = area.to_string();
-
-                    // Collect for processing
-                    events_to_process.push((area, area_event));
+                    // Hazards (q7k): arrival sets/refreshes the block
+                    // budget — fresh events extend an active hazard.
+                    area_details.hazard_blocks = Some(MAX_HAZARD_BLOCKS);
                 }
             }
         }
 
-        // Process survival checks for all triggered events
-        for (area, event) in events_to_process {
-            self.process_event_for_area(&area, &event, rng)?;
-        }
+        // Hazards (q7k): survival re-runs for every active hazard
+        // this cycle, each ages one block, wipes at 0.
+        self.hazard_survival(rng)?;
 
         Ok(())
     }
 
-    /// If the character count is low, constrain them by closing areas.
-    /// We achieve this by spawning events in open areas.
+    /// If the character count is low, constrain them by forcing
+    /// hazards into open areas (q7k valve — same rule, no movement
+    /// block; flagged for tuning).
     pub(super) fn constrain_areas(&mut self, rng: &mut SmallRng) -> Result<(), GameError> {
         let character_count = self.living_characters_count() as u32;
         let odds = character_count as f64 / 24.0;
@@ -161,6 +186,8 @@ impl Game {
                     let key = area.area.unwrap().to_string();
                     if key == area_name {
                         area.events = area_details.events;
+                        // Forced hazards get the same TTL (q7k).
+                        area.hazard_blocks = Some(MAX_HAZARD_BLOCKS);
                         break;
                     }
                 }

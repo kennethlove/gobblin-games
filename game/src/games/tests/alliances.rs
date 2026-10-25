@@ -119,18 +119,11 @@ fn run_character_cycle_drains_character_alliance_events_into_game_queue() {
     let mut game = create_test_game_with_characters(vec![character1.clone(), character2.clone()]);
     let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
     game.areas.push(area);
-    let closed_areas = game
-        .areas
-        .iter()
-        .filter(|ad| ad.area.is_some() & !ad.is_open())
-        .map(|ad| ad.area.unwrap())
-        .collect::<Vec<Area>>();
 
     let mut rng = SmallRng::seed_from_u64(211);
     let _ = game.run_character_cycle(
         shared::messages::Phase::DAY,
         &mut rng,
-        closed_areas,
         vec![character1.clone(), character2.clone()],
         2,
     );
@@ -166,12 +159,6 @@ fn run_character_cycle_forms_alliance_between_compatible_same_area_characters() 
     let mut game = create_test_game_with_characters(vec![t1.clone(), t2.clone()]);
     let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
     game.areas.push(area);
-    let closed_areas = game
-        .areas
-        .iter()
-        .filter(|ad| ad.area.is_some() & !ad.is_open())
-        .map(|ad| ad.area.unwrap())
-        .collect::<Vec<Area>>();
 
     let mut formed = false;
     for seed in 0u64..400 {
@@ -180,7 +167,6 @@ fn run_character_cycle_forms_alliance_between_compatible_same_area_characters() 
         let _ = g.run_character_cycle(
             shared::messages::Phase::DAY,
             &mut rng,
-            closed_areas.clone(),
             vec![t1.clone(), t2.clone()],
             2,
         );
@@ -220,18 +206,11 @@ fn run_character_cycle_treacherous_character_betrays_same_area_ally_when_timer_e
     let mut game = create_test_game_with_characters(vec![betrayer.clone(), victim.clone()]);
     let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
     game.areas.push(area);
-    let closed_areas = game
-        .areas
-        .iter()
-        .filter(|ad| ad.area.is_some() & !ad.is_open())
-        .map(|ad| ad.area.unwrap())
-        .collect::<Vec<Area>>();
 
     let mut rng = SmallRng::seed_from_u64(313);
     let _ = game.run_character_cycle(
         shared::messages::Phase::DAY,
         &mut rng,
-        closed_areas,
         vec![betrayer.clone(), victim.clone()],
         2,
     );
@@ -276,18 +255,11 @@ fn run_character_cycle_treacherous_no_betrayal_without_same_area_ally_resets_tim
         .push(AreaDetails::new(Some("Hill".to_string()), Area::Sector1));
     game.areas
         .push(AreaDetails::new(Some("Lake".to_string()), Area::Sector4));
-    let closed_areas = game
-        .areas
-        .iter()
-        .filter(|ad| ad.area.is_some() & !ad.is_open())
-        .map(|ad| ad.area.unwrap())
-        .collect::<Vec<Area>>();
 
     let mut rng = SmallRng::seed_from_u64(419);
     let _ = game.run_character_cycle(
         shared::messages::Phase::DAY,
         &mut rng,
-        closed_areas,
         vec![loner.clone(), other.clone()],
         2,
     );
@@ -324,16 +296,9 @@ fn run_character_cycle_enqueues_death_recorded_for_recently_dead_ally() {
     game.areas
         .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
     let living = game.living_characters();
-    let closed_areas: Vec<Area> = vec![];
 
     let mut rng = SmallRng::seed_from_u64(547);
-    let _ = game.run_character_cycle(
-        shared::messages::Phase::DAY,
-        &mut rng,
-        closed_areas,
-        living,
-        1,
-    );
+    let _ = game.run_character_cycle(shared::messages::Phase::DAY, &mut rng, living, 1);
 
     assert!(
         game.alliance_events.is_empty(),
@@ -375,16 +340,9 @@ fn run_character_cycle_three_way_preserves_existing_alliance() {
     game.areas
         .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
     let living = game.living_characters();
-    let closed_areas: Vec<Area> = vec![];
 
     let mut rng = SmallRng::seed_from_u64(547);
-    let _ = game.run_character_cycle(
-        shared::messages::Phase::DAY,
-        &mut rng,
-        closed_areas,
-        living,
-        3,
-    );
+    let _ = game.run_character_cycle(shared::messages::Phase::DAY, &mut rng, living, 3);
 
     let a2 = game.characters.iter().find(|t| t.id == aid).unwrap();
     let b2 = game.characters.iter().find(|t| t.id == bid).unwrap();
@@ -425,16 +383,9 @@ fn run_character_cycle_consumes_recently_killed_by_for_combat_death() {
     game.areas
         .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
     let living = game.living_characters();
-    let closed_areas: Vec<Area> = vec![];
 
     let mut rng = SmallRng::seed_from_u64(547);
-    let _ = game.run_character_cycle(
-        shared::messages::Phase::DAY,
-        &mut rng,
-        closed_areas,
-        living,
-        1,
-    );
+    let _ = game.run_character_cycle(shared::messages::Phase::DAY, &mut rng, living, 1);
 
     assert!(
         game.alliance_events.is_empty(),
@@ -477,16 +428,9 @@ fn run_character_cycle_environmental_death_emits_killer_none() {
     game.areas
         .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
     let living = game.living_characters();
-    let closed_areas: Vec<Area> = vec![];
 
     let mut rng = SmallRng::seed_from_u64(547);
-    let _ = game.run_character_cycle(
-        shared::messages::Phase::DAY,
-        &mut rng,
-        closed_areas,
-        living,
-        1,
-    );
+    let _ = game.run_character_cycle(shared::messages::Phase::DAY, &mut rng, living, 1);
 
     let d = game.characters.iter().find(|t| t.id == did).unwrap();
     assert_eq!(d.status, CharacterStatus::Dead);
@@ -516,7 +460,6 @@ fn alliance_formation_emits_message_with_alliance_formed_kind() {
     game_with_area
         .areas
         .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
-    let closed_areas: Vec<Area> = vec![];
 
     let mut hit: Option<shared::messages::GameMessage> = None;
     for seed in 0u64..400 {
@@ -525,7 +468,6 @@ fn alliance_formation_emits_message_with_alliance_formed_kind() {
         let _ = g.run_character_cycle(
             shared::messages::Phase::DAY,
             &mut rng,
-            closed_areas.clone(),
             vec![t1.clone(), t2.clone()],
             2,
         );
@@ -575,13 +517,11 @@ fn betrayal_emits_message_with_betrayal_triggered_kind() {
     let mut game = create_test_game_with_characters(vec![betrayer.clone(), victim.clone()]);
     game.areas
         .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
-    let closed_areas: Vec<Area> = vec![];
 
     let mut rng = SmallRng::seed_from_u64(313);
     let _ = game.run_character_cycle(
         shared::messages::Phase::DAY,
         &mut rng,
-        closed_areas,
         vec![betrayer.clone(), victim.clone()],
         2,
     );
@@ -620,7 +560,6 @@ fn alliance_formed_message_content_matches_game_event_display() {
     game_with_area
         .areas
         .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
-    let closed_areas: Vec<Area> = vec![];
 
     let mut hit: Option<shared::messages::GameMessage> = None;
     for seed in 0u64..400 {
@@ -629,7 +568,6 @@ fn alliance_formed_message_content_matches_game_event_display() {
         let _ = g.run_character_cycle(
             shared::messages::Phase::DAY,
             &mut rng,
-            closed_areas.clone(),
             vec![t1.clone(), t2.clone()],
             2,
         );
@@ -702,13 +640,11 @@ fn betrayal_triggered_message_content_matches_game_event_display() {
     let mut game = create_test_game_with_characters(vec![betrayer.clone(), victim.clone()]);
     game.areas
         .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
-    let closed_areas: Vec<Area> = vec![];
 
     let mut rng = SmallRng::seed_from_u64(313);
     let _ = game.run_character_cycle(
         shared::messages::Phase::DAY,
         &mut rng,
-        closed_areas,
         vec![betrayer.clone(), victim.clone()],
         2,
     );

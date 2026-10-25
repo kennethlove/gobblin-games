@@ -382,8 +382,6 @@ struct CycleContext {
     combat_tuning_snapshot: characters::combat_tuning::CombatTuning,
     /// Read-only snapshot of every area for multi-hop pathfinding.
     all_areas_snapshot: Vec<AreaDetails>,
-    /// Areas closed for this cycle, propagated into `EnvironmentContext`.
-    closed_areas: Vec<Area>,
     /// Total living character count (used by `EncounterContext`).
     living_characters_count: usize,
 }
@@ -533,11 +531,6 @@ impl Game {
         }
     }
 
-    /// Returns a random area from the game.
-    fn random_area(&mut self) -> Option<&mut AreaDetails> {
-        self.areas.choose_mut(&mut rand::rng())
-    }
-
     /// Returns a random open area from the game.
     fn random_open_area(&self) -> Option<AreaDetails> {
         self.open_areas().choose(&mut rand::rng()).cloned()
@@ -548,7 +541,9 @@ impl Game {
         self.areas.iter().filter(|a| a.is_open()).cloned().collect()
     }
 
-    /// Returns a vec of closed areas.
+    /// Returns a vec of closed areas. Test-only: the cycle no longer
+    /// consumes it (hazards never block — q7k); tests assert hazard state.
+    #[cfg(test)]
     fn closed_areas(&self) -> Vec<AreaDetails> {
         self.areas
             .iter()
