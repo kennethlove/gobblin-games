@@ -1158,6 +1158,7 @@ impl Game {
                 // (or the public join hook) admits them.
                 let pool: Vec<&mut _> = self.characters.iter_mut().collect();
                 let mut combat = CombatRoundLoop::with_sides(
+                    areas::location::layout_from(&self.areas).to_vec(),
                     pool,
                     [vec![*attacker_idx], vec![target_idx]],
                     combat_id.clone(),
@@ -1246,7 +1247,8 @@ impl Game {
                         continue;
                     };
                     let from = fleer.location;
-                    let line = match flee_destination(from, rng) {
+                    let layout = areas::location::layout_from(&self.areas);
+                    let line = match flee_destination(&layout, from, rng) {
                         Some(dest) => {
                             fleer.location = dest;
                             format!(
@@ -1614,10 +1616,11 @@ fn location_ref(location: areas::location::Location) -> shared::messages::Locati
 /// ring neighbor exists. Returns `None` when the location has no
 /// neighbors (unoccupied sub index).
 fn flee_destination(
+    layout: &[(areas::AreaId, areas::hex::Axial)],
     from: areas::location::Location,
     rng: &mut impl rand::Rng,
 ) -> Option<areas::location::Location> {
-    let neighbors: Vec<areas::location::Location> = areas::location::sub_neighbors(from)
+    let neighbors: Vec<areas::location::Location> = areas::location::sub_neighbors(layout, from)
         .into_iter()
         .flatten()
         .collect();
@@ -1649,12 +1652,14 @@ mod combat_scoping_tests {
     #[test]
     fn flee_destination_always_lands_on_an_adjacent_sub_tile() {
         let mut rng = SmallRng::seed_from_u64(7);
-        for from in areas::location::all_locations() {
-            let dest = flee_destination(from, &mut rng).unwrap_or_else(|| {
-                panic!("occupied location {from:?} must have a flee destination")
-            });
+        for from in areas::location::all_locations(&areas::hex::default_layout()) {
+            let dest = flee_destination(&areas::hex::default_layout(), from, &mut rng)
+                .unwrap_or_else(|| {
+                    panic!("occupied location {from:?} must have a flee destination")
+                });
             assert!(
-                areas::location::sub_neighbors(from).contains(&Some(dest)),
+                areas::location::sub_neighbors(&areas::hex::default_layout(), from)
+                    .contains(&Some(dest)),
                 "flee destination {dest:?} is not adjacent to {from:?}"
             );
         }
@@ -1665,9 +1670,10 @@ mod combat_scoping_tests {
         let mut rng = SmallRng::seed_from_u64(11);
         // Every occupied triangle has both within-parent ring neighbors
         // set, so the within-parent preference always wins.
-        for from in areas::location::all_locations() {
+        for from in areas::location::all_locations(&areas::hex::default_layout()) {
             for _ in 0..8 {
-                let dest = flee_destination(from, &mut rng).expect("occupied location");
+                let dest = flee_destination(&areas::hex::default_layout(), from, &mut rng)
+                    .expect("occupied location");
                 assert_eq!(
                     dest.area, from.area,
                     "flee from {from:?} left the parent hex despite a ring neighbor existing"
@@ -1680,6 +1686,6 @@ mod combat_scoping_tests {
     fn flee_destination_is_none_for_unoccupied_sub() {
         let mut rng = SmallRng::seed_from_u64(3);
         let from = Location::new(AreaId::hub(), SubTriangle::new(6));
-        assert!(flee_destination(from, &mut rng).is_none());
+        assert!(flee_destination(&areas::hex::default_layout(), from, &mut rng).is_none());
     }
 }

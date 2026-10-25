@@ -97,10 +97,8 @@ pub fn sub_slots(area: AreaId) -> impl Iterator<Item = Location> {
 /// All 42 occupied sub-tile cells of the arena (7 areas x 6 triangles),
 /// area order per [`default_layout`], triangle order per
 /// [`SubTriangle::index`].
-pub fn all_locations() -> impl Iterator<Item = Location> {
-    default_layout()
-        .into_iter()
-        .flat_map(|(area, _)| sub_slots(area))
+pub fn all_locations(layout: &[(AreaId, Axial)]) -> impl Iterator<Item = Location> {
+    layout.iter().map(|(area, _)| *area).flat_map(sub_slots)
 }
 
 /// Uniformly random occupied cell across `areas` — one draw per goblin
@@ -182,9 +180,48 @@ pub fn is_occupied(location: Location) -> bool {
 /// cross one.
 ///
 /// An unoccupied sub (`index >= 6`) yields all `None`.
-pub fn sub_neighbors(location: Location) -> [Option<Location>; 6] {
+/// The game's runtime layout for `details`: each row's `axial` (or the
+/// default cluster's coordinate for rows predating zkp.2 hydration).
+pub fn layout_from(details: &[AreaDetails]) -> Vec<(AreaId, Axial)> {
+    details
+        .iter()
+        .map(|d| {
+            (
+                d.area.unwrap_or_else(AreaId::hub),
+                d.axial
+                    .unwrap_or_else(|| area_axial(d.area.unwrap_or_else(AreaId::hub))),
+            )
+        })
+        .collect()
+}
+
+/// Axial of `area` in `layout`, falling back to the default-layout
+/// coordinate when a row predates `axial` (legacy records).
+fn axial_of(layout: &[(AreaId, Axial)], area: AreaId) -> Axial {
+    layout
+        .iter()
+        .find(|(a, _)| *a == area)
+        .map(|(_, ax)| *ax)
+        .unwrap_or_else(|| area_axial(area))
+}
+
+/// Area whose hex sits at `coord` in `layout` (else the default cluster).
+fn area_of(layout: &[(AreaId, Axial)], coord: Axial) -> Option<AreaId> {
+    layout
+        .iter()
+        .find(|(_, ax)| *ax == coord)
+        .map(|(a, _)| *a)
+        .or_else(|| area_at(coord))
+}
+
+pub fn sub_neighbors(layout: &[(AreaId, Axial)], location: Location) -> [Option<Location>; 6] {
     let mut out: [Option<Location>; 6] = [None; 6];
     if !is_occupied(location) {
+        return out;
+    }
+    // The layout is the world (zkp.5): an area outside it has no cells,
+    // not even ring neighbors inside its own hex.
+    if layout.iter().all(|(a, _)| *a != location.area) {
         return out;
     }
     let t = location.sub.base_direction();
@@ -197,7 +234,7 @@ pub fn sub_neighbors(location: Location) -> [Option<Location>; 6] {
     out[(t + 1) % 6] = Some(ring((t + 1) % 6));
     out[(t + 5) % 6] = Some(ring((t + 5) % 6));
     // Cross-parent door: base-to-base across the full edge in direction t.
-    out[t] = area_at(area_axial(location.area).neighbors()[t]).map(|area| Location {
+    out[t] = area_of(layout, axial_of(layout, location.area).neighbors()[t]).map(|area| Location {
         area,
         sub: SubTriangle::new(((t + 3) % 6) as u8),
     });
@@ -207,7 +244,7 @@ pub fn sub_neighbors(location: Location) -> [Option<Location>; 6] {
 /// BFS distance in sub-hops over the 42-cell occupied graph. `None`
 /// when either location is not an occupied cell. Equal locations give
 /// `Some(0)`.
-pub fn distance(from: Location, to: Location) -> Option<u32> {
+pub fn distance(layout: &[(AreaId, Axial)], from: Location, to: Location) -> Option<u32> {
     if !is_occupied(from) || !is_occupied(to) {
         return None;
     }
@@ -220,7 +257,7 @@ pub fn distance(from: Location, to: Location) -> Option<u32> {
         if current == to {
             return Some(d);
         }
-        for neighbor in sub_neighbors(current).into_iter().flatten() {
+        for neighbor in sub_neighbors(layout, current).into_iter().flatten() {
             if let std::collections::hash_map::Entry::Vacant(e) = dist.entry(neighbor) {
                 e.insert(d + 1);
                 queue.push_back(neighbor);
@@ -234,8 +271,12 @@ pub fn distance(from: Location, to: Location) -> Option<u32> {
 /// returned path starts with `from`, ends with `to`, and consecutive
 /// entries are mutual [`sub_neighbors`]; hop count = `len - 1` =
 /// [`distance`]. `None` when either location is not an occupied cell.
-pub fn shortest_path(from: Location, to: Location) -> Option<Vec<Location>> {
-    shortest_path_while(from, to, |_| false)
+pub fn shortest_path(
+    layout: &[(AreaId, Axial)],
+    from: Location,
+    to: Location,
+) -> Option<Vec<Location>> {
+    shortest_path_while(layout, from, to, |_| false)
 }
 
 /// Like [`shortest_path`], but cells for which `is_blocked` returns
@@ -244,6 +285,7 @@ pub fn shortest_path(from: Location, to: Location) -> Option<Vec<Location>> {
 /// route to `to` passes through a blocked cell. The game uses this to
 /// route sub-hops around closed areas.
 pub fn shortest_path_while(
+    layout: &[(AreaId, Axial)],
     from: Location,
     to: Location,
     is_blocked: impl Fn(Location) -> bool,
@@ -260,7 +302,7 @@ pub fn shortest_path_while(
     visited.insert(from);
     queue.push_back(from);
     while let Some(current) = queue.pop_front() {
-        for neighbor in sub_neighbors(current).into_iter().flatten() {
+        for neighbor in sub_neighbors(layout, current).into_iter().flatten() {
             if visited.contains(&neighbor) || is_blocked(neighbor) {
                 continue;
             }
@@ -371,10 +413,14 @@ mod tests {
 
     #[test]
     fn all_locations_covers_42_unique_cells() {
-        let all: Vec<Location> = all_locations().collect();
+        let all: Vec<Location> = all_locations(&default_layout()).collect();
         let set: HashSet<Location> = all.iter().copied().collect();
         assert_eq!(all.len(), 42);
-        assert_eq!(set.len(), 42, "duplicate cells in all_locations()");
+        assert_eq!(
+            set.len(),
+            42,
+            "duplicate cells in all_locations(&default_layout())"
+        );
         assert!(all.iter().all(|l| is_occupied(*l)));
     }
 
@@ -429,9 +475,9 @@ mod tests {
 
     #[test]
     fn neighbor_slots_are_only_own_and_adjacent_directions() {
-        for loc in all_locations() {
+        for loc in all_locations(&default_layout()) {
             let t = loc.sub.base_direction();
-            let n = sub_neighbors(loc);
+            let n = sub_neighbors(&default_layout(), loc);
             for (i, neighbor) in n.iter().enumerate() {
                 let adjacent = i == t || i == (t + 1) % 6 || i == (t + 5) % 6;
                 if adjacent {
@@ -451,7 +497,7 @@ mod tests {
     fn within_parent_neighbors_are_the_adjacent_ring_triangles() {
         for (area, _) in default_layout() {
             for t in 0..SubTriangle::COUNT {
-                let n = sub_neighbors(at(area, t as u8));
+                let n = sub_neighbors(&default_layout(), at(area, t as u8));
                 assert_eq!(n[(t + 1) % 6], Some(at(area, ((t + 1) % 6) as u8)));
                 assert_eq!(n[(t + 5) % 6], Some(at(area, ((t + 5) % 6) as u8)));
             }
@@ -460,9 +506,9 @@ mod tests {
 
     #[test]
     fn cross_parent_door_is_base_to_base_across_shared_edge() {
-        for loc in all_locations() {
+        for loc in all_locations(&default_layout()) {
             let t = loc.sub.base_direction();
-            let n = sub_neighbors(loc);
+            let n = sub_neighbors(&default_layout(), loc);
             let parent = area_axial(loc.area);
             let expected = area_at(parent.neighbors()[t]).map(|area| at(area, ((t + 3) % 6) as u8));
             assert_eq!(n[t], expected, "{loc:?} cross slot {t}");
@@ -472,7 +518,7 @@ mod tests {
                 assert_eq!(other.sub, SubTriangle::new(((t + 3) % 6) as u8));
                 // Mutuality: the reverse door leads back.
                 assert!(
-                    sub_neighbors(other).contains(&Some(loc)),
+                    sub_neighbors(&default_layout(), other).contains(&Some(loc)),
                     "{loc:?} <-> {other:?} door not mutual"
                 );
             }
@@ -487,8 +533,8 @@ mod tests {
             if x <= y { (x, y) } else { (y, x) }
         };
         let mut actual: HashSet<((AreaId, u8), (AreaId, u8))> = HashSet::new();
-        for loc in all_locations() {
-            for neighbor in sub_neighbors(loc).into_iter().flatten() {
+        for loc in all_locations(&default_layout()) {
+            for neighbor in sub_neighbors(&default_layout(), loc).into_iter().flatten() {
                 if neighbor.area == loc.area {
                     continue;
                 }
@@ -512,8 +558,8 @@ mod tests {
 
     #[test]
     fn cross_parent_doors_agree_with_area_neighbors() {
-        for loc in all_locations() {
-            for neighbor in sub_neighbors(loc).into_iter().flatten() {
+        for loc in all_locations(&default_layout()) {
+            for neighbor in sub_neighbors(&default_layout(), loc).into_iter().flatten() {
                 if neighbor.area != loc.area {
                     assert!(
                         loc.area.neighbors().contains(&neighbor.area),
@@ -528,8 +574,8 @@ mod tests {
 
     #[test]
     fn neighbors_are_never_duplicated() {
-        for loc in all_locations() {
-            let n = sub_neighbors(loc);
+        for loc in all_locations(&default_layout()) {
+            let n = sub_neighbors(&default_layout(), loc);
             let occupied: Vec<Location> = n.into_iter().flatten().collect();
             let set: HashSet<Location> = occupied.iter().copied().collect();
             assert_eq!(set.len(), occupied.len(), "duplicates for {loc:?}");
@@ -543,8 +589,8 @@ mod tests {
     fn edge_count_is_84_within_and_24_cross_directed() {
         let mut within_directed = 0;
         let mut cross_directed = 0;
-        for loc in all_locations() {
-            for neighbor in sub_neighbors(loc).into_iter().flatten() {
+        for loc in all_locations(&default_layout()) {
+            for neighbor in sub_neighbors(&default_layout(), loc).into_iter().flatten() {
                 if neighbor.area == loc.area {
                     within_directed += 1;
                 } else {
@@ -563,11 +609,26 @@ mod tests {
         // From the Hub default sub-tile (triangle 0): the two adjacent
         // ring triangles at 1 hop, the next pair at 2, the opposite
         // triangle at 3 — the6-cycle structure with no shortcuts.
-        assert_eq!(distance(Location::center(AreaId::hub()), hub(1)), Some(1));
-        assert_eq!(distance(Location::center(AreaId::hub()), hub(5)), Some(1));
-        assert_eq!(distance(Location::center(AreaId::hub()), hub(2)), Some(2));
-        assert_eq!(distance(Location::center(AreaId::hub()), hub(4)), Some(2));
-        assert_eq!(distance(Location::center(AreaId::hub()), hub(3)), Some(3));
+        assert_eq!(
+            distance(&default_layout(), Location::center(AreaId::hub()), hub(1)),
+            Some(1)
+        );
+        assert_eq!(
+            distance(&default_layout(), Location::center(AreaId::hub()), hub(5)),
+            Some(1)
+        );
+        assert_eq!(
+            distance(&default_layout(), Location::center(AreaId::hub()), hub(2)),
+            Some(2)
+        );
+        assert_eq!(
+            distance(&default_layout(), Location::center(AreaId::hub()), hub(4)),
+            Some(2)
+        );
+        assert_eq!(
+            distance(&default_layout(), Location::center(AreaId::hub()), hub(3)),
+            Some(3)
+        );
     }
 
     /// Full-ring pin: within-parent distance is exactly the distance on
@@ -582,7 +643,7 @@ mod tests {
                     let straight = (i as i32 - j as i32).abs();
                     let want = straight.min(SubTriangle::COUNT as i32 - straight) as u32;
                     assert_eq!(
-                        distance(at(area, i as u8), at(area, j as u8)),
+                        distance(&default_layout(), at(area, i as u8), at(area, j as u8)),
                         Some(want),
                         "{area:?} triangle {i} -> {j}"
                     );
@@ -595,9 +656,9 @@ mod tests {
     fn cross_parent_door_is_one_hop() {
         let from = hub(0);
         let door = at(AreaId::sector1(), 3);
-        assert_eq!(sub_neighbors(from)[0], Some(door));
-        assert_eq!(distance(from, door), Some(1));
-        assert_eq!(distance(door, from), Some(1));
+        assert_eq!(sub_neighbors(&default_layout(), from)[0], Some(door));
+        assert_eq!(distance(&default_layout(), from, door), Some(1));
+        assert_eq!(distance(&default_layout(), door, from), Some(1));
     }
 
     /// A cross-hex path: Hub triangle 0 to Sector 1 triangle 0 must
@@ -607,8 +668,8 @@ mod tests {
     fn hub_center_to_sector1_triangle0_is_four_hops_via_door() {
         let from = Location::center(AreaId::hub());
         let to = at(AreaId::sector1(), 0);
-        assert_eq!(distance(from, to), Some(4));
-        let path = shortest_path(from, to).unwrap();
+        assert_eq!(distance(&default_layout(), from, to), Some(4));
+        let path = shortest_path(&default_layout(), from, to).unwrap();
         assert_eq!(path.len(), 5, "path: {path:?}");
         assert_eq!(path.first(), Some(&from));
         assert_eq!(
@@ -623,24 +684,33 @@ mod tests {
     fn shortest_path_steps_are_mutual_neighbors() {
         let from = Location::center(AreaId::hub());
         let to = Location::center(AreaId::sector5());
-        let path = shortest_path(from, to).unwrap();
+        let path = shortest_path(&default_layout(), from, to).unwrap();
         assert_eq!(path.first(), Some(&from));
         assert_eq!(path.last(), Some(&to));
         for window in path.windows(2) {
             let (a, b) = (window[0], window[1]);
-            assert!(sub_neighbors(a).contains(&Some(b)), "{a:?} !-> {b:?}");
-            assert!(sub_neighbors(b).contains(&Some(a)), "{b:?} !-> {a:?}");
+            assert!(
+                sub_neighbors(&default_layout(), a).contains(&Some(b)),
+                "{a:?} !-> {b:?}"
+            );
+            assert!(
+                sub_neighbors(&default_layout(), b).contains(&Some(a)),
+                "{b:?} !-> {a:?}"
+            );
         }
-        assert_eq!(path.len() as u32 - 1, distance(from, to).unwrap());
+        assert_eq!(
+            path.len() as u32 - 1,
+            distance(&default_layout(), from, to).unwrap()
+        );
     }
 
     #[test]
     fn all_forty_two_cells_reachable_from_hub_center() {
         let from = Location::center(AreaId::hub());
         let mut reached = 0;
-        for target in all_locations() {
-            let d = distance(from, target).expect("every cell reachable");
-            let path = shortest_path(from, target).unwrap();
+        for target in all_locations(&default_layout()) {
+            let d = distance(&default_layout(), from, target).expect("every cell reachable");
+            let path = shortest_path(&default_layout(), from, target).unwrap();
             assert_eq!(path.len() as u32 - 1, d);
             reached += 1;
         }
@@ -649,12 +719,12 @@ mod tests {
 
     #[test]
     fn distance_is_symmetric_and_matches_path_length() {
-        for a in all_locations() {
-            for b in all_locations() {
-                let ab = distance(a, b).unwrap();
-                let ba = distance(b, a).unwrap();
+        for a in all_locations(&default_layout()) {
+            for b in all_locations(&default_layout()) {
+                let ab = distance(&default_layout(), a, b).unwrap();
+                let ba = distance(&default_layout(), b, a).unwrap();
                 assert_eq!(ab, ba, "asymmetric for {a:?} <-> {b:?}");
-                let path = shortest_path(a, b).unwrap();
+                let path = shortest_path(&default_layout(), a, b).unwrap();
                 assert_eq!(path.len() as u32 - 1, ab);
             }
         }
@@ -664,12 +734,12 @@ mod tests {
     fn unoccupied_sub_triangles_have_no_distance_or_path() {
         let dead = Location::new(AreaId::hub(), SubTriangle::new(6));
         assert!(!is_occupied(dead));
-        assert_eq!(distance(hub(0), dead), None);
-        assert_eq!(shortest_path(hub(0), dead), None);
-        assert_eq!(distance(dead, hub(0)), None);
-        assert_eq!(shortest_path(dead, hub(0)), None);
+        assert_eq!(distance(&default_layout(), hub(0), dead), None);
+        assert_eq!(shortest_path(&default_layout(), hub(0), dead), None);
+        assert_eq!(distance(&default_layout(), dead, hub(0)), None);
+        assert_eq!(shortest_path(&default_layout(), dead, hub(0)), None);
         // An unoccupied sub has no neighbors at all.
-        assert_eq!(sub_neighbors(dead), [None; 6]);
+        assert_eq!(sub_neighbors(&default_layout(), dead), [None; 6]);
     }
 
     // ---- blocked-cell BFS -------------------------------------------
@@ -679,14 +749,14 @@ mod tests {
         let from = Location::center(AreaId::hub());
         let to = at(AreaId::sector1(), 0);
         let door = at(AreaId::sector1(), 3); // the Hub0 <-> Sector1-3 door
-        let path = shortest_path_while(from, to, |cell| cell == door)
+        let path = shortest_path_while(&default_layout(), from, to, |cell| cell == door)
             .expect("a route into Sector1 exists through another door");
         assert!(!path.contains(&door), "blocked cell on path: {path:?}");
         assert_eq!(path.first(), Some(&from));
         assert_eq!(path.last(), Some(&to));
         for window in path.windows(2) {
             assert!(
-                sub_neighbors(window[0]).contains(&Some(window[1])),
+                sub_neighbors(&default_layout(), window[0]).contains(&Some(window[1])),
                 "{:?} !-> {:?}",
                 window[0],
                 window[1]
@@ -699,7 +769,9 @@ mod tests {
     fn shortest_path_while_returns_none_when_goal_is_behind_a_blocked_area() {
         let from = Location::center(AreaId::hub());
         let to = at(AreaId::sector1(), 0);
-        let path = shortest_path_while(from, to, |cell| cell.area == AreaId::sector1());
+        let path = shortest_path_while(&default_layout(), from, to, |cell| {
+            cell.area == AreaId::sector1()
+        });
         assert_eq!(path, None, "every route to Sector1 enters Sector1");
     }
 
@@ -707,7 +779,7 @@ mod tests {
     fn shortest_path_while_allows_the_start_cell_even_if_marked_blocked() {
         let from = Location::center(AreaId::hub());
         let to = hub(2);
-        let path = shortest_path_while(from, to, |cell| cell == from).unwrap();
+        let path = shortest_path_while(&default_layout(), from, to, |cell| cell == from).unwrap();
         assert_eq!(path.first(), Some(&from));
         assert_eq!(path.last(), Some(&to));
     }
@@ -771,5 +843,69 @@ mod tests {
             sub: SubTriangle::new(5),
         };
         assert_eq!(terrain_at(out_of_range, &details), BaseTerrain::Clearing);
+    }
+}
+
+#[cfg(test)]
+mod zkp5_layout_tests {
+    use super::*;
+    use crate::hex::{Axial, default_layout};
+
+    fn loc(area: AreaId, sub: u8) -> Location {
+        Location::new(area, SubTriangle::new(sub))
+    }
+
+    #[test]
+    fn door_follows_the_layouts_coordinates_not_the_default_cluster() {
+        let door_coord = Axial::new(0, 0).neighbors()[0];
+        let layout = [
+            (AreaId::hub(), Axial::new(0, 0)),
+            (AreaId::sector2(), door_coord),
+        ];
+        // sub 0's base faces neighbors()[0] -> the area at THAT coord.
+        let near = sub_neighbors(&layout, loc(AreaId::hub(), 0));
+        let crossed = near[0].expect("door cell");
+        assert_eq!(crossed.area, AreaId::sector2());
+        assert_eq!(
+            crossed.sub.index(),
+            3,
+            "door lands opposite on the far side"
+        );
+    }
+
+    #[test]
+    fn paths_only_touch_areas_present_in_the_layout() {
+        let layout = [
+            (AreaId::hub(), Axial::new(0, 0)),
+            (AreaId::sector1(), Axial::new(1, -1)),
+        ];
+        // hub <-> sector1 are neighbors in the layout, so a path exists
+        // between their cells ...
+        let path = shortest_path(&layout, loc(AreaId::hub(), 0), loc(AreaId::sector1(), 0));
+        assert!(path.is_some(), "connected pair must path");
+        // ... while a location in an absent area is never occupied.
+        assert!(
+            shortest_path(&layout, loc(AreaId::sector6(), 0), loc(AreaId::hub(), 0)).is_none(),
+            "absent area has no cells"
+        );
+        assert_eq!(all_locations(&layout).count(), 12, "2 areas x 6 triangles");
+    }
+
+    #[test]
+    fn ten_hex_layout_paths_end_to_end() {
+        let mut layout = default_layout().to_vec();
+        layout.push((AreaId::sector1(), Axial::new(2, -1))); // wrong on purpose? no: see below
+        // grow a chain: reuse distinct kinds at coords adjacent to the cluster
+        layout.truncate(7);
+        layout.push((AreaId::sector2(), Axial::new(2, -1)));
+        layout.push((AreaId::sector3(), Axial::new(2, 0)));
+        layout.push((AreaId::sector4(), Axial::new(0, 2)));
+        let end = loc(AreaId::sector3(), 5);
+        let path = shortest_path(&layout, loc(AreaId::hub(), 0), end);
+        assert!(
+            path.is_some(),
+            "10-hex (7+3) layout must path across the grown chain"
+        );
+        assert_eq!(all_locations(&layout).count(), 60, "10 areas x 6 triangles");
     }
 }

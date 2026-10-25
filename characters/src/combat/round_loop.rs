@@ -137,6 +137,8 @@ pub struct CombatRoundLoop<'a> {
     exited: Vec<usize>,
     tuning: CombatTuning,
     provider: Box<dyn CombatActionProvider + 'a>,
+    /// Arena layout for the one-hop neighborhood (ring + door).
+    layout: Vec<(areas::AreaId, areas::hex::Axial)>,
 }
 
 impl<'a> CombatRoundLoop<'a> {
@@ -166,6 +168,7 @@ impl<'a> CombatRoundLoop<'a> {
         provider: Box<dyn CombatActionProvider + 'a>,
     ) -> Self {
         Self::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![first, second],
             [vec![0], vec![1]],
             combat_id,
@@ -178,6 +181,7 @@ impl<'a> CombatRoundLoop<'a> {
     /// join order). Tests use it for multi-member sides; the cycle passes
     /// the whole world so the round-boundary scan can see join candidates.
     pub fn with_sides(
+        layout: Vec<(areas::AreaId, areas::hex::Axial)>,
         chars: Vec<&'a mut Character>,
         sides: [Vec<usize>; 2],
         combat_id: String,
@@ -185,6 +189,7 @@ impl<'a> CombatRoundLoop<'a> {
         provider: Box<dyn CombatActionProvider + 'a>,
     ) -> Self {
         Self {
+            layout,
             chars,
             sides,
             combat_id,
@@ -492,10 +497,11 @@ impl<'a> CombatRoundLoop<'a> {
             return None;
         }
         let actor = &*chars[actor_idx];
-        let near: Vec<areas::location::Location> = areas::location::sub_neighbors(actor.location)
-            .into_iter()
-            .flatten()
-            .collect();
+        let near: Vec<areas::location::Location> =
+            areas::location::sub_neighbors(&self.layout, actor.location)
+                .into_iter()
+                .flatten()
+                .collect();
         (0..chars.len()).find(|&i| {
             i != actor_idx
                 && !self.sides[0].contains(&i)
@@ -1668,6 +1674,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(41);
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut b, &mut c],
             // Bob alone vs Alice+Carol: his fallback would be Alice.
             [vec![1], vec![0, 2]],
@@ -1779,6 +1786,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(47);
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut d, &mut b],
             [vec![0, 1], vec![2]],
             "t3".into(),
@@ -1845,6 +1853,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(53);
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut d, &mut b],
             [vec![0, 1], vec![2]],
             "t4".into(),
@@ -1902,6 +1911,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(7);
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut b, &mut c],
             [vec![0], vec![1]],
             "t3".into(),
@@ -1937,6 +1947,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(8);
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut b, &mut c],
             [vec![0], vec![1]],
             "t4".into(),
@@ -1970,6 +1981,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(11);
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut b, &mut c],
             [vec![0], vec![1]],
             "t5".into(),
@@ -1993,6 +2005,7 @@ mod tests {
         c.traits.clear(); // no AttackPosture: bystander, not intervener
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut b, &mut c],
             [vec![0], vec![1]],
             "t5b".into(),
@@ -2023,6 +2036,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(13);
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut b, &mut c],
             [vec![0], vec![1]],
             "t6".into(),
@@ -2050,6 +2064,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(17);
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut b, &mut c],
             [vec![0], vec![1]],
             "t7".into(),
@@ -2104,7 +2119,7 @@ mod tests {
         c.attributes.speed = 0;
         // One sub-hop from Alice: her first occupied neighbor triangle (the
         // round scan only covers her own triangle, so the call must).
-        c.location = areas::location::sub_neighbors(a.location)
+        c.location = areas::location::sub_neighbors(&areas::hex::default_layout(), a.location)
             .into_iter()
             .flatten()
             .next()
@@ -2114,6 +2129,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(19);
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut b, &mut c],
             [vec![0], vec![1]],
             "t8".into(),
@@ -2157,6 +2173,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(21);
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut b],
             [vec![0], vec![1]],
             "t9".into(),
@@ -2196,6 +2213,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(23);
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut b, &mut c],
             [vec![0], vec![1]],
             "t10".into(),
@@ -2238,6 +2256,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(29);
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut d, &mut b],
             [vec![0, 1], vec![2]],
             "t11".into(),
@@ -2271,7 +2290,7 @@ mod tests {
         c.attributes.strength = 0;
         // One sub-hop away: the round scan covers only Alice's own triangle,
         // so an in-triangle ally would already be a member by round top.
-        c.location = areas::location::sub_neighbors(a.location)
+        c.location = areas::location::sub_neighbors(&areas::hex::default_layout(), a.location)
             .into_iter()
             .flatten()
             .next()
@@ -2287,6 +2306,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(31);
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut d, &mut b, &mut c],
             [vec![0, 1], vec![2]],
             "t12".into(),
@@ -2329,6 +2349,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(37);
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut b, &mut c],
             [vec![0], vec![1]],
             "t13".into(),
@@ -2370,6 +2391,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(41);
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut b, &mut carl, &mut e],
             [vec![0], vec![1, 2]],
             "t14".into(),
@@ -2404,6 +2426,7 @@ mod tests {
         let mut rng = SmallRng::seed_from_u64(43);
         let mut events = Vec::new();
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut b, &mut c],
             [vec![0], vec![1]],
             "t15".into(),
@@ -2433,6 +2456,7 @@ mod tests {
         b.blood = 900;
 
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut b],
             [vec![0], vec![1]],
             "amb".into(),
@@ -2464,6 +2488,7 @@ mod tests {
         b.blood = 900;
 
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut b],
             [vec![0], vec![1]],
             "amb2".into(),
@@ -2492,6 +2517,7 @@ mod tests {
         b.blood = 1;
 
         let mut combat = CombatRoundLoop::with_sides(
+            areas::hex::default_layout().to_vec(),
             vec![&mut a, &mut b],
             [vec![0], vec![1]],
             "amb3".into(),

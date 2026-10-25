@@ -78,6 +78,7 @@ impl Character {
     ) -> TravelResult {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
         let current = self.location;
+        let layout = areas::location::layout_from(all_areas);
 
         let character_ref = || CharacterRef {
             identifier: self.identifier.clone().into(),
@@ -112,12 +113,14 @@ impl Character {
         // 2. Normalize the goal: hazards never block (q7k); only a
         // genuinely unreachable goal degrades to wandering.
         let goal = match suggested_location {
-            Some(goal) if shortest_path_while(current, goal, |_| false).is_some() => Some(goal),
+            Some(goal) if shortest_path_while(&layout, current, goal, |_| false).is_some() => {
+                Some(goal)
+            }
             _ => None,
         };
 
         // 3. The beat's single sub-hop, priced by its crossing.
-        let Some(hop) = self.next_sub_hop(goal, &mut rng) else {
+        let Some(hop) = self.next_sub_hop(&layout, goal, &mut rng) else {
             let current_area_name = current.area.to_string();
             let line = GameOutput::CharacterTravelNoOptions(
                 self.name.as_str(),
@@ -160,12 +163,20 @@ impl Character {
 
     /// The next sub-hop toward `goal`, or a random open neighbor when
     /// wandering (`goal` is `None`). `None` when no hop is possible.
-    fn next_sub_hop(&self, goal: Option<Location>, rng: &mut SmallRng) -> Option<Location> {
+    fn next_sub_hop(
+        &self,
+        layout: &[(AreaId, areas::hex::Axial)],
+        goal: Option<Location>,
+        rng: &mut SmallRng,
+    ) -> Option<Location> {
         if let Some(goal) = goal {
-            return shortest_path_while(self.location, goal, |_| false)
+            return shortest_path_while(layout, self.location, goal, |_| false)
                 .and_then(|path| path.get(1).copied());
         }
-        let open: Vec<Location> = sub_neighbors(self.location).into_iter().flatten().collect();
+        let open: Vec<Location> = sub_neighbors(layout, self.location)
+            .into_iter()
+            .flatten()
+            .collect();
         open.choose(rng).copied()
     }
 
@@ -208,6 +219,15 @@ impl Character {
 
 #[cfg(test)]
 mod tests {
+    /// The default seven areas as details: travels derives the arena
+    /// layout from details now (zkp.5), so fixtures pass real areas.
+    fn default_test_areas() -> Vec<AreaDetails> {
+        areas::hex::default_layout()
+            .iter()
+            .map(|(a, _)| AreaDetails::new(None, *a))
+            .collect()
+    }
+
     use super::*;
     use crate::Character;
     use areas::AreaId;
@@ -244,7 +264,7 @@ mod tests {
     async fn travels_wander_takes_one_sub_hop_per_beat(character: Character) {
         let mut character = character;
         let mut events = Vec::new();
-        let result = character.travels(None, &[], &mut events);
+        let result = character.travels(None, &default_test_areas(), &mut events);
         assert!(
             matches!(result, TravelResult::Success(_)),
             "wander must succeed: {result:?}"
@@ -259,7 +279,7 @@ mod tests {
         );
 
         // Second Move beat: one more hop, one more price.
-        let result = character.travels(None, &[], &mut events);
+        let result = character.travels(None, &default_test_areas(), &mut events);
         assert!(
             matches!(result, TravelResult::Success(_)),
             "second wander must succeed: {result:?}"
@@ -280,7 +300,11 @@ mod tests {
         // AreaId::hub() triangle 0 -> Sector 1 triangle 0: the door into
         // Sector 1 triangle 3, then around the ring — 4 hops total;
         // each Move beat commits exactly one of them.
-        let result = character.travels(Some(Location::center(AreaId::sector1())), &[], &mut events);
+        let result = character.travels(
+            Some(Location::center(AreaId::sector1())),
+            &default_test_areas(),
+            &mut events,
+        );
         assert_eq!(result, TravelResult::Success(at(AreaId::sector1(), 3)));
         assert_eq!(
             character.location,
@@ -294,7 +318,11 @@ mod tests {
         );
 
         // Second Move beat toward the same goal: one more hop.
-        let result = character.travels(Some(Location::center(AreaId::sector1())), &[], &mut events);
+        let result = character.travels(
+            Some(Location::center(AreaId::sector1())),
+            &default_test_areas(),
+            &mut events,
+        );
         assert_eq!(result, TravelResult::Success(at(AreaId::sector1(), 2)));
         assert_eq!(
             character.location,
@@ -341,7 +369,7 @@ mod tests {
         let mut character = character;
         let mut events = Vec::new();
         let goal = at(AreaId::hub(), 1); // adjacent ring triangle
-        let result = character.travels(Some(goal), &[], &mut events);
+        let result = character.travels(Some(goal), &default_test_areas(), &mut events);
         assert_eq!(result, TravelResult::Success(goal));
         assert_eq!(character.location, goal);
         assert_eq!(
@@ -398,7 +426,7 @@ mod tests {
         character.stamina = hop_price(&character);
         let result = character.travels(
             Some(Location::center(AreaId::sector1())),
-            &[],
+            &default_test_areas(),
             &mut Vec::new(),
         );
         assert_eq!(result, TravelResult::Success(at(AreaId::sector1(), 3)));
@@ -410,7 +438,11 @@ mod tests {
         // The second beat cannot pay its crossing price: the hop
         // fails with the travel-exhausted event and the location stays.
         let mut events = Vec::new();
-        let result = character.travels(Some(Location::center(AreaId::sector1())), &[], &mut events);
+        let result = character.travels(
+            Some(Location::center(AreaId::sector1())),
+            &default_test_areas(),
+            &mut events,
+        );
         assert_eq!(result, TravelResult::Failure);
         assert_eq!(character.location, at(AreaId::sector1(), 3));
         assert_eq!(character.stamina, 0);
@@ -427,7 +459,11 @@ mod tests {
         character.stamina = 0;
         let start = character.location;
         let mut events = Vec::new();
-        let result = character.travels(Some(Location::center(AreaId::sector1())), &[], &mut events);
+        let result = character.travels(
+            Some(Location::center(AreaId::sector1())),
+            &default_test_areas(),
+            &mut events,
+        );
         assert_eq!(result, TravelResult::Failure);
         assert_eq!(character.location, start);
         let exhausted_line = events
@@ -443,7 +479,7 @@ mod tests {
         character.location = Location::center(AreaId::sector1());
         let result = character.travels(
             Some(Location::center(AreaId::sector1())),
-            &[],
+            &default_test_areas(),
             &mut Vec::new(),
         );
         assert_eq!(result, TravelResult::Failure);
