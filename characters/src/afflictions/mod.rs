@@ -87,7 +87,7 @@ mod trauma_snapshot_tests;
 mod visibility_tests {
     use super::*;
     use crate::Character;
-    use areas::Area;
+    use areas::AreaId;
     use shared::afflictions::{Affliction, AfflictionKind, AfflictionSource, BodyPart};
 
     fn make_affliction(kind: AfflictionKind, severity: Severity) -> Affliction {
@@ -129,16 +129,16 @@ mod visibility_tests {
     #[test]
     fn moderate_affliction_visible_only_in_same_area() {
         let mut observer = Character::new("Observer".to_string(), None, None);
-        observer.location.area = Area::Sector1;
+        observer.location.area = AreaId::sector1();
         let mut target = Character::new("Target".to_string(), None, None);
-        target.location.area = Area::Sector1;
+        target.location.area = AreaId::sector1();
         let aff = make_affliction(AfflictionKind::BrokenBone, Severity::Moderate);
         target.afflictions.insert(aff.key(), aff);
 
         let visible = visible_afflictions_to(&observer, &target, false);
         assert_eq!(visible.len(), 1);
 
-        observer.location.area = Area::Sector2;
+        observer.location.area = AreaId::sector2();
         let visible = visible_afflictions_to(&observer, &target, false);
         assert!(visible.is_empty());
     }
@@ -146,9 +146,9 @@ mod visibility_tests {
     #[test]
     fn severe_affliction_visible_to_all() {
         let mut observer = Character::new("Observer".to_string(), None, None);
-        observer.location.area = Area::Sector1;
+        observer.location.area = AreaId::sector1();
         let mut target = Character::new("Target".to_string(), None, None);
-        target.location.area = Area::Sector6;
+        target.location.area = AreaId::sector6();
         let aff = make_affliction(AfflictionKind::Blind, Severity::Severe);
         target.afflictions.insert(aff.key(), aff);
 
@@ -160,9 +160,9 @@ mod visibility_tests {
     #[test]
     fn mixed_severities_filter_correctly() {
         let mut observer = Character::new("Observer".to_string(), None, None);
-        observer.location.area = Area::Sector1;
+        observer.location.area = AreaId::sector1();
         let mut target = Character::new("Target".to_string(), None, None);
-        target.location.area = Area::Sector1;
+        target.location.area = AreaId::sector1();
 
         let mild = make_affliction(AfflictionKind::Wounded, Severity::Mild);
         let moderate = make_affliction(AfflictionKind::BrokenBone, Severity::Moderate);
@@ -174,7 +174,7 @@ mod visibility_tests {
         let visible = visible_afflictions_to(&observer, &target, false);
         assert_eq!(visible.len(), 2);
 
-        observer.location.area = Area::Sector2;
+        observer.location.area = AreaId::sector2();
         let visible = visible_afflictions_to(&observer, &target, false);
         assert_eq!(visible.len(), 1);
         assert_eq!(visible[0].kind, AfflictionKind::Blind);
@@ -183,9 +183,9 @@ mod visibility_tests {
     #[test]
     fn target_has_visible_affliction_checks_correctly() {
         let mut observer = Character::new("Observer".to_string(), None, None);
-        observer.location.area = Area::Sector1;
+        observer.location.area = AreaId::sector1();
         let mut target = Character::new("Target".to_string(), None, None);
-        target.location.area = Area::Sector1;
+        target.location.area = AreaId::sector1();
         let aff = make_affliction(AfflictionKind::Blind, Severity::Moderate);
         target.afflictions.insert(aff.key(), aff);
 
@@ -204,7 +204,7 @@ mod visibility_tests {
             false
         ));
 
-        observer.location.area = Area::Sector2;
+        observer.location.area = AreaId::sector2();
         assert!(!target_has_visible_affliction(
             &observer,
             &target,

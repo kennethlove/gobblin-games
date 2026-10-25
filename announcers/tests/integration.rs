@@ -269,7 +269,7 @@ async fn notable_events_capped_across_phases() {
         let events = vec![make_msg(MessagePayload::CharacterMoved {
             character: tr("Snaggletooth"),
             from: ar("A"),
-            to: ar(&format!("Area{i}")),
+            to: ar(&format!("Area{}", i)),
             from_sub: None,
             to_sub: None,
         })];

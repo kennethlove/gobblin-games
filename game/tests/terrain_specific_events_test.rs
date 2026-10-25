@@ -1,5 +1,5 @@
 use areas::events::AreaEvent;
-use areas::{Area, AreaDetails};
+use areas::{AreaDetails, AreaId};
 use game::games::Game;
 use std::collections::HashMap;
 use world::terrain::{BaseTerrain, TerrainType};
@@ -14,10 +14,10 @@ fn test_game_loop_generates_terrain_appropriate_events() {
 
     // Create areas with different terrains
     let terrains = vec![
-        (Area::Sector1, BaseTerrain::Forest, "Forest"),
-        (Area::Sector4, BaseTerrain::Desert, "Desert"),
-        (Area::Sector2, BaseTerrain::Mountains, "Mountains"),
-        (Area::Sector5, BaseTerrain::Wetlands, "Wetlands"),
+        (AreaId::sector1(), BaseTerrain::Forest, "Forest"),
+        (AreaId::sector4(), BaseTerrain::Desert, "Desert"),
+        (AreaId::sector2(), BaseTerrain::Mountains, "Mountains"),
+        (AreaId::sector5(), BaseTerrain::Wetlands, "Wetlands"),
     ];
 
     for (area, terrain, name) in terrains {

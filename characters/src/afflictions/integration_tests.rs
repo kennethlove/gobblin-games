@@ -15,7 +15,7 @@ mod tests {
     };
     use crate::combat::inflict_table::{HitSeverity, WeaponKind, lookup_inflicts};
     use crate::combat_tuning::CombatTuning;
-    use areas::Area;
+    use areas::AreaId;
     use areas::location::Location;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
@@ -234,10 +234,10 @@ mod tests {
     #[test]
     fn severe_affliction_visible_from_different_area() {
         let mut observer = Character::new("Observer".to_string(), None, None);
-        observer.location.area = Area::Sector1;
+        observer.location.area = AreaId::sector1();
         let mut target =
             make_ttribute_with_affliction("Target", AfflictionKind::Blind, Severity::Severe);
-        target.location.area = Area::Sector6;
+        target.location.area = AreaId::sector6();
 
         let visible = visible_afflictions_to(&observer, &target, false);
         assert_eq!(visible.len(), 1, "Severe afflictions must be public");
@@ -247,17 +247,17 @@ mod tests {
     #[test]
     fn moderate_affliction_visible_only_in_same_area() {
         let mut observer = Character::new("Observer".to_string(), None, None);
-        observer.location.area = Area::Sector1;
+        observer.location.area = AreaId::sector1();
         let mut target =
             make_ttribute_with_affliction("Target", AfflictionKind::BrokenBone, Severity::Moderate);
-        target.location.area = Area::Sector1;
+        target.location.area = AreaId::sector1();
 
         // Same area → visible.
         let visible = visible_afflictions_to(&observer, &target, false);
         assert_eq!(visible.len(), 1);
 
         // Different area → hidden.
-        observer.location.area = Area::Sector2;
+        observer.location.area = AreaId::sector2();
         let visible = visible_afflictions_to(&observer, &target, false);
         assert!(
             visible.is_empty(),
@@ -291,13 +291,13 @@ mod tests {
     #[test]
     fn moderate_same_area_vs_different_area() {
         let mut same_area_observer = Character::new("Nearby".to_string(), None, None);
-        same_area_observer.location.area = Area::Sector3;
+        same_area_observer.location.area = AreaId::sector3();
         let mut far_observer = Character::new("Faraway".to_string(), None, None);
-        far_observer.location.area = Area::Sector5;
+        far_observer.location.area = AreaId::sector5();
 
         let mut target =
             make_ttribute_with_affliction("Target", AfflictionKind::MissingArm, Severity::Moderate);
-        target.location.area = Area::Sector3;
+        target.location.area = AreaId::sector3();
 
         assert!(
             !visible_afflictions_to(&same_area_observer, &target, false).is_empty(),
@@ -320,7 +320,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(Area::Sector1))),
+            &Action::Move(Some(Location::center(AreaId::sector1()))),
             Some(world::terrain::BaseTerrain::Mountains),
         );
         assert_eq!(result, Some(Action::Rest));
@@ -335,7 +335,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(Area::Sector1))),
+            &Action::Move(Some(Location::center(AreaId::sector1()))),
             Some(world::terrain::BaseTerrain::Highlands),
         );
         assert_eq!(result, Some(Action::Rest));
@@ -350,7 +350,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(Area::Sector1))),
+            &Action::Move(Some(Location::center(AreaId::sector1()))),
             Some(world::terrain::BaseTerrain::Wetlands),
         );
         assert_eq!(result, Some(Action::Rest));
@@ -365,7 +365,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(Area::Sector1))),
+            &Action::Move(Some(Location::center(AreaId::sector1()))),
             Some(world::terrain::BaseTerrain::Forest),
         );
         assert!(result.is_none(), "Forest should be allowed");
@@ -377,7 +377,7 @@ mod tests {
             make_ttribute_with_affliction("Character", AfflictionKind::MissingLeg, Severity::Mild);
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(Area::Sector1))),
+            &Action::Move(Some(Location::center(AreaId::sector1()))),
             Some(world::terrain::BaseTerrain::Mountains),
         );
         assert!(result.is_none(), "Mild MissingLeg should not block terrain");
@@ -392,7 +392,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(Area::Sector1))),
+            &Action::Move(Some(Location::center(AreaId::sector1()))),
             Some(world::terrain::BaseTerrain::Mountains),
         );
         assert_eq!(result, Some(Action::Rest));
@@ -443,7 +443,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(Area::Sector1))),
+            &Action::Move(Some(Location::center(AreaId::sector1()))),
             None,
         );
         assert!(

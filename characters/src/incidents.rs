@@ -1,5 +1,5 @@
 use crate::Character;
-use areas::Area;
+use areas::AreaId;
 use areas::shelter;
 use areas::weather;
 use rand::Rng;
@@ -211,8 +211,8 @@ pub enum SleepIncident {
     Annoying { flavor: AnnoyingFlavor },
     /// A random item was stolen.
     Theft { stolen_item: String },
-    /// Area relocation while unconscious.
-    Relocation { new_area: Area },
+    /// AreaId relocation while unconscious.
+    Relocation { new_area: AreaId },
     /// Animal encounter (named).
     AnimalEncounter { animal: String },
     /// Nightmare causing sanity loss — does not wake the sleeper.
@@ -359,13 +359,13 @@ impl SleepIncident {
         pool[idx].to_string()
     }
 
-    fn random_area(rng: &mut impl Rng) -> Area {
+    fn random_area(rng: &mut impl Rng) -> AreaId {
         let areas = [
-            Area::Hub,
-            Area::Sector1,
-            Area::Sector2,
-            Area::Sector3,
-            Area::Sector4,
+            AreaId::hub(),
+            AreaId::sector1(),
+            AreaId::sector2(),
+            AreaId::sector3(),
+            AreaId::sector4(),
         ];
         let idx = rng.random_range(0..areas.len());
         areas[idx]
@@ -535,12 +535,12 @@ mod tests {
         let mut character = Character::new("Test".to_string(), None, None);
         let orig_area = character.location.area;
         let incident = SleepIncident::Relocation {
-            new_area: Area::Sector1,
+            new_area: AreaId::sector1(),
         };
         let mut rng = SmallRng::seed_from_u64(42);
         apply_sleep_incident(&mut character, &incident, &mut rng);
         assert_ne!(character.location.area, orig_area, "area should change");
-        assert_eq!(character.location.area, Area::Sector1);
+        assert_eq!(character.location.area, AreaId::sector1());
     }
 
     #[test]

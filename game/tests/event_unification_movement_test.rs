@@ -5,7 +5,7 @@
 //! exhausted-travel, suicide), now reach `Game.messages` rather than being
 //! silently dropped by the old `try_log_action` no-op.
 
-use areas::{Area, AreaDetails};
+use areas::{AreaDetails, AreaId};
 use characters::Character;
 use game::games::Game;
 use shared::messages::{GameMessage, MessageSource};
@@ -20,7 +20,7 @@ fn movement_and_turn_phase_events_reach_game_messages() {
     let mut game = Game::new("event-unification-movement-test");
 
     // Two areas so movement is actually possible.
-    for (name, area) in [("Hub", Area::Hub), ("North Field", Area::Sector1)] {
+    for (name, area) in [("Hub", AreaId::hub()), ("North Field", AreaId::sector1())] {
         let details = AreaDetails::new_with_terrain(
             Some(name.to_string()),
             area,
@@ -34,7 +34,7 @@ fn movement_and_turn_phase_events_reach_game_messages() {
     // take-item / use-item / patron-gift / exhausted-travel paths.
     let mut lone = Character::random();
     lone.name = "Lone".to_string();
-    lone.location.area = Area::Hub;
+    lone.location.area = AreaId::hub();
     lone.blood = 1000;
     lone.stamina = lone.max_stamina; // full stamina -> travel branch
     lone.statistics.game = game.identifier.clone();

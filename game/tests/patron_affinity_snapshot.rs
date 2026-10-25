@@ -2,7 +2,7 @@
 //! audience events. Regenerate with `cargo insta accept` after intentional
 //! rebalances.
 
-use areas::{Area, AreaDetails};
+use areas::{AreaDetails, AreaId};
 use characters::Character;
 use game::games::Game;
 use game::patrons::{PatronContext, translate, update_affinities};
@@ -16,14 +16,14 @@ fn build_test_game() -> Game {
 
     let area = AreaDetails::new_with_terrain(
         Some("Arena".to_string()),
-        Area::Sector1,
+        AreaId::sector1(),
         TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap(),
     );
     game.areas.push(area);
 
     for i in 0..6 {
         let mut character = Character::new(format!("Character{}", i), Some((i % 8) + 1), None);
-        character.location.area = Area::Sector1;
+        character.location.area = AreaId::sector1();
         character.blood = 1000;
         character.statistics.game = game.identifier.clone();
         game.characters.push(character);

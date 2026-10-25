@@ -1,5 +1,5 @@
 use areas::events::AreaEvent;
-use areas::{Area, AreaDetails};
+use areas::{AreaDetails, AreaId};
 use characters::Character;
 use game::games::Game;
 use rand::SeedableRng;
@@ -15,7 +15,7 @@ fn test_event_survival_integration_with_game_loop() {
     // Create area with Forest terrain (catastrophic for wildfire)
     let mut area_details = AreaDetails::new_with_terrain(
         Some("Forest Area".to_string()),
-        Area::Sector1,
+        AreaId::sector1(),
         TerrainType::new(BaseTerrain::Forest, vec![]).unwrap(),
     );
 
@@ -26,7 +26,7 @@ fn test_event_survival_integration_with_game_loop() {
     // Create characters in forest with vulnerable health
     for i in 0..5 {
         let mut character = Character::new(format!("Character{}", i), Some((i % 8) + 1), None);
-        character.location.area = Area::Sector1;
+        character.location.area = AreaId::sector1();
         character.blood = 500;
         character.terrain_affinity = vec![]; // No protection
         character.statistics.game = game.identifier.clone();
@@ -41,7 +41,7 @@ fn test_event_survival_integration_with_game_loop() {
 
     // Process event survival checks
     let mut rng = SmallRng::seed_from_u64(123);
-    game.process_event_for_area(&Area::Sector1, &AreaEvent::Wildfire, &mut rng)
+    game.process_event_for_area(&AreaId::sector1(), &AreaEvent::Wildfire, &mut rng)
         .unwrap();
 
     // Check that some characters died (probabilistic, but should happen)
@@ -83,12 +83,12 @@ fn test_trigger_cycle_events_calls_process_event() {
     // Create multiple areas with different terrains
     let forest_area = AreaDetails::new_with_terrain(
         Some("Forest".to_string()),
-        Area::Sector1,
+        AreaId::sector1(),
         TerrainType::new(BaseTerrain::Forest, vec![]).unwrap(),
     );
     let desert_area = AreaDetails::new_with_terrain(
         Some("Desert".to_string()),
-        Area::Sector4,
+        AreaId::sector4(),
         TerrainType::new(BaseTerrain::Desert, vec![]).unwrap(),
     );
 
@@ -98,7 +98,11 @@ fn test_trigger_cycle_events_calls_process_event() {
     // Create characters in each area
     for i in 0..6 {
         let mut character = Character::new(format!("Character{}", i), Some((i % 8) + 1), None);
-        character.location.area = if i < 3 { Area::Sector1 } else { Area::Sector4 };
+        character.location.area = if i < 3 {
+            AreaId::sector1()
+        } else {
+            AreaId::sector4()
+        };
         character.blood = 500;
         character.terrain_affinity = vec![];
         character.statistics.game = game.identifier.clone();
@@ -120,9 +124,9 @@ fn test_trigger_cycle_events_calls_process_event() {
 
     // Process events (what trigger_cycle_events now does internally)
     let mut rng = SmallRng::seed_from_u64(99);
-    game.process_event_for_area(&Area::Sector1, &AreaEvent::Wildfire, &mut rng)
+    game.process_event_for_area(&AreaId::sector1(), &AreaEvent::Wildfire, &mut rng)
         .unwrap();
-    game.process_event_for_area(&Area::Sector4, &AreaEvent::Sandstorm, &mut rng)
+    game.process_event_for_area(&AreaId::sector4(), &AreaEvent::Sandstorm, &mut rng)
         .unwrap();
 
     let final_alive = game.living_characters().len();
@@ -160,21 +164,21 @@ fn test_terrain_affinity_improves_survival() {
 
         let mut area = AreaDetails::new_with_terrain(
             Some("Forest".to_string()),
-            Area::Sector1,
+            AreaId::sector1(),
             TerrainType::new(BaseTerrain::Forest, vec![]).unwrap(),
         );
         area.events.push(AreaEvent::Flood);
         game_with.areas.push(area);
 
         let mut character = Character::new("Affinity Character".to_string(), Some(1), None);
-        character.location.area = Area::Sector1;
+        character.location.area = AreaId::sector1();
         character.blood = 500;
         character.terrain_affinity = vec![BaseTerrain::Forest]; // HAS affinity
         character.statistics.game = game_with.identifier.clone();
         game_with.characters.push(character);
 
         game_with
-            .process_event_for_area(&Area::Sector1, &AreaEvent::Flood, &mut rng_with)
+            .process_event_for_area(&AreaId::sector1(), &AreaEvent::Flood, &mut rng_with)
             .unwrap();
 
         if game_with.characters[0].effective_health() == 0 {
@@ -187,21 +191,21 @@ fn test_terrain_affinity_improves_survival() {
 
         let mut area2 = AreaDetails::new_with_terrain(
             Some("Forest".to_string()),
-            Area::Sector1,
+            AreaId::sector1(),
             TerrainType::new(BaseTerrain::Forest, vec![]).unwrap(),
         );
         area2.events.push(AreaEvent::Flood);
         game_without.areas.push(area2);
 
         let mut character2 = Character::new("No Affinity Character".to_string(), Some(1), None);
-        character2.location.area = Area::Sector1;
+        character2.location.area = AreaId::sector1();
         character2.blood = 500;
         character2.terrain_affinity = vec![]; // NO affinity
         character2.statistics.game = game_without.identifier.clone();
         game_without.characters.push(character2);
 
         game_without
-            .process_event_for_area(&Area::Sector1, &AreaEvent::Flood, &mut rng_without)
+            .process_event_for_area(&AreaId::sector1(), &AreaEvent::Flood, &mut rng_without)
             .unwrap();
 
         if game_without.characters[0].effective_health() == 0 {

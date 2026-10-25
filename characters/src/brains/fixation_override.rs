@@ -3,7 +3,7 @@
 //! Runs after stamina_override, before phobia_override. Provides:
 //! 1. Per-tier override semantics — Mild = tiebreaker, Moderate = strong-bias,
 //!    Severe = compulsion (overrides all unless target unreachable)
-//! 2. Per-target hooks — Character → Attack, Item → Loot/Gather, Area → Move
+//! 2. Per-target hooks — Character → Attack, Item → Loot/Gather, AreaId → Move
 //! 3. Trait modifiers — Resilient/Fragile/Loyal affect effective tier
 //!
 //! Pipeline order: [..., survival, stamina, **fixation**, phobia, trauma, affliction, preferred, alliance, consumable]
@@ -51,7 +51,7 @@ pub fn fixation_target_action(kind: &AfflictionKind) -> Option<Action> {
     match kind {
         AfflictionKind::Fixation(FixationTarget::Character(_)) => Some(Action::Attack),
         AfflictionKind::Fixation(FixationTarget::Item(_)) => Some(Action::TakeItem),
-        AfflictionKind::Fixation(FixationTarget::Area(_)) => Some(Action::Move(None)),
+        AfflictionKind::Fixation(FixationTarget::AreaId(_)) => Some(Action::Move(None)),
         _ => None,
     }
 }
@@ -72,7 +72,7 @@ pub fn fixation_target_action(kind: &AfflictionKind) -> Option<Action> {
 /// Per-target action mapping:
 /// - Fixation(Character(id)) → Attack
 /// - Fixation(Item(id)) → TakeItem  
-/// - Fixation(Area(name)) → Move
+/// - Fixation(AreaId(name)) → Move
 pub fn fixation_override(character: &Character, ctx: &FixationOverrideContext) -> Option<Action> {
     if character.afflictions.is_empty() {
         return None;
@@ -262,7 +262,7 @@ mod tests {
 
     #[test]
     fn fixation_target_action_area_returns_move() {
-        let kind = AfflictionKind::Fixation(FixationTarget::Area("hub".into()));
+        let kind = AfflictionKind::Fixation(FixationTarget::AreaId("hub".into()));
         assert_eq!(fixation_target_action(&kind), Some(Action::Move(None)));
     }
 
@@ -310,7 +310,7 @@ mod tests {
     #[test]
     fn severe_fixation_compulsion_when_reachable() {
         let mut character =
-            make_character_with_fixation(FixationTarget::Area("hub".into()), Severity::Severe);
+            make_character_with_fixation(FixationTarget::AreaId("hub".into()), Severity::Severe);
         character.traits.clear();
         let ctx = FixationOverrideContext {
             target_reachable: true,
@@ -324,7 +324,7 @@ mod tests {
     #[test]
     fn severe_fixation_no_override_when_unreachable() {
         let mut character =
-            make_character_with_fixation(FixationTarget::Area("hub".into()), Severity::Severe);
+            make_character_with_fixation(FixationTarget::AreaId("hub".into()), Severity::Severe);
         character.traits.clear();
         let ctx = FixationOverrideContext {
             target_reachable: false,

@@ -18,7 +18,7 @@
 use crate::Character;
 use crate::actions::Action;
 use areas::location::{Location, shortest_path_while, sub_neighbors};
-use areas::{Area, AreaDetails};
+use areas::{AreaDetails, AreaId};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
 use shared::messages::{AreaRef, CharacterRef, MessagePayload};
@@ -41,8 +41,13 @@ impl Character {
     /// (owner decision; see the formula's doc for the 30/40 example).
     /// Unknown areas price at the default terrain — test harnesses
     /// pass empty `all_areas`.
-    pub(crate) fn hop_stamina_cost(&self, from: Area, to: Area, all_areas: &[AreaDetails]) -> u32 {
-        let standard_cost = |area: Area| {
+    pub(crate) fn hop_stamina_cost(
+        &self,
+        from: AreaId,
+        to: AreaId,
+        all_areas: &[AreaDetails],
+    ) -> u32 {
+        let standard_cost = |area: AreaId| {
             let terrain = all_areas
                 .iter()
                 .find(|ad| ad.area == Some(area))
@@ -78,7 +83,7 @@ impl Character {
             identifier: self.identifier.clone().into(),
             name: self.name.clone(),
         };
-        let area_ref = |a: Area| {
+        let area_ref = |a: AreaId| {
             let s = a.to_string();
             AreaRef {
                 identifier: s.clone().into(),
@@ -205,7 +210,7 @@ impl Character {
 mod tests {
     use super::*;
     use crate::Character;
-    use areas::Area::*;
+    use areas::AreaId;
     use areas::hex::SubTriangle;
     use rstest::*;
 
@@ -216,7 +221,7 @@ mod tests {
         c
     }
 
-    fn at(area: Area, index: u8) -> Location {
+    fn at(area: AreaId, index: u8) -> Location {
         Location::new(area, SubTriangle::new(index))
     }
 
@@ -272,14 +277,14 @@ mod tests {
     async fn move_beats_take_one_sub_hop_each_paying_its_crossing(character: Character) {
         let mut character = character;
         let mut events = Vec::new();
-        // Hub triangle 0 -> Sector 1 triangle 0: the door into
+        // AreaId::hub() triangle 0 -> Sector 1 triangle 0: the door into
         // Sector 1 triangle 3, then around the ring — 4 hops total;
         // each Move beat commits exactly one of them.
-        let result = character.travels(Some(Location::center(Sector1)), &[], &mut events);
-        assert_eq!(result, TravelResult::Success(at(Sector1, 3)));
+        let result = character.travels(Some(Location::center(AreaId::sector1())), &[], &mut events);
+        assert_eq!(result, TravelResult::Success(at(AreaId::sector1(), 3)));
         assert_eq!(
             character.location,
-            at(Sector1, 3),
+            at(AreaId::sector1(), 3),
             "beat 1 hops through the door"
         );
         assert_eq!(
@@ -289,11 +294,11 @@ mod tests {
         );
 
         // Second Move beat toward the same goal: one more hop.
-        let result = character.travels(Some(Location::center(Sector1)), &[], &mut events);
-        assert_eq!(result, TravelResult::Success(at(Sector1, 2)));
+        let result = character.travels(Some(Location::center(AreaId::sector1())), &[], &mut events);
+        assert_eq!(result, TravelResult::Success(at(AreaId::sector1(), 2)));
         assert_eq!(
             character.location,
-            at(Sector1, 2),
+            at(AreaId::sector1(), 2),
             "beat 2 walks one step along the ring"
         );
         assert_eq!(
@@ -335,7 +340,7 @@ mod tests {
     async fn single_hop_pays_only_its_crossing_price(character: Character) {
         let mut character = character;
         let mut events = Vec::new();
-        let goal = at(Hub, 1); // adjacent ring triangle
+        let goal = at(AreaId::hub(), 1); // adjacent ring triangle
         let result = character.travels(Some(goal), &[], &mut events);
         assert_eq!(result, TravelResult::Success(goal));
         assert_eq!(character.location, goal);
@@ -360,21 +365,24 @@ mod tests {
         let all_areas = vec![
             AreaDetails::new_with_terrain(
                 Some("Hub".to_string()),
-                Hub,
+                AreaId::hub(),
                 world::terrain::TerrainType::new(world::terrain::BaseTerrain::Clearing, vec![])
                     .unwrap(),
             ),
             AreaDetails::new_with_terrain(
                 Some("S1".to_string()),
-                Sector1,
+                AreaId::sector1(),
                 world::terrain::TerrainType::new(world::terrain::BaseTerrain::Desert, vec![])
                     .unwrap(),
             ),
         ];
-        // Hub triangle 0 -> Sector1 triangle 3 crosses the door.
-        let result =
-            character.travels(Some(Location::center(Sector1)), &all_areas, &mut Vec::new());
-        assert_eq!(result, TravelResult::Success(at(Sector1, 3)));
+        // AreaId::hub() triangle 0 -> AreaId::sector1() triangle 3 crosses the door.
+        let result = character.travels(
+            Some(Location::center(AreaId::sector1())),
+            &all_areas,
+            &mut Vec::new(),
+        );
+        assert_eq!(result, TravelResult::Success(at(AreaId::sector1(), 3)));
         assert_eq!(
             character.stamina,
             100 - (10 + 20),
@@ -388,8 +396,12 @@ mod tests {
         let mut character = character;
         // Exactly one crossing price: beat 1 empties the pool.
         character.stamina = hop_price(&character);
-        let result = character.travels(Some(Location::center(Sector1)), &[], &mut Vec::new());
-        assert_eq!(result, TravelResult::Success(at(Sector1, 3)));
+        let result = character.travels(
+            Some(Location::center(AreaId::sector1())),
+            &[],
+            &mut Vec::new(),
+        );
+        assert_eq!(result, TravelResult::Success(at(AreaId::sector1(), 3)));
         assert_eq!(
             character.stamina, 0,
             "the one affordable hop spent everything"
@@ -398,9 +410,9 @@ mod tests {
         // The second beat cannot pay its crossing price: the hop
         // fails with the travel-exhausted event and the location stays.
         let mut events = Vec::new();
-        let result = character.travels(Some(Location::center(Sector1)), &[], &mut events);
+        let result = character.travels(Some(Location::center(AreaId::sector1())), &[], &mut events);
         assert_eq!(result, TravelResult::Failure);
-        assert_eq!(character.location, at(Sector1, 3));
+        assert_eq!(character.location, at(AreaId::sector1(), 3));
         assert_eq!(character.stamina, 0);
         let exhausted_line = events
             .iter()
@@ -415,7 +427,7 @@ mod tests {
         character.stamina = 0;
         let start = character.location;
         let mut events = Vec::new();
-        let result = character.travels(Some(Location::center(Sector1)), &[], &mut events);
+        let result = character.travels(Some(Location::center(AreaId::sector1())), &[], &mut events);
         assert_eq!(result, TravelResult::Failure);
         assert_eq!(character.location, start);
         let exhausted_line = events
@@ -428,8 +440,12 @@ mod tests {
     #[tokio::test]
     async fn travels_fail_already_there(character: Character) {
         let mut character = character;
-        character.location = Location::center(Sector1);
-        let result = character.travels(Some(Location::center(Sector1)), &[], &mut Vec::new());
+        character.location = Location::center(AreaId::sector1());
+        let result = character.travels(
+            Some(Location::center(AreaId::sector1())),
+            &[],
+            &mut Vec::new(),
+        );
         assert_eq!(result, TravelResult::Failure);
     }
 }

@@ -404,7 +404,7 @@ mod tests {
     use crate::AfflictionDraft;
     use crate::Character;
     use crate::statuses::CharacterStatus;
-    use areas::Area;
+    use areas::AreaId;
     use areas::events::AreaEvent;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
@@ -426,7 +426,7 @@ mod tests {
     fn process_status_mauled(mut character: Character, mut small_rng: SmallRng) {
         let blood = character.blood;
         character.status = CharacterStatus::Mauled(Animal::Bear);
-        let area_details = AreaDetails::new(Some("Forest".to_string()), areas::Area::Hub);
+        let area_details = AreaDetails::new(Some("Forest".to_string()), areas::AreaId::hub());
         character.process_status(&area_details, &mut small_rng, &mut Vec::new());
         assert!(character.blood < blood);
     }
@@ -439,7 +439,7 @@ mod tests {
         #[case] status: CharacterStatus,
     ) {
         character.status = status.clone();
-        let area_details = AreaDetails::new(Some("Forest".to_string()), areas::Area::Hub);
+        let area_details = AreaDetails::new(Some("Forest".to_string()), areas::AreaId::hub());
         character.process_status(&area_details, &mut small_rng, &mut Vec::new());
         assert!(character.is_alive());
     }
@@ -454,7 +454,7 @@ mod tests {
             source: AfflictionSource::Environmental,
             trapped_metadata: None,
         });
-        let area_details = AreaDetails::new(Some("Forest".to_string()), areas::Area::Hub);
+        let area_details = AreaDetails::new(Some("Forest".to_string()), areas::AreaId::hub());
         character.process_status(&area_details, &mut small_rng, &mut Vec::new());
         assert_eq!(character.blood, 0);
         assert_eq!(character.status, CharacterStatus::RecentlyDead);
@@ -462,7 +462,7 @@ mod tests {
 
     #[rstest]
     fn process_status_from_area_event(mut character: Character, mut small_rng: SmallRng) {
-        let mut area_details = AreaDetails::new(Some("Forest".to_string()), Area::Hub);
+        let mut area_details = AreaDetails::new(Some("Forest".to_string()), AreaId::hub());
         area_details.events.push(AreaEvent::Wildfire);
 
         character.process_status(&area_details, &mut small_rng, &mut Vec::new());
@@ -475,7 +475,7 @@ mod tests {
 
     #[rstest]
     fn wildfire_sets_affliction(mut character: Character) {
-        let mut area_details = AreaDetails::new(Some("Forest".to_string()), areas::Area::Hub);
+        let mut area_details = AreaDetails::new(Some("Forest".to_string()), areas::AreaId::hub());
         area_details.events.push(AreaEvent::Wildfire);
 
         character.apply_area_effects(&area_details);
@@ -489,7 +489,7 @@ mod tests {
 
     #[rstest]
     fn blizzard_sets_affliction(mut character: Character) {
-        let mut area_details = AreaDetails::new(Some("Tundra".to_string()), areas::Area::Hub);
+        let mut area_details = AreaDetails::new(Some("Tundra".to_string()), areas::AreaId::hub());
         area_details.events.push(AreaEvent::Blizzard);
 
         character.apply_area_effects(&area_details);
@@ -503,7 +503,7 @@ mod tests {
 
     #[rstest]
     fn heatwave_sets_affliction(mut character: Character) {
-        let mut area_details = AreaDetails::new(Some("Desert".to_string()), areas::Area::Hub);
+        let mut area_details = AreaDetails::new(Some("Desert".to_string()), areas::AreaId::hub());
         area_details.events.push(AreaEvent::Heatwave);
 
         character.apply_area_effects(&area_details);
@@ -517,7 +517,7 @@ mod tests {
 
     #[rstest]
     fn sandstorm_sets_affliction(mut character: Character) {
-        let mut area_details = AreaDetails::new(Some("Desert".to_string()), areas::Area::Hub);
+        let mut area_details = AreaDetails::new(Some("Desert".to_string()), areas::AreaId::hub());
         area_details.events.push(AreaEvent::Sandstorm);
 
         character.apply_area_effects(&area_details);
@@ -531,7 +531,7 @@ mod tests {
 
     #[rstest]
     fn drought_sets_affliction(mut character: Character) {
-        let mut area_details = AreaDetails::new(Some("Desert".to_string()), areas::Area::Hub);
+        let mut area_details = AreaDetails::new(Some("Desert".to_string()), areas::AreaId::hub());
         area_details.events.push(AreaEvent::Drought);
 
         character.apply_area_effects(&area_details);
@@ -545,7 +545,7 @@ mod tests {
 
     #[rstest]
     fn flood_sets_trapped_affliction(mut character: Character) {
-        let mut area_details = AreaDetails::new(Some("River".to_string()), areas::Area::Hub);
+        let mut area_details = AreaDetails::new(Some("River".to_string()), areas::AreaId::hub());
         area_details.events.push(AreaEvent::Flood);
 
         character.apply_area_effects(&area_details);
@@ -559,7 +559,7 @@ mod tests {
 
     #[rstest]
     fn earthquake_sets_trapped_affliction(mut character: Character) {
-        let mut area_details = AreaDetails::new(Some("Cave".to_string()), areas::Area::Hub);
+        let mut area_details = AreaDetails::new(Some("Cave".to_string()), areas::AreaId::hub());
         area_details.events.push(AreaEvent::Earthquake);
 
         character.apply_area_effects(&area_details);

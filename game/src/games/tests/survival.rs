@@ -99,14 +99,14 @@ fn initiative_liveness_gate_still_works() {
     killer.blood = 1000;
     killer.attributes.strength = 50;
     killer.attributes.speed = 100;
-    killer.location.area = Area::Hub;
+    killer.location.area = AreaId::hub();
 
     let mut victim = Character::new("Victim".to_string(), None, None);
     victim.blood = 10;
     victim.attributes.strength = 1;
     victim.attributes.toughness = 1;
     victim.attributes.speed = 1;
-    victim.location.area = Area::Hub;
+    victim.location.area = AreaId::hub();
 
     game.characters.clear();
     game.characters.push(killer);
@@ -137,8 +137,8 @@ fn attributes_new_includes_agility() {
 #[test]
 fn test_random_open_area() {
     let mut game = Game::new("Test Game");
-    let area1 = AreaDetails::new(Some("Lake".to_string()), Area::Sector1);
-    let area2 = AreaDetails::new(Some("Forest".to_string()), Area::Sector4);
+    let area1 = AreaDetails::new(Some("Lake".to_string()), AreaId::sector1());
+    let area2 = AreaDetails::new(Some("Forest".to_string()), AreaId::sector4());
     game.areas.push(area1);
     game.areas.push(area2.clone());
     let mut rng = rand::rng();
@@ -291,7 +291,7 @@ fn test_check_game_state_continues() {
 fn test_prepare_cycle() {
     use shared::messages::Phase;
     let mut game = Game::new("Test Game");
-    let area = AreaDetails::new(Some("Lake".to_string()), Area::Sector1);
+    let area = AreaDetails::new(Some("Lake".to_string()), AreaId::sector1());
     let mut rng = rand::rng();
     let event = AreaEvent::random(&mut rng);
     game.day = Some(1);
@@ -327,8 +327,10 @@ fn smoke_night_event_frequency_uses_configured_hours() {
         game.config.day_start_hour = day_start_hour;
         game.config.nightfall_hour = nightfall_hour;
         for i in 0..128 {
-            game.areas
-                .push(AreaDetails::new(Some(format!("Lake{i}")), Area::Sector1));
+            game.areas.push(AreaDetails::new(
+                Some(format!("Lake{i}")),
+                AreaId::sector1(),
+            ));
         }
         game
     };
@@ -401,8 +403,10 @@ fn smoke_cycle_event_frequency_drives_cadence() {
         game.day = Some(2);
         game.config.night_event_frequency = night_event_frequency;
         for i in 0..128 {
-            game.areas
-                .push(AreaDetails::new(Some(format!("Lake{i}")), Area::Sector1));
+            game.areas.push(AreaDetails::new(
+                Some(format!("Lake{i}")),
+                AreaId::sector1(),
+            ));
         }
         game
     };
@@ -441,8 +445,8 @@ fn smoke_cycle_event_frequency_drives_cadence() {
 #[test]
 fn test_constrain_areas() {
     let mut game = Game::new("Test Game");
-    let area1 = AreaDetails::new(Some("Lake".to_string()), Area::Sector1);
-    let area2 = AreaDetails::new(Some("Forest".to_string()), Area::Sector4);
+    let area1 = AreaDetails::new(Some("Lake".to_string()), AreaId::sector1());
+    let area2 = AreaDetails::new(Some("Forest".to_string()), AreaId::sector4());
     game.areas.push(area1);
     game.areas.push(area2);
 
@@ -465,7 +469,7 @@ fn test_run_character_cycle() {
     let character2 = create_character("Character2", true);
 
     let mut game = create_test_game_with_characters(vec![character1.clone(), character2.clone()]);
-    let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
+    let area = AreaDetails::new(Some("Lake".to_string()), AreaId::hub());
     game.areas.push(area);
 
     let mut rng = SmallRng::seed_from_u64(42);
@@ -485,8 +489,10 @@ fn test_run_character_cycle() {
 #[test]
 fn hazard_lasts_three_blocks_then_wipes() {
     let mut game = Game::new("Test Game");
-    game.areas
-        .push(AreaDetails::new(Some("Lake".to_string()), Area::Sector1));
+    game.areas.push(AreaDetails::new(
+        Some("Lake".to_string()),
+        AreaId::sector1(),
+    ));
     let mut rng = SmallRng::seed_from_u64(4);
     game.areas[0].events.push(AreaEvent::random(&mut rng));
     game.areas[0].hazard_blocks = Some(3);
@@ -507,8 +513,8 @@ fn hazard_lasts_three_blocks_then_wipes() {
 #[test]
 fn test_open_and_closed_areas() {
     let mut game = Game::new("Test Game");
-    let area1 = AreaDetails::new(Some("Lake".to_string()), Area::Sector1);
-    let area2 = AreaDetails::new(Some("Forest".to_string()), Area::Sector4);
+    let area1 = AreaDetails::new(Some("Lake".to_string()), AreaId::sector1());
+    let area2 = AreaDetails::new(Some("Forest".to_string()), AreaId::sector4());
     game.areas.push(area1);
     game.areas.push(area2);
 
@@ -581,7 +587,7 @@ fn status_death_emits_exactly_one_character_killed() {
     // Without an area record the character's turn (and process_status,
     // where the death announcement lives) never runs.
     game.areas
-        .push(AreaDetails::new(Some("Hub".to_string()), Area::Hub));
+        .push(AreaDetails::new(Some("Hub".to_string()), AreaId::hub()));
     game.day = Some(1);
     let _ = game.run_phase(shared::messages::Phase::DAY);
     // process_status announces the status death and promotes to RecentlyDead;
@@ -623,7 +629,7 @@ fn bleed_out_death_emits_one_bled_out_and_one_killed() {
     // Without an area record the character's turn (where the wound drain
     // lives) never runs.
     game.areas
-        .push(AreaDetails::new(Some("Hub".to_string()), Area::Hub));
+        .push(AreaDetails::new(Some("Hub".to_string()), AreaId::hub()));
     game.day = Some(1);
     let _ = game.run_phase(shared::messages::Phase::DAY);
     let bled_out = game
@@ -671,7 +677,7 @@ fn bleed_out_death_reaches_cycle_sweep_and_records_day_killed() {
     ));
     let mut game = create_test_game_with_characters(vec![a]);
     game.areas
-        .push(AreaDetails::new(Some("Hub".to_string()), Area::Hub));
+        .push(AreaDetails::new(Some("Hub".to_string()), AreaId::hub()));
     game.day = Some(1);
     let _ = game.run_phase(shared::messages::Phase::DAY);
     // A second phase proves the dead character is swept and stays swept.
@@ -705,7 +711,7 @@ fn sleeping_character_naturally_wakes_after_duration_emits_character_woke() {
     t.cycles_awake = 9;
     t.stamina = 50;
     let mut game = create_test_game_with_characters(vec![t.clone()]);
-    let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
+    let area = AreaDetails::new(Some("Lake".to_string()), AreaId::hub());
     game.areas.push(area);
     let mut rng = SmallRng::seed_from_u64(42);
     let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![t], 1);
@@ -738,7 +744,7 @@ fn sleeping_character_regenerates_stamina_each_phase() {
     t.max_stamina = 100;
     let prior = t.stamina;
     let mut game = create_test_game_with_characters(vec![t.clone()]);
-    let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
+    let area = AreaDetails::new(Some("Lake".to_string()), AreaId::hub());
     game.areas.push(area);
     let mut rng = SmallRng::seed_from_u64(42);
     let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![t], 1);
@@ -778,7 +784,7 @@ fn sleeping_wounded_character_does_not_regen_hp() {
     );
     let prior_hp = t.effective_health();
     let mut game = create_test_game_with_characters(vec![t.clone()]);
-    let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
+    let area = AreaDetails::new(Some("Lake".to_string()), AreaId::hub());
     game.areas.push(area);
     let mut rng = SmallRng::seed_from_u64(42);
     let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![t], 1);
@@ -798,7 +804,7 @@ fn cycles_awake_does_not_increment_while_sleeping() {
     t.sleep_remaining = 3;
     t.cycles_awake = 4;
     let mut game = create_test_game_with_characters(vec![t.clone()]);
-    let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
+    let area = AreaDetails::new(Some("Lake".to_string()), AreaId::hub());
     game.areas.push(area);
     let mut rng = SmallRng::seed_from_u64(42);
     let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![t], 1);
@@ -816,7 +822,7 @@ fn area_event_interrupts_sleeping_character() {
     t.stamina = 10;
     let prior_stamina = t.stamina;
     let mut game = create_test_game_with_characters(vec![t.clone()]);
-    let mut area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
+    let mut area = AreaDetails::new(Some("Lake".to_string()), AreaId::hub());
     area.events.push(AreaEvent::Wildfire);
     game.areas.push(area);
     let mut rng = SmallRng::seed_from_u64(42);

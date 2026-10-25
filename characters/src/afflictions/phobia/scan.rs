@@ -156,7 +156,7 @@ fn scan_character_phobias(
 mod tests {
     use super::*;
     use crate::AfflictionDraft;
-    use areas::Area;
+    use areas::AreaId;
     use areas::events::AreaEvent;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
@@ -166,7 +166,7 @@ mod tests {
     fn make_context_with_fire() -> PhobiaContext<'static> {
         use std::sync::LazyLock;
         static AREA: LazyLock<areas::AreaDetails> = LazyLock::new(|| {
-            let mut area = areas::AreaDetails::new(None, Area::Hub);
+            let mut area = areas::AreaDetails::new(None, AreaId::hub());
             area.terrain = TerrainType::new(BaseTerrain::Forest, vec![]).unwrap();
             area.events = vec![AreaEvent::Wildfire];
             area
@@ -183,7 +183,7 @@ mod tests {
     fn make_context_clear() -> PhobiaContext<'static> {
         use std::sync::LazyLock;
         static AREA: LazyLock<areas::AreaDetails> = LazyLock::new(|| {
-            let mut area = areas::AreaDetails::new(None, Area::Hub);
+            let mut area = areas::AreaDetails::new(None, AreaId::hub());
             area.terrain = TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap();
             area
         });
@@ -303,7 +303,7 @@ mod tests {
     fn make_context_with_others(others: &[Character]) -> PhobiaContext<'_> {
         use std::sync::LazyLock;
         static AREA: LazyLock<areas::AreaDetails> = LazyLock::new(|| {
-            let mut area = areas::AreaDetails::new(None, Area::Hub);
+            let mut area = areas::AreaDetails::new(None, AreaId::hub());
             area.terrain = TerrainType::new(BaseTerrain::Forest, vec![]).unwrap();
             area.events = vec![AreaEvent::Wildfire];
             area

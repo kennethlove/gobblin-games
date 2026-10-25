@@ -446,7 +446,7 @@ pub async fn join_game(
 async fn game_spawn_areas(
     db: &Surreal<Any>,
     game_identifier: &str,
-) -> Result<Vec<areas::Area>, AppError> {
+) -> Result<Vec<areas::AreaId>, AppError> {
     let mut response = db
         .query("SELECT arena FROM game WHERE identifier = $game")
         .bind(("game", game_identifier.to_owned()))

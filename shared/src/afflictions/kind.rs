@@ -64,7 +64,7 @@ impl FromStr for PhobiaTrigger {
 pub enum FixationTarget {
     Character(String),
     Item(String),
-    Area(String),
+    AreaId(String),
 }
 
 impl fmt::Display for FixationTarget {
@@ -72,7 +72,7 @@ impl fmt::Display for FixationTarget {
         match self {
             FixationTarget::Character(id) => write!(f, "character:{id}"),
             FixationTarget::Item(id) => write!(f, "item:{id}"),
-            FixationTarget::Area(name) => write!(f, "area:{name}"),
+            FixationTarget::AreaId(name) => write!(f, "area:{name}"),
         }
     }
 }
@@ -86,7 +86,7 @@ impl FromStr for FixationTarget {
         } else if let Some(id) = s.strip_prefix("item:") {
             Ok(FixationTarget::Item(id.to_string()))
         } else if let Some(name) = s.strip_prefix("area:") {
-            Ok(FixationTarget::Area(name.to_string()))
+            Ok(FixationTarget::AreaId(name.to_string()))
         } else {
             Err(format!("unknown FixationTarget: {s}"))
         }
@@ -388,7 +388,7 @@ mod tests {
 
     #[test]
     fn fixation_target_display_roundtrip_area() {
-        let target = FixationTarget::Area("hub".to_string());
+        let target = FixationTarget::AreaId("hub".to_string());
         let s = target.to_string();
         assert_eq!(s, "area:hub");
         let parsed: FixationTarget = s.parse().unwrap();
@@ -409,7 +409,7 @@ mod tests {
         let kind = AfflictionKind::Fixation(FixationTarget::Item("i-1".to_string()));
         assert_eq!(kind.to_string(), "fixation:item:i-1");
 
-        let kind = AfflictionKind::Fixation(FixationTarget::Area("sector1".to_string()));
+        let kind = AfflictionKind::Fixation(FixationTarget::AreaId("sector1".to_string()));
         assert_eq!(kind.to_string(), "fixation:area:sector1");
     }
 
@@ -430,7 +430,7 @@ mod tests {
         let kind: AfflictionKind = "fixation:area:sector1".parse().unwrap();
         assert_eq!(
             kind,
-            AfflictionKind::Fixation(FixationTarget::Area("sector1".to_string()))
+            AfflictionKind::Fixation(FixationTarget::AreaId("sector1".to_string()))
         );
     }
 

@@ -1,4 +1,4 @@
-//! Area-level pathfinding: builds a graph over the v1 7-area hex topology
+//! AreaId-level pathfinding: builds a graph over the v1 7-area hex topology
 //! and exposes a path-planning helper for characters.
 //!
 //! Edge stamina cost is a composite per the design decision (8pq Q2):
@@ -13,9 +13,8 @@
 use super::actions::Action;
 use super::{Character, calculate_stamina_cost, crossing_stamina_cost};
 use areas::location::Location;
-use areas::{Area, AreaDetails};
+use areas::{AreaDetails, AreaId};
 use std::collections::HashMap;
-use strum::IntoEnumIterator;
 use world::pathfinding::{Graph, astar};
 use world::terrain::Harshness;
 
@@ -25,23 +24,23 @@ pub struct AreaGraph<'a> {
     /// All known areas (whether represented in `area_details` or not).
     /// Used to define the node set; missing details still produce a node
     /// connected by topology, just with default-terrain cost.
-    pub areas: Vec<Area>,
+    pub areas: Vec<AreaId>,
     /// Character doing the planning. Used for stamina-cost computation.
     pub character: &'a Character,
     /// Per-area details lookup (terrain, items, etc.).
-    pub details: HashMap<Area, &'a AreaDetails>,
+    pub details: HashMap<AreaId, &'a AreaDetails>,
 }
 
 impl<'a> AreaGraph<'a> {
     pub fn new(areas: &'a [AreaDetails], character: &'a Character) -> Self {
-        let mut details: HashMap<Area, &AreaDetails> = HashMap::new();
+        let mut details: HashMap<AreaId, &AreaDetails> = HashMap::new();
         for ad in areas {
             if let Some(a) = ad.area {
                 details.insert(a, ad);
             }
         }
         Self {
-            areas: Area::iter().collect(),
+            areas: AreaId::iter().into_iter().collect(),
             character,
             details,
         }
@@ -50,7 +49,7 @@ impl<'a> AreaGraph<'a> {
     /// The standard move cost of entering `area` from this
     /// perspective: per-character, per-terrain; `20` (the base move
     /// cost) when no details are known.
-    fn standard_move_cost(&self, area: Area) -> u32 {
+    fn standard_move_cost(&self, area: AreaId) -> u32 {
         let detail = self.details.get(&area).copied();
         if let Some(ad) = detail {
             calculate_stamina_cost(
@@ -64,7 +63,7 @@ impl<'a> AreaGraph<'a> {
         }
     }
 
-    fn edge_cost(&self, from: Area, to: Area) -> u32 {
+    fn edge_cost(&self, from: AreaId, to: AreaId) -> u32 {
         let stamina =
             crossing_stamina_cost(self.standard_move_cost(from), self.standard_move_cost(to));
         let detail = self.details.get(&to).copied();
@@ -82,11 +81,11 @@ impl<'a> AreaGraph<'a> {
 }
 
 impl<'a> Graph for AreaGraph<'a> {
-    type Node = Area;
+    type Node = AreaId;
     type Cost = u32;
 
-    fn neighbors(&self, node: Area) -> Vec<(Area, u32)> {
-        let layout: Vec<(Area, areas::hex::Axial)> = self
+    fn neighbors(&self, node: AreaId) -> Vec<(AreaId, u32)> {
+        let layout: Vec<(AreaId, areas::hex::Axial)> = self
             .areas
             .iter()
             .map(|kind| {
@@ -105,7 +104,7 @@ impl<'a> Graph for AreaGraph<'a> {
             .collect()
     }
 
-    fn heuristic(&self, _from: Area, _to: Area) -> u32 {
+    fn heuristic(&self, _from: AreaId, _to: AreaId) -> u32 {
         // Hop-count is 0 or 1 in this 7-node graph (Hub is
         // adjacent to everything; sectors are at most 2 hops apart).
         // A constant zero (Dijkstra) is admissible and optimal here.
@@ -120,9 +119,9 @@ impl<'a> Graph for AreaGraph<'a> {
 pub fn plan_path(
     areas: &[AreaDetails],
     character: &Character,
-    start: Area,
-    goal: Area,
-) -> Option<(Vec<Area>, u32)> {
+    start: AreaId,
+    goal: AreaId,
+) -> Option<(Vec<AreaId>, u32)> {
     let g = AreaGraph::new(areas, character);
     astar(&g, start, goal)
 }
@@ -132,7 +131,7 @@ mod tests {
     use super::*;
     use world::terrain::{BaseTerrain, TerrainType};
 
-    fn area(name: &str, a: Area, base: BaseTerrain) -> AreaDetails {
+    fn area(name: &str, a: AreaId, base: BaseTerrain) -> AreaDetails {
         AreaDetails::new_with_terrain(
             Some(name.to_string()),
             a,
@@ -142,13 +141,13 @@ mod tests {
 
     fn standard_areas() -> Vec<AreaDetails> {
         vec![
-            area("c", Area::Hub, BaseTerrain::Clearing),
-            area("s1", Area::Sector1, BaseTerrain::Forest),
-            area("s2", Area::Sector2, BaseTerrain::Mountains),
-            area("s3", Area::Sector3, BaseTerrain::Grasslands),
-            area("s4", Area::Sector4, BaseTerrain::Desert),
-            area("s5", Area::Sector5, BaseTerrain::Wetlands),
-            area("s6", Area::Sector6, BaseTerrain::Tundra),
+            area("c", AreaId::hub(), BaseTerrain::Clearing),
+            area("s1", AreaId::sector1(), BaseTerrain::Forest),
+            area("s2", AreaId::sector2(), BaseTerrain::Mountains),
+            area("s3", AreaId::sector3(), BaseTerrain::Grasslands),
+            area("s4", AreaId::sector4(), BaseTerrain::Desert),
+            area("s5", AreaId::sector5(), BaseTerrain::Wetlands),
+            area("s6", AreaId::sector6(), BaseTerrain::Tundra),
         ]
     }
 
@@ -160,8 +159,8 @@ mod tests {
     fn plan_to_self_returns_singleton() {
         let areas = standard_areas();
         let t = fresh_character();
-        let (path, cost) = plan_path(&areas, &t, Area::Hub, Area::Hub).unwrap();
-        assert_eq!(path, vec![Area::Hub]);
+        let (path, cost) = plan_path(&areas, &t, AreaId::hub(), AreaId::hub()).unwrap();
+        assert_eq!(path, vec![AreaId::hub()]);
         assert_eq!(cost, 0);
     }
 
@@ -169,8 +168,8 @@ mod tests {
     fn plan_neighbor_is_two_node_path() {
         let areas = standard_areas();
         let t = fresh_character();
-        let (path, _) = plan_path(&areas, &t, Area::Hub, Area::Sector1).unwrap();
-        assert_eq!(path, vec![Area::Hub, Area::Sector1]);
+        let (path, _) = plan_path(&areas, &t, AreaId::hub(), AreaId::sector1()).unwrap();
+        assert_eq!(path, vec![AreaId::hub(), AreaId::sector1()]);
     }
 
     #[test]
@@ -179,10 +178,10 @@ mod tests {
         // The fastest route is Sector1 -> Hub -> Sector4.
         let areas = standard_areas();
         let t = fresh_character();
-        let (path, _) = plan_path(&areas, &t, Area::Sector1, Area::Sector4).unwrap();
+        let (path, _) = plan_path(&areas, &t, AreaId::sector1(), AreaId::sector4()).unwrap();
         assert_eq!(path.len(), 3);
-        assert_eq!(path[0], Area::Sector1);
-        assert_eq!(path[1], Area::Hub);
-        assert_eq!(path[2], Area::Sector4);
+        assert_eq!(path[0], AreaId::sector1());
+        assert_eq!(path[1], AreaId::hub());
+        assert_eq!(path[2], AreaId::sector4());
     }
 }

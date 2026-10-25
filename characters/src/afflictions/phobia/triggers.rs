@@ -133,13 +133,13 @@ fn character_has_light_source(character: &Character) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use areas::Area;
+    use areas::AreaId;
     use shared::messages::{CharacterRef, GameMessage, MessagePayload, MessageSource, Phase};
     use world::items::Item;
     use world::terrain::TerrainType;
 
     fn make_area_details(terrain: BaseTerrain, events: Vec<AreaEvent>) -> AreaDetails {
-        let mut area = AreaDetails::new(None, Area::Hub);
+        let mut area = AreaDetails::new(None, AreaId::hub());
         area.terrain = TerrainType::new(terrain, vec![]).unwrap();
         area.events = events;
         area

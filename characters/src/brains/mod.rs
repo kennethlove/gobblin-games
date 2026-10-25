@@ -3,7 +3,7 @@ use crate::actions::Action;
 use crate::alliances::MAX_ALLIES;
 use crate::traits::{CharacterAttribute, REFUSERS, ThresholdDelta, Trait, geometric_mean_affinity};
 use areas::location::Location;
-use areas::{Area, AreaDetails};
+use areas::{AreaDetails, AreaId};
 use rand::Rng;
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
@@ -252,7 +252,7 @@ impl Brain {
         nearby_characters: u32,
         available_destinations: &[areas::DestinationInfo],
         all_areas: &[AreaDetails],
-        enemy_density: &HashMap<Area, u32>,
+        enemy_density: &HashMap<AreaId, u32>,
         phase: shared::messages::Phase,
         rng: &mut impl Rng,
     ) -> Action {
@@ -334,7 +334,7 @@ impl Brain {
         character: &Character,
         available_destinations: &[areas::DestinationInfo],
         all_areas: &[AreaDetails],
-        enemy_density: &HashMap<Area, u32>,
+        enemy_density: &HashMap<AreaId, u32>,
     ) -> Option<Location> {
         // Multi-hop pathfinding (8pq): score every known area (not
         // just neighbors), then plan a stamina-aware path and take
@@ -400,7 +400,7 @@ impl Brain {
         character: &Character,
         available_destinations: &[areas::DestinationInfo],
         all_areas: &[AreaDetails],
-        enemy_density: &HashMap<Area, u32>,
+        enemy_density: &HashMap<AreaId, u32>,
     ) -> [Action; 2] {
         let destination = || {
             Action::Move(self.move_destination(
@@ -425,7 +425,7 @@ impl Brain {
     }
 
     /// Choose the best destination from available areas based on terrain scoring.
-    /// Returns the Area enum variant of the highest-scoring area.
+    /// Returns the AreaId enum variant of the highest-scoring area.
     ///
     /// Scoring factors:
     /// - +20 if area has terrain in character's affinity
@@ -437,8 +437,8 @@ impl Brain {
         &self,
         areas: &[AreaDetails],
         character: &Character,
-        enemy_density: &HashMap<Area, u32>,
-    ) -> Option<Area> {
+        enemy_density: &HashMap<AreaId, u32>,
+    ) -> Option<AreaId> {
         if areas.is_empty() {
             return None;
         }
@@ -446,7 +446,7 @@ impl Brain {
         let is_desperate = character.effective_health() < 30;
 
         let mut best_score = i32::MIN;
-        let mut best_area: Option<Area> = None;
+        let mut best_area: Option<AreaId> = None;
 
         for area_details in areas {
             let mut score = 0i32;

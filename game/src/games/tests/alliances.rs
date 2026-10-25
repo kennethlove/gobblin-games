@@ -117,7 +117,7 @@ fn run_character_cycle_drains_character_alliance_events_into_game_queue() {
         });
 
     let mut game = create_test_game_with_characters(vec![character1.clone(), character2.clone()]);
-    let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
+    let area = AreaDetails::new(Some("Lake".to_string()), AreaId::hub());
     game.areas.push(area);
 
     let mut rng = SmallRng::seed_from_u64(211);
@@ -150,14 +150,14 @@ fn run_character_cycle_forms_alliance_between_compatible_same_area_characters() 
     t2.team = 1;
     t1.traits = vec![Trait::Friendly];
     t2.traits = vec![Trait::Friendly];
-    t1.location.area = Area::Hub;
-    t2.location.area = Area::Hub;
+    t1.location.area = AreaId::hub();
+    t2.location.area = AreaId::hub();
 
     let id1 = t1.id;
     let id2 = t2.id;
 
     let mut game = create_test_game_with_characters(vec![t1.clone(), t2.clone()]);
-    let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
+    let area = AreaDetails::new(Some("Lake".to_string()), AreaId::hub());
     game.areas.push(area);
 
     let mut formed = false;
@@ -195,8 +195,8 @@ fn run_character_cycle_treacherous_character_betrays_same_area_ally_when_timer_e
     betrayer.allies.push(victim.id);
     victim.allies.push(betrayer.id);
     betrayer.turns_since_last_betrayal = TREACHEROUS_BETRAYAL_INTERVAL;
-    betrayer.location.area = Area::Hub;
-    victim.location.area = Area::Hub;
+    betrayer.location.area = AreaId::hub();
+    victim.location.area = AreaId::hub();
     betrayer.team = 1;
     victim.team = 2;
 
@@ -204,7 +204,7 @@ fn run_character_cycle_treacherous_character_betrays_same_area_ally_when_timer_e
     let vid = victim.id;
 
     let mut game = create_test_game_with_characters(vec![betrayer.clone(), victim.clone()]);
-    let area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
+    let area = AreaDetails::new(Some("Lake".to_string()), AreaId::hub());
     game.areas.push(area);
 
     let mut rng = SmallRng::seed_from_u64(313);
@@ -244,17 +244,21 @@ fn run_character_cycle_treacherous_no_betrayal_without_same_area_ally_resets_tim
     loner.traits = vec![Trait::Treacherous];
     other.traits = vec![Trait::Tough];
     loner.turns_since_last_betrayal = TREACHEROUS_BETRAYAL_INTERVAL;
-    loner.location.area = Area::Sector1;
-    other.location.area = Area::Sector4;
+    loner.location.area = AreaId::sector1();
+    other.location.area = AreaId::sector4();
     loner.team = 5;
     other.team = 6;
     let lid = loner.id;
 
     let mut game = create_test_game_with_characters(vec![loner.clone(), other.clone()]);
-    game.areas
-        .push(AreaDetails::new(Some("Hill".to_string()), Area::Sector1));
-    game.areas
-        .push(AreaDetails::new(Some("Lake".to_string()), Area::Sector4));
+    game.areas.push(AreaDetails::new(
+        Some("Hill".to_string()),
+        AreaId::sector1(),
+    ));
+    game.areas.push(AreaDetails::new(
+        Some("Lake".to_string()),
+        AreaId::sector4(),
+    ));
 
     let mut rng = SmallRng::seed_from_u64(419);
     let _ = game.run_character_cycle(
@@ -284,8 +288,8 @@ fn run_character_cycle_enqueues_death_recorded_for_recently_dead_ally() {
     deceased.allies.push(survivor.id);
     deceased.blood = 0;
     deceased.status = CharacterStatus::RecentlyDead;
-    deceased.location.area = Area::Hub;
-    survivor.location.area = Area::Hub;
+    deceased.location.area = AreaId::hub();
+    survivor.location.area = AreaId::hub();
     deceased.team = 7;
     survivor.team = 8;
 
@@ -294,7 +298,7 @@ fn run_character_cycle_enqueues_death_recorded_for_recently_dead_ally() {
 
     let mut game = create_test_game_with_characters(vec![deceased.clone(), survivor.clone()]);
     game.areas
-        .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
+        .push(AreaDetails::new(Some("Lake".to_string()), AreaId::hub()));
     let living = game.living_characters();
 
     let mut rng = SmallRng::seed_from_u64(547);
@@ -325,9 +329,9 @@ fn run_character_cycle_three_way_preserves_existing_alliance() {
     c.traits = vec![Trait::LoneWolf];
     a.allies.push(b.id);
     b.allies.push(a.id);
-    a.location.area = Area::Hub;
-    b.location.area = Area::Hub;
-    c.location.area = Area::Hub;
+    a.location.area = AreaId::hub();
+    b.location.area = AreaId::hub();
+    c.location.area = AreaId::hub();
     a.team = 1;
     b.team = 2;
     c.team = 3;
@@ -338,7 +342,7 @@ fn run_character_cycle_three_way_preserves_existing_alliance() {
 
     let mut game = create_test_game_with_characters(vec![a.clone(), b.clone(), c.clone()]);
     game.areas
-        .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
+        .push(AreaDetails::new(Some("Lake".to_string()), AreaId::hub()));
     let living = game.living_characters();
 
     let mut rng = SmallRng::seed_from_u64(547);
@@ -371,9 +375,9 @@ fn run_character_cycle_consumes_recently_killed_by_for_combat_death() {
     deceased.status = CharacterStatus::RecentlyDead;
     deceased.recently_killed_by = Some(kid);
 
-    deceased.location.area = Area::Hub;
-    killer.location.area = Area::Hub;
-    survivor.location.area = Area::Hub;
+    deceased.location.area = AreaId::hub();
+    killer.location.area = AreaId::hub();
+    survivor.location.area = AreaId::hub();
     deceased.team = 7;
     killer.team = 2;
     survivor.team = 8;
@@ -381,7 +385,7 @@ fn run_character_cycle_consumes_recently_killed_by_for_combat_death() {
     let mut game =
         create_test_game_with_characters(vec![deceased.clone(), killer.clone(), survivor.clone()]);
     game.areas
-        .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
+        .push(AreaDetails::new(Some("Lake".to_string()), AreaId::hub()));
     let living = game.living_characters();
 
     let mut rng = SmallRng::seed_from_u64(547);
@@ -419,14 +423,14 @@ fn run_character_cycle_environmental_death_emits_killer_none() {
     deceased.status = CharacterStatus::RecentlyDead;
     assert!(deceased.recently_killed_by.is_none());
 
-    deceased.location.area = Area::Hub;
-    survivor.location.area = Area::Hub;
+    deceased.location.area = AreaId::hub();
+    survivor.location.area = AreaId::hub();
     deceased.team = 7;
     survivor.team = 8;
 
     let mut game = create_test_game_with_characters(vec![deceased.clone(), survivor.clone()]);
     game.areas
-        .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
+        .push(AreaDetails::new(Some("Lake".to_string()), AreaId::hub()));
     let living = game.living_characters();
 
     let mut rng = SmallRng::seed_from_u64(547);
@@ -452,14 +456,14 @@ fn alliance_formation_emits_message_with_alliance_formed_kind() {
     t2.team = 1;
     t1.traits = vec![Trait::Friendly];
     t2.traits = vec![Trait::Friendly];
-    t1.location.area = Area::Hub;
-    t2.location.area = Area::Hub;
+    t1.location.area = AreaId::hub();
+    t2.location.area = AreaId::hub();
 
     let base = create_test_game_with_characters(vec![t1.clone(), t2.clone()]);
     let mut game_with_area = base.clone();
     game_with_area
         .areas
-        .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
+        .push(AreaDetails::new(Some("Lake".to_string()), AreaId::hub()));
 
     let mut hit: Option<shared::messages::GameMessage> = None;
     for seed in 0u64..400 {
@@ -509,14 +513,14 @@ fn betrayal_emits_message_with_betrayal_triggered_kind() {
     betrayer.allies.push(victim.id);
     victim.allies.push(betrayer.id);
     betrayer.turns_since_last_betrayal = TREACHEROUS_BETRAYAL_INTERVAL;
-    betrayer.location.area = Area::Hub;
-    victim.location.area = Area::Hub;
+    betrayer.location.area = AreaId::hub();
+    victim.location.area = AreaId::hub();
     betrayer.team = 1;
     victim.team = 2;
 
     let mut game = create_test_game_with_characters(vec![betrayer.clone(), victim.clone()]);
     game.areas
-        .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
+        .push(AreaDetails::new(Some("Lake".to_string()), AreaId::hub()));
 
     let mut rng = SmallRng::seed_from_u64(313);
     let _ = game.run_character_cycle(
@@ -552,14 +556,14 @@ fn alliance_formed_message_content_matches_game_event_display() {
     t2.team = 1;
     t1.traits = vec![Trait::Friendly];
     t2.traits = vec![Trait::Friendly];
-    t1.location.area = Area::Hub;
-    t2.location.area = Area::Hub;
+    t1.location.area = AreaId::hub();
+    t2.location.area = AreaId::hub();
 
     let base = create_test_game_with_characters(vec![t1.clone(), t2.clone()]);
     let mut game_with_area = base.clone();
     game_with_area
         .areas
-        .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
+        .push(AreaDetails::new(Some("Lake".to_string()), AreaId::hub()));
 
     let mut hit: Option<shared::messages::GameMessage> = None;
     for seed in 0u64..400 {
@@ -627,8 +631,8 @@ fn betrayal_triggered_message_content_matches_game_event_display() {
     betrayer.allies.push(victim.id);
     victim.allies.push(betrayer.id);
     betrayer.turns_since_last_betrayal = TREACHEROUS_BETRAYAL_INTERVAL;
-    betrayer.location.area = Area::Hub;
-    victim.location.area = Area::Hub;
+    betrayer.location.area = AreaId::hub();
+    victim.location.area = AreaId::hub();
     betrayer.team = 1;
     victim.team = 2;
 
@@ -639,7 +643,7 @@ fn betrayal_triggered_message_content_matches_game_event_display() {
 
     let mut game = create_test_game_with_characters(vec![betrayer.clone(), victim.clone()]);
     game.areas
-        .push(AreaDetails::new(Some("Lake".to_string()), Area::Hub));
+        .push(AreaDetails::new(Some("Lake".to_string()), AreaId::hub()));
 
     let mut rng = SmallRng::seed_from_u64(313);
     let _ = game.run_character_cycle(

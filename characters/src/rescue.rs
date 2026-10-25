@@ -200,7 +200,7 @@ pub fn evaluate_rescue_opportunity(
 mod tests {
     use super::*;
     use crate::Character;
-    use areas::Area;
+    use areas::AreaId;
     use rand::SeedableRng;
     use rstest::rstest;
     use shared::afflictions::{
@@ -223,13 +223,13 @@ mod tests {
     fn free_character(name: &str, strength: u32) -> Character {
         let mut t = Character::new(name.into(), None, None);
         t.attributes.strength = strength;
-        t.location.area = Area::Hub;
+        t.location.area = AreaId::hub();
         t
     }
 
     fn same_area_details() -> AreaDetails {
         AreaDetails {
-            area: Some(Area::Hub),
+            area: Some(AreaId::hub()),
             ..Default::default()
         }
     }
@@ -294,7 +294,7 @@ mod tests {
         let mut target = trapped_character("target", Severity::Moderate);
         let rescuer = free_character("rescuer", 30);
         let mut area = same_area_details();
-        area.area = Some(Area::Sector1); // different area from Hub
+        area.area = Some(AreaId::sector1()); // different area from Hub
         let mut events = Vec::new();
         let mut rng = rand::rngs::SmallRng::seed_from_u64(0);
 
@@ -414,10 +414,10 @@ mod tests {
     #[test]
     fn evaluate_rescue_finds_trapped_character() {
         let mut rescuer = Character::new("Rescuer".into(), None, None);
-        rescuer.location.area = Area::Hub;
+        rescuer.location.area = AreaId::hub();
 
         let mut trapped = Character::new("Trapped".into(), None, None);
-        trapped.location.area = Area::Hub;
+        trapped.location.area = AreaId::hub();
         trapped.try_acquire_affliction(crate::AfflictionDraft {
             kind: AfflictionKind::Trapped(TrapKind::Buried),
             body_part: None,
@@ -479,9 +479,9 @@ mod tests {
     #[test]
     fn evaluate_rescue_opportunity_co_presence_excludes_other_sub_tiles() {
         let mut rescuer = Character::new("Rescuer".into(), None, None);
-        rescuer.location.area = Area::Hub;
+        rescuer.location.area = AreaId::hub();
         let mut trapped = trapped_character("Trapped", Severity::Moderate);
-        trapped.location.area = Area::Hub;
+        trapped.location.area = AreaId::hub();
         trapped.location.sub = areas::hex::SubTriangle::new(3);
 
         let area = AreaDetails::default();

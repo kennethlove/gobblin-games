@@ -52,7 +52,7 @@ impl Game {
         // Always prefix subject with the game identifier so that the
         // API's per-game log queries (`WHERE string::starts_with(subject,
         // $game_id)`) match every emitted message regardless of source
-        // type (Game / Area / Character). Without this prefix, area and
+        // type (Game / AreaId / Character). Without this prefix, area and
         // character messages would be invisible to the day-page and
         // timeline-summary endpoints.
         let scoped_subject = if subject.starts_with(&format!("{}:", self.identifier)) {

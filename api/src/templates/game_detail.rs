@@ -1170,16 +1170,16 @@ pub fn render_hex_map(
     characters: &[&characters::Character],
 ) -> String {
     let area_order = [
-        areas::Area::Hub,
-        areas::Area::Sector1,
-        areas::Area::Sector2,
-        areas::Area::Sector3,
-        areas::Area::Sector4,
-        areas::Area::Sector5,
-        areas::Area::Sector6,
+        areas::AreaId::hub(),
+        areas::AreaId::sector1(),
+        areas::AreaId::sector2(),
+        areas::AreaId::sector3(),
+        areas::AreaId::sector4(),
+        areas::AreaId::sector5(),
+        areas::AreaId::sector6(),
     ];
 
-    let area_map: std::collections::HashMap<areas::Area, &areas::AreaDetails> = areas
+    let area_map: std::collections::HashMap<areas::AreaId, &areas::AreaDetails> = areas
         .iter()
         .filter_map(|a| a.area.map(|area| (area, a)))
         .collect();
