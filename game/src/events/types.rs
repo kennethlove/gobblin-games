@@ -327,7 +327,7 @@ pub enum GameEvent {
         item: Item,
     },
 
-    // ---- Area events ----
+    // ---- AreaId events ----
     AreaEvent {
         area_event: String,
         area_name: String,

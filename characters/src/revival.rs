@@ -596,7 +596,7 @@ mod tests {
         let mental = [
             AfflictionKind::Trauma,
             AfflictionKind::Phobia(PhobiaTrigger::Fire),
-            AfflictionKind::Fixation(FixationTarget::Area("hub".to_string())),
+            AfflictionKind::Fixation(FixationTarget::AreaId("hub".to_string())),
             AfflictionKind::Addiction(Substance::Alcohol),
         ];
         for kind in mental {

@@ -5,7 +5,7 @@
 //! `Game.messages` (rather than silently dropped by the old
 //! `try_log_action` no-op), with `MessageSource::Character(identifier)`.
 
-use areas::{Area, AreaDetails};
+use areas::{AreaDetails, AreaId};
 use characters::Character;
 use game::games::Game;
 use shared::messages::MessageSource;
@@ -21,7 +21,7 @@ fn combat_events_reach_game_messages_with_character_source() {
     // Single-area arena keeps both characters guaranteed-adjacent.
     let area_details = AreaDetails::new_with_terrain(
         Some("Hub".to_string()),
-        Area::Hub,
+        AreaId::hub(),
         TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap(),
     );
     game.areas.push(area_details);

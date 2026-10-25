@@ -86,8 +86,8 @@ fn base_bias(kind: AfflictionKind) -> (f64, f64, f64, f64, f64) {
         AfflictionKind::Fixation(FixationTarget::Character(_)) => (0.7, 1.0, 1.0, 1.0, 1.0),
         // Item fixation → reduced rest_preference (want to explore/loot)
         AfflictionKind::Fixation(FixationTarget::Item(_)) => (1.0, 1.0, 1.0, 1.0, 0.7),
-        // Area fixation → reduced isolation (want to travel)
-        AfflictionKind::Fixation(FixationTarget::Area(_)) => (1.0, 1.0, 0.7, 1.0, 1.0),
+        // AreaId fixation → reduced isolation (want to travel)
+        AfflictionKind::Fixation(FixationTarget::AreaId(_)) => (1.0, 1.0, 0.7, 1.0, 1.0),
     }
 }
 
@@ -330,7 +330,7 @@ mod tests {
     #[test]
     fn fixation_area_reduces_isolation() {
         let bias = compute_brain_bias(&[aff(
-            AfflictionKind::Fixation(FixationTarget::Area("sector1".into())),
+            AfflictionKind::Fixation(FixationTarget::AreaId("sector1".into())),
             Severity::Moderate,
         )]);
         assert!(

@@ -6,7 +6,7 @@
 //! preset loads through the same registry loader as any future preset —
 //! there is no special-cased code path for it beyond its registry entry.
 
-use crate::Area;
+use crate::AreaId;
 use crate::hex::SubTriangle;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -40,7 +40,7 @@ pub struct ArenaSlot {
     /// from the enum while coverage is the known seven (validated by
     /// `validate_layout`); adjacency derives from the slot's q/r via
     /// `neighbors_from_layout` (zkp.2).
-    pub area: Area,
+    pub area: AreaId,
     /// Axial hex coordinate (`q`, `r`) — authoritative: instantiate
     /// passes it to the area record and layout-aware adjacency reads it
     /// back through `AreaDetails::axial` (zkp.2; pre-zkp.2 it was
@@ -69,7 +69,7 @@ pub struct ArenaPreset {
     pub name: String,
     /// One-paragraph human description shown next to the name.
     pub description: String,
-    /// Area slots in label order: Hub first, then Sectors 1..6
+    /// AreaId slots in label order: Hub first, then Sectors 1..6
     /// clockwise from top-right.
     pub areas: Vec<ArenaSlot>,
 }
@@ -82,7 +82,7 @@ impl ArenaPreset {
     /// Slots without authored sub-tiles yield an empty sub-tile list.
     /// Returns `(area, name, sub_tiles, axial)` — the coordinate rides
     /// the caller into the area record (zkp.2).
-    pub fn instantiate(&self) -> Vec<(Area, String, Vec<SubTile>, crate::hex::Axial)> {
+    pub fn instantiate(&self) -> Vec<(AreaId, String, Vec<SubTile>, crate::hex::Axial)> {
         let generated = crate::generate_area_names();
         debug_assert_eq!(
             generated.len(),
@@ -198,23 +198,22 @@ fn parse_preset(json: &str, expected_id: &str) -> Result<ArenaPreset, PresetErro
     Ok(preset)
 }
 
-/// The engine's adjacency (`Area::neighbors`) covers exactly the seven
+/// The engine's adjacency (`AreaId::neighbors`) covers exactly the seven
 /// known areas, so a preset must list each exactly once, Hub first, at
 /// unique axial coordinates.
 fn validate_layout(areas: &[ArenaSlot]) -> Result<(), String> {
     use std::collections::HashSet;
-    use strum::IntoEnumIterator;
 
-    let kinds: HashSet<Area> = areas.iter().map(|s| s.area).collect();
+    let kinds: HashSet<AreaId> = areas.iter().map(|s| s.area).collect();
     if kinds.len() != areas.len() {
         return Err("duplicate area kinds".to_string());
     }
-    for kind in Area::iter() {
+    for kind in AreaId::iter().into_iter() {
         if !kinds.contains(&kind) {
             return Err(format!("missing area {kind}"));
         }
     }
-    if areas[0].area != Area::Hub {
+    if areas[0].area != AreaId::hub() {
         return Err("Hub must be the first area".to_string());
     }
     let coords: HashSet<(i32, i32)> = areas.iter().map(|s| (s.q, s.r)).collect();
@@ -256,11 +255,11 @@ mod tests {
     #[test]
     fn default_preset_matches_default_layout() {
         let preset = default_preset();
-        let expected: Vec<(Area, i32, i32)> = default_layout()
+        let expected: Vec<(AreaId, i32, i32)> = default_layout()
             .iter()
             .map(|(area, ax)| (*area, ax.q, ax.r))
             .collect();
-        let got: Vec<(Area, i32, i32)> = preset
+        let got: Vec<(AreaId, i32, i32)> = preset
             .areas
             .iter()
             .map(|slot| (slot.area, slot.q, slot.r))
@@ -317,7 +316,7 @@ mod tests {
     #[test]
     fn neighbors_from_layout_matches_default_neighbors() {
         let layout = crate::hex::default_layout();
-        for (kind, _) in layout {
+        for (kind, _) in &layout {
             assert_eq!(
                 kind.neighbors_from_layout(&layout),
                 kind.neighbors(),
@@ -331,7 +330,7 @@ mod tests {
         // Same seven slots, every coordinate shifted (+1, 0): adjacency
         // is relative geometry, so the ring must come out identical —
         // this is the invariant presets rely on (zkp.2).
-        let layout: Vec<(Area, crate::hex::Axial)> = crate::hex::default_layout()
+        let layout: Vec<(AreaId, crate::hex::Axial)> = crate::hex::default_layout()
             .into_iter()
             .map(|(kind, ax)| (kind, crate::hex::Axial::new(ax.q + 1, ax.r)))
             .collect();
@@ -348,9 +347,9 @@ mod tests {
     fn instantiate_default_preset_covers_all_areas_with_unique_names() {
         let triples = default_preset().instantiate();
         assert_eq!(triples.len(), 7);
-        assert_eq!(triples[0].0, Area::Hub);
+        assert_eq!(triples[0].0, AreaId::hub());
         assert_eq!(triples[0].1, "The Hub".to_string());
-        let kinds: HashSet<Area> = triples.iter().map(|(area, _, _, _)| *area).collect();
+        let kinds: HashSet<AreaId> = triples.iter().map(|(area, _, _, _)| *area).collect();
         assert_eq!(kinds.len(), 7);
         let names: HashSet<String> = triples.iter().map(|(_, name, _, _)| name.clone()).collect();
         assert_eq!(names.len(), 7);
@@ -378,7 +377,7 @@ mod tests {
         assert_eq!(decoded, preset);
         assert_eq!(decoded.areas[0].name.as_deref(), Some("Home"));
         let triples = decoded.instantiate();
-        assert_eq!(triples[0].0, Area::Hub);
+        assert_eq!(triples[0].0, AreaId::hub());
         assert_eq!(triples[0].1, "Home".to_string());
         assert!(triples[0].2.is_empty(), "no sub-tiles authored");
     }
@@ -580,7 +579,6 @@ mod arena_generation_poc {
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
     use std::str::FromStr;
-    use strum::IntoEnumIterator;
     use world::terrain::{TerrainType, enforce_balance_constraint};
 
     /// Deterministic-by-seed arena generator. PoC only — see module doc.
@@ -628,11 +626,11 @@ mod arena_generation_poc {
         let mut areas = Vec::with_capacity(7);
         for i in 0..7 {
             let (area, q, r) = if i == 0 {
-                (Area::Hub, 0, 0)
+                (AreaId::hub(), 0, 0)
             } else {
                 let ax = sector_axial(i);
                 (
-                    Area::from_str(&format!("Sector {}", i)).expect("known sector"),
+                    AreaId::from_str(&format!("Sector {}", i)).expect("known sector"),
                     ax.q,
                     ax.r,
                 )
@@ -684,16 +682,16 @@ mod arena_generation_poc {
 
     /// The generated shape stays hex-compatible with the engine wheel:
     /// all seven areas, Hub first at the origin, unique coords, and the
-    /// coordinate ring preserves `Area::neighbors` adjacency (spike §1,
+    /// coordinate ring preserves `AreaId::neighbors` adjacency (spike §1,
     /// §5: no pathfinding changes needed for this topology).
     #[test]
     fn generated_arena_preserves_wheel_adjacency() {
         use crate::hex::Axial;
         let preset = generate(7);
-        assert_eq!(preset.areas[0].area, Area::Hub);
+        assert_eq!(preset.areas[0].area, AreaId::hub());
         assert_eq!((preset.areas[0].q, preset.areas[0].r), (0, 0));
 
-        let coord_of = |area: Area| -> Axial {
+        let coord_of = |area: AreaId| -> Axial {
             let slot = preset
                 .areas
                 .iter()
@@ -701,9 +699,9 @@ mod arena_generation_poc {
                 .expect("every area present");
             Axial::new(slot.q, slot.r)
         };
-        for area in Area::iter() {
+        for area in AreaId::iter().into_iter() {
             let here = coord_of(area);
-            for neighbor in area.neighbors() {
+            for neighbor in area.clone().neighbors() {
                 let there = coord_of(neighbor);
                 assert_eq!(
                     here.distance(there),

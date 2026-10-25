@@ -22,8 +22,8 @@
 //! for it to under-count, so `scaled_axial`/`scaled_distance` were
 //! deleted rather than adapted.
 
-use crate::Area;
 use crate::AreaDetails;
+use crate::AreaId;
 use crate::hex::{Axial, SubTriangle, default_layout};
 use rand::{Rng, RngExt};
 use serde::{Deserialize, Serialize};
@@ -47,13 +47,13 @@ use world::terrain::BaseTerrain;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Location {
     #[serde(default = "default_area")]
-    pub area: Area,
+    pub area: AreaId,
     #[serde(default = "default_sub")]
     pub sub: SubTriangle,
 }
 
-fn default_area() -> Area {
-    Area::default()
+fn default_area() -> AreaId {
+    AreaId::default()
 }
 
 fn default_sub() -> SubTriangle {
@@ -63,12 +63,12 @@ fn default_sub() -> SubTriangle {
 impl Default for Location {
     /// Hub, sub-tile triangle 0 — matches the serde defaults.
     fn default() -> Self {
-        Self::center(Area::Hub)
+        Self::center(AreaId::hub())
     }
 }
 
 impl Location {
-    pub const fn new(area: Area, sub: SubTriangle) -> Self {
+    pub const fn new(area: AreaId, sub: SubTriangle) -> Self {
         Self { area, sub }
     }
 
@@ -77,7 +77,7 @@ impl Location {
     /// slot was literally the hex center; in the triangle layout every
     /// triangle reaches the center, and triangle 0 is the canonical
     /// spawn/default position.)
-    pub const fn center(area: Area) -> Self {
+    pub const fn center(area: AreaId) -> Self {
         Self {
             area,
             sub: SubTriangle::new(0),
@@ -87,7 +87,7 @@ impl Location {
 
 /// The 6 sub-tile triangle locations of an area, in
 /// [`SubTriangle::index`] order (`0..=6`).
-pub fn sub_slots(area: Area) -> impl Iterator<Item = Location> {
+pub fn sub_slots(area: AreaId) -> impl Iterator<Item = Location> {
     (0..SubTriangle::COUNT as u8).map(move |i| Location {
         area,
         sub: SubTriangle::new(i),
@@ -107,9 +107,9 @@ pub fn all_locations() -> impl Iterator<Item = Location> {
 /// in the spawn pass at game creation (no mid-run joins exist, so this
 /// is the only placement rule). Empty list falls back to the canonical
 /// Hub triangle 0.
-pub fn random_spawn_location<R: Rng + ?Sized>(rng: &mut R, areas: &[Area]) -> Location {
+pub fn random_spawn_location<R: Rng + ?Sized>(rng: &mut R, areas: &[AreaId]) -> Location {
     if areas.is_empty() {
-        return Location::center(Area::Hub);
+        return Location::center(AreaId::hub());
     }
     let area = areas[rng.random_range(0..areas.len())];
     Location::new(
@@ -119,7 +119,7 @@ pub fn random_spawn_location<R: Rng + ?Sized>(rng: &mut R, areas: &[Area]) -> Lo
 }
 
 /// Axial coordinate of an area-hex in the top-level layout.
-pub fn area_axial(area: Area) -> Axial {
+pub fn area_axial(area: AreaId) -> Axial {
     default_layout()
         .iter()
         .find(|(a, _)| *a == area)
@@ -144,7 +144,7 @@ pub fn terrain_at(location: Location, details: &AreaDetails) -> BaseTerrain {
         .unwrap_or(details.terrain.base)
 }
 
-pub fn area_at(axial: Axial) -> Option<Area> {
+pub fn area_at(axial: Axial) -> Option<AreaId> {
     default_layout()
         .iter()
         .find(|(_, ax)| *ax == axial)
@@ -152,7 +152,7 @@ pub fn area_at(axial: Axial) -> Option<Area> {
 }
 
 /// Whether the location is one of the 42 occupied cells (its sub index
-/// is in `0..6`). Every `Area` variant is part of the layout, so only
+/// is in `0..6`). Every `AreaId` variant is part of the layout, so only
 /// the sub can make a location unoccupied.
 pub fn is_occupied(location: Location) -> bool {
     location.sub.index() < SubTriangle::COUNT as u8
@@ -290,10 +290,10 @@ mod tests {
     use world::terrain::TerrainType;
 
     fn hub(index: u8) -> Location {
-        Location::new(Area::Hub, SubTriangle::new(index))
+        Location::new(AreaId::hub(), SubTriangle::new(index))
     }
 
-    fn at(area: Area, index: u8) -> Location {
+    fn at(area: AreaId, index: u8) -> Location {
         Location::new(area, SubTriangle::new(index))
     }
 
@@ -303,7 +303,7 @@ mod tests {
     fn random_spawn_stays_in_the_requested_areas() {
         use rand::SeedableRng;
         let mut rng = rand::rngs::SmallRng::seed_from_u64(7);
-        let areas = vec![Area::Hub, Area::Sector3];
+        let areas = vec![AreaId::hub(), AreaId::sector3()];
         for _ in 0..64 {
             let loc = random_spawn_location(&mut rng, &areas);
             assert!(areas.contains(&loc.area));
@@ -317,7 +317,7 @@ mod tests {
 
     #[test]
     fn serde_round_trips_plain_struct_shape() {
-        let loc = at(Area::Sector2, 2);
+        let loc = at(AreaId::sector2(), 2);
         let json = serde_json::to_value(loc).unwrap();
         assert_eq!(
             json,
@@ -332,14 +332,14 @@ mod tests {
     fn serde_missing_sub_defaults_to_triangle_zero() {
         let loc: Location =
             serde_json::from_value(serde_json::json!({"area": "Sector 1"})).unwrap();
-        assert_eq!(loc, at(Area::Sector1, 0));
+        assert_eq!(loc, at(AreaId::sector1(), 0));
     }
 
     #[test]
     fn serde_empty_payload_defaults_to_hub_center() {
         let loc: Location = serde_json::from_value(serde_json::json!({})).unwrap();
         assert_eq!(loc, Location::default());
-        assert_eq!(loc, Location::center(Area::Hub));
+        assert_eq!(loc, Location::center(AreaId::hub()));
     }
 
     /// Legacy sub-tile rows carried `sub` as `{"q": .., "r": ..}`. That
@@ -362,10 +362,10 @@ mod tests {
 
     #[test]
     fn sub_slots_iterates_in_triangle_index_order() {
-        let slots: Vec<Location> = sub_slots(Area::Sector3).collect();
+        let slots: Vec<Location> = sub_slots(AreaId::sector3()).collect();
         assert_eq!(slots.len(), SubTriangle::COUNT);
         for (i, slot) in slots.iter().enumerate() {
-            assert_eq!(*slot, at(Area::Sector3, i as u8));
+            assert_eq!(*slot, at(AreaId::sector3(), i as u8));
         }
     }
 
@@ -486,7 +486,7 @@ mod tests {
             let y = (b.area, b.sub.index());
             if x <= y { (x, y) } else { (y, x) }
         };
-        let mut actual: HashSet<((Area, u8), (Area, u8))> = HashSet::new();
+        let mut actual: HashSet<((AreaId, u8), (AreaId, u8))> = HashSet::new();
         for loc in all_locations() {
             for neighbor in sub_neighbors(loc).into_iter().flatten() {
                 if neighbor.area == loc.area {
@@ -563,11 +563,11 @@ mod tests {
         // From the Hub default sub-tile (triangle 0): the two adjacent
         // ring triangles at 1 hop, the next pair at 2, the opposite
         // triangle at 3 — the6-cycle structure with no shortcuts.
-        assert_eq!(distance(Location::center(Area::Hub), hub(1)), Some(1));
-        assert_eq!(distance(Location::center(Area::Hub), hub(5)), Some(1));
-        assert_eq!(distance(Location::center(Area::Hub), hub(2)), Some(2));
-        assert_eq!(distance(Location::center(Area::Hub), hub(4)), Some(2));
-        assert_eq!(distance(Location::center(Area::Hub), hub(3)), Some(3));
+        assert_eq!(distance(Location::center(AreaId::hub()), hub(1)), Some(1));
+        assert_eq!(distance(Location::center(AreaId::hub()), hub(5)), Some(1));
+        assert_eq!(distance(Location::center(AreaId::hub()), hub(2)), Some(2));
+        assert_eq!(distance(Location::center(AreaId::hub()), hub(4)), Some(2));
+        assert_eq!(distance(Location::center(AreaId::hub()), hub(3)), Some(3));
     }
 
     /// Full-ring pin: within-parent distance is exactly the distance on
@@ -594,7 +594,7 @@ mod tests {
     #[test]
     fn cross_parent_door_is_one_hop() {
         let from = hub(0);
-        let door = at(Area::Sector1, 3);
+        let door = at(AreaId::sector1(), 3);
         assert_eq!(sub_neighbors(from)[0], Some(door));
         assert_eq!(distance(from, door), Some(1));
         assert_eq!(distance(door, from), Some(1));
@@ -605,20 +605,24 @@ mod tests {
     /// walk the Sector 1 ring (3 more hops) —4 hops total.
     #[test]
     fn hub_center_to_sector1_triangle0_is_four_hops_via_door() {
-        let from = Location::center(Area::Hub);
-        let to = at(Area::Sector1, 0);
+        let from = Location::center(AreaId::hub());
+        let to = at(AreaId::sector1(), 0);
         assert_eq!(distance(from, to), Some(4));
         let path = shortest_path(from, to).unwrap();
         assert_eq!(path.len(), 5, "path: {path:?}");
         assert_eq!(path.first(), Some(&from));
-        assert_eq!(path[1], at(Area::Sector1, 3), "must enter through the door");
+        assert_eq!(
+            path[1],
+            at(AreaId::sector1(), 3),
+            "must enter through the door"
+        );
         assert_eq!(path.last(), Some(&to));
     }
 
     #[test]
     fn shortest_path_steps_are_mutual_neighbors() {
-        let from = Location::center(Area::Hub);
-        let to = Location::center(Area::Sector5);
+        let from = Location::center(AreaId::hub());
+        let to = Location::center(AreaId::sector5());
         let path = shortest_path(from, to).unwrap();
         assert_eq!(path.first(), Some(&from));
         assert_eq!(path.last(), Some(&to));
@@ -632,7 +636,7 @@ mod tests {
 
     #[test]
     fn all_forty_two_cells_reachable_from_hub_center() {
-        let from = Location::center(Area::Hub);
+        let from = Location::center(AreaId::hub());
         let mut reached = 0;
         for target in all_locations() {
             let d = distance(from, target).expect("every cell reachable");
@@ -658,7 +662,7 @@ mod tests {
 
     #[test]
     fn unoccupied_sub_triangles_have_no_distance_or_path() {
-        let dead = Location::new(Area::Hub, SubTriangle::new(6));
+        let dead = Location::new(AreaId::hub(), SubTriangle::new(6));
         assert!(!is_occupied(dead));
         assert_eq!(distance(hub(0), dead), None);
         assert_eq!(shortest_path(hub(0), dead), None);
@@ -672,9 +676,9 @@ mod tests {
 
     #[test]
     fn shortest_path_while_detours_around_a_blocked_cell() {
-        let from = Location::center(Area::Hub);
-        let to = at(Area::Sector1, 0);
-        let door = at(Area::Sector1, 3); // the Hub0 <-> Sector1-3 door
+        let from = Location::center(AreaId::hub());
+        let to = at(AreaId::sector1(), 0);
+        let door = at(AreaId::sector1(), 3); // the Hub0 <-> Sector1-3 door
         let path = shortest_path_while(from, to, |cell| cell == door)
             .expect("a route into Sector1 exists through another door");
         assert!(!path.contains(&door), "blocked cell on path: {path:?}");
@@ -693,15 +697,15 @@ mod tests {
 
     #[test]
     fn shortest_path_while_returns_none_when_goal_is_behind_a_blocked_area() {
-        let from = Location::center(Area::Hub);
-        let to = at(Area::Sector1, 0);
-        let path = shortest_path_while(from, to, |cell| cell.area == Area::Sector1);
+        let from = Location::center(AreaId::hub());
+        let to = at(AreaId::sector1(), 0);
+        let path = shortest_path_while(from, to, |cell| cell.area == AreaId::sector1());
         assert_eq!(path, None, "every route to Sector1 enters Sector1");
     }
 
     #[test]
     fn shortest_path_while_allows_the_start_cell_even_if_marked_blocked() {
-        let from = Location::center(Area::Hub);
+        let from = Location::center(AreaId::hub());
         let to = hub(2);
         let path = shortest_path_while(from, to, |cell| cell == from).unwrap();
         assert_eq!(path.first(), Some(&from));
@@ -727,11 +731,11 @@ mod tests {
             ..Default::default()
         };
         let forest = Location {
-            area: Area::Hub,
+            area: AreaId::hub(),
             sub: SubTriangle::new(0),
         };
         let marsh = Location {
-            area: Area::Hub,
+            area: AreaId::hub(),
             sub: SubTriangle::new(1),
         };
         assert_eq!(terrain_at(forest, &details), BaseTerrain::Forest);
@@ -745,7 +749,7 @@ mod tests {
             ..Default::default()
         };
         let at = Location {
-            area: Area::Hub,
+            area: AreaId::hub(),
             sub: SubTriangle::new(3),
         };
         assert_eq!(terrain_at(at, &details), BaseTerrain::Desert);
@@ -763,7 +767,7 @@ mod tests {
             ..Default::default()
         };
         let out_of_range = Location {
-            area: Area::Hub,
+            area: AreaId::hub(),
             sub: SubTriangle::new(5),
         };
         assert_eq!(terrain_at(out_of_range, &details), BaseTerrain::Clearing);

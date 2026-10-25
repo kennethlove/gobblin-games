@@ -11,7 +11,7 @@
 //! adjacency and area identity. The pixel-layout half (`to_pixel`) is here
 //! so the frontend can render without re-deriving the math.
 
-use crate::Area;
+use crate::AreaId;
 use serde::{Deserialize, Serialize};
 
 /// Axial hex coordinate (`q`, `r`). Pointy-top orientation.
@@ -68,15 +68,15 @@ impl Axial {
 /// The 7-tile default layout, ordered to match the area's numeric label
 /// (`0` for Hub, `1..6` for the surrounding sectors clockwise from
 /// top-right). The order in this slice **is** the numeric label.
-pub fn default_layout() -> [(Area, Axial); 7] {
+pub fn default_layout() -> [(AreaId, Axial); 7] {
     [
-        (Area::Hub, Axial::new(0, 0)),
-        (Area::Sector1, Axial::new(1, -1)),
-        (Area::Sector2, Axial::new(1, 0)),
-        (Area::Sector3, Axial::new(0, 1)),
-        (Area::Sector4, Axial::new(-1, 1)),
-        (Area::Sector5, Axial::new(-1, 0)),
-        (Area::Sector6, Axial::new(0, -1)),
+        (AreaId::hub(), Axial::new(0, 0)),
+        (AreaId::sector1(), Axial::new(1, -1)),
+        (AreaId::sector2(), Axial::new(1, 0)),
+        (AreaId::sector3(), Axial::new(0, 1)),
+        (AreaId::sector4(), Axial::new(-1, 1)),
+        (AreaId::sector5(), Axial::new(-1, 0)),
+        (AreaId::sector6(), Axial::new(0, -1)),
     ]
 }
 
@@ -196,7 +196,7 @@ mod tests {
 
     #[test]
     fn default_layout_first_is_hub() {
-        assert_eq!(default_layout()[0].0, Area::Hub);
+        assert_eq!(default_layout()[0].0, AreaId::hub());
         assert_eq!(default_layout()[0].1, Axial::new(0, 0));
     }
 

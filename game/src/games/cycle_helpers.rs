@@ -1,6 +1,6 @@
 use super::*;
 use areas::events::AreaEvent;
-use areas::{Area, AreaDetails};
+use areas::{AreaDetails, AreaId};
 use rand::rngs::SmallRng;
 use std::collections::HashMap;
 
@@ -89,7 +89,7 @@ impl Game {
         // Two-phase: gather first so `process_event_for_area` can take
         // `&mut self` without fighting the areas borrow (E0499 — same
         // trap as the cycle event closure).
-        let mut active: Vec<(Area, Vec<AreaEvent>)> = Vec::new();
+        let mut active: Vec<(AreaId, Vec<AreaEvent>)> = Vec::new();
         for area_details in self.areas.iter_mut() {
             match area_details.hazard_blocks {
                 Some(blocks) if blocks > 0 => {

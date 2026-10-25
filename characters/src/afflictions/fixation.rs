@@ -7,10 +7,9 @@ use shared::afflictions::{
     FixationTarget, Severity, ThwartReason,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use strum::IntoEnumIterator;
 
 use crate::Character;
-use areas::Area;
+use areas::AreaId;
 use rand::RngExt;
 use rand::SeedableRng;
 use rand::prelude::IndexedRandom;
@@ -42,7 +41,7 @@ pub fn count_by_target_kind(
             match target {
                 FixationTarget::Character(_) => character_count += 1,
                 FixationTarget::Item(_) => item_count += 1,
-                FixationTarget::Area(_) => area_count += 1,
+                FixationTarget::AreaId(_) => area_count += 1,
             }
         }
     }
@@ -67,9 +66,9 @@ pub fn roll_spawn_fixations(character: &mut Character, rng: &mut SmallRng) {
     }
 
     // Pick a random area as fixation target
-    let areas: Vec<Area> = Area::iter().collect();
+    let areas: Vec<AreaId> = AreaId::iter().into_iter().collect();
     if let Some(area) = areas.choose(rng) {
-        let target = FixationTarget::Area(area.to_string());
+        let target = FixationTarget::AreaId(area.to_string());
         let key = (AfflictionKind::Fixation(target.clone()), None);
         let aff = Affliction {
             kind: AfflictionKind::Fixation(target),
@@ -257,7 +256,7 @@ pub fn process_character_fixations(
                     thwart_reason = ThwartReason::TargetLost;
                 }
             }
-            FixationTarget::Area(a_name) => {
+            FixationTarget::AreaId(a_name) => {
                 let area_str = character_area.to_string();
                 if area_str.eq_ignore_ascii_case(a_name) {
                     in_contact = true;
@@ -282,7 +281,7 @@ pub fn process_character_fixations(
         // for future refinement.
         if !consummated && !thwarted && in_contact {
             match target {
-                FixationTarget::Item(_) | FixationTarget::Area(_) => {
+                FixationTarget::Item(_) | FixationTarget::AreaId(_) => {
                     consummated = true;
                 }
                 _ => {}
@@ -442,7 +441,7 @@ mod tests {
             None,
             &mut SmallRng::seed_from_u64(42),
         );
-        add_fixation(&mut t, FixationTarget::Area("sector1".to_string()));
+        add_fixation(&mut t, FixationTarget::AreaId("sector1".to_string()));
         assert_eq!(count_fixations(&t.afflictions), 1);
 
         add_fixation(
@@ -460,7 +459,7 @@ mod tests {
             None,
             &mut SmallRng::seed_from_u64(42),
         );
-        add_fixation(&mut t, FixationTarget::Area("sector1".to_string()));
+        add_fixation(&mut t, FixationTarget::AreaId("sector1".to_string()));
         add_fixation(
             &mut t,
             FixationTarget::Character("other-character".to_string()),
@@ -500,7 +499,7 @@ mod tests {
     fn item_pickup_respects_cap() {
         let mut t = make_character();
         // Fill up to cap
-        add_fixation(&mut t, FixationTarget::Area("sector1".to_string()));
+        add_fixation(&mut t, FixationTarget::AreaId("sector1".to_string()));
         add_fixation(&mut t, FixationTarget::Character("other".to_string()));
 
         let item = Item::new_random_consumable();
@@ -517,7 +516,7 @@ mod tests {
             None,
             &mut SmallRng::seed_from_u64(42),
         );
-        add_fixation(&mut t, FixationTarget::Area("sector1".to_string()));
+        add_fixation(&mut t, FixationTarget::AreaId("sector1".to_string()));
 
         // Try adding another area fixation - should be blocked by cap checks
         // But the can_acquire check happens in anatomy.rs, so we simulate via
@@ -632,8 +631,8 @@ mod tests {
             &mut SmallRng::seed_from_u64(42),
         );
         // Default area is Hub.
-        t.location.area = Area::Hub;
-        add_fixation(&mut t, FixationTarget::Area("Hub".to_string()));
+        t.location.area = AreaId::hub();
+        add_fixation(&mut t, FixationTarget::AreaId("Hub".to_string()));
 
         let id_to_uuid = HashMap::new();
         let dead_killers = HashMap::new();
@@ -721,11 +720,11 @@ mod tests {
             None,
             &mut SmallRng::seed_from_u64(42),
         );
-        add_acquired_fixation(&mut t, FixationTarget::Area("Hub".to_string()));
+        add_acquired_fixation(&mut t, FixationTarget::AreaId("Hub".to_string()));
         // add_acquired_fixation sets cycles_since_last_contact = 6,
         // which is above DECAY_THRESHOLD (5).
         // Place character in a DIFFERENT area so they're not in contact.
-        t.location.area = Area::Sector1;
+        t.location.area = AreaId::sector1();
 
         let id_to_uuid = HashMap::new();
         let dead_killers = HashMap::new();
@@ -766,8 +765,8 @@ mod tests {
             None,
             &mut SmallRng::seed_from_u64(99),
         );
-        a.location.area = Area::Hub;
-        b.location.area = Area::Hub; // same area
+        a.location.area = AreaId::hub();
+        b.location.area = AreaId::hub(); // same area
 
         // Acquired fixation with cycles_since_last_contact = 6 (past decay threshold).
         let key = (
@@ -831,8 +830,8 @@ mod tests {
     fn co_presence_characters(diff_sub: bool) -> (Character, Character) {
         let mut a = make_character();
         let mut b = make_character();
-        a.location.area = Area::Hub;
-        b.location.area = Area::Hub;
+        a.location.area = AreaId::hub();
+        b.location.area = AreaId::hub();
         if diff_sub {
             b.location.sub = areas::hex::SubTriangle::new(2);
         }
@@ -922,8 +921,8 @@ mod tests {
             None,
             &mut SmallRng::seed_from_u64(42),
         );
-        t.location.area = Area::Sector1;
-        let target = FixationTarget::Area("Hub".to_string());
+        t.location.area = AreaId::sector1();
+        let target = FixationTarget::AreaId("Hub".to_string());
         add_acquired_fixation(&mut t, target.clone());
 
         // Set up observer state with various last_seen cycles.
@@ -984,9 +983,9 @@ mod tests {
             None,
             &mut SmallRng::seed_from_u64(42),
         );
-        t.location.area = Area::Sector1;
+        t.location.area = AreaId::sector1();
         // Add an Innate fixation with high contact gap.
-        let target = FixationTarget::Area("Hub".to_string());
+        let target = FixationTarget::AreaId("Hub".to_string());
         let key = (AfflictionKind::Fixation(target.clone()), None);
         let aff = Affliction {
             kind: AfflictionKind::Fixation(target),

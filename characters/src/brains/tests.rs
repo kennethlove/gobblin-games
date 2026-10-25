@@ -599,11 +599,11 @@ fn brain_act_routes_first_hop_to_non_neighbor_goal(
     mut character: Character,
     mut small_rng: SmallRng,
 ) {
-    use areas::Area;
+    use areas::AreaId;
     use areas::location::Location;
 
     // Place the character in Sector1.
-    character.location.area = Area::Sector1;
+    character.location.area = AreaId::sector1();
     // Avoid the items branch & alliance branch — strip both.
     character.items.clear();
     character.brain.preferred_action = None;
@@ -611,7 +611,7 @@ fn brain_act_routes_first_hop_to_non_neighbor_goal(
     // Build a 7-area world. Make Sector4 carry the character's terrain
     // affinity so choose_destination prefers it; everything else is
     // plain Clearing so neighbor scoring is uniform.
-    let mk = |a: Area, base: BaseTerrain| {
+    let mk = |a: AreaId, base: BaseTerrain| {
         AreaDetails::new_with_terrain(
             Some(format!("{a:?}")),
             a,
@@ -621,13 +621,13 @@ fn brain_act_routes_first_hop_to_non_neighbor_goal(
     // Give the character a Desert affinity, then make Sector4 a Desert.
     character.terrain_affinity = vec![BaseTerrain::Desert];
     let all_areas = vec![
-        mk(Area::Hub, BaseTerrain::Clearing),
-        mk(Area::Sector1, BaseTerrain::Clearing),
-        mk(Area::Sector2, BaseTerrain::Clearing),
-        mk(Area::Sector3, BaseTerrain::Clearing),
-        mk(Area::Sector4, BaseTerrain::Desert),
-        mk(Area::Sector5, BaseTerrain::Clearing),
-        mk(Area::Sector6, BaseTerrain::Clearing),
+        mk(AreaId::hub(), BaseTerrain::Clearing),
+        mk(AreaId::sector1(), BaseTerrain::Clearing),
+        mk(AreaId::sector2(), BaseTerrain::Clearing),
+        mk(AreaId::sector3(), BaseTerrain::Clearing),
+        mk(AreaId::sector4(), BaseTerrain::Desert),
+        mk(AreaId::sector5(), BaseTerrain::Clearing),
+        mk(AreaId::sector6(), BaseTerrain::Clearing),
     ];
 
     let action = character.brain.act(
@@ -649,7 +649,7 @@ fn brain_act_routes_first_hop_to_non_neighbor_goal(
             // (triangle 0 via Location::center) stands in.
             assert_eq!(
                 first_hop,
-                Location::center(Area::Hub),
+                Location::center(AreaId::hub()),
                 "expected first hop toward Sector4 to be Hub, got {first_hop:?}"
             );
         }
@@ -663,20 +663,20 @@ fn brain_act_routes_first_hop_to_non_neighbor_goal(
 /// empty one. Excludes the character itself from its own area's count.
 #[rstest]
 fn choose_destination_avoids_crowded_areas(character: Character) {
-    use areas::Area;
+    use areas::AreaId;
 
-    let mk = |a: Area| {
+    let mk = |a: AreaId| {
         AreaDetails::new_with_terrain(
             Some(format!("{a:?}")),
             a,
             TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap(),
         )
     };
-    let areas = vec![mk(Area::Sector1), mk(Area::Sector2)];
+    let areas = vec![mk(AreaId::sector1()), mk(AreaId::sector2())];
 
     let mut density = HashMap::new();
-    density.insert(Area::Sector1, 4); // crowded
-    density.insert(Area::Sector2, 0); // empty
+    density.insert(AreaId::sector1(), 4); // crowded
+    density.insert(AreaId::sector2(), 0); // empty
 
     let chosen = character
         .brain
@@ -684,7 +684,7 @@ fn choose_destination_avoids_crowded_areas(character: Character) {
         .expect("expected a destination");
     assert_eq!(
         chosen,
-        Area::Sector2,
+        AreaId::sector2(),
         "should pick empty Sector2 over crowded Sector1"
     );
 }
@@ -695,30 +695,30 @@ fn choose_destination_avoids_crowded_areas(character: Character) {
 /// score *worse* than an equally-empty foreign one.
 #[rstest]
 fn choose_destination_excludes_self_from_own_area_density(character: Character) {
-    use areas::Area;
+    use areas::AreaId;
 
     let mut t = character;
-    t.location.area = Area::Sector1;
+    t.location.area = AreaId::sector1();
 
-    let mk = |a: Area| {
+    let mk = |a: AreaId| {
         AreaDetails::new_with_terrain(
             Some(format!("{a:?}")),
             a,
             TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap(),
         )
     };
-    let areas = vec![mk(Area::Sector1), mk(Area::Sector2)];
+    let areas = vec![mk(AreaId::sector1()), mk(AreaId::sector2())];
 
     let mut density = HashMap::new();
-    density.insert(Area::Sector1, 1); // just the character itself
-    density.insert(Area::Sector2, 0);
+    density.insert(AreaId::sector1(), 1); // just the character itself
+    density.insert(AreaId::sector2(), 0);
 
     let chosen = t
         .brain
         .choose_destination(&areas, &t, &density)
         .expect("expected a destination");
     // Tie on "others" (0 vs 0): scoring order picks the first area.
-    assert_eq!(chosen, Area::Sector1);
+    assert_eq!(chosen, AreaId::sector1());
 }
 
 // ---- Sleep gating (PR2c.1) ----

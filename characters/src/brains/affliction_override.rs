@@ -153,7 +153,7 @@ pub fn affliction_override(character: &Character, _action: &Action) -> Option<Ac
 mod tests {
     use super::*;
     use crate::Character;
-    use areas::Area;
+    use areas::AreaId;
     use areas::location::Location;
     use shared::afflictions::{Affliction, AfflictionSource, BodyPart, TrapKind};
 
@@ -207,7 +207,7 @@ mod tests {
         character.afflictions.insert(aff.key(), aff);
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(Area::Sector1))),
+            &Action::Move(Some(Location::center(AreaId::sector1()))),
             Some(BaseTerrain::Mountains),
         );
         assert_eq!(result, Some(Action::Rest));
@@ -220,7 +220,7 @@ mod tests {
         character.afflictions.insert(aff.key(), aff);
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(Area::Sector1))),
+            &Action::Move(Some(Location::center(AreaId::sector1()))),
             Some(BaseTerrain::Highlands),
         );
         assert_eq!(result, Some(Action::Rest));
@@ -233,7 +233,7 @@ mod tests {
         character.afflictions.insert(aff.key(), aff);
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(Area::Sector1))),
+            &Action::Move(Some(Location::center(AreaId::sector1()))),
             Some(BaseTerrain::Wetlands),
         );
         assert_eq!(result, Some(Action::Rest));
@@ -246,7 +246,7 @@ mod tests {
         character.afflictions.insert(aff.key(), aff);
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(Area::Sector1))),
+            &Action::Move(Some(Location::center(AreaId::sector1()))),
             Some(BaseTerrain::Forest),
         );
         assert!(result.is_none());
@@ -259,7 +259,7 @@ mod tests {
         character.afflictions.insert(aff.key(), aff);
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(Area::Sector1))),
+            &Action::Move(Some(Location::center(AreaId::sector1()))),
             None,
         );
         assert!(result.is_none());
@@ -290,7 +290,7 @@ mod tests {
         character.afflictions.insert(aff.key(), aff);
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(Area::Sector1))),
+            &Action::Move(Some(Location::center(AreaId::sector1()))),
             Some(BaseTerrain::Mountains),
         );
         assert_eq!(result, Some(Action::Rest));
@@ -304,8 +304,10 @@ mod tests {
             Severity::Moderate,
         );
         character.afflictions.insert(aff.key(), aff);
-        let result =
-            affliction_override(&character, &Action::Move(Some(Location::center(Area::Hub))));
+        let result = affliction_override(
+            &character,
+            &Action::Move(Some(Location::center(AreaId::hub()))),
+        );
         assert_eq!(result, Some(Action::None));
     }
 
@@ -346,7 +348,7 @@ mod tests {
         character.afflictions.insert(aff.key(), aff);
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(Area::Hub))),
+            &Action::Move(Some(Location::center(AreaId::hub()))),
             None,
         );
         assert_eq!(result, Some(Action::None));

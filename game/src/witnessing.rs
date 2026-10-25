@@ -31,13 +31,13 @@ pub(crate) fn witnesses<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use areas::Area;
+    use areas::AreaId;
     use areas::hex::SubTriangle;
 
     fn char_at(sub: u8) -> Character {
         let mut t = Character::new("w".into(), None, None);
         t.location = Location {
-            area: Area::Hub,
+            area: AreaId::hub(),
             sub: SubTriangle::new(sub),
         };
         t

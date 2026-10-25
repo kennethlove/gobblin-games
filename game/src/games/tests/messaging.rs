@@ -24,7 +24,7 @@ fn test_announce_cycle_end() {
 #[test]
 fn test_announce_area_events() {
     let mut game = Game::new("Test Game");
-    let mut area = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
+    let mut area = AreaDetails::new(Some("Lake".to_string()), AreaId::hub());
     let mut rng = rand::rng();
     area.events.push(AreaEvent::random(&mut rng));
     area.events.push(AreaEvent::random(&mut rng));
@@ -34,7 +34,7 @@ fn test_announce_area_events() {
     let _ = game.announce_area_events();
 
     assert_eq!(game.messages.len(), 2);
-    let area_name = Area::Hub.to_string();
+    let area_name = AreaId::hub().to_string();
     for msg in &game.messages {
         assert_eq!(
             msg.source,

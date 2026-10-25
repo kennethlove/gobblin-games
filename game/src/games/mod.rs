@@ -1,5 +1,5 @@
 use areas::events::AreaEvent;
-use areas::{Area, AreaDetails};
+use areas::{AreaDetails, AreaId};
 use characters::actions::Action;
 use characters::statuses::CharacterStatus;
 use characters::{ActionSuggestion, Character};
@@ -186,7 +186,7 @@ fn format_addiction_message(
 pub enum GameError {
     /// Error related to message operations
     MessageError(String),
-    /// Area not found in game
+    /// AreaId not found in game
     AreaNotFound(String),
     /// Character not found in game
     CharacterNotFound(String),
@@ -369,15 +369,15 @@ struct CycleContext {
     /// Optional global action suggestion (e.g. day-1 spread, day-3
     /// Hub push).
     action_suggestion: Option<ActionSuggestion>,
-    /// `Area -> index into self.areas` for O(1) area lookup during the
+    /// `AreaId -> index into self.areas` for O(1) area lookup during the
     /// `&mut self.characters` iteration.
-    area_details_map: HashMap<Area, usize>,
+    area_details_map: HashMap<AreaId, usize>,
     /// Owned per-area character snapshots used to build `EncounterContext`
     /// without re-borrowing `self.characters` during the executor loop.
-    characters_by_area: HashMap<Area, Vec<Character>>,
+    characters_by_area: HashMap<AreaId, Vec<Character>>,
     /// Per-area living-character density (4wnj). Read by
     /// `Brain::choose_destination` as a crowd penalty.
-    enemy_density: HashMap<Area, u32>,
+    enemy_density: HashMap<AreaId, u32>,
     /// Cached combat tuning so the executor never has to re-borrow `self`.
     combat_tuning_snapshot: characters::combat_tuning::CombatTuning,
     /// Read-only snapshot of every area for multi-hop pathfinding.
@@ -716,7 +716,7 @@ impl Game {
     /// Process survival checks for all characters in an area when an event occurs
     pub fn process_event_for_area(
         &mut self,
-        area: &Area,
+        area: &AreaId,
         event: &AreaEvent,
         rng: &mut impl Rng,
     ) -> Result<(), GameError> {
@@ -729,7 +729,7 @@ impl Game {
 
             match area_idx {
                 Some(idx) => (self.areas[idx].terrain.base, self.areas[idx].events.clone()),
-                None => return Ok(()), // Area not found
+                None => return Ok(()), // AreaId not found
             }
         };
 

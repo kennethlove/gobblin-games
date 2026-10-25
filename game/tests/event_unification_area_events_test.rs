@@ -7,7 +7,7 @@
 //! these confirm the full event slice is unified through `Game.messages`.
 
 use areas::events::AreaEvent;
-use areas::{Area, AreaDetails};
+use areas::{AreaDetails, AreaId};
 use characters::Character;
 use game::games::Game;
 use rand::SeedableRng;
@@ -26,7 +26,7 @@ fn area_event_survival_narration_reaches_game_messages() {
 
     let area_details = AreaDetails::new_with_terrain(
         Some("Hub".to_string()),
-        Area::Hub,
+        AreaId::hub(),
         TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap(),
     );
     game.areas.push(area_details);

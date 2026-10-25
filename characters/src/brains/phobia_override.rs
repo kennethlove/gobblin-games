@@ -172,7 +172,7 @@ mod tests {
     use super::*;
     use crate::AfflictionDraft;
     use crate::traits::Trait;
-    use areas::Area;
+    use areas::AreaId;
     use areas::events::AreaEvent;
     use shared::afflictions::{
         AfflictionKind, AfflictionSource, PhobiaMetadata, PhobiaOrigin, PhobiaTrigger, Severity,
@@ -180,7 +180,7 @@ mod tests {
     use world::terrain::TerrainType;
 
     fn make_area(terrain: BaseTerrain, events: Vec<AreaEvent>) -> AreaDetails {
-        let mut area = AreaDetails::new(None, Area::Hub);
+        let mut area = AreaDetails::new(None, AreaId::hub());
         area.terrain = TerrainType::new(terrain, vec![]).unwrap();
         area.events = events;
         area

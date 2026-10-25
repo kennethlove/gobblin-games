@@ -39,7 +39,7 @@ use crate::afflictions::{AcquireResolution, can_acquire};
 use crate::events::CharacterEvent;
 use actions::{Action, AttackOutcome};
 use areas::location::Location;
-use areas::{Area, AreaDetails};
+use areas::{AreaDetails, AreaId};
 use brains::Brain;
 use rand::RngExt;
 use rand::prelude::*;
@@ -155,7 +155,7 @@ pub struct EnvironmentContext<'a> {
     /// Per-area count of living characters. Fed into `Brain::choose_destination`
     /// as a crowd penalty so movement scoring naturally disperses crowded
     /// characters without a call-site escape hatch.
-    pub enemy_density: &'a std::collections::HashMap<Area, u32>,
+    pub enemy_density: &'a std::collections::HashMap<AreaId, u32>,
     /// Current game day (1-indexed). Used to gate day-1-only behavior such
     /// as suppressing patron gifts in the opening cycle.
     pub current_day: u32,
@@ -194,7 +194,7 @@ pub struct Character {
         deserialize_with = "deserialize_uuid_lenient"
     )]
     pub id: Uuid,
-    /// Where are they? Area-hex plus sub-tile slot. Flattened so the
+    /// Where are they? AreaId-hex plus sub-tile slot. Flattened so the
     /// legacy top-level `area` column keeps hydrating (area preserved,
     /// sub defaults to the canonical triangle 0 via `Location::center`);
     /// the wire carries `area` and `sub` as
@@ -446,7 +446,7 @@ impl Character {
         Self {
             identifier: id,
             id: id_uuid,
-            location: Location::center(Area::Hub),
+            location: Location::center(AreaId::hub()),
             name: name.clone(),
             team,
             clan_name: String::new(),
@@ -674,7 +674,7 @@ impl Character {
             terrain_affinity: world::clans::roll_terrain_affinity(&mut rng),
             traits,
             // Per-game state: zeroed by construction.
-            location: Location::center(Area::Hub),
+            location: Location::center(AreaId::hub()),
             status: CharacterStatus::default(),
             editable: true,
             stamina: max_stamina,
@@ -735,7 +735,7 @@ impl Character {
         Self {
             identifier: id,
             id: id_uuid,
-            location: Location::center(Area::Hub),
+            location: Location::center(AreaId::hub()),
             name,
             team,
             clan_name: String::new(),
@@ -1299,7 +1299,7 @@ impl Character {
             identifier: self.identifier.clone().into(),
             name: self.name.clone(),
         };
-        let area_ref = |a: Area| {
+        let area_ref = |a: AreaId| {
             let s = a.to_string();
             AreaRef {
                 identifier: s.clone().into(),
@@ -1710,7 +1710,7 @@ impl Character {
                 identifier: self.identifier.clone().into(),
                 name: self.name.clone(),
             };
-            let area_ref = |a: Area| {
+            let area_ref = |a: AreaId| {
                 let s = a.to_string();
                 AreaRef {
                     identifier: s.clone().into(),
@@ -2920,7 +2920,7 @@ mod tests {
         use crate::actions::Action;
         use crate::brains::PsychoticBreakType;
         use crate::statuses::CharacterStatus;
-        use areas::Area;
+        use areas::AreaId;
         use shared::afflictions::Substance;
         let mut me = Character::new(
             "Stinky".to_string(),
@@ -2959,7 +2959,7 @@ mod tests {
         assert_eq!(me.status, CharacterStatus::default());
         assert!(me.is_alive());
         assert!(me.wounds.is_empty());
-        assert!(matches!(me.location.area, Area::Hub));
+        assert_eq!(me.location.area, AreaId::hub());
         // Pristine stamina is trait-coherent: carried curses like
         // Asthmatic shrink the fresh pool.
         let fresh_max = crate::lifecycle::health::max_stamina_for_traits(&me.traits);
@@ -3219,7 +3219,7 @@ mod tests {
         // own lifetime counter right where BetrayalRecorded is enqueued.
         use crate::traits::Trait;
         use crate::{EncounterContext, EnvironmentContext};
-        use areas::{Area, AreaDetails};
+        use areas::{AreaDetails, AreaId};
 
         let mut betrayer = Character::new("Rendmaw".to_string(), Some(1), None);
         betrayer.traits = vec![Trait::Treacherous];
@@ -3227,8 +3227,8 @@ mod tests {
         betrayer.allies.push(victim.id);
         betrayer.turns_since_last_betrayal = crate::alliances::TREACHEROUS_BETRAYAL_INTERVAL;
 
-        let mut area_details = AreaDetails::new(Some("Lake".to_string()), Area::Hub);
-        let all_areas = vec![AreaDetails::new(Some("Lake".to_string()), Area::Hub)];
+        let mut area_details = AreaDetails::new(Some("Lake".to_string()), AreaId::hub());
+        let all_areas = vec![AreaDetails::new(Some("Lake".to_string()), AreaId::hub())];
         let enemy_density = std::collections::HashMap::new();
         let combat_tuning = crate::combat_tuning::CombatTuning::default();
         let mut environment_details = EnvironmentContext {
@@ -3669,7 +3669,7 @@ mod tests {
     fn survival_area(base: world::terrain::BaseTerrain) -> areas::AreaDetails {
         areas::AreaDetails::new_with_terrain(
             None,
-            areas::Area::Hub,
+            areas::AreaId::hub(),
             world::terrain::TerrainType::new(base, vec![]).unwrap(),
         )
     }
@@ -4043,7 +4043,7 @@ mod tests {
     fn set_trap_records_the_placing_goblins_sub_tile() {
         let mut me = character();
         me.location =
-            areas::location::Location::new(areas::Area::Hub, areas::hex::SubTriangle::new(3));
+            areas::location::Location::new(areas::AreaId::hub(), areas::hex::SubTriangle::new(3));
         let mut area = survival_area(world::terrain::BaseTerrain::Clearing);
         let mut rng = SmallRng::seed_from_u64(11);
         let mut events: Vec<TaggedEvent> = Vec::new();
@@ -4062,7 +4062,7 @@ mod tests {
     fn set_trap_caps_at_two_untriggered_traps_in_own_sub_tile() {
         let mut me = character();
         me.location =
-            areas::location::Location::new(areas::Area::Hub, areas::hex::SubTriangle::new(3));
+            areas::location::Location::new(areas::AreaId::hub(), areas::hex::SubTriangle::new(3));
         let mut area = survival_area(world::terrain::BaseTerrain::Clearing);
         // Untriggered traps in OTHER sub-tiles don't count against this one.
         for sub in 0..5u8 {
@@ -4094,7 +4094,7 @@ mod tests {
     fn search_only_reveals_traps_in_own_sub_tile() {
         let mut me = character();
         me.location =
-            areas::location::Location::new(areas::Area::Hub, areas::hex::SubTriangle::new(0));
+            areas::location::Location::new(areas::AreaId::hub(), areas::hex::SubTriangle::new(0));
         let mut area = survival_area(world::terrain::BaseTerrain::Clearing);
         // Concealment 1: any roll finds it — but only if the sub is scanned.
         area.placed_traps.push(trap_at(
@@ -4169,7 +4169,7 @@ mod tests {
         );
         // Knob on, Moderate, other sub-tile: hidden (co-presence required).
         other.location =
-            areas::location::Location::new(areas::Area::Hub, areas::hex::SubTriangle::new(4));
+            areas::location::Location::new(areas::AreaId::hub(), areas::hex::SubTriangle::new(4));
         assert!(
             Character::perceivable_candidate(&me, &other, true),
             "Moderate only visible with co-presence"
@@ -4202,7 +4202,7 @@ mod tests {
     fn trap_triggers_for_goblin_in_the_keyed_sub_tile() {
         let mut me = character();
         me.location =
-            areas::location::Location::new(areas::Area::Hub, areas::hex::SubTriangle::new(2));
+            areas::location::Location::new(areas::AreaId::hub(), areas::hex::SubTriangle::new(2));
         let mut area = survival_area(world::terrain::BaseTerrain::Clearing);
         // Concealment 30 exceeds any perception roll (max 21), so the
         // keyed-sub path must trigger regardless of the seeded rng.
@@ -4229,7 +4229,7 @@ mod tests {
     fn trap_does_not_trigger_for_goblin_in_another_sub_tile() {
         let mut me = character();
         me.location =
-            areas::location::Location::new(areas::Area::Hub, areas::hex::SubTriangle::new(4));
+            areas::location::Location::new(areas::AreaId::hub(), areas::hex::SubTriangle::new(4));
         let mut area = survival_area(world::terrain::BaseTerrain::Clearing);
         area.placed_traps.push(trap_at(
             "some-other-goblin",
@@ -4426,8 +4426,10 @@ mod tests {
     #[test]
     fn location_serializes_flat_area_and_sub_columns() {
         let mut c = Character::new("Stinky".to_string(), None, None);
-        c.location =
-            areas::location::Location::new(areas::Area::Sector3, areas::hex::SubTriangle::new(4));
+        c.location = areas::location::Location::new(
+            areas::AreaId::sector3(),
+            areas::hex::SubTriangle::new(4),
+        );
         let v = serde_json::to_value(&c).unwrap();
         assert_eq!(v["area"], serde_json::json!("Sector 3"));
         assert_eq!(v["sub"], serde_json::json!(4));
@@ -4437,8 +4439,10 @@ mod tests {
     #[test]
     fn location_round_trips_through_json() {
         let mut c = Character::new("Stinky".to_string(), None, None);
-        c.location =
-            areas::location::Location::new(areas::Area::Sector6, areas::hex::SubTriangle::new(1));
+        c.location = areas::location::Location::new(
+            areas::AreaId::sector6(),
+            areas::hex::SubTriangle::new(1),
+        );
         let v = serde_json::to_value(&c).unwrap();
         let back: Character = serde_json::from_value(v).unwrap();
         assert_eq!(back.location, c.location);
@@ -4454,7 +4458,7 @@ mod tests {
         v["area"] = serde_json::json!("Sector 1");
         v.as_object_mut().unwrap().remove("sub");
         let back: Character = serde_json::from_value(v).unwrap();
-        assert_eq!(back.location.area, areas::Area::Sector1);
+        assert_eq!(back.location.area, areas::AreaId::sector1());
         assert_eq!(
             back.location.sub,
             areas::location::Location::default().sub,

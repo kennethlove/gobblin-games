@@ -6,7 +6,7 @@
 //! - a successful flee relocates the fleer into an adjacent sub-tile
 //! - combat payloads carry the fight's location
 
-use areas::Area;
+use areas::AreaId;
 use areas::hex::SubTriangle;
 use areas::location::Location;
 use characters::Character;
@@ -20,7 +20,7 @@ fn single_hub_game() -> Game {
     let mut game = Game::new("subhex-combat-scoping");
     game.areas.push(areas::AreaDetails::new_with_terrain(
         Some("Hub".to_string()),
-        Area::Hub,
+        AreaId::hub(),
         TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap(),
     ));
     // WHY: with 2 characters (< low_character_threshold = 8)
@@ -57,7 +57,7 @@ fn combat_messages(game: &Game) -> Vec<&shared::messages::GameMessage> {
 #[test]
 fn same_sub_fight_starts_and_stamps_location_on_payloads() {
     let mut game = single_hub_game();
-    let hub_sub0 = Location::new(Area::Hub, SubTriangle::new(0));
+    let hub_sub0 = Location::new(AreaId::hub(), SubTriangle::new(0));
     let mut attacker = fighter("Attacker", &game, 1, hub_sub0);
     attacker.attributes.strength = 60;
     let mut defender = fighter("Defender", &game, 2, hub_sub0);
@@ -105,8 +105,8 @@ fn same_sub_fight_starts_and_stamps_location_on_payloads() {
 #[test]
 fn cross_sub_pending_attack_is_dropped_by_defensive_recheck() {
     let mut game = single_hub_game();
-    let hub_sub0 = Location::new(Area::Hub, SubTriangle::new(0));
-    let hub_sub3 = Location::new(Area::Hub, SubTriangle::new(3));
+    let hub_sub0 = Location::new(AreaId::hub(), SubTriangle::new(0));
+    let hub_sub3 = Location::new(AreaId::hub(), SubTriangle::new(3));
     let attacker = fighter("Attacker", &game, 1, hub_sub0);
     let defender = fighter("Defender", &game, 2, hub_sub3);
     let target_id = defender.id;
@@ -126,8 +126,8 @@ fn cross_sub_pending_attack_is_dropped_by_defensive_recheck() {
 #[test]
 fn cross_sub_characters_never_start_a_fight() {
     let mut game = single_hub_game();
-    let hub_sub0 = Location::new(Area::Hub, SubTriangle::new(0));
-    let hub_sub3 = Location::new(Area::Hub, SubTriangle::new(3));
+    let hub_sub0 = Location::new(AreaId::hub(), SubTriangle::new(0));
+    let hub_sub3 = Location::new(AreaId::hub(), SubTriangle::new(3));
     let mut attacker = fighter("Attacker", &game, 1, hub_sub0);
     attacker.attributes.strength = 60;
     let mut defender = fighter("Defender", &game, 2, hub_sub3);
@@ -157,7 +157,7 @@ fn successful_flee_relocates_fleer_into_adjacent_sub() {
     game.combat_tuning.brain_flee_base = 1_000;
     game.combat_tuning.flee_contest_modifier = 1_000;
 
-    let hub_sub0 = Location::new(Area::Hub, SubTriangle::new(0));
+    let hub_sub0 = Location::new(AreaId::hub(), SubTriangle::new(0));
     let attacker = fighter("Attacker", &game, 1, hub_sub0);
     let defender = fighter("Defender", &game, 2, hub_sub0);
     let target_id = defender.id;

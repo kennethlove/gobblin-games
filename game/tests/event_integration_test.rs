@@ -1,5 +1,5 @@
 use areas::events::AreaEvent;
-use areas::{Area, AreaDetails};
+use areas::{AreaDetails, AreaId};
 use characters::Character;
 use game::games::Game;
 use rand::SeedableRng;
@@ -13,7 +13,7 @@ fn test_wildfire_in_forest_kills_characters() {
     // Create area with Forest terrain
     let area_details = AreaDetails::new_with_terrain(
         Some("Forest Area".to_string()),
-        Area::Sector1,
+        AreaId::sector1(),
         TerrainType::new(BaseTerrain::Forest, vec![]).unwrap(),
     );
     game.areas.push(area_details);
@@ -57,7 +57,7 @@ fn test_wildfire_in_desert_minor_impact() {
     // Create area with Desert terrain
     let area_details = AreaDetails::new_with_terrain(
         Some("Desert Area".to_string()),
-        Area::Sector4,
+        AreaId::sector4(),
         TerrainType::new(BaseTerrain::Desert, vec![]).unwrap(),
     );
     game.areas.push(area_details);
@@ -66,7 +66,7 @@ fn test_wildfire_in_desert_minor_impact() {
 
     // Create character
     let mut character = Character::random();
-    character.location.area = Area::Sector4;
+    character.location.area = AreaId::sector4();
     character.blood = 500;
     character.terrain_affinity = vec![];
     character.statistics.game = game.identifier.clone();

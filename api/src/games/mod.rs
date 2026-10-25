@@ -6,7 +6,7 @@ pub(crate) mod persist;
 use crate::characters::CHARACTERS_ROUTER;
 use crate::{AppError, AppState};
 use areas::preset::SubTile;
-use areas::{Area, AreaDetails, hex::Axial};
+use areas::{AreaDetails, AreaId, hex::Axial};
 use axum::Router;
 use axum::routing::{get, post, put};
 use characters::Character;
@@ -97,7 +97,7 @@ pub struct GameAreaEdge {
 }
 
 async fn create_game_area(
-    area: Area,
+    area: AreaId,
     display_name: &str,
     sub_tiles: &[SubTile],
     axial: Axial,
@@ -140,7 +140,7 @@ async fn create_game_area(
 }
 
 async fn create_game_area_edge(
-    area: Area,
+    area: AreaId,
     display_name: &str,
     sub_tiles: &[SubTile],
     axial: Axial,
@@ -163,7 +163,7 @@ async fn create_game_area_edge(
         .bind(("game_id", game_identifier_str.clone()))
         .await
         .map_err(|e| AppError::InternalServerError(format!("Failed to find area: {}", e)))?;
-    let existing_area: Option<SerdeWrapper<Area>> = resp
+    let existing_area: Option<SerdeWrapper<AreaId>> = resp
         .take(0)
         .map_err(|e| AppError::InternalServerError(format!("Failed to find area: {}", e)))?;
 
@@ -203,7 +203,7 @@ async fn create_game_area_edge(
 /// Create areas for a game, including spawning items within them.
 pub async fn create_area(
     game_identifier: &str,
-    area: Area,
+    area: AreaId,
     display_name: String,
     sub_tiles: Vec<SubTile>,
     axial: Axial,

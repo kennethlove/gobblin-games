@@ -12,7 +12,7 @@ use shared::afflictions::{AfflictionKind, AfflictionSource, Severity, TrapKind, 
 
 fn make_character(name: &str) -> Character {
     let mut t = Character::new(name.into(), None, None);
-    t.location.area = areas::Area::Hub;
+    t.location.area = areas::AreaId::hub();
     t.attributes.strength = 30;
     t.attributes.toughness = 15;
     t
@@ -69,14 +69,14 @@ fn rescue_bonus_applied_to_trapped_target() {
 
     let mut rescuer = make_character("Rescuer");
     rescuer.attributes.strength = 40;
-    rescuer.location.area = areas::Area::Hub;
+    rescuer.location.area = areas::AreaId::hub();
 
     let mut target = make_character("Target");
-    target.location.area = areas::Area::Hub;
+    target.location.area = areas::AreaId::hub();
     add_buried(&mut target, Severity::Mild);
 
     let area = AreaDetails {
-        area: Some(areas::Area::Hub),
+        area: Some(areas::AreaId::hub()),
         ..Default::default()
     };
 
@@ -113,7 +113,7 @@ fn rescue_bonus_applied_to_trapped_target() {
 /// Test: trapped character cannot move via hard gate.
 #[test]
 fn trapped_blocked_from_moving() {
-    use areas::Area;
+    use areas::AreaId;
     use areas::location::Location;
     use characters::brains::affliction_override::hard_gates_with_terrain;
 
@@ -122,7 +122,7 @@ fn trapped_blocked_from_moving() {
 
     let result = hard_gates_with_terrain(
         &character,
-        &Action::Move(Some(Location::center(Area::Sector1))),
+        &Action::Move(Some(Location::center(AreaId::sector1()))),
         None,
     );
     assert_eq!(result, Some(Action::None));
@@ -153,7 +153,9 @@ fn trapped_override_blocks_move() {
 
     let result = affliction_override(
         &character,
-        &Action::Move(Some(areas::location::Location::center(areas::Area::Hub))),
+        &Action::Move(Some(
+            areas::location::Location::center(areas::AreaId::hub()),
+        )),
     );
     assert_eq!(result, Some(Action::None));
 }

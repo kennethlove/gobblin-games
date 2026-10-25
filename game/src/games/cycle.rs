@@ -1,5 +1,5 @@
 use super::*;
-use areas::{Area, AreaDetails};
+use areas::{AreaDetails, AreaId};
 use characters::brains::combat::CombatBrain;
 use characters::combat::round_loop::CombatRoundLoop;
 use characters::events::CharacterEvent;
@@ -51,7 +51,7 @@ impl Game {
             }
         }
 
-        let mut characters_by_area: HashMap<Area, Vec<Character>> = HashMap::new();
+        let mut characters_by_area: HashMap<AreaId, Vec<Character>> = HashMap::new();
         for character in living_characters {
             characters_by_area
                 .entry(character.location.area)
@@ -62,7 +62,7 @@ impl Game {
         // Per-area living-character density. Threaded into `EnvironmentContext`
         // so `Brain::choose_destination` can apply a per-enemy crowd penalty
         // and disperse crowded areas without a call-site escape hatch.
-        let enemy_density: HashMap<Area, u32> = characters_by_area
+        let enemy_density: HashMap<AreaId, u32> = characters_by_area
             .iter()
             .map(|(area, characters)| (*area, characters.len() as u32))
             .collect();
@@ -899,7 +899,7 @@ impl Game {
                 &from_terrain,
                 character,
             );
-            let layout: Vec<(Area, areas::hex::Axial)> = self
+            let layout: Vec<(AreaId, areas::hex::Axial)> = self
                 .areas
                 .iter()
                 .filter_map(|ad| {
@@ -1586,7 +1586,7 @@ impl Game {
     }
 
     /// Get a mutable reference to the area details for a given area.
-    pub(super) fn get_area_details_mut(&mut self, area: Area) -> Option<&mut AreaDetails> {
+    pub(super) fn get_area_details_mut(&mut self, area: AreaId) -> Option<&mut AreaDetails> {
         self.areas.iter_mut().find(|ad| ad.area == Some(area))
     }
 }
@@ -1679,7 +1679,7 @@ mod combat_scoping_tests {
     #[test]
     fn flee_destination_is_none_for_unoccupied_sub() {
         let mut rng = SmallRng::seed_from_u64(3);
-        let from = Location::new(Area::Hub, SubTriangle::new(6));
+        let from = Location::new(AreaId::hub(), SubTriangle::new(6));
         assert!(flee_destination(from, &mut rng).is_none());
     }
 }
