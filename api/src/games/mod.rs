@@ -6,7 +6,7 @@ pub(crate) mod persist;
 use crate::characters::CHARACTERS_ROUTER;
 use crate::{AppError, AppState};
 use areas::preset::SubTile;
-use areas::{Area, AreaDetails};
+use areas::{Area, AreaDetails, hex::Axial};
 use axum::Router;
 use axum::routing::{get, post, put};
 use characters::Character;
@@ -100,6 +100,7 @@ async fn create_game_area(
     area: Area,
     display_name: &str,
     sub_tiles: &[SubTile],
+    axial: Axial,
     db: &Surreal<Any>,
 ) -> Result<GameArea, AppError> {
     let identifier = Uuid::new_v4().to_string();
@@ -123,6 +124,12 @@ async fn create_game_area(
         })?;
         body["sub_tiles"] = value;
     }
+    // Axial coordinate rides the area record (zkp.2): AreaDetails::axial
+    // hydrates it on read (serde default) straight from
+    // `fn::get_full_game`'s `SELECT *`. area table is SCHEMALESS — no
+    // field declaration needed; schemas/area.surql documents it.
+    body["axial"] = serde_json::to_value(axial)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to encode axial: {}", e)))?;
     db.query("UPSERT $rid CONTENT $body")
         .bind(("rid", area_id.clone()))
         .bind(("body", body))
@@ -136,6 +143,7 @@ async fn create_game_area_edge(
     area: Area,
     display_name: &str,
     sub_tiles: &[SubTile],
+    axial: Axial,
     game_identifier: Uuid,
     db: &Surreal<Any>,
 ) -> Result<GameAreaEdge, AppError> {
@@ -163,7 +171,7 @@ async fn create_game_area_edge(
         Uuid::from_str(&identifier.to_string())
             .map_err(|e| AppError::BadRequest(format!("Invalid area UUID: {}", e)))?
     } else {
-        match create_game_area(area, display_name, sub_tiles, db).await {
+        match create_game_area(area, display_name, sub_tiles, axial, db).await {
             Ok(game_area) => Uuid::from_str(game_area.identifier.as_str())
                 .map_err(|e| AppError::BadRequest(format!("Invalid game area UUID: {}", e)))?,
             Err(_) => {
@@ -198,22 +206,30 @@ pub async fn create_area(
     area: Area,
     display_name: String,
     sub_tiles: Vec<SubTile>,
+    axial: Axial,
     num_items: u32,
     db: &Surreal<Any>,
 ) -> Result<(), AppError> {
     let game_uuid = Uuid::from_str(game_identifier)
         .map_err(|e| AppError::BadRequest(format!("Invalid game UUID: {}", e)))?;
-    let game_area = create_game_area_edge(area, display_name.as_str(), &sub_tiles, game_uuid, db)
-        .await
-        .map_err(|e| {
-            let detail = match &e {
-                AppError::InternalServerError(s)
-                | AppError::BadRequest(s)
-                | AppError::DbError(s) => s.clone(),
-                other => other.to_string(),
-            };
-            AppError::InternalServerError(format!("Failed to create game area: {}", detail))
-        })?;
+    let game_area = create_game_area_edge(
+        area,
+        display_name.as_str(),
+        &sub_tiles,
+        axial,
+        game_uuid,
+        db,
+    )
+    .await
+    .map_err(|e| {
+        let detail = match &e {
+            AppError::InternalServerError(s) | AppError::BadRequest(s) | AppError::DbError(s) => {
+                s.clone()
+            }
+            other => other.to_string(),
+        };
+        AppError::InternalServerError(format!("Failed to create game area: {}", detail))
+    })?;
     let item_futures = (0..num_items).map(|_| add_item_to_area(&game_area, None, db));
     let item_results = futures::future::join_all(item_futures).await;
     if let Some(err) = item_results.into_iter().find_map(Result::err) {

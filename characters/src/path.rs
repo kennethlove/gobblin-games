@@ -86,7 +86,20 @@ impl<'a> Graph for AreaGraph<'a> {
     type Cost = u32;
 
     fn neighbors(&self, node: Area) -> Vec<(Area, u32)> {
-        node.neighbors()
+        let layout: Vec<(Area, areas::hex::Axial)> = self
+            .areas
+            .iter()
+            .map(|kind| {
+                (
+                    *kind,
+                    self.details
+                        .get(kind)
+                        .and_then(|d| d.axial)
+                        .unwrap_or_else(|| areas::location::area_axial(*kind)),
+                )
+            })
+            .collect();
+        node.neighbors_from_layout(&layout)
             .into_iter()
             .map(|n| (n, self.edge_cost(node, n)))
             .collect()

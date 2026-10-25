@@ -899,10 +899,23 @@ impl Game {
                 &from_terrain,
                 character,
             );
+            let layout: Vec<(Area, areas::hex::Axial)> = self
+                .areas
+                .iter()
+                .filter_map(|ad| {
+                    ad.area.map(|kind| {
+                        (
+                            kind,
+                            ad.axial
+                                .unwrap_or_else(|| areas::location::area_axial(kind)),
+                        )
+                    })
+                })
+                .collect();
             let available_destinations = character
                 .location
                 .area
-                .neighbors()
+                .neighbors_from_layout(&layout)
                 .into_iter()
                 .filter_map(|neighbor_area| {
                     // Find the AreaDetails for this neighbor

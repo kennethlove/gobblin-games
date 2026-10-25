@@ -99,13 +99,32 @@ impl Area {
     /// Parent adjacency by geometry: an area touches every area at axial
     /// distance 1 from its own coordinate. The ring/wrap falls out of the
     /// layout's coordinates instead of a hardcoded 7-arm match — zkp.1.
-    /// Coordinate source stays `default_layout()` until phase B feeds
-    /// preset q/r.
     pub fn neighbors(&self) -> Vec<Area> {
-        let me = crate::location::area_axial(*self);
-        crate::hex::Axial::neighbors(me)
+        self.neighbors_from_layout(&crate::hex::default_layout())
+    }
+
+    /// Adjacency from a caller-supplied layout: distance-1 of `self`'s
+    /// coordinate, resolved back to identities in that layout (missing
+    /// entries fall back to `default_layout`, so details-less areas
+    /// behave exactly like [`Area::neighbors`]). zkp.2: presets feed
+    /// their q/r through this and the ring becomes the layout's
+    /// property, not the enum's.
+    pub fn neighbors_from_layout(&self, layout: &[(Area, crate::hex::Axial)]) -> Vec<Area> {
+        let coord = |a: Area| {
+            layout
+                .iter()
+                .find(|(kind, _)| *kind == a)
+                .map(|(_, ax)| *ax)
+                .unwrap_or_else(|| crate::location::area_axial(a))
+        };
+        crate::hex::Axial::neighbors(coord(*self))
             .into_iter()
-            .filter_map(crate::location::area_at)
+            .filter_map(|ax| {
+                layout
+                    .iter()
+                    .find(|(kind, _)| coord(*kind) == ax)
+                    .map(|(kind, _)| *kind)
+            })
             .collect()
     }
 }
@@ -161,6 +180,13 @@ pub struct AreaDetails {
     #[serde(default)]
     pub name: String,
     pub area: Option<Area>,
+    /// Authoritative axial coordinate from the arena preset (zkp.2).
+    /// Hydrates from the area record's `axial` field (serde default).
+    /// `None` = rows written before coords rode the record, or helpers
+    /// without a preset — readers fall back to `area_axial`
+    /// (`default_layout`), which is exactly the pre-zkp.2 behavior.
+    #[serde(default)]
+    pub axial: Option<crate::hex::Axial>,
     #[serde(default)]
     pub items: Vec<Item>,
     #[serde(default)]
@@ -195,6 +221,7 @@ impl Default for AreaDetails {
             identifier: Uuid::new_v4().to_string(),
             name: String::new(),
             area: None,
+            axial: None,
             items: vec![],
             events: vec![],
             hazard_blocks: None,
@@ -245,6 +272,7 @@ impl AreaDetails {
             identifier: Uuid::new_v4().to_string(),
             name: name.unwrap_or(area.to_string()),
             area: Some(area),
+            axial: None,
             items: vec![],
             events: vec![],
             hazard_blocks: None,
@@ -259,6 +287,7 @@ impl AreaDetails {
             identifier: Uuid::new_v4().to_string(),
             name: name.unwrap_or(area.to_string()),
             area: Some(area),
+            axial: None,
             items: vec![],
             events: vec![],
             hazard_blocks: None,
