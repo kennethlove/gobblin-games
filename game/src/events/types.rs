@@ -332,12 +332,6 @@ pub enum GameEvent {
         area_event: String,
         area_name: String,
     },
-    AreaClose {
-        area_name: String,
-    },
-    AreaOpen {
-        area_name: String,
-    },
     TrappedInArea {
         character_id: Uuid,
         character_name: String,

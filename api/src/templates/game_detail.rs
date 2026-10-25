@@ -98,7 +98,8 @@ fn message_kind_label(payload: &shared::messages::MessagePayload) -> &'static st
         CombatBeat | CombatRoundStart | CombatJoined | CombatEnded => "Combat",
         AllianceFormed | AllianceProposed | AllianceDissolved | BetrayalTriggered
         | TrustShockBreak => "Alliance",
-        CharacterMoved | CharacterHidden | AreaClosed | AreaEvent => "Movement",
+        CharacterMoved | CharacterHidden | AreaClosed => "Movement",
+        AreaEvent => "Hazard",
         ItemFound | ItemUsed | ItemDropped => "Item",
         PatronGift => "Patron",
         CharacterRested | CharacterStarved | CharacterDehydrated | SanityBreak
@@ -136,7 +137,8 @@ fn kind_color(payload: &shared::messages::MessagePayload) -> &'static str {
         | CharacterWounded | TrapSet | TrapTriggered => "var(--waiting)",
         AllianceFormed | AllianceProposed | AllianceDissolved | BetrayalTriggered
         | TrustShockBreak => "var(--info)",
-        CharacterMoved | CharacterHidden | AreaClosed | AreaEvent => "var(--accent)",
+        CharacterMoved | CharacterHidden | AreaClosed => "var(--accent)",
+        AreaEvent => "var(--danger)",
         ItemFound | ItemUsed | ItemDropped | PatronGift => "var(--gold)",
         CharacterRested | CharacterStarved | CharacterDehydrated | SanityBreak
         | HungerBandChanged | ThirstBandChanged | StaminaBandChanged | ShelterSought | Foraged

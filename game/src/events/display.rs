@@ -459,14 +459,6 @@ impl Display for GameEvent {
                 let event = indefinite_capitalized(area_event);
                 write!(f, "=== ⚠️ {} has occurred in the {} ===", event, area_short)
             }
-            GameEvent::AreaClose { area_name } => {
-                let area_short = area_name.replace("The ", "");
-                write!(f, "=== 🔔 The {} is uninhabitable ===", area_short)
-            }
-            GameEvent::AreaOpen { area_name } => {
-                let area_short = area_name.replace("The ", "");
-                write!(f, "=== 🔔 The {} is habitable again ===", area_short)
-            }
             GameEvent::TrappedInArea {
                 character_name,
                 area_name,
