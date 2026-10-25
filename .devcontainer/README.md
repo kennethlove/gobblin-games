@@ -1,6 +1,6 @@
 # Devcontainer
 
-Reproducible dev environment for Gobblin' Games. Opens in VS Code or any editor that speaks the [devcontainer spec](https://containers.dev/).
+Reproducible dev environment for Gobblin Games. Opens in VS Code or any editor that speaks the [devcontainer spec](https://containers.dev/).
 
 ## What's inside
 

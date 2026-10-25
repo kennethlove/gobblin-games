@@ -1,7 +1,7 @@
 # game/src/
 
 ## Responsibility
-Core game engine implementing the Gobblin' Games simulation. This directory provides pure Rust business logic with no I/O dependencies — all game state management, turn-based cycle execution, character lifecycle, area event handling, and message generation. The engine is deterministic and stateless except for message accumulation, making it suitable for both single-run simulations and stateful API integration.
+Core game engine implementing the Gobblin Games simulation. This directory provides pure Rust business logic with no I/O dependencies — all game state management, turn-based cycle execution, character lifecycle, area event handling, and message generation. The engine is deterministic and stateless except for message accumulation, making it suitable for both single-run simulations and stateful API integration.
 
 ## Design Patterns
 

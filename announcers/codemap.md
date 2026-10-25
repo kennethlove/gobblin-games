@@ -2,7 +2,7 @@
 
 ## Responsibility
 
-Structured commentary pipeline for Gobblin' Games events. Transforms typed game messages into deterministic narration by The Chronicler — template banks keyed by phase context, with no network or model dependency. The `Commentator` trait abstracts over any backend.
+Structured commentary pipeline for Gobblin Games events. Transforms typed game messages into deterministic narration by The Chronicler — template banks keyed by phase context, with no network or model dependency. The `Commentator` trait abstracts over any backend.
 
 ## Architecture
 

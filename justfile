@@ -1,4 +1,4 @@
-# Gobblin' Games - Rust Workspace Justfile
+# Gobblin Games - Rust Workspace Justfile
 default:
     @just --list
 

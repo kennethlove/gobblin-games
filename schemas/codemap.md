@@ -2,7 +2,7 @@
 
 ## Responsibility
 
-Defines the SurrealDB database schema for the Gobblin' Games application. This directory contains the complete data model for game sessions, characters, items, areas, user authentication, message logs, and summaries. The schemas establish:
+Defines the SurrealDB database schema for the Gobblin Games application. This directory contains the complete data model for game sessions, characters, items, areas, user authentication, message logs, and summaries. The schemas establish:
 
 - Table structures (SCHEMAFULL vs SCHEMALESS)
 - Graph relationships between entities
