@@ -36,12 +36,15 @@ pub struct SubTile {
 /// One area slot in an arena preset.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArenaSlot {
-    /// Which engine area this slot instantiates. Engine adjacency
-    /// (`Area::neighbors`) is fixed, so every preset must cover exactly
-    /// the seven known areas, each once.
+    /// Which engine area this slot instantiates. Identity still comes
+    /// from the enum while coverage is the known seven (validated by
+    /// `validate_layout`); adjacency derives from the slot's q/r via
+    /// `neighbors_from_layout` (zkp.2).
     pub area: Area,
-    /// Axial hex coordinate (`q`, `r`) — presentation only; game logic
-    /// operates on area identity, not coordinates.
+    /// Axial hex coordinate (`q`, `r`) — authoritative: instantiate
+    /// passes it to the area record and layout-aware adjacency reads it
+    /// back through `AreaDetails::axial` (zkp.2; pre-zkp.2 it was
+    /// presentation-only).
     pub q: i32,
     pub r: i32,
     /// Fixed display name. Absent = a fresh generated name per game.
@@ -77,7 +80,9 @@ impl ArenaPreset {
     /// draw from the same generated-name bank the pre-preset flow used,
     /// so the default preset behaves exactly like the old inline flow.
     /// Slots without authored sub-tiles yield an empty sub-tile list.
-    pub fn instantiate(&self) -> Vec<(Area, String, Vec<SubTile>)> {
+    /// Returns `(area, name, sub_tiles, axial)` — the coordinate rides
+    /// the caller into the area record (zkp.2).
+    pub fn instantiate(&self) -> Vec<(Area, String, Vec<SubTile>, crate::hex::Axial)> {
         let generated = crate::generate_area_names();
         debug_assert_eq!(
             generated.len(),
@@ -89,7 +94,12 @@ impl ArenaPreset {
             .zip(generated)
             .map(|(slot, fallback)| {
                 let sub_tiles = slot.sub_tiles.clone().unwrap_or_default();
-                (slot.area, slot.name.clone().unwrap_or(fallback), sub_tiles)
+                (
+                    slot.area,
+                    slot.name.clone().unwrap_or(fallback),
+                    sub_tiles,
+                    crate::hex::Axial::new(slot.q, slot.r),
+                )
             })
             .collect()
     }
@@ -305,14 +315,44 @@ mod tests {
     }
 
     #[test]
+    fn neighbors_from_layout_matches_default_neighbors() {
+        let layout = crate::hex::default_layout();
+        for (kind, _) in layout {
+            assert_eq!(
+                kind.neighbors_from_layout(&layout),
+                kind.neighbors(),
+                "{kind:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn neighbors_from_layout_follows_translated_coordinates() {
+        // Same seven slots, every coordinate shifted (+1, 0): adjacency
+        // is relative geometry, so the ring must come out identical —
+        // this is the invariant presets rely on (zkp.2).
+        let layout: Vec<(Area, crate::hex::Axial)> = crate::hex::default_layout()
+            .into_iter()
+            .map(|(kind, ax)| (kind, crate::hex::Axial::new(ax.q + 1, ax.r)))
+            .collect();
+        for (kind, _) in crate::hex::default_layout() {
+            assert_eq!(
+                kind.neighbors_from_layout(&layout),
+                kind.neighbors(),
+                "translation preserves the ring for {kind:?}"
+            );
+        }
+    }
+
+    #[test]
     fn instantiate_default_preset_covers_all_areas_with_unique_names() {
         let triples = default_preset().instantiate();
         assert_eq!(triples.len(), 7);
         assert_eq!(triples[0].0, Area::Hub);
         assert_eq!(triples[0].1, "The Hub".to_string());
-        let kinds: HashSet<Area> = triples.iter().map(|(area, _, _)| *area).collect();
+        let kinds: HashSet<Area> = triples.iter().map(|(area, _, _, _)| *area).collect();
         assert_eq!(kinds.len(), 7);
-        let names: HashSet<String> = triples.iter().map(|(_, name, _)| name.clone()).collect();
+        let names: HashSet<String> = triples.iter().map(|(_, name, _, _)| name.clone()).collect();
         assert_eq!(names.len(), 7);
     }
 
@@ -507,7 +547,7 @@ mod tests {
         assert!(
             triples
                 .iter()
-                .all(|(_, _, subs)| subs.len() == SubTriangle::COUNT)
+                .all(|(_, _, subs, _)| subs.len() == SubTriangle::COUNT)
         );
     }
 }
@@ -548,7 +588,7 @@ mod arena_generation_poc {
         let mut rng = SmallRng::seed_from_u64(seed);
 
         // 1. Ring orientation: sector i (1..=6) lands at ring position
-        //    (±(i-1) + rotation) mod 6. Hub stays at (0, 0).
+        //    (+/-(i-1) + rotation) mod 6. Hub stays at (0, 0).
         let rotation: i32 = rng.random_range(0..6);
         let reflected = rng.random_bool(0.5);
         let ring: Vec<Axial> = default_layout().iter().skip(1).map(|(_, ax)| *ax).collect();

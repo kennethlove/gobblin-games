@@ -150,12 +150,13 @@ pub async fn create_game(
     let area_futures = arena
         .instantiate()
         .into_iter()
-        .map(|(area, name, sub_tiles)| {
+        .map(|(area, name, sub_tiles, axial)| {
             super::create_area(
                 game_identifier.as_str(),
                 area,
                 name,
                 sub_tiles,
+                axial,
                 base_item_count,
                 &db,
             )
@@ -254,12 +255,13 @@ pub async fn quickstart(
     let area_futures = arena
         .instantiate()
         .into_iter()
-        .map(|(area, name, sub_tiles)| {
+        .map(|(area, name, sub_tiles, axial)| {
             super::create_area(
                 game_identifier.as_str(),
                 area,
                 name,
                 sub_tiles,
+                axial,
                 base_item_count,
                 &db,
             )

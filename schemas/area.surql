@@ -5,6 +5,10 @@ DEFINE TABLE OVERWRITE area SCHEMALESS
 DEFINE FIELD OVERWRITE identifier ON area;
 DEFINE FIELD OVERWRITE name ON area;
 DEFINE FIELD OVERWRITE area ON area;
+# Axial coordinate {q, r} of this area hex in the arena layout (zkp.2).
+# area is SCHEMALESS, so this documents rather than enforces; AreaDetails
+# hydrates `axial` via serde default.
+DEFINE FIELD OVERWRITE axial ON area;
 DEFINE FIELD OVERWRITE base_terrain ON area;
 DEFINE FIELD OVERWRITE terrain_descriptors ON area;
 

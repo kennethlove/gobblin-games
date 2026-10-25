@@ -12,9 +12,10 @@
 //! so the frontend can render without re-deriving the math.
 
 use crate::Area;
+use serde::{Deserialize, Serialize};
 
 /// Axial hex coordinate (`q`, `r`). Pointy-top orientation.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Axial {
     pub q: i32,
     pub r: i32,
@@ -164,25 +165,25 @@ mod tests {
 
     #[test]
     fn distance_opposite_sectors_is_two() {
-        // Sector1 (top-right) ↔ Sector4 (bottom-left)
+        // Sector1 (top-right) <-> Sector4 (bottom-left)
         assert_eq!(
             Axial::new(1, -1).distance(Axial::new(-1, 1)),
             2,
             "Sector1 ↔ Sector4 should be 2"
         );
-        // Sector2 ↔ Sector5
+        // Sector2 <-> Sector5
         assert_eq!(Axial::new(1, 0).distance(Axial::new(-1, 0)), 2);
-        // Sector3 ↔ Sector6
+        // Sector3 <-> Sector6
         assert_eq!(Axial::new(0, 1).distance(Axial::new(0, -1)), 2);
     }
 
     #[test]
     fn distance_adjacent_sectors_is_one() {
-        // Sector1 ↔ Sector2 (top-right ↔ right)
+        // Sector1 <-> Sector2 (top-right <-> right)
         assert_eq!(Axial::new(1, -1).distance(Axial::new(1, 0)), 1);
-        // Sector2 ↔ Sector3
+        // Sector2 <-> Sector3
         assert_eq!(Axial::new(1, 0).distance(Axial::new(0, 1)), 1);
-        // Wrap: Sector6 ↔ Sector1
+        // Wrap: Sector6 <-> Sector1
         assert_eq!(Axial::new(0, -1).distance(Axial::new(1, -1)), 1);
     }
 
