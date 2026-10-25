@@ -488,18 +488,6 @@ mod tests {
                 GameOutput::AreaEvent("earthquake", "The Forest"),
             ),
             (
-                GameEvent::AreaClose {
-                    area_name: "The Forest".into(),
-                },
-                GameOutput::AreaClose("The Forest"),
-            ),
-            (
-                GameEvent::AreaOpen {
-                    area_name: "The Forest".into(),
-                },
-                GameOutput::AreaOpen("The Forest"),
-            ),
-            (
                 GameEvent::TrappedInArea {
                     character_id: uid_a(),
                     character_name: "Alice".into(),
@@ -579,8 +567,8 @@ mod tests {
     #[test]
     fn parity_table_covers_every_variant() {
         // Bumps any time a variant is added without a parity row.
-        // 72 = current count of GameEvent variants in types.rs.
-        assert_eq!(parity_table().len(), 72);
+        // 70 = current count of GameEvent variants in types.rs.
+        assert_eq!(parity_table().len(), 70);
     }
 
     #[test]

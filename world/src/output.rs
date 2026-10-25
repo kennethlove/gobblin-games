@@ -91,8 +91,6 @@ pub enum GameOutput<'a> {
     ShieldShattersMidBlock(&'a str, &'a str, u32),
     PatronGift(&'a str, &'a Item),
     AreaEvent(&'a str, &'a str),
-    AreaClose(&'a str),
-    AreaOpen(&'a str),
     TrappedInArea(&'a str, &'a str),
     DiedInArea(&'a str, &'a str),
     CharacterDeath(&'a str),
@@ -416,14 +414,6 @@ impl<'a> Display for GameOutput<'a> {
                 let area_name = area.replace("The ", "");
                 let event = indefinite_capitalized(area_event);
                 write!(f, "=== ⚠️ {} has occurred in the {} ===", event, area_name)
-            }
-            GameOutput::AreaClose(area) => {
-                let area_name = area.replace("The ", "");
-                write!(f, "=== 🔔 The {} is uninhabitable ===", area_name)
-            }
-            GameOutput::AreaOpen(area) => {
-                let area_name = area.replace("The ", "");
-                write!(f, "=== 🔔 The {} is habitable again ===", area_name)
             }
             GameOutput::TrappedInArea(character, area) => {
                 let area_name = area.replace("The ", "");
