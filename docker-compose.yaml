@@ -24,6 +24,10 @@ services:
       - 'SURREAL_USER=${SURREAL_USER:-root}'
       - 'SURREAL_PASS=${SURREAL_PASS:-root}'
       - 'PRODUCTION=${PRODUCTION:-true}'
+      - 'STORAGE_PATH=/app/api/uploads'
+    volumes:
+      # Survive redeploys: without this, avatars die with the container.
+      - uploads_data:/app/api/uploads
     labels:
       - "coolify.managed=true"
     healthcheck:
@@ -34,8 +38,11 @@ services:
       start_period: 10s
 
 networks:
-    internal:
-        name: "${COMPOSE_PROJECT_NAME:-app}_internal"
-        labels:
-        - "coolify.managed=true"
-        driver: bridge
+  internal:
+    name: "${COMPOSE_PROJECT_NAME:-app}_internal"
+    labels:
+      - "coolify.managed=true"
+    driver: bridge
+
+volumes:
+  uploads_data:

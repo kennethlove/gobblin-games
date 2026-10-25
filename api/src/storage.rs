@@ -1,7 +1,18 @@
 use crate::AppError;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
+
+/// Cloudflare image-transformation prefix, e.g.
+/// `/cdn-cgi/image/width=256,format=auto`. Empty (dev/local): public URLs
+/// stay plain `/uploads/...` paths.
+static IMAGE_CDN_PREFIX: LazyLock<String> = LazyLock::new(|| {
+    std::env::var("IMAGE_CDN_PREFIX")
+        .unwrap_or_default()
+        .trim_end_matches('/')
+        .to_string()
+});
 
 /// File validation constraints
 pub struct UploadConstraints {
@@ -110,7 +121,16 @@ impl StorageBackend for LocalStorage {
     }
 
     fn public_url(&self, path: &str) -> String {
-        format!("{}/{}", self.public_prefix, path)
+        if IMAGE_CDN_PREFIX.is_empty() {
+            format!("{}/{}", self.public_prefix, path)
+        } else {
+            format!(
+                "{}{}/{}",
+                IMAGE_CDN_PREFIX.as_str(),
+                self.public_prefix,
+                path
+            )
+        }
     }
 }
 
