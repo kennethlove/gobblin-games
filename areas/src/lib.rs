@@ -96,26 +96,17 @@ impl FromStr for Area {
 }
 
 impl Area {
-    /// Topological neighbors derived from the v1 hex layout: Hub
-    /// touches all six sectors, each sector touches Hub plus its
-    /// two adjacent sectors (clockwise/counter-clockwise wrap 1..6).
+    /// Parent adjacency by geometry: an area touches every area at axial
+    /// distance 1 from its own coordinate. The ring/wrap falls out of the
+    /// layout's coordinates instead of a hardcoded 7-arm match — zkp.1.
+    /// Coordinate source stays `default_layout()` until phase B feeds
+    /// preset q/r.
     pub fn neighbors(&self) -> Vec<Area> {
-        match self {
-            Area::Hub => vec![
-                Area::Sector1,
-                Area::Sector2,
-                Area::Sector3,
-                Area::Sector4,
-                Area::Sector5,
-                Area::Sector6,
-            ],
-            Area::Sector1 => vec![Area::Hub, Area::Sector6, Area::Sector2],
-            Area::Sector2 => vec![Area::Hub, Area::Sector1, Area::Sector3],
-            Area::Sector3 => vec![Area::Hub, Area::Sector2, Area::Sector4],
-            Area::Sector4 => vec![Area::Hub, Area::Sector3, Area::Sector5],
-            Area::Sector5 => vec![Area::Hub, Area::Sector4, Area::Sector6],
-            Area::Sector6 => vec![Area::Hub, Area::Sector5, Area::Sector1],
-        }
+        let me = crate::location::area_axial(*self);
+        crate::hex::Axial::neighbors(me)
+            .into_iter()
+            .filter_map(crate::location::area_at)
+            .collect()
     }
 }
 
