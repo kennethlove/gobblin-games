@@ -7,43 +7,232 @@
       "area": "Hub",
       "q": 0,
       "r": 0,
-      "terrain": "Clearing"
+      "terrain": "Clearing",
+      "sub_tiles": [
+        {
+          "terrain": "Clearing",
+          "feature": "Market Square Rubble",
+          "flavor": "The stalls are gone; the arguments remain."
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Broken Arcade"
+        },
+        {
+          "terrain": "Clearing",
+          "feature": "Fountain Cracked"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Archive Stump"
+        },
+        {
+          "terrain": "Clearing",
+          "feature": "Gallows Tree"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Sidewalk Camp"
+        }
+      ]
     },
     {
       "area": "Sector 1",
       "q": 1,
       "r": -1,
-      "terrain": "UrbanRuins"
+      "terrain": "UrbanRuins",
+      "sub_tiles": [
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Collapsed Tenements"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Ash Alley"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Rooftop Run"
+        },
+        {
+          "terrain": "Forest",
+          "feature": "Courtyard Sprawl",
+          "flavor": "Trees grew through the weddings."
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Chimney Row"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Overpass Den"
+        }
+      ]
     },
     {
       "area": "Sector 2",
       "q": 1,
       "r": 0,
-      "terrain": "UrbanRuins"
+      "terrain": "UrbanRuins",
+      "sub_tiles": [
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Grand Station Hall",
+          "flavor": "The timetable still hangs, charred."
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Platform Graves"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Tunnel Mouth"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Flooded Concourse"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Signal Tower"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Baggage Yard"
+        }
+      ]
     },
     {
       "area": "Sector 3",
       "q": 0,
       "r": 1,
-      "terrain": "UrbanRuins"
+      "terrain": "UrbanRuins",
+      "sub_tiles": [
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Temple Steps"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Bell Without Rope"
+        },
+        {
+          "terrain": "Grasslands",
+          "feature": "Common Green",
+          "flavor": "Someone still mows the middle."
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Cloister Wall"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Statue Field"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Boneyard Gate"
+        }
+      ]
     },
     {
       "area": "Sector 4",
       "q": -1,
       "r": 1,
-      "terrain": "Badlands"
+      "terrain": "Badlands",
+      "sub_tiles": [
+        {
+          "terrain": "Badlands",
+          "feature": "Slag Terraces",
+          "flavor": "The furnaces cooled; the poison did not."
+        },
+        {
+          "terrain": "Badlands",
+          "feature": "Clinker Dunes"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Smelter Skeleton"
+        },
+        {
+          "terrain": "Badlands",
+          "feature": "Acid Runoff"
+        },
+        {
+          "terrain": "Badlands",
+          "feature": "Dead Orchard"
+        },
+        {
+          "terrain": "Grasslands",
+          "feature": "Company Town Lot"
+        }
+      ]
     },
     {
       "area": "Sector 5",
       "q": -1,
       "r": 0,
-      "terrain": "UrbanRuins"
+      "terrain": "UrbanRuins",
+      "sub_tiles": [
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Ward Three"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Hospital Shell"
+        },
+        {
+          "terrain": "Forest",
+          "feature": "Ward Garden Gone",
+          "flavor": "Roots took the beds first."
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Pharmacy Front"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Clinic Yard"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Morgue Door"
+        }
+      ]
     },
     {
       "area": "Sector 6",
       "q": 0,
       "r": -1,
-      "terrain": "UrbanRuins"
+      "terrain": "UrbanRuins",
+      "sub_tiles": [
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Foundry Row"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Crane Bones"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Sluice Works"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Coolant Ponds"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Foreman's Walk"
+        },
+        {
+          "terrain": "Badlands",
+          "feature": "Cinder Field",
+          "flavor": "Nothing grows and the bricks are warm."
+        }
+      ]
     }
   ]
 }
