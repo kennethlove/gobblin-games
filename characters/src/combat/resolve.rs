@@ -108,7 +108,9 @@ pub struct AttackContestOutcome {
 /// Generate attack data for each character.
 /// Each rolls a d20 to decide a basic attack / defense value.
 /// Strength and any weapon are added to the attack roll.
-/// Defense and any shield are added to the defense roll.
+/// Shields (not Toughness) are added to the defense roll — Toughness
+/// works only through damage mitigation below (9a1: 0a7's promised
+/// "success roll to damage reduction" move, at last).
 /// If either roll is more than 1.5x the other, that triggers a "decisive" victory.
 /// Natural 1 on attack = critical fumble (attacker takes damage).
 /// Natural 20 on attack = critical hit (triple damage).
@@ -152,7 +154,9 @@ pub fn attack_contest(
     // Get defense roll and defense modifier
     let base_defense_roll: i32 = rng.random_range(1..=20); // Base roll
     let mut defense_roll = base_defense_roll;
-    defense_roll += target.effective_attribute(CharacterAttribute::Toughness) as i32; // Add defense
+    // 9a1: Toughness is OUT of the success contest — it gates damage
+    // only via `mitigate_damage` (cap 50%) + armor soak, no double-dip.
+    // Success contest = d20 + stamina band + shield vs d20 + STR + weapon.
     {
         let band = stamina_band(target.stamina, target.max_stamina, tuning);
         let penalty = match band {

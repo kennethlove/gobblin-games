@@ -22,7 +22,9 @@ fn attack_contest_win(mut small_rng: SmallRng) {
     // Roll-independent: trait AttrMods must not shift exact math.
     target.traits.clear();
 
-    attacker.attributes.strength = 10;
+    attacker.attributes.strength = 2;
+    // 9a1: contest = STR + d20 (+weapon) vs bare d20 (+shield). STR2
+    // edges this seed's pair by 1 — a plain win, never 1.5x.
     target.attributes.toughness = 5;
 
     let result = attack_contest(
@@ -68,8 +70,11 @@ fn attack_contest_lose(mut small_rng: SmallRng) {
     // Roll-independent: trait AttrMods must not shift exact math.
     target.traits.clear();
 
-    attacker.attributes.strength = 15;
+    attacker.attributes.strength = 1;
     target.attributes.toughness = 20;
+    // 9a1: Toughness left the contest — the defender's edge is the
+    // shield now: d20 + 1 beats d20 + STR(1 floor), never 1.5x.
+    target.add_item(sturdy_shield(1));
 
     let result = attack_contest(
         &mut attacker,
@@ -93,6 +98,9 @@ fn attack_contest_lose_decisively(mut small_rng: SmallRng) {
 
     attacker.attributes.strength = 1;
     target.attributes.toughness = 20;
+    // 9a1: decisive defender comes from shield weight, not Toughness:
+    // d20 + 11 clears 1.5x over d20 + STR(1 floor) on every roll pair.
+    target.add_item(sturdy_shield(10));
 
     let result = attack_contest(
         &mut attacker,
@@ -114,7 +122,7 @@ fn attack_contest_draw(mut small_rng: SmallRng) {
     // Roll-independent: trait AttrMods must not shift exact math.
     target.traits.clear();
 
-    attacker.attributes.strength = 21; // Magic number to make the final scores even
+    attacker.attributes.strength = 1; // 9a1: exact tie on bare d20s (1+d20a == d20d) = Miss
     target.attributes.toughness = 20;
 
     let result = attack_contest(
@@ -231,7 +239,7 @@ fn attacks_miss(mut small_rng: SmallRng) {
     // Roll-independent: trait AttrMods must not shift exact math.
     target.traits.clear();
 
-    attacker.attributes.strength = 21; // Magic number to make them draw
+    attacker.attributes.strength = 1; // 9a1: same bare-d20 tie, through attacks()
     target.attributes.toughness = 20;
 
     let result = attacker.attacks(
@@ -927,6 +935,20 @@ fn brittle_shield(effect: i32) -> world::items::Item {
     )
 }
 
+/// Construct a shield that will not break mid-contest (9a1 fixtures:
+/// the shield IS the defender's contest edge, so it must survive the
+/// break-modified re-decide).
+fn sturdy_shield(effect: i32) -> world::items::Item {
+    world::items::Item::new(
+        "Tower Buckler",
+        world::items::ItemType::Shield,
+        world::items::ItemRarity::Common,
+        99,
+        world::items::Attribute::Defense,
+        effect,
+    )
+}
+
 #[test]
 fn weapon_break_records_forfeit_and_penalty_on_beat() {
     // cg9: wear fires when a landed hit is absorbed by armor (middle tier),
@@ -995,37 +1017,49 @@ fn weapon_break_records_forfeit_and_penalty_on_beat() {
 
 #[test]
 fn shield_break_records_forfeit_and_penalty_on_beat() {
-    let mut attacker = Character::new("Atk".into(), None, None);
-    // Roll-independent: trait AttrMods must not shift exact math.
-    attacker.traits.clear();
-    attacker.attributes.strength = 10;
+    // cg9 + 9a1: the shield wear tier fires on a load-bearing block —
+    // defender wins the bare-d20 contest AND the attack landed inside
+    // shield_effect (attack > defense - 4). Hunt a seed that produces
+    // it and shatters the durability-1 shield; fresh characters per seed.
+    let mut hit_events: Option<Vec<TaggedEvent>> = None;
+    for seed in 0..500u64 {
+        let mut attacker = Character::new("Atk".into(), None, None);
+        // Roll-independent: trait AttrMods must not shift exact math.
+        attacker.traits.clear();
+        attacker.attributes.strength = 10;
 
-    let mut target = Character::new("Tgt".into(), None, None);
+        let mut target = Character::new("Tgt".into(), None, None);
+        // Roll-independent: trait AttrMods must not shift exact math.
+        target.traits.clear();
+        target.attributes.toughness = 5;
+        let shield = brittle_shield(4);
+        target.add_item(shield.clone());
 
-    // Roll-independent: trait AttrMods must not shift exact math.
+        let mut events: Vec<TaggedEvent> = Vec::new();
+        let mut rng = SmallRng::seed_from_u64(seed);
+        let _ = attacker.attacks(
+            &mut target,
+            &mut rng,
+            &mut events,
+            shared::messages::Phase::DAY,
+            &CombatTuning::default(),
+        );
+        let shield_shattered = first_beat(&events).is_some_and(|beat| {
+            beat.target.as_ref().is_some_and(|target_ref| {
+                beat.wear.iter().any(|w| {
+                    w.owner.identifier == target_ref.identifier
+                        && w.outcome == shared::combat_beat::WearOutcomeReport::Broken
+                })
+            })
+        });
+        if shield_shattered {
+            hit_events = Some(events);
+            break;
+        }
+    }
+    let events = hit_events.expect("no load-bearing shield break found in 500 seeds");
 
-    target.traits.clear();
-    target.attributes.toughness = 5;
-    let shield = brittle_shield(4);
-    target.add_item(shield.clone());
-
-    let mut events: Vec<TaggedEvent> = Vec::new();
-    let mut rng = SmallRng::seed_from_u64(7);
-    let _ = attacker.attacks(
-        &mut target,
-        &mut rng,
-        &mut events,
-        shared::messages::Phase::DAY,
-        &CombatTuning::default(),
-    );
-
-    let beat = events
-        .iter()
-        .find_map(|e| match &e.payload {
-            MessagePayload::CombatBeat(b) => Some(b),
-            _ => None,
-        })
-        .expect("expected one CombatBeat emission");
+    let beat = first_beat(&events).expect("expected one CombatBeat emission");
     let shield_wear = beat
         .wear
         .iter()
