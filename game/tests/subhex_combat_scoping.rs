@@ -180,10 +180,11 @@ fn successful_flee_relocates_fleer_into_adjacent_sub() {
     assert!(fled_beat, "tuned fight must end with a flee");
 
     let original = hub_sub0;
-    let adjacent: Vec<Location> = areas::location::sub_neighbors(original)
-        .into_iter()
-        .flatten()
-        .collect();
+    let adjacent: Vec<Location> =
+        areas::location::sub_neighbors(&areas::hex::default_layout(), original)
+            .into_iter()
+            .flatten()
+            .collect();
 
     let relocated: Vec<&Character> = game
         .characters

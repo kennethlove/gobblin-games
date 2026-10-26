@@ -21,9 +21,8 @@ use world::terrain::Harshness;
 /// Snapshot of the area graph from one character's perspective at one
 /// moment in time. Built per planning call — do not cache across cycles.
 pub struct AreaGraph<'a> {
-    /// All known areas (whether represented in `area_details` or not).
-    /// Used to define the node set; missing details still produce a node
-    /// connected by topology, just with default-terrain cost.
+    /// Node set = the areas this game actually has (`area_details`,
+    /// zkp.5): N-hex layouts contribute exactly their own slots.
     pub areas: Vec<AreaId>,
     /// Character doing the planning. Used for stamina-cost computation.
     pub character: &'a Character,
@@ -40,7 +39,7 @@ impl<'a> AreaGraph<'a> {
             }
         }
         Self {
-            areas: AreaId::iter().into_iter().collect(),
+            areas: areas.iter().filter_map(|ad| ad.area).collect(),
             character,
             details,
         }

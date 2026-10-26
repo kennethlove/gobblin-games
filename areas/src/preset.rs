@@ -198,20 +198,16 @@ fn parse_preset(json: &str, expected_id: &str) -> Result<ArenaPreset, PresetErro
     Ok(preset)
 }
 
-/// The engine's adjacency (`AreaId::neighbors`) covers exactly the seven
-/// known areas, so a preset must list each exactly once, Hub first, at
-/// unique axial coordinates.
+/// A preset's slots define the arena (zkp.5): every listed area kind
+/// appears once, Hub first, at unique axial coordinates. There is no
+/// completeness rule — layouts smaller or larger than the default seven
+/// are legal, and adjacency follows the layout at runtime.
 fn validate_layout(areas: &[ArenaSlot]) -> Result<(), String> {
     use std::collections::HashSet;
 
     let kinds: HashSet<AreaId> = areas.iter().map(|s| s.area).collect();
     if kinds.len() != areas.len() {
         return Err("duplicate area kinds".to_string());
-    }
-    for kind in AreaId::iter().into_iter() {
-        if !kinds.contains(&kind) {
-            return Err(format!("missing area {kind}"));
-        }
     }
     if areas[0].area != AreaId::hub() {
         return Err("Hub must be the first area".to_string());
@@ -383,7 +379,7 @@ mod tests {
     }
 
     #[test]
-    fn preset_missing_area_is_rejected() {
+    fn preset_with_fewer_areas_is_valid() {
         let json = r#"{
             "id": "bad",
             "name": "Bad",
@@ -397,8 +393,9 @@ mod tests {
                 { "area": "Sector 5", "q": -1, "r": 0 }
             ]
         }"#;
-        let err = parse_preset(json, "bad").expect_err("missing area must fail");
-        assert!(err.to_string().contains("Sector 6"), "message: {err}");
+        let preset = parse_preset(json, "bad").expect("N<7 layout is legal (zkp.5)");
+        assert_eq!(preset.areas.len(), 6, "slots define the arena");
+        assert!(preset.areas.iter().all(|s| s.area != AreaId::sector6()));
     }
 
     #[test]
