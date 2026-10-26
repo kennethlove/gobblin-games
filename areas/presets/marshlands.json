@@ -7,43 +7,232 @@
       "area": "Hub",
       "q": 0,
       "r": 0,
-      "terrain": "Grasslands"
+      "terrain": "Grasslands",
+      "sub_tiles": [
+        {
+          "terrain": "Grasslands",
+          "feature": "Reedbank Commons",
+          "flavor": "The dry ground everyone fights over."
+        },
+        {
+          "terrain": "Grasslands",
+          "feature": "Causeway Head"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Mud Verge"
+        },
+        {
+          "terrain": "Grasslands",
+          "feature": "Drum Meadow"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Drowned Chapel"
+        },
+        {
+          "terrain": "Grasslands",
+          "feature": "Fen Edge Camp"
+        }
+      ]
     },
     {
       "area": "Sector 1",
       "q": 1,
       "r": -1,
-      "terrain": "Wetlands"
+      "terrain": "Wetlands",
+      "sub_tiles": [
+        {
+          "terrain": "Wetlands",
+          "feature": "Heron Sedge"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Slow Backwater"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Peat Diggings"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Bog Lanterns"
+        },
+        {
+          "terrain": "Forest",
+          "feature": "Willow Island",
+          "flavor": "Dry enough to sleep, if you do not mind the neighbors."
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Mire Steps"
+        }
+      ]
     },
     {
       "area": "Sector 2",
       "q": 1,
       "r": 0,
-      "terrain": "Wetlands"
+      "terrain": "Wetlands",
+      "sub_tiles": [
+        {
+          "terrain": "Wetlands",
+          "feature": "Blackwater Reach",
+          "flavor": "The water keeps whatever it takes."
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Sunken Wharf"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Eel Run"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Flooded Foundry"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Quicksand Bell"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Reedmaze"
+        }
+      ]
     },
     {
       "area": "Sector 3",
       "q": 0,
       "r": 1,
-      "terrain": "Wetlands"
+      "terrain": "Wetlands",
+      "sub_tiles": [
+        {
+          "terrain": "Wetlands",
+          "feature": "Mistford Shallows"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Standing Pools"
+        },
+        {
+          "terrain": "Forest",
+          "feature": "Tanglelight Grove",
+          "flavor": "The lights are not fire and not lanterns."
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Leech Terraces"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Fogline Docks"
+        },
+        {
+          "terrain": "Grasslands",
+          "feature": "Raised Field"
+        }
+      ]
     },
     {
       "area": "Sector 4",
       "q": -1,
       "r": 1,
-      "terrain": "Forest"
+      "terrain": "Forest",
+      "sub_tiles": [
+        {
+          "terrain": "Forest",
+          "feature": "High Dry Coppice",
+          "flavor": "One dry hill in a wet world."
+        },
+        {
+          "terrain": "Forest",
+          "feature": "Deadfall Lane"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Root Flood"
+        },
+        {
+          "terrain": "Forest",
+          "feature": "Fungal Rings"
+        },
+        {
+          "terrain": "Forest",
+          "feature": "Logjam Road"
+        },
+        {
+          "terrain": "Grasslands",
+          "feature": "Embankment Walk"
+        }
+      ]
     },
     {
       "area": "Sector 5",
       "q": -1,
       "r": 0,
-      "terrain": "Wetlands"
+      "terrain": "Wetlands",
+      "sub_tiles": [
+        {
+          "terrain": "Wetlands",
+          "feature": "Delta Fan"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Silt Banks"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Crooked Channel",
+          "flavor": "Maps disagree about where it goes."
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Drowned Colonnade"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Hollow Reeds"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Storm Levee"
+        }
+      ]
     },
     {
       "area": "Sector 6",
       "q": 0,
       "r": -1,
-      "terrain": "Wetlands"
+      "terrain": "Wetlands",
+      "sub_tiles": [
+        {
+          "terrain": "Wetlands",
+          "feature": "Nightwater"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Plague Pool"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Bulrush Bight"
+        },
+        {
+          "terrain": "Clearing",
+          "feature": "Salt Lick"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Sinking Manse"
+        },
+        {
+          "terrain": "Grasslands",
+          "feature": "Pilgrim's Way",
+          "flavor": "A raised path that only floods when it wants."
+        }
+      ]
     }
   ]
 }

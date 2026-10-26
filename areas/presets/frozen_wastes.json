@@ -7,43 +7,232 @@
       "area": "Hub",
       "q": 0,
       "r": 0,
-      "terrain": "Tundra"
+      "terrain": "Tundra",
+      "sub_tiles": [
+        {
+          "terrain": "Clearing",
+          "feature": "Thaw Ring",
+          "flavor": "The one bare circle left in the ice."
+        },
+        {
+          "terrain": "Clearing",
+          "feature": "Snow-post Gate"
+        },
+        {
+          "terrain": "Tundra",
+          "feature": "Frozen Pond"
+        },
+        {
+          "terrain": "Grasslands",
+          "feature": "Winter Grazing"
+        },
+        {
+          "terrain": "Clearing",
+          "feature": "Cairn Field"
+        },
+        {
+          "terrain": "Tundra",
+          "feature": "Rime Stones"
+        }
+      ]
     },
     {
       "area": "Sector 1",
       "q": 1,
       "r": -1,
-      "terrain": "Tundra"
+      "terrain": "Tundra",
+      "sub_tiles": [
+        {
+          "terrain": "Tundra",
+          "feature": "White Shelf"
+        },
+        {
+          "terrain": "Tundra",
+          "feature": "Sunken Trapline"
+        },
+        {
+          "terrain": "Tundra",
+          "feature": "Cracked Ice Run"
+        },
+        {
+          "terrain": "Forest",
+          "feature": "Sprigrove",
+          "flavor": "Green under snow; something still eats here."
+        },
+        {
+          "terrain": "Tundra",
+          "feature": "Wolf Thaw Cache"
+        },
+        {
+          "terrain": "Clearing",
+          "feature": "Burned Windbreak"
+        }
+      ]
     },
     {
       "area": "Sector 2",
       "q": 1,
       "r": 0,
-      "terrain": "Mountains"
+      "terrain": "Mountains",
+      "sub_tiles": [
+        {
+          "terrain": "Mountains",
+          "feature": "Frostspire Ledge",
+          "flavor": "The wind never stops up here."
+        },
+        {
+          "terrain": "Mountains",
+          "feature": "Collapsed Shafty"
+        },
+        {
+          "terrain": "Tundra",
+          "feature": "Ice Hollow"
+        },
+        {
+          "terrain": "Mountains",
+          "feature": "Scree Chimney"
+        },
+        {
+          "terrain": "Highlands",
+          "feature": "Greyhorn Saddle"
+        },
+        {
+          "terrain": "Tundra",
+          "feature": "Crevasse Camp"
+        }
+      ]
     },
     {
       "area": "Sector 3",
       "q": 0,
       "r": 1,
-      "terrain": "Tundra"
+      "terrain": "Tundra",
+      "sub_tiles": [
+        {
+          "terrain": "Tundra",
+          "feature": "Stillreach Flat"
+        },
+        {
+          "terrain": "Tundra",
+          "feature": "Aurora Post"
+        },
+        {
+          "terrain": "Wetlands",
+          "feature": "Slush Bogs",
+          "flavor": "Half water, half ice, all complaint."
+        },
+        {
+          "terrain": "Tundra",
+          "feature": "Frozen Fen"
+        },
+        {
+          "terrain": "Tundra",
+          "feature": "Snowdrift Marker"
+        },
+        {
+          "terrain": "Clearing",
+          "feature": "Abandoned Igloo Ring"
+        }
+      ]
     },
     {
       "area": "Sector 4",
       "q": -1,
       "r": 1,
-      "terrain": "Highlands"
+      "terrain": "Highlands",
+      "sub_tiles": [
+        {
+          "terrain": "Highlands",
+          "feature": "Wind-blast Bench",
+          "flavor": "Snow leaves the ridge, everything else stays."
+        },
+        {
+          "terrain": "Highlands",
+          "feature": "Crown Stones"
+        },
+        {
+          "terrain": "Mountains",
+          "feature": "Icefall Pitch"
+        },
+        {
+          "terrain": "Highlands",
+          "feature": "Old Fire Lookout"
+        },
+        {
+          "terrain": "Mountains",
+          "feature": "Blackrock Spine"
+        },
+        {
+          "terrain": "Grasslands",
+          "feature": "Melt Meadow"
+        }
+      ]
     },
     {
       "area": "Sector 5",
       "q": -1,
       "r": 0,
-      "terrain": "Mountains"
+      "terrain": "Mountains",
+      "sub_tiles": [
+        {
+          "terrain": "Mountains",
+          "feature": "Glacier Tongue",
+          "flavor": "It moves a hand's width a year."
+        },
+        {
+          "terrain": "Tundra",
+          "feature": "Blue Ice Cut"
+        },
+        {
+          "terrain": "Mountains",
+          "feature": "Frost Quarry"
+        },
+        {
+          "terrain": "Tundra",
+          "feature": "Winterkill Hollow"
+        },
+        {
+          "terrain": "Mountains",
+          "feature": "Stonefall Gate"
+        },
+        {
+          "terrain": "UrbanRuins",
+          "feature": "Frozen Pump House"
+        }
+      ]
     },
     {
       "area": "Sector 6",
       "q": 0,
       "r": -1,
-      "terrain": "Tundra"
+      "terrain": "Tundra",
+      "sub_tiles": [
+        {
+          "terrain": "Tundra",
+          "feature": "Long Dark Approach"
+        },
+        {
+          "terrain": "Tundra",
+          "feature": "Hail Scar"
+        },
+        {
+          "terrain": "Clearing",
+          "feature": "Sun Patch"
+        },
+        {
+          "terrain": "Tundra",
+          "feature": "Carrion Snow"
+        },
+        {
+          "terrain": "Highlands",
+          "feature": "Last Treeline"
+        },
+        {
+          "terrain": "Tundra",
+          "feature": "White Silence",
+          "flavor": "Nothing moves and nothing argues."
+        }
+      ]
     }
   ]
 }
