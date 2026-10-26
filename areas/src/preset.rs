@@ -58,6 +58,11 @@ pub struct ArenaSlot {
     /// six when present.
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "sub_hexes")]
     pub sub_tiles: Option<Vec<SubTile>>,
+    /// Optional pinned parent-area base terrain (5tz). Absent = the
+    /// create path leaves the record's serde default (Clearing), the
+    /// pre-5tz behavior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terrain: Option<world::terrain::BaseTerrain>,
 }
 
 /// A complete arena preset.
@@ -74,15 +79,30 @@ pub struct ArenaPreset {
     pub areas: Vec<ArenaSlot>,
 }
 
+/// `ArenaPreset::instantiate()`'s per-slot row: (area, display name,
+/// sub-tiles, axial coordinate, pinned base terrain).
+///
+/// WHY: a type alias because CI runs clippy with `-D warnings` and the
+/// 5-tuple in the signature trips `type_complexity` (PR #120); the
+/// tuple itself is exactly what callers zip over, so the shape stays.
+pub type InstantiatedSlot = (
+    AreaId,
+    String,
+    Vec<SubTile>,
+    crate::hex::Axial,
+    Option<world::terrain::BaseTerrain>,
+);
+
 impl ArenaPreset {
     /// Concrete `(area, display name, sub-tiles)` triples for a fresh
     /// game, in slot order. Slots with a fixed name keep it; the rest
     /// draw from the same generated-name bank the pre-preset flow used,
     /// so the default preset behaves exactly like the old inline flow.
     /// Slots without authored sub-tiles yield an empty sub-tile list.
-    /// Returns `(area, name, sub_tiles, axial)` — the coordinate rides
-    /// the caller into the area record (zkp.2).
-    pub fn instantiate(&self) -> Vec<(AreaId, String, Vec<SubTile>, crate::hex::Axial)> {
+    /// Returns `(area, name, sub_tiles, axial, base terrain)` — the
+    /// coordinate rides the caller into the area record (zkp.2); the
+    /// pinned terrain rides the caller into the record too (5tz).
+    pub fn instantiate(&self) -> Vec<InstantiatedSlot> {
         let generated = crate::generate_area_names();
         debug_assert_eq!(
             generated.len(),
@@ -99,6 +119,7 @@ impl ArenaPreset {
                     slot.name.clone().unwrap_or(fallback),
                     sub_tiles,
                     crate::hex::Axial::new(slot.q, slot.r),
+                    slot.terrain,
                 )
             })
             .collect()
@@ -137,10 +158,18 @@ impl fmt::Display for PresetError {
 
 /// The in-repo preset registry: `(id, raw JSON)`. Adding a preset = one
 /// JSON file in `areas/presets/` + one line here.
-const REGISTRY: &[(&str, &str)] = &[(
-    DEFAULT_PRESET_ID,
-    include_str!("../presets/classic_hex.json"),
-)];
+const REGISTRY: &[(&str, &str)] = &[
+    (
+        DEFAULT_PRESET_ID,
+        include_str!("../presets/classic_hex.json"),
+    ),
+    (
+        "frozen-wastes",
+        include_str!("../presets/frozen_wastes.json"),
+    ),
+    ("marshlands", include_str!("../presets/marshlands.json")),
+    ("ruined-city", include_str!("../presets/ruined_city.json")),
+];
 
 /// Every preset id in the registry.
 pub fn preset_ids() -> Vec<&'static str> {
@@ -291,7 +320,7 @@ mod tests {
             err,
             PresetError::UnknownId {
                 requested: "volcano".to_string(),
-                available: vec![DEFAULT_PRESET_ID.to_string()],
+                available: preset_ids().into_iter().map(str::to_string).collect(),
             }
         );
         let message = err.to_string();
@@ -345,9 +374,12 @@ mod tests {
         assert_eq!(triples.len(), 7);
         assert_eq!(triples[0].0, AreaId::hub());
         assert_eq!(triples[0].1, "The Hub".to_string());
-        let kinds: HashSet<AreaId> = triples.iter().map(|(area, _, _, _)| *area).collect();
+        let kinds: HashSet<AreaId> = triples.iter().map(|(area, _, _, _, _)| *area).collect();
         assert_eq!(kinds.len(), 7);
-        let names: HashSet<String> = triples.iter().map(|(_, name, _, _)| name.clone()).collect();
+        let names: HashSet<String> = triples
+            .iter()
+            .map(|(_, name, _, _, _)| name.clone())
+            .collect();
         assert_eq!(names.len(), 7);
     }
 
@@ -543,7 +575,7 @@ mod tests {
         assert!(
             triples
                 .iter()
-                .all(|(_, _, subs, _)| subs.len() == SubTriangle::COUNT)
+                .all(|(_, _, subs, _, _)| subs.len() == SubTriangle::COUNT)
         );
     }
 }
@@ -638,6 +670,7 @@ mod arena_generation_poc {
                 r,
                 name: Some(names[i].clone()),
                 sub_tiles: Some(sub_tiles[i].clone()),
+                terrain: Some(terrains[i].base),
             });
         }
 
@@ -707,5 +740,34 @@ mod arena_generation_poc {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod terrain_preset_tests {
+    use super::*;
+    use world::terrain::BaseTerrain;
+
+    #[test]
+    fn frozen_wastes_pins_hub_terrain_and_flows_through_instantiate() {
+        let preset = load_preset("frozen-wastes").expect("preset loads");
+        assert_eq!(
+            preset.areas[0].terrain,
+            Some(BaseTerrain::Tundra),
+            "hub slot carries its pinned terrain"
+        );
+        let quads = preset.instantiate();
+        assert_eq!(quads.len(), 7);
+        assert_eq!(quads[0].4, Some(BaseTerrain::Tundra));
+    }
+
+    #[test]
+    fn classic_preset_keeps_unpinned_terrain() {
+        let preset = default_preset();
+        assert!(
+            preset.areas.iter().all(|slot| slot.terrain.is_none()),
+            "the default preset pins no terrain (today's behavior)"
+        );
+        assert!(preset.instantiate().iter().all(|q| q.4.is_none()));
     }
 }

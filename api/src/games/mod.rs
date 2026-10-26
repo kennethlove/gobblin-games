@@ -101,6 +101,7 @@ async fn create_game_area(
     display_name: &str,
     sub_tiles: &[SubTile],
     axial: Axial,
+    terrain: Option<BaseTerrain>,
     db: &Surreal<Any>,
 ) -> Result<GameArea, AppError> {
     let identifier = Uuid::new_v4().to_string();
@@ -130,6 +131,15 @@ async fn create_game_area(
     // field declaration needed; schemas/area.surql documents it.
     body["axial"] = serde_json::to_value(axial)
         .map_err(|e| AppError::InternalServerError(format!("Failed to encode axial: {}", e)))?;
+    // Parent-area terrain rides the area record (5tz): AreaDetails
+    // hydrates it (serde default) straight from `SELECT *`. Absent =
+    // serde default (Clearing) = pre-5tz behavior.
+    if let Some(base) = terrain {
+        let rolled = world::terrain::TerrainType::random_with_base(base, &mut rand::rng());
+        body["terrain"] = serde_json::to_value(&rolled).map_err(|e| {
+            AppError::InternalServerError(format!("Failed to encode terrain: {}", e))
+        })?;
+    }
     db.query("UPSERT $rid CONTENT $body")
         .bind(("rid", area_id.clone()))
         .bind(("body", body))
@@ -144,6 +154,7 @@ async fn create_game_area_edge(
     display_name: &str,
     sub_tiles: &[SubTile],
     axial: Axial,
+    terrain: Option<BaseTerrain>,
     game_identifier: Uuid,
     db: &Surreal<Any>,
 ) -> Result<GameAreaEdge, AppError> {
@@ -171,7 +182,7 @@ async fn create_game_area_edge(
         Uuid::from_str(&identifier.to_string())
             .map_err(|e| AppError::BadRequest(format!("Invalid area UUID: {}", e)))?
     } else {
-        match create_game_area(area, display_name, sub_tiles, axial, db).await {
+        match create_game_area(area, display_name, sub_tiles, axial, terrain, db).await {
             Ok(game_area) => Uuid::from_str(game_area.identifier.as_str())
                 .map_err(|e| AppError::BadRequest(format!("Invalid game area UUID: {}", e)))?,
             Err(_) => {
@@ -201,12 +212,18 @@ async fn create_game_area_edge(
 }
 
 /// Create areas for a game, including spawning items within them.
+// WHY: 8 args trip clippy::too_many_arguments under CI's -D warnings.
+// The positional order IS the narrative (identity, shape, coordinate,
+// pinned terrain, content, db) and every caller builds the row for one
+// fresh area; regroup into a params struct when a ninth arg appears.
+#[allow(clippy::too_many_arguments)]
 pub async fn create_area(
     game_identifier: &str,
     area: AreaId,
     display_name: String,
     sub_tiles: Vec<SubTile>,
     axial: Axial,
+    terrain: Option<BaseTerrain>,
     num_items: u32,
     db: &Surreal<Any>,
 ) -> Result<(), AppError> {
@@ -217,6 +234,7 @@ pub async fn create_area(
         display_name.as_str(),
         &sub_tiles,
         axial,
+        terrain,
         game_uuid,
         db,
     )
@@ -230,7 +248,7 @@ pub async fn create_area(
         };
         AppError::InternalServerError(format!("Failed to create game area: {}", detail))
     })?;
-    let item_futures = (0..num_items).map(|_| add_item_to_area(&game_area, None, db));
+    let item_futures = (0..num_items).map(|_| add_item_to_area(&game_area, terrain, db));
     let item_results = futures::future::join_all(item_futures).await;
     if let Some(err) = item_results.into_iter().find_map(Result::err) {
         let detail = match &err {

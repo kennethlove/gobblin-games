@@ -1,0 +1,49 @@
+{
+  "id": "frozen-wastes",
+  "name": "Frozen Wastes",
+  "description": "Seven hexes under permanent frost: Tundra and Frozen uplands with a Cold-wrapped hub.",
+  "areas": [
+    {
+      "area": "Hub",
+      "q": 0,
+      "r": 0,
+      "terrain": "Tundra"
+    },
+    {
+      "area": "Sector 1",
+      "q": 1,
+      "r": -1,
+      "terrain": "Tundra"
+    },
+    {
+      "area": "Sector 2",
+      "q": 1,
+      "r": 0,
+      "terrain": "Mountains"
+    },
+    {
+      "area": "Sector 3",
+      "q": 0,
+      "r": 1,
+      "terrain": "Tundra"
+    },
+    {
+      "area": "Sector 4",
+      "q": -1,
+      "r": 1,
+      "terrain": "Highlands"
+    },
+    {
+      "area": "Sector 5",
+      "q": -1,
+      "r": 0,
+      "terrain": "Mountains"
+    },
+    {
+      "area": "Sector 6",
+      "q": 0,
+      "r": -1,
+      "terrain": "Tundra"
+    }
+  ]
+}

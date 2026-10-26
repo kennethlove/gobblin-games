@@ -1,0 +1,49 @@
+{
+  "id": "ruined-city",
+  "name": "Ruined City",
+  "description": "A dead city's bones: UrbanRuins districts around a Clearing where the square still holds.",
+  "areas": [
+    {
+      "area": "Hub",
+      "q": 0,
+      "r": 0,
+      "terrain": "Clearing"
+    },
+    {
+      "area": "Sector 1",
+      "q": 1,
+      "r": -1,
+      "terrain": "UrbanRuins"
+    },
+    {
+      "area": "Sector 2",
+      "q": 1,
+      "r": 0,
+      "terrain": "UrbanRuins"
+    },
+    {
+      "area": "Sector 3",
+      "q": 0,
+      "r": 1,
+      "terrain": "UrbanRuins"
+    },
+    {
+      "area": "Sector 4",
+      "q": -1,
+      "r": 1,
+      "terrain": "Badlands"
+    },
+    {
+      "area": "Sector 5",
+      "q": -1,
+      "r": 0,
+      "terrain": "UrbanRuins"
+    },
+    {
+      "area": "Sector 6",
+      "q": 0,
+      "r": -1,
+      "terrain": "UrbanRuins"
+    }
+  ]
+}
