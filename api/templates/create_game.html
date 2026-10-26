@@ -62,7 +62,7 @@
         <option value="{{ preset.id }}"{% if preset.id == default_arena_id %} selected{% endif %} title="{{ preset.description }}">{{ preset.name }}</option>
         {% endfor %}
       </select>
-      <p class="text-xs text-gray-500 mt-1">The map every goblin fights on.</p>
+      <p class="text-xs text-gray-500 mt-1">The map every goblin fights on. <span id="arena-size-hint"></span></p>
     </div>
 
     {% if goblins %}
@@ -90,5 +90,26 @@
       </span>
     </button>
   </form>
+  <script>
+    // WHY: zkp.4 — arena size scales with goblin count as a DEFAULT
+    // SUGGESTION only (spike Q2); the Arena select above is never
+    // overridden. Hexes = ceil(goblins / 3) clamped to 5..10, matching
+    // current playtest density (~3 goblins per hex: 128 on 42 cells).
+    function suggestHexes(teams, perTeam) {
+      var goblins = Math.max(0, teams * perTeam);
+      return Math.min(10, Math.max(5, Math.ceil(goblins / 3)));
+    }
+    function updateArenaHint() {
+      var teams = parseInt(document.getElementById("team_count").value, 10) || 0;
+      var perTeam = parseInt(document.getElementById("goblins_per_team").value, 10) || 0;
+      document.getElementById("arena-size-hint").textContent =
+        " Suggested arena size for " + teams * perTeam + " goblins: " +
+        suggestHexes(teams, perTeam) + " hexes (5 to 10).";
+    }
+    ["team_count", "goblins_per_team"].forEach(function (id) {
+      document.getElementById(id).addEventListener("input", updateArenaHint);
+    });
+    updateArenaHint();
+  </script>
 </div>
 {% endblock %}
