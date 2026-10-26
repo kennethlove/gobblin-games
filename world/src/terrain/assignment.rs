@@ -30,6 +30,14 @@ impl TerrainType {
         TerrainType { base, descriptors }
     }
 
+    /// Terrain with a pinned base and 0-2 compatible descriptors (the
+    /// same pool `random` rolls from) - preset-pinned areas (5tz) use
+    /// this; an absent pin keeps `random`'s free roll.
+    pub fn random_with_base(base: BaseTerrain, rng: &mut impl Rng) -> Self {
+        let descriptors = Self::compatible_descriptors_for(base, rng);
+        TerrainType { base, descriptors }
+    }
+
     /// Generate random Moderate harshness terrain
     pub fn random_moderate(rng: &mut impl Rng) -> Self {
         let moderate_terrains = [
@@ -187,6 +195,21 @@ mod tests {
                 terrain.base.harshness(),
                 terrain.base
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod random_with_base_tests {
+    use super::*;
+
+    #[test]
+    fn random_with_base_pins_the_base() {
+        let mut rng = rand::rng();
+        for _ in 0..16 {
+            let t = TerrainType::random_with_base(BaseTerrain::Tundra, &mut rng);
+            assert_eq!(t.base, BaseTerrain::Tundra);
+            assert!(t.descriptors.len() <= 2);
         }
     }
 }

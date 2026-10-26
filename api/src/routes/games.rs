@@ -1195,20 +1195,22 @@ pub async fn create_game_post_handler(
     }
 
     let base_item_count = shared::ItemQuantity::default().base_item_count();
-    let area_futures = arena
-        .instantiate()
-        .into_iter()
-        .map(|(area, name, sub_tiles, axial)| {
-            api::games::create_area(
-                &game_identifier,
-                area,
-                name,
-                sub_tiles,
-                axial,
-                base_item_count,
-                &user_db,
-            )
-        });
+    let area_futures =
+        arena
+            .instantiate()
+            .into_iter()
+            .map(|(area, name, sub_tiles, axial, terrain)| {
+                api::games::create_area(
+                    &game_identifier,
+                    area,
+                    name,
+                    sub_tiles,
+                    axial,
+                    terrain,
+                    base_item_count,
+                    &user_db,
+                )
+            });
     let area_results = futures::future::join_all(area_futures).await;
     if area_results.into_iter().any(|r| r.is_err()) {
         return Redirect::to("/games/new").into_response();
