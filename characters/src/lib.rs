@@ -1437,20 +1437,21 @@ impl Character {
     }
 
     /// Stamina gate shared by the survival executors (`SeekShelter`,
-    /// `Forage`). Mirrors the travel path: check `calculate_stamina_cost`
-    /// first and deny with an exhausted event when the pool cannot cover
-    /// it. Returns `false` (and pushes the denial) when the action must
-    /// not run. The act path does not deduct stamina generically — only
-    /// travel and combat do — so this helper deducts the cost itself once
-    /// the check passes.
+    /// `Forage`, `DrinkFromTerrain`). Mirrors the travel path: price the
+    /// action on the tile underfoot (`stamina_cost_on`) first and deny
+    /// with an exhausted event when the pool cannot cover it. Returns
+    /// `false` (and pushes the denial) when the action must not run. The
+    /// act path does not deduct stamina generically — only travel and
+    /// combat do — so this helper deducts the cost itself once the
+    /// check passes.
     fn spend_stamina_for(
         &mut self,
         action: &Action,
-        terrain: &world::terrain::TerrainType,
+        base: world::terrain::BaseTerrain,
         verb: &str,
         events: &mut Vec<TaggedEvent>,
     ) -> bool {
-        let cost = calculate_stamina_cost(action, terrain, self);
+        let cost = stamina_cost_on(action, base, self);
         if self.stamina < cost {
             let line = format!(
                 "🥵 {} is too exhausted to {}, lacks stamina",
@@ -1512,17 +1513,12 @@ impl Character {
         rng: &mut impl Rng,
         events: &mut Vec<TaggedEvent>,
     ) {
-        if !self.spend_stamina_for(
-            &Action::SeekShelter,
-            &area_details.terrain,
-            "seek shelter",
-            events,
-        ) {
+        let terrain = areas::location::terrain_at(self.location, area_details);
+        if !self.spend_stamina_for(&Action::SeekShelter, terrain, "seek shelter", events) {
             return;
         }
 
         let builder = self.traits.contains(&crate::traits::Trait::Builder);
-        let terrain = areas::location::terrain_at(self.location, area_details);
         let mut shelter = crate::incidents::find_shelter(
             self.attributes.intelligence,
             self.attributes.strength,
@@ -1597,14 +1593,12 @@ impl Character {
         rng: &mut impl Rng,
         events: &mut Vec<TaggedEvent>,
     ) {
-        if !self.spend_stamina_for(&Action::Forage, &area_details.terrain, "forage", events) {
+        let terrain = areas::location::terrain_at(self.location, area_details);
+        if !self.spend_stamina_for(&Action::Forage, terrain, "forage", events) {
             return;
         }
 
-        let richness = areas::forage::forage_richness(areas::location::terrain_at(
-            self.location,
-            area_details,
-        ));
+        let richness = areas::forage::forage_richness(terrain);
         // ResourcefulForager adds one d20 attempt to the loop.
         let attempts = richness
             + u8::from(
@@ -1670,12 +1664,8 @@ impl Character {
         rng: &mut impl Rng,
         events: &mut Vec<TaggedEvent>,
     ) {
-        if !self.spend_stamina_for(
-            &Action::DrinkFromTerrain,
-            &area_details.terrain,
-            "drink",
-            events,
-        ) {
+        let terrain = areas::location::terrain_at(self.location, area_details);
+        if !self.spend_stamina_for(&Action::DrinkFromTerrain, terrain, "drink", events) {
             return;
         }
 
@@ -2376,6 +2366,21 @@ pub fn calculate_stamina_cost(
     terrain: &world::terrain::TerrainType,
     character: &Character,
 ) -> u32 {
+    stamina_cost_on(action, terrain.base, character)
+}
+
+/// The stamina price of `action` priced on a specific tile's
+/// [`BaseTerrain`] (mhb): the terrain-keyed survival actions (`SeekShelter`,
+/// `Forage`, `DrinkFromTerrain`) pay the tile underfoot, not the whole
+/// area's terrain. WHY: crossing costs moved to sub-tile pricing in PRs
+/// #75/#76 and shelter/forage/drink RESOLUTION already read `terrain_at`
+/// — only the price lagged. Area-level planning (move estimates, cycle
+/// runways) keeps [`calculate_stamina_cost`] unchanged.
+pub fn stamina_cost_on(
+    action: &Action,
+    base: world::terrain::BaseTerrain,
+    character: &Character,
+) -> u32 {
     // Base costs for each action type
     let base_cost: f32 = match action {
         Action::Move(_) => 20.0,
@@ -2409,10 +2414,10 @@ pub fn calculate_stamina_cost(
     }
 
     // Terrain multiplier from movement_cost
-    let terrain_multiplier = terrain.base.movement_cost();
+    let terrain_multiplier = base.movement_cost();
 
     // Affinity modifier: 0.8 if character has affinity for this terrain, else 1.0
-    let affinity_modifier = if character.terrain_affinity.contains(&terrain.base) {
+    let affinity_modifier = if character.terrain_affinity.contains(&base) {
         0.8
     } else {
         1.0
@@ -2438,6 +2443,32 @@ pub fn calculate_stamina_cost(
 /// a 30/40 crossing prices at 15 + 20 = 35.
 pub fn crossing_stamina_cost(from_standard_cost: u32, to_standard_cost: u32) -> u32 {
     from_standard_cost.div_ceil(2) + to_standard_cost.div_ceil(2)
+}
+
+#[test]
+fn terrain_keyed_actions_price_the_tile_underfoot() {
+    // mhb acceptance: the tile-priced entry point differs from the
+    // area-level one, and the values follow BaseTerrain::movement_cost.
+    // Pin the modifiers (no affinities, full health) so the multipliers
+    // are movement_cost alone: Desert 2.0 -> 15 x 2.0 = 30;
+    // Grasslands 0.9 -> 13.5 rounds to 14.
+    let mut me = Character::new("Grub".into(), None, None);
+    me.terrain_affinity.clear();
+    me.blood = 1000; // full health: desperation multiplier = 1.0
+    let on_desert = stamina_cost_on(&Action::Forage, world::terrain::BaseTerrain::Desert, &me);
+    let on_grass = stamina_cost_on(
+        &Action::Forage,
+        world::terrain::BaseTerrain::Grasslands,
+        &me,
+    );
+    let area_level = calculate_stamina_cost(&Action::Forage, &areas::default_terrain(), &me);
+
+    assert_eq!(on_desert, 30);
+    assert_eq!(on_grass, 14);
+    assert_ne!(
+        on_desert, area_level,
+        "a tile that is not the area's base terrain must price differently than the area"
+    );
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -4095,7 +4126,13 @@ mod tests {
             flavor: None,
         }];
         let before_stamina = me.stamina;
-        let expected_cost = crate::calculate_stamina_cost(&Action::Forage, &area.terrain, &me);
+        let sub = areas::location::terrain_at(me.location, &area);
+        let expected_cost = crate::stamina_cost_on(&Action::Forage, sub, &me);
+        let area_cost = crate::calculate_stamina_cost(&Action::Forage, &area.terrain, &me);
+        assert_ne!(
+            expected_cost, area_cost,
+            "forest tile (1.3) must price differently than the desert area (2.0)"
+        );
         let mut rng = SmallRng::seed_from_u64(3);
         let mut events: Vec<TaggedEvent> = Vec::new();
 
