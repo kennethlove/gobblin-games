@@ -1078,8 +1078,11 @@ impl Character {
                 Action::DrinkFromTerrain => {
                     self.act_drink_from_terrain(area_details, rng, events);
                 }
-                // Eating executors are deferred; these stay no-ops.
-                Action::Eat(_) | Action::DrinkItem(_) => {}
+                Action::Eat(item) => {
+                    self.act_eat(item, rng, events);
+                }
+                // Next slice: DrinkItem executor (stacked on this PR).
+                Action::DrinkItem(_) => {}
                 Action::Sleep { duration_phases } => {
                     // PR1 Task 9a: roll shelter quality at sleep start (we6l)
                     let terrain = areas::location::terrain_at(self.location, area_details);
@@ -1702,6 +1705,68 @@ impl Character {
                 },
                 source: shared::messages::DrinkSource::Terrain { area },
                 debt_recovered,
+            },
+        ));
+    }
+
+    /// Eat an inventory Food item (spec §16): pick the best when the
+    /// action carries `None` (per the action's contract), destroy it
+    /// (`remove_item`), drop `hunger` by the item's `food_value` through
+    /// [`crate::survival::eat_food`] (starvation-stamp clear), roll the
+    /// spec's 5% contamination (silent on failure; Poisoned visibility
+    /// rides the affliction machinery), emit one `Ate` line with the
+    /// recovered debt. No stamina guard — eating what you carry costs no
+    /// effort (Forage and terrain drinking do).
+    fn act_eat(
+        &mut self,
+        picked: Option<world::items::Item>,
+        rng: &mut impl Rng,
+        events: &mut Vec<TaggedEvent>,
+    ) {
+        use world::items::OwnsItems;
+        let item = match picked {
+            Some(item) => item,
+            None => match self
+                .items
+                .iter()
+                .filter(|i| i.item_type.is_food())
+                .max_by_key(|i| i.item_type.food_value().unwrap_or(0))
+            {
+                Some(best) => best.clone(),
+                None => return,
+            },
+        };
+        let Some(value) = item.item_type.food_value() else {
+            return;
+        };
+        if self.remove_item(&item).is_err() {
+            return;
+        }
+        crate::survival::eat_food(self, value);
+
+        // Spec §16: 5% base contamination for Eat(item).
+        if rng.random_range(0..100) < 5 {
+            self.try_acquire_affliction(AfflictionDraft {
+                kind: AfflictionKind::Poisoned,
+                body_part: None,
+                severity: Severity::Moderate,
+                source: AfflictionSource::Environmental,
+                trapped_metadata: None,
+            });
+        }
+
+        events.push(TaggedEvent::new(
+            format!("{} eats the {}", self.name, item.name),
+            MessagePayload::Ate {
+                character: CharacterRef {
+                    identifier: self.identifier.clone().into(),
+                    name: self.name.clone(),
+                },
+                item: ItemRef {
+                    identifier: item.identifier.clone().into(),
+                    name: item.name.clone(),
+                },
+                debt_recovered: value,
             },
         ));
     }
@@ -2826,6 +2891,48 @@ mod tests {
         }
         // Contamination (15%) is seed-dependent — Poisoned visibility is
         // covered by the affliction/band machinery, not asserted here.
+    }
+
+    #[test]
+    fn eat_consumes_food_item_and_reports_debt() {
+        let mut t = Character::new("Grubbit".to_string(), None, None);
+        t.hunger = 4; // Starving
+        t.starving_since_day = Some(1);
+        let food = world::items::Item::new(
+            "Dried Grub",
+            world::items::ItemType::Food(3),
+            world::items::ItemRarity::Common,
+            5,
+            world::items::Attribute::Strength,
+            0,
+        );
+        t.items.push(food.clone());
+        let mut rng = SmallRng::seed_from_u64(11);
+        let mut events: Vec<TaggedEvent> = vec![];
+
+        t.act_eat(Some(food.clone()), &mut rng, &mut events);
+
+        assert!(
+            t.items.iter().all(|i| i.identifier != food.identifier),
+            "the eaten item is destroyed"
+        );
+        assert_eq!(t.hunger, 4 - 3, "food_value points off the hunger bar");
+        assert!(t.starving_since_day.is_none(), "eat clears the stamp");
+        assert_eq!(events.len(), 1, "one Ate line per meal");
+        match &events[0].payload {
+            MessagePayload::Ate {
+                character,
+                item,
+                debt_recovered,
+            } => {
+                assert_eq!(character.name, "Grubbit");
+                assert_eq!(item.name, "Dried Grub");
+                assert_eq!(*debt_recovered, 3);
+            }
+            other => panic!("expected Ate, got {other:?}"),
+        }
+        // 5% contamination is seed-dependent here — see the affliction
+        // machinery tests for Poisoned visibility.
     }
 
     #[test]
