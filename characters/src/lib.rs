@@ -1081,8 +1081,9 @@ impl Character {
                 Action::Eat(item) => {
                     self.act_eat(item, rng, events);
                 }
-                // Next slice: DrinkItem executor (stacked on this PR).
-                Action::DrinkItem(_) => {}
+                Action::DrinkItem(item) => {
+                    self.act_drink_item(item, rng, events);
+                }
                 Action::Sleep { duration_phases } => {
                     // PR1 Task 9a: roll shelter quality at sleep start (we6l)
                     let terrain = areas::location::terrain_at(self.location, area_details);
@@ -1765,6 +1766,62 @@ impl Character {
                 item: ItemRef {
                     identifier: item.identifier.clone().into(),
                     name: item.name.clone(),
+                },
+                debt_recovered: value,
+            },
+        ));
+    }
+
+    /// Drink an inventory Water item (spec §16 "same shape" as Eat):
+    /// pick the best when `None` (per the action's contract), destroy it,
+    /// drop `thirst` by `water_value` through
+    /// [`crate::survival::drink_water`] (dehydration-stamp clear), emit
+    /// one `Drank { source: Item }` line with the recovered debt. No
+    /// stamina guard — same as eating from inventory.
+    ///
+    /// Spec lists contamination for Eat (5%), Forage (10%) and *terrain*
+    /// Drink (15%) only — item water rolls nothing. Raise with Kenneth
+    /// if carried water should match the terrain roll.
+    fn act_drink_item(
+        &mut self,
+        picked: Option<world::items::Item>,
+        rng: &mut impl Rng,
+        events: &mut Vec<TaggedEvent>,
+    ) {
+        use world::items::OwnsItems;
+        let item = match picked {
+            Some(item) => item,
+            None => match self
+                .items
+                .iter()
+                .filter(|i| i.item_type.is_water())
+                .max_by_key(|i| i.item_type.water_value().unwrap_or(0))
+            {
+                Some(best) => best.clone(),
+                None => return,
+            },
+        };
+        let Some(value) = item.item_type.water_value() else {
+            return;
+        };
+        if self.remove_item(&item).is_err() {
+            return;
+        }
+        crate::survival::drink_water(self, value);
+        let _ = rng; // no roll: the spec lists no contamination for item water
+
+        events.push(TaggedEvent::new(
+            format!("{} drinks the {}", self.name, item.name),
+            MessagePayload::Drank {
+                character: CharacterRef {
+                    identifier: self.identifier.clone().into(),
+                    name: self.name.clone(),
+                },
+                source: shared::messages::DrinkSource::Item {
+                    item: ItemRef {
+                        identifier: item.identifier.clone().into(),
+                        name: item.name.clone(),
+                    },
                 },
                 debt_recovered: value,
             },
@@ -2933,6 +2990,46 @@ mod tests {
         }
         // 5% contamination is seed-dependent here — see the affliction
         // machinery tests for Poisoned visibility.
+    }
+
+    #[test]
+    fn drink_item_satesses_thirst_and_reports_debt() {
+        let mut t = Character::new("Guzzlop".to_string(), None, None);
+        t.thirst = 4; // Dehydrated
+        t.dehydrated_since_day = Some(1);
+        let water = world::items::Item::new(
+            "Canteen",
+            world::items::ItemType::Water(2),
+            world::items::ItemRarity::Common,
+            5,
+            world::items::Attribute::Strength,
+            0,
+        );
+        t.items.push(water.clone());
+        let mut rng = SmallRng::seed_from_u64(13);
+        let mut events: Vec<TaggedEvent> = vec![];
+
+        t.act_drink_item(Some(water.clone()), &mut rng, &mut events);
+
+        assert!(
+            t.items.iter().all(|i| i.identifier != water.identifier),
+            "the drunk item is destroyed"
+        );
+        assert_eq!(t.thirst, 4 - 2, "water_value points off the thirst bar");
+        assert!(t.dehydrated_since_day.is_none(), "drink clears the stamp");
+        assert_eq!(events.len(), 1, "one Drank line per drink");
+        match &events[0].payload {
+            MessagePayload::Drank {
+                character,
+                source,
+                debt_recovered,
+            } => {
+                assert_eq!(character.name, "Guzzlop");
+                assert_eq!(*debt_recovered, 2);
+                assert!(matches!(source, shared::messages::DrinkSource::Item { .. }));
+            }
+            other => panic!("expected Drank, got {other:?}"),
+        }
     }
 
     #[test]
