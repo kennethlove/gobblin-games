@@ -67,6 +67,13 @@ const THIRST_PATTERN_LOW: [u8; SURVIVAL_TICKS_PER_DAY] = [1, 0, 0, 1, 0, 0];
 const THIRST_PATTERN_MID: [u8; SURVIVAL_TICKS_PER_DAY] = [1, 1, 0, 1, 1, 0];
 const THIRST_PATTERN_HIGH: [u8; SURVIVAL_TICKS_PER_DAY] = [2, 2, 0, 2, 2, 0];
 
+/// Points one full sate restores (terrain drink here; meals should use
+/// the same knob). WHY 2: the bars run 6 ticks/day with a mid tier of
+/// +4/day, so 2 points x 2 sates covers the day — 2 eats + 2 drinks per
+/// day at base rate, 3-4/day at the high tier (mods still bite). Tune
+/// here; `Drank.debt_recovered` reports whatever this is set to.
+pub const SATIATE_AMOUNT: u8 = 2;
+
 /// Advances hunger/thirst bars on a survival-tick hour. `tick_index` is
 /// the position of the current hour in `survival_tick_hours` (0..6).
 pub fn tick_survival(
@@ -117,7 +124,7 @@ pub fn tick_survival(
 }
 
 /// Ceiling growth for the day-scaled drain: day 1 = `base_units`, then
-/// × `growth_pct` per starvation/dehydration day (12, 15, 19, 24, 30 …).
+/// x `growth_pct` per starvation/dehydration day (12, 15, 19, 24, 30 ...).
 pub fn daily_drain_units(base_units: u32, growth_pct: u32, days: u16) -> u32 {
     if days == 0 {
         return 0;
@@ -134,7 +141,7 @@ pub fn drain_units_for_tick(daily_units: u32, tick_index: usize) -> u32 {
     (daily_units * (i + 1)) / n - (daily_units * i) / n
 }
 
-/// Applies the day-scaled starvation drain (damage units × 10 blood) on
+/// Applies the day-scaled starvation drain (damage units x 10 blood) on
 /// survival-tick hours. Returns the HP lost this tick (0 if not starving).
 /// Tracks the first starving day on the character; eating clears it.
 pub fn apply_starvation_drain(
@@ -156,7 +163,7 @@ pub fn apply_starvation_drain(
     hp
 }
 
-/// Applies the day-scaled dehydration drain (damage units × 10 blood).
+/// Applies the day-scaled dehydration drain (damage units x 10 blood).
 /// Independent of starvation (own day stamp).
 pub fn apply_dehydration_drain(
     character: &mut Character,
@@ -295,7 +302,7 @@ mod tests {
     fn survival_tick_low_strength_follows_two_per_day_pattern() {
         let mut t = baseline_character();
         t.attributes.strength = 20; // low
-        // Pattern [1,0,0,1,0,0] → 2 hunger/day (old parity behavior).
+        // Pattern [1,0,0,1,0,0] -> 2 hunger/day (old parity behavior).
         for (tick, expected) in [(0, 1), (1, 1), (2, 1), (3, 2), (4, 2), (5, 2)] {
             tick_survival(&mut t, &Weather::Clear, false, tick);
             assert_eq!(t.hunger, expected, "after tick {tick}");

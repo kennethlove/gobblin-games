@@ -1075,8 +1075,11 @@ impl Character {
                 Action::Forage => {
                     self.act_forage(area_details, rng, events);
                 }
-                // Drinking/eating executors are deferred; these stay no-ops.
-                Action::DrinkFromTerrain | Action::Eat(_) | Action::DrinkItem(_) => {}
+                Action::DrinkFromTerrain => {
+                    self.act_drink_from_terrain(area_details, rng, events);
+                }
+                // Eating executors are deferred; these stay no-ops.
+                Action::Eat(_) | Action::DrinkItem(_) => {}
                 Action::Sleep { duration_phases } => {
                     // PR1 Task 9a: roll shelter quality at sleep start (we6l)
                     let terrain = areas::location::terrain_at(self.location, area_details);
@@ -1645,6 +1648,60 @@ impl Character {
                 area,
                 success,
                 debt_recovered: 0,
+            },
+        ));
+    }
+
+    /// Terrain drink (cc7): drink your fill from a live water source —
+    /// `SATIATE_AMOUNT` points of thirst off + drain stamp cleared
+    /// (through [`crate::survival::drink_water`]). The brain gates the
+    /// action on `water_source(terrain, weather) > 0` at decision time;
+    /// EnvironmentContext carries no weather, so contamination uses the
+    /// spec's base 15% only (Heatwave/Trait mods need weather plumbed in).
+    /// Contamination is silent by spec — Poisoned visibility comes from
+    /// the affliction/band machinery, not an extra line here.
+    fn act_drink_from_terrain(
+        &mut self,
+        area_details: &AreaDetails,
+        rng: &mut impl Rng,
+        events: &mut Vec<TaggedEvent>,
+    ) {
+        if !self.spend_stamina_for(
+            &Action::DrinkFromTerrain,
+            &area_details.terrain,
+            "drink",
+            events,
+        ) {
+            return;
+        }
+
+        crate::survival::drink_water(self, crate::survival::SATIATE_AMOUNT);
+        let debt_recovered = crate::survival::SATIATE_AMOUNT;
+
+        // Spec §16: terrain water contaminates on 15% (provisional base).
+        if rng.random_range(0..100) < 15 {
+            self.try_acquire_affliction(AfflictionDraft {
+                kind: AfflictionKind::Poisoned,
+                body_part: None,
+                severity: Severity::Moderate,
+                source: AfflictionSource::Environmental,
+                trapped_metadata: None,
+            });
+        }
+
+        let area = AreaRef {
+            identifier: self.location.area.to_string().clone().into(),
+            name: self.location.area.to_string(),
+        };
+        events.push(TaggedEvent::new(
+            format!("{} drinks their fill at the {}", self.name, area.name),
+            MessagePayload::Drank {
+                character: CharacterRef {
+                    identifier: self.identifier.clone().into(),
+                    name: self.name.clone(),
+                },
+                source: shared::messages::DrinkSource::Terrain { area },
+                debt_recovered,
             },
         ));
     }
@@ -2731,6 +2788,44 @@ mod tests {
         assert_eq!(t.sheltered_until, None, "starts exposed");
         assert!(t.starving_since_day.is_none());
         assert!(t.dehydrated_since_day.is_none());
+    }
+
+    #[test]
+    fn terrain_drink_satesses_thirst_and_reports_debt() {
+        let mut t = Character::new("Tepsip".to_string(), None, None);
+        t.thirst = 3; // Dehydrated
+        t.dehydrated_since_day = Some(1);
+        t.stamina = t.max_stamina;
+        let details = areas::AreaDetails::new(None, areas::AreaId::hub());
+        let mut rng = SmallRng::seed_from_u64(7);
+        let mut events: Vec<TaggedEvent> = vec![];
+
+        t.act_drink_from_terrain(&details, &mut rng, &mut events);
+
+        assert_eq!(
+            t.thirst,
+            3 - crate::survival::SATIATE_AMOUNT,
+            "one full sate takes SATIATE_AMOUNT points off"
+        );
+        assert!(t.dehydrated_since_day.is_none(), "drink clears the stamp");
+        assert_eq!(events.len(), 1, "one Drank line per drink");
+        match &events[0].payload {
+            MessagePayload::Drank {
+                character,
+                source,
+                debt_recovered,
+            } => {
+                assert_eq!(character.name, "Tepsip");
+                assert_eq!(*debt_recovered, crate::survival::SATIATE_AMOUNT);
+                assert!(
+                    matches!(source, shared::messages::DrinkSource::Terrain { .. }),
+                    "terrain source"
+                );
+            }
+            other => panic!("expected Drank, got {other:?}"),
+        }
+        // Contamination (15%) is seed-dependent — Poisoned visibility is
+        // covered by the affliction/band machinery, not asserted here.
     }
 
     #[test]

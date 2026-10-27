@@ -236,7 +236,7 @@ Typical water values: `1` (sip), `2` (canteen), `3` (full waterskin).
 
 - **`Eat(item)`** — consume a `Food(n)` item from inventory. `tribute.hunger = saturating_sub(n)`. Resets `starvation_drain_step`. Emits `Ate`. Item is destroyed.
 - **`Drink(item)`** — same shape for `Water(n)`. Emits `Drank { source: Item(...) }`.
-- **`Drink(area)`** — terrain action at a hex with `water_source(...) > 0`. No item needed. Resolves to `tribute.thirst -= 1` on success. Emits `Drank { source: Terrain(...) }`.
+- **`Drink(area)`** — terrain action at a hex with `water_source(...) > 0`. No item needed. Resolves to `tribute.thirst -= SATIATE_AMOUNT` (2 as shipped — tunable in `characters/src/survival.rs`; two sates of 2 cover the 4/day mid tier = 2 drinks/day). Emits `Drank { source: Terrain(...) }` with `debt_recovered`.
 - **`Forage`** — terrain action at a hex with non-zero forage richness. Roll vs. richness. On success, `tribute.hunger -= 1`. Emits `Foraged`.
 
 ### Food poisoning
