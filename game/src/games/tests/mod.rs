@@ -35,6 +35,7 @@ pub(crate) fn create_character(name: &str, is_alive: bool) -> Character {
 
 mod alliances;
 mod messaging;
+mod private;
 mod survival;
 
 #[test]

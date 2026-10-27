@@ -44,7 +44,22 @@ mod tests {
 
     #[fixture]
     fn character() -> Character {
-        Character::new("Snaggletooth".to_string(), None, None)
+        // WHY: seeded (char_named pattern) — raw `Character::new` rolls
+        // traits from global entropy, which made this fixture's rolls
+        // non-reproducible under the full workspace run. Also note
+        // hides(): effective intelligence floors at 1 (spec: every scale
+        // contributes), so hides_fail rolls at p = 1/100 — a fixed seed
+        // keeps that luck deterministic instead of a 1% CI flake.
+        use rand::SeedableRng;
+        use rand::rngs::SmallRng;
+        use std::hash::{Hash, Hasher};
+        let seed = {
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            "Snaggletooth".hash(&mut h);
+            h.finish()
+        };
+        let mut rng = SmallRng::seed_from_u64(seed);
+        Character::new_with_rng("Snaggletooth".to_string(), None, None, &mut rng)
     }
 
     #[rstest]
