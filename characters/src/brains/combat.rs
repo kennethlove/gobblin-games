@@ -146,6 +146,14 @@ impl CombatBrain {
     /// cowards the weakest. Ties keep slice order (join order). Returns
     /// `None` only for an empty side.
     pub fn choose_target(&self, actor: &Character, opposing_side: &[&Character]) -> Option<Uuid> {
+        // cif: the fight's champion = highest lifetime wins among these
+        // candidates (zero wins everywhere = nobody; ties share the bonus,
+        // the existing stable first-wins rule still picks the winner).
+        let champion = opposing_side
+            .iter()
+            .filter(|m| m.statistics.wins > 0)
+            .max_by_key(|m| m.statistics.wins)
+            .map(|m| m.id);
         let t = &self.tuning;
         let strength_pref = if behavior_sum(&actor.traits, BehaviorAxis::AttackPosture) > 0 {
             1
@@ -160,6 +168,11 @@ impl CombatBrain {
             let mut score = 0;
             if m.blood <= WOUNDED_BLOOD {
                 score += t.brain_target_wounded_bonus;
+            }
+            // cif: the champion wears a target — modest bump that stays
+            // under the wound bonus (hunted, not insta-focused).
+            if champion == Some(m.id) {
+                score += t.brain_target_champion_bonus;
             }
             // Attribute points scale into the weight's magnitude so one
             // strength point stays a fraction of the wounded bonus.
@@ -313,6 +326,50 @@ mod tests {
         hurt.blood = 200; // <= WOUNDED_BLOOD
         let side = [&fresh, &hurt];
         assert_eq!(brain().choose_target(&actor, &side), Some(hurt.id));
+    }
+
+    /// cif: highest lifetime wins wears the target.
+    #[test]
+    fn champion_is_preferred_target() {
+        let mut actor = char_named("Alice");
+        actor.traits.clear(); // no wound/strength tilts — the title decides
+        let mut fresh = char_named("Bob");
+        fresh.blood = 1000;
+        fresh.statistics.wins = 5;
+        let mut champ = char_named("Carol");
+        champ.blood = 1000;
+        champ.statistics.wins = 8;
+        let side = [&fresh, &champ];
+        assert_eq!(brain().choose_target(&actor, &side), Some(champ.id));
+    }
+
+    /// The wound bonus (15) outranks the champion bump (8) — hunted,
+    /// not insta-focused.
+    #[test]
+    fn wound_outranks_champion_bonus() {
+        let mut actor = char_named("Alice");
+        actor.traits.clear();
+        let mut champ = char_named("Bob");
+        champ.blood = 1000;
+        champ.statistics.wins = 12;
+        let mut hurt = char_named("Carol");
+        hurt.blood = 200; // wounded
+        hurt.statistics.wins = 3;
+        let side = [&champ, &hurt];
+        assert_eq!(brain().choose_target(&actor, &side), Some(hurt.id));
+    }
+
+    /// Nobody has won a fight: no champion, bonus never engages.
+    #[test]
+    fn zero_wins_name_no_champion() {
+        let mut actor = char_named("Alice");
+        actor.traits.clear();
+        let a = char_named("Bob");
+        let b = char_named("Carol");
+        let side = [&a, &b];
+        // stable first-wins rule still picks the earlier member (as if
+        // the champion bump did not exist — which it does not).
+        assert_eq!(brain().choose_target(&actor, &side), Some(a.id));
     }
 
     #[test]

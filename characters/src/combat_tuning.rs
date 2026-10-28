@@ -110,6 +110,10 @@ pub struct CombatTuning {
     /// Strength preference weight: added for aggressive actors, subtracted
     /// for cowards (aggressive -> strongest, cowardly -> weakest).
     pub brain_target_strong_bonus: i32,
+    /// cif: score bump when the candidate is the fight's champion (highest
+    /// lifetime wins among the combatants). Modest default — hunted, not
+    /// insta-focused (wounded = 15 outranks it).
+    pub brain_target_champion_bonus: i32,
 
     // --- Conditional weapon/shield wear tiers (cg9 balance pass) ---
     // Wear fires only on gated outcomes; clean hits and plain misses wear
@@ -195,6 +199,7 @@ impl Default for CombatTuning {
 
             brain_target_wounded_bonus: 15,
             brain_target_strong_bonus: 5,
+            brain_target_champion_bonus: 8,
 
             weapon_wear_on_shield_block: 2,
             weapon_wear_on_armor_block: 1,

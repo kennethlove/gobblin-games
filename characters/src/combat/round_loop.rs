@@ -139,6 +139,11 @@ pub struct CombatRoundLoop<'a> {
     provider: Box<dyn CombatActionProvider + 'a>,
     /// Arena layout for the one-hop neighborhood (ring + door).
     layout: Vec<(areas::AreaId, areas::hex::Axial)>,
+    /// cif: highest-lifetime-wins combatant going into the fight (None
+    /// while everyone sits at zero wins — no champion, no callout).
+    champion: Option<Uuid>,
+    champion_announced: bool,
+    champion_dethroned: bool,
 }
 
 impl<'a> CombatRoundLoop<'a> {
@@ -199,6 +204,9 @@ impl<'a> CombatRoundLoop<'a> {
             exited: Vec::new(),
             tuning,
             provider,
+            champion: None,
+            champion_announced: false,
+            champion_dethroned: false,
         }
     }
 
@@ -228,12 +236,90 @@ impl<'a> CombatRoundLoop<'a> {
                 beats: vec![],
             };
         }
+        self.announce_champion(events);
         // Take the combatants out for the round so `self` methods can use
         // tuning/provider/result alongside them; put back before returning.
         let mut chars = std::mem::take(&mut self.chars);
         let round = self.advance_round_with(&mut chars, rng, events);
         self.chars = chars;
+        self.announce_dethrone(events);
         round
+    }
+
+    /// cif: who is the champion in *this* fight? Highest lifetime fight
+    /// wins among the combatants, computed once; zero wins everywhere
+    /// means nobody carries the title.
+    fn ensure_champion(&mut self) {
+        if self.champion.is_some() {
+            return;
+        }
+        let mut best: Option<(Uuid, u32)> = None;
+        for c in &self.chars {
+            let wins = c.statistics.wins;
+            if wins == 0 {
+                continue;
+            }
+            if best.is_none_or(|(_, w)| wins > w) {
+                best = Some((c.id, wins));
+            }
+        }
+        self.champion = best.map(|(id, _)| id);
+    }
+
+    /// cif entry callout: "listed as champion going into the fight" — the
+    /// announce line rides the event stream (MessagePayload::Generic,
+    /// prose-only), once per fight (flag guards opener + first round).
+    fn announce_champion(&mut self, events: &mut Vec<TaggedEvent>) {
+        self.ensure_champion();
+        if self.champion_announced {
+            return;
+        }
+        let Some(id) = self.champion else {
+            self.champion_announced = true;
+            return;
+        };
+        if let Some(c) = self.chars.iter().find(|c| c.id == id) {
+            let content = format!(
+                "🏆 {} enters the fight as CHAMPION ({} lifetime wins)",
+                c.name, c.statistics.wins
+            );
+            events.push(TaggedEvent::new(content, MessagePayload::Generic));
+        }
+        self.champion_announced = true;
+    }
+
+    /// cif dethrone callout: the round's kill payload names the victim and
+    /// killer; a champion death emits the line exactly once per fight.
+    fn announce_dethrone(&mut self, events: &mut Vec<TaggedEvent>) {
+        if self.champion_dethroned {
+            return;
+        }
+        let Some(id) = self.champion else {
+            return;
+        };
+        let Some(pos) = self.chars.iter().position(|c| c.id == id) else {
+            return;
+        };
+        if self.chars[pos].status != crate::CharacterStatus::Dead {
+            return;
+        }
+        let name = self.chars[pos].name.clone();
+        let identifier = self.chars[pos].identifier.clone();
+        let killer = events.iter().find_map(|ev| match &ev.payload {
+            MessagePayload::CharacterKilled { victim, killer, .. }
+                if victim.identifier == identifier =>
+            {
+                Some(killer.as_ref().map(|k| k.name.clone()))
+            }
+            _ => None,
+        });
+        let content = match killer {
+            Some(Some(killer)) => format!("🏆 {name} has been DETHRONED by {killer}"),
+            Some(None) => format!("🏆 {name} has been DETHRONED"),
+            None => format!("🏆 {name} has fallen — the champion is out"),
+        };
+        events.push(TaggedEvent::new(content, MessagePayload::Generic));
+        self.champion_dethroned = true;
     }
 
     /// §14 (7si): the ambush opener — the entry swing resolves before round 1
@@ -243,6 +329,7 @@ impl<'a> CombatRoundLoop<'a> {
     /// the fight here and [`Self::advance_round`] never starts. No-op when the
     /// target is awake — an awake fight opens with round 1 as before.
     pub fn resolve_opener(&mut self, rng: &mut impl Rng, events: &mut Vec<TaggedEvent>) {
+        self.announce_champion(events);
         // Entry order is fixed by the cycle: sides[0] = attacker, sides[1] = target.
         let Some(&target) = self.sides[1].first() else {
             return;
@@ -940,6 +1027,7 @@ mod tests {
     use crate::traits::Trait;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
+    use shared::messages::CharacterRef;
 
     /// Deterministic character for combat tests. `Character::new` rolls
     /// traits/brain from the global entropy RNG, which made round-loop
@@ -954,6 +1042,89 @@ mod tests {
         };
         let mut rng = SmallRng::seed_from_u64(seed);
         Character::new_with_rng(name.to_string(), None, None, &mut rng)
+    }
+
+    /// cif: the champion rides the event stream on the first advance —
+    /// exactly one entry line for the whole fight.
+    #[test]
+    fn champion_entry_line_emits_once() {
+        let mut a = char_named("Alice");
+        a.statistics.wins = 8;
+        a.attributes.strength = 0; // pin: no kill ends the fight early
+        let mut b = char_named("Bob");
+        b.attributes.strength = 0;
+        let mut rng = SmallRng::seed_from_u64(3);
+        let mut events = Vec::new();
+        let mut combat = CombatRoundLoop::with_provider(
+            &mut a,
+            &mut b,
+            "cchamp".into(),
+            CombatTuning::default(),
+            Box::new(AttackOnlyProvider),
+        );
+        combat.advance_round(&mut rng, &mut events);
+        combat.advance_round(&mut rng, &mut events);
+        let entries = events
+            .iter()
+            .filter(|ev| {
+                matches!(ev.payload, MessagePayload::Generic) && ev.content.contains("CHAMPION")
+            })
+            .count();
+        assert_eq!(entries, 1, "one champion line for the whole fight");
+    }
+
+    /// cif: a dead champion gets the dethrone line once, naming the killer
+    /// from the round's kill payload.
+    #[test]
+    fn champion_dethrone_line_names_the_killer_once() {
+        let mut champ = char_named("Champ");
+        champ.statistics.wins = 8;
+        let champ_uuid = champ.id;
+        let mut other = char_named("Other");
+        other.statistics.wins = 5;
+        let mut combat = CombatRoundLoop::with_provider(
+            &mut champ,
+            &mut other,
+            "cdethrone".into(),
+            CombatTuning::default(),
+            Box::new(AttackOnlyProvider),
+        );
+        combat.ensure_champion();
+        let champ_id = combat.champion.expect("a winner carries the title");
+        assert_eq!(champ_id, champ_uuid);
+
+        // The champion falls to the rival.
+        let pos = combat.chars.iter().position(|c| c.id == champ_id).unwrap();
+        combat.chars[pos].status = crate::CharacterStatus::Dead;
+        let victim_ref = CharacterRef {
+            identifier: combat.chars[pos].identifier.clone().into(),
+            name: combat.chars[pos].name.clone(),
+        };
+        let other_pos = combat.chars.iter().position(|c| c.id != champ_id).unwrap();
+        let killer_ref = CharacterRef {
+            identifier: combat.chars[other_pos].identifier.clone().into(),
+            name: combat.chars[other_pos].name.clone(),
+        };
+        let mut events = vec![TaggedEvent::new(
+            "Champ dies!",
+            MessagePayload::CharacterKilled {
+                victim: victim_ref,
+                killer: Some(killer_ref),
+                cause: shared::afflictions::DeathCause::Combat,
+            },
+        )];
+        combat.announce_dethrone(&mut events);
+        combat.announce_dethrone(&mut events); // second call = no duplicate
+        let lines: Vec<_> = events
+            .iter()
+            .filter(|ev| ev.content.contains("DETHRONED"))
+            .collect();
+        assert_eq!(lines.len(), 1, "exactly one dethrone line");
+        assert!(
+            lines[0].content.contains("by Other"),
+            "killer named: {}",
+            lines[0].content
+        );
     }
 
     /// Strong attacker vs near-dead target: the first attack kills, so the fight
