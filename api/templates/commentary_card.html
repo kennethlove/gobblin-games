@@ -1,0 +1,16 @@
+<div class="event-card commentary" data-archetype="commentary">
+  <div class="card-head">
+    <span class="card-badge">ANALYSIS</span>
+    <span class="card-timestamp">Day {{ day }} {{ phase }}</span>
+  </div>
+  <div class="card-body">
+    <div class="comment-text">{% for line in lines %}<div>{{ line }}</div>{% endfor %}</div>
+    <div class="comment-speaker">
+      <div class="speaker-avatar">C</div>
+      <div class="speaker-info">
+        <span class="speaker-name">{{ speaker }}</span>
+        <span class="speaker-role">ANALYSIS</span>
+      </div>
+    </div>
+  </div>
+</div>
