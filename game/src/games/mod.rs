@@ -250,6 +250,14 @@ pub struct Game {
     pub areas: Vec<AreaDetails>,
     #[serde(default)]
     pub characters: Vec<Character>,
+    /// Legacy rows predate the column: missing or NULL hydrates as
+    /// private (k5n — agrees with the schema `DEFAULT true`; the
+    /// listing query already hides them, the detail serializer must
+    /// not contradict it).
+    #[serde(
+        default = "private_by_default",
+        deserialize_with = "deserialize_private"
+    )]
     pub private: bool,
     #[serde(default)]
     pub config: world::config::GameConfig,
@@ -327,6 +335,17 @@ impl Default for Game {
             patrons: vec![],
         }
     }
+}
+
+/// Schema `DEFAULT true` for legacy rows missing the column (k5n).
+fn private_by_default() -> bool {
+    true
+}
+
+/// `private: null` (Surreal NULL on pre-column rows) hydrates as
+/// `true`; real booleans pass through (k5n).
+fn deserialize_private<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    Ok(<Option<bool> as serde::Deserialize>::deserialize(d)?.unwrap_or(true))
 }
 
 impl Display for Game {
