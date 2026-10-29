@@ -305,26 +305,19 @@ fn render_plain_event_card(msg: &shared::messages::GameMessage) -> String {
     let badge = archetype_label(archetype);
     let kind = message_kind_label(&msg.payload);
     let color = kind_color(&msg.payload);
-    let ts = format!(
-        "D{} {} T{}",
-        msg.game_day,
-        format!("{:?}", msg.phase).to_uppercase(),
-        msg.tick
-    );
+    // Display = the hour ("12"), same D-hour-T form as fight_ts. The old
+    // `format!("{:?}", ...).to_uppercase()` produced "D2 PHASE(12) T50".
+    let ts = format!("D{} {} T{}", msg.game_day, msg.phase, msg.tick);
 
-    format!(
-        r#"<div class="event-card {archetype}" data-archetype="{archetype}" style="border-left-color:{color};">
-          <div class="card-head">
-            <span class="card-badge" style="background:{color};">{badge}</span>
-            <span class="card-timestamp">{ts}</span>
-          </div>
-          <div class="card-body">
-            <span style="font-weight:600;">{kind}</span>
-            — {content}
-          </div>
-        </div>"#,
-        content = html_escape(&msg.content)
-    )
+    let mut ctx = tera::Context::new();
+    ctx.insert("archetype", archetype);
+    ctx.insert("badge", badge);
+    ctx.insert("kind", kind);
+    ctx.insert("color", color);
+    ctx.insert("ts", &ts);
+    // Tera autoescapes .html; content passes raw (was html_escape()).
+    ctx.insert("content", &msg.content);
+    crate::templates::tera_engine::render("event_card.html", &ctx)
 }
 
 /// Render a whole message slice for the timeline: contiguous runs of
@@ -690,33 +683,19 @@ pub fn render_commentary_card(seg: &announcers::CommentarySegment) -> String {
         .first()
         .map(|l| l.speaker.as_str())
         .unwrap_or("COMMENTATOR");
-    let text: String = seg
-        .lines
-        .iter()
-        .map(|l| format!("<div>{}</div>", html_escape(&l.text)))
-        .collect();
 
-    format!(
-        r#"<div class="event-card commentary" data-archetype="commentary">
-          <div class="card-head">
-            <span class="card-badge">ANALYSIS</span>
-            <span class="card-timestamp">Day {} {}</span>
-          </div>
-          <div class="card-body">
-            <div class="comment-text">{text}</div>
-            <div class="comment-speaker">
-              <div class="speaker-avatar">C</div>
-              <div class="speaker-info">
-                <span class="speaker-name">{}</span>
-                <span class="speaker-role">ANALYSIS</span>
-              </div>
-            </div>
-          </div>
-        </div>"#,
-        seg.day,
-        seg.phase,
-        html_escape(speaker)
-    )
+    let mut ctx = tera::Context::new();
+    ctx.insert("day", &seg.day);
+    ctx.insert("phase", &seg.phase.to_string());
+    ctx.insert(
+        "lines",
+        &seg.lines
+            .iter()
+            .map(|l| l.text.as_str())
+            .collect::<Vec<_>>(),
+    );
+    ctx.insert("speaker", speaker);
+    crate::templates::tera_engine::render("commentary_card.html", &ctx)
 }
 
 pub fn render_character_row(character: &characters::Character, game_id: &str) -> String {
@@ -1369,6 +1348,31 @@ mod day_summary_card_tests {
         let html = render_event_card(&plain);
         assert!(!html.contains("DAY SUMMARY"), "plain path: {html}");
         assert!(html.contains("event-card"), "{html}");
+        // Regression: plain-card timestamps use Phase's Display (the
+        // hour), not its Debug ("PHASE(12)").
+        assert!(!html.contains("PHASE("), "{html}");
+    }
+
+    /// Commentary segments render through commentary_card.html (Tera).
+    #[test]
+    fn commentary_card_renders_via_partial() {
+        let seg = announcers::CommentarySegment {
+            id: String::new(),
+            game_id: "g".into(),
+            day: 1,
+            phase: "06".into(),
+            lines: vec![announcers::CommentaryLine {
+                speaker: "Verity".into(),
+                text: "A <coup> at dawn".into(),
+            }],
+            generated_at: chrono::Utc::now(),
+            model_used: "test".into(),
+        };
+        let html = render_commentary_card(&seg);
+        assert!(html.contains("comment-speaker"), "{html}");
+        assert!(html.contains("Verity"), "{html}");
+        // Tera autoescapes: raw markup in line text must not survive.
+        assert!(!html.contains("<coup>"), "{html}");
     }
 
     /// The timeline template passes pre-rendered cards straight through —
