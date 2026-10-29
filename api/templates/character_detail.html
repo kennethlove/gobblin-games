@@ -3,5 +3,24 @@
 <div class="container" style="padding-block:var(--gap-lg);">
   <a href="/games/{{ game_id }}" class="back-link">Back to Game</a>
   {{ character_detail_html | safe }}
+  {% if pending_advancements > 0 %}
+  <form class="card" method="post"
+        hx-post="/characters/{{ character_id }}/advance"
+        hx-swap="none" hx-on::after-request="window.location.reload()"
+        style="margin-top:var(--gap-md);">
+    <h3>{{ pending_advancements }} unspent advancement{% if pending_advancements != 1 %}s{% endif %}</h3>
+    <div style="display:flex;gap:var(--gap-sm);align-items:end;flex-wrap:wrap;">
+      <label style="flex:1;min-width:12rem;">Stat
+        <select name="stat">
+          <option value="strength">Strength</option>
+          <option value="toughness">Toughness</option>
+          <option value="luck">Luck</option>
+        </select>
+      </label>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn">Spend</button>
+    </div>
+  </form>
+  {% endif %}
 </div>
 {% endblock %}

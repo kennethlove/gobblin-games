@@ -57,6 +57,76 @@ pub enum AdvancementEvent {
     },
 }
 
+/// A stat an owner can buy with one advancement (6bl slice 2, v1 menu).
+///
+/// Non-negative-only by trait-spec §10.9 (the high-water rule): XP can
+/// only ever push attributes upward. WHY three stats: the old revival
+/// `Penalty` row touched exactly strength/toughness/luck — the same
+/// surface, now owner-directed and positive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AdvancementStat {
+    Strength,
+    Toughness,
+    Luck,
+}
+
+impl AdvancementStat {
+    pub const ALL: [AdvancementStat; 3] = [
+        AdvancementStat::Strength,
+        AdvancementStat::Toughness,
+        AdvancementStat::Luck,
+    ];
+
+    /// +1 with saturation — u8 tops are reachable via creation rolls and
+    /// repeated spends; saturating keeps the purchase non-negative.
+    pub fn apply(self, attributes: &mut crate::Attributes) {
+        match self {
+            AdvancementStat::Strength => {
+                attributes.strength = attributes.strength.saturating_add(1)
+            }
+            AdvancementStat::Toughness => {
+                attributes.toughness = attributes.toughness.saturating_add(1)
+            }
+            AdvancementStat::Luck => attributes.luck = attributes.luck.saturating_add(1),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AdvancementStat::Strength => "strength",
+            AdvancementStat::Toughness => "toughness",
+            AdvancementStat::Luck => "luck",
+        }
+    }
+
+    /// Parse the wire form the spend endpoint accepts (lowercase).
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "strength" => Some(AdvancementStat::Strength),
+            "toughness" => Some(AdvancementStat::Toughness),
+            "luck" => Some(AdvancementStat::Luck),
+            _ => None,
+        }
+    }
+}
+
+/// Why a spend was refused — the cheapest channel until a caller branches
+/// (join-gate text vs endpoint 400s both render the same message).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpendAdvancementError {
+    NothingPending,
+}
+
+impl std::fmt::Display for SpendAdvancementError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SpendAdvancementError::NothingPending => {
+                write!(f, "no advancements are pending")
+            }
+        }
+    }
+}
+
 /// Append `event` to `log`, evicting the oldest entry at the cap.
 pub fn push_event(log: &mut Vec<AdvancementEvent>, event: AdvancementEvent) {
     if log.len() >= MAX_ADVANCEMENT_EVENTS {
@@ -89,6 +159,52 @@ mod tests {
         // Oldest evicted, newest kept: last iteration was i = 68 (even),
         // which stamps the first trait.
         assert_eq!(log.last(), Some(&gained(Trait::Tough)));
+    }
+
+    #[test]
+    fn level_derives_from_xp_and_pending_counts_unspent() {
+        let mut c = crate::Character::default();
+        assert_eq!(c.level(), 0);
+        assert_eq!(c.pending_advancements(), 0);
+        c.xp = crate::XP_PER_LEVEL - 1;
+        assert_eq!(c.level(), 0);
+        c.xp = crate::XP_PER_LEVEL;
+        assert_eq!(c.level(), 1);
+        assert_eq!(c.pending_advancements(), 1);
+        c.xp = crate::XP_PER_LEVEL * 3;
+        assert_eq!(c.level(), 3);
+        c.advancements_spent = 2;
+        assert_eq!(c.pending_advancements(), 1);
+    }
+
+    #[test]
+    fn spend_requires_pending_and_applies_the_stat() {
+        let mut c = crate::Character::default();
+        assert_eq!(
+            c.spend_advancement(AdvancementStat::Strength),
+            Err(SpendAdvancementError::NothingPending)
+        );
+        c.xp = crate::XP_PER_LEVEL;
+        let before = c.attributes.strength;
+        assert_eq!(c.spend_advancement(AdvancementStat::Strength), Ok(()));
+        assert_eq!(c.attributes.strength, before.saturating_add(1));
+        assert_eq!(c.advancements_spent, 1);
+        assert_eq!(c.pending_advancements(), 0);
+        assert_eq!(
+            c.advancement_log.last(),
+            Some(&AdvancementEvent::XpPurchase {
+                detail: "+1 strength".to_string(),
+                amount: 1,
+            })
+        );
+    }
+
+    #[test]
+    fn advancement_stats_roundtrip_through_the_wire_form() {
+        for stat in AdvancementStat::ALL {
+            assert_eq!(AdvancementStat::parse(stat.as_str()), Some(stat));
+        }
+        assert_eq!(AdvancementStat::parse("stamina"), None);
     }
 
     #[test]

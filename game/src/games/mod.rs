@@ -457,9 +457,13 @@ impl Game {
             // and a grant landed by this revival starts its countdown at
             // the next boundary — not the one that granted it.
             character.tick_temporary_traits();
+            // 6bl slice 2: every goblin that played earns the per-game XP;
+            // the winning side adds the win bonus (placeholder table).
+            character.award_xp(characters::XP_PER_GAME);
             if character.is_alive() {
                 characters::revival::restore(character);
                 if winner == Some(character.team) {
+                    character.award_xp(characters::XP_PER_WIN);
                     characters::revival::maybe_survivor_boon(character, &mut rng);
                 }
             } else {

@@ -235,7 +235,7 @@ pub async fn my_goblins_handler(
 /// the token, then open an authenticated connection for the `$auth`
 /// writes. Returns `None` when either check fails — the caller sends the
 /// same `/auth` redirect [`authenticate_db`] uses.
-async fn form_write_db(
+pub async fn form_write_db(
     state: &AppState,
     headers: &axum::http::HeaderMap,
     csrf_token: &str,
@@ -323,6 +323,43 @@ pub async fn my_goblins_edit_handler(
     {
         Ok(_) => Redirect::to("/my-goblins").into_response(),
         Err(error) => goblins_error_redirect(error),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AdvanceForm {
+    pub stat: String,
+    pub csrf_token: String,
+}
+
+/// POST /characters/{character_id}/advance — spend one pending
+/// advancement (+1 to the picked stat). Advancement is a LIFETIME
+/// counter (overall XP), so the endpoint is deliberately not
+/// game-scoped; the form lives on the character page and we land back
+/// wherever it was submitted from.
+pub async fn character_advance_handler(
+    Path(character_identifier): Path<String>,
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Form(form): Form<AdvanceForm>,
+) -> Response {
+    let Some(user_db) = form_write_db(&state, &headers, &form.csrf_token).await else {
+        return Redirect::to("/auth").into_response();
+    };
+    let back = headers
+        .get(axum::http::header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("/my-goblins")
+        .to_string();
+    let Some(stat) = characters::advancement::AdvancementStat::parse(&form.stat) else {
+        return Redirect::to(back.as_str()).into_response();
+    };
+    match crate::characters::character_advance(&user_db, &character_identifier, stat).await {
+        Ok(()) | Err(crate::AppError::Conflict(_)) => Redirect::to(back.as_str()).into_response(),
+        Err(error) => {
+            tracing::warn!("advancement spend failed: {error}");
+            Redirect::to(back.as_str()).into_response()
+        }
     }
 }
 
