@@ -449,6 +449,9 @@ impl Game {
     /// health.
     pub fn post_game_recovery(&mut self) {
         let mut rng = rand::rng();
+        // 6bl survivor table: fires only for the winning side — captured
+        // before any status mutation. A draw (no winning team) skips it.
+        let winner = self.winning_team();
         for character in &mut self.characters {
             // Boundary tick BEFORE revival: expired durations lift first,
             // and a grant landed by this revival starts its countdown at
@@ -456,6 +459,9 @@ impl Game {
             character.tick_temporary_traits();
             if character.is_alive() {
                 characters::revival::restore(character);
+                if winner == Some(character.team) {
+                    characters::revival::maybe_survivor_boon(character, &mut rng);
+                }
             } else {
                 characters::revival::revive(character, &mut rng);
             }

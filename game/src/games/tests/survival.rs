@@ -214,9 +214,22 @@ fn test_post_game_recovery_wakes_dead_and_restores_survivor() {
     // Three distinct teams stand after recovery — no winner, because
     // winner determination runs at the finish seam BEFORE recovery.
     assert!(game.winning_team().is_none());
-    // The survivor is restored to full health (matches the fresh fixture:
-    // default blood, healthy, no wounds).
-    assert_eq!(game.characters[0], alive);
+    // The survivor is restored to full health (fresh fixture: default
+    // blood, healthy, no wounds) — and may carry the survivor boon: the
+    // winner side rolls the 65% table (6bl), granting at most one bonus
+    // trait (or +1 luck when none is eligible).
+    assert_eq!(game.characters[0].status, CharacterStatus::Healthy);
+    assert_eq!(game.characters[0].blood, alive.blood);
+    assert!(game.characters[0].wounds.is_empty());
+    let gained: Vec<_> = game.characters[0]
+        .traits
+        .iter()
+        .filter(|t| !alive.traits.contains(t))
+        .collect();
+    assert!(
+        gained.len() <= 1,
+        "survivor table grants at most one trait, got {gained:?}"
+    );
     // Revived characters wake clean: healthy, blood restored, wounds gone.
     for c in &game.characters[1..] {
         assert_eq!(c.status, CharacterStatus::Healthy);
@@ -230,6 +243,9 @@ fn test_post_game_recovery_ticks_temporary_traits_at_the_boundary() {
     use std::collections::BTreeMap;
     // A survivor whose Tough boon ran its last game: the boundary tick
     // must remove the trait and its duration entry with no trace.
+    // A second living team makes the game a DRAW, which skips the
+    // 65%-boon survivor roll (6bl) — the tick semantics stay observable
+    // without the table re-granting Tough on top.
     let mut survivor = create_character("Stinky", true);
     survivor.team = 1;
     survivor
@@ -237,8 +253,10 @@ fn test_post_game_recovery_ticks_temporary_traits_at_the_boundary() {
         .retain(|t| *t != characters::traits::Trait::Tough);
     survivor.traits.push(characters::traits::Trait::Tough);
     survivor.temporary_traits = BTreeMap::from([(characters::traits::Trait::Tough, 1)]);
+    let mut rival = create_character("Billy Slick", true);
+    rival.team = 2;
 
-    let mut game = create_test_game_with_characters(vec![survivor]);
+    let mut game = create_test_game_with_characters(vec![survivor, rival]);
     game.post_game_recovery();
 
     let after = &game.characters[0];
