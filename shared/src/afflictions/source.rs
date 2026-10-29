@@ -99,6 +99,41 @@ impl std::fmt::Display for DeathCause {
     }
 }
 
+/// How a death reads to the crowd (ul6): a pure copy-tier signal computed
+/// from what a death already carries — no stored state, no new feeds.
+/// WHY: option A scope (copy tiers only); witness count is deliberately
+/// skipped — no death site has it in scope and cause + record + round
+/// carry the joke. Day-summary callouts (option B) can ride this fn later.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeathTier {
+    Glorious,
+    Embarrassing,
+    Mundane,
+}
+
+/// Cause absurdity ranks highest; a decorated fighter falling in combat
+/// earns praise; dying on the opening swing reads embarrassing.
+pub fn death_tier(cause: &DeathCause, victim_wins: u32, round: Option<u32>) -> DeathTier {
+    let absurd = matches!(
+        cause,
+        DeathCause::CriticalFumble
+            | DeathCause::Suicide
+            | DeathCause::Hazard(_)
+            | DeathCause::Drowning
+            | DeathCause::Fire
+    );
+    if absurd {
+        return DeathTier::Embarrassing;
+    }
+    if matches!(cause, DeathCause::Combat | DeathCause::Character(_)) && victim_wins >= 3 {
+        return DeathTier::Glorious;
+    }
+    if round == Some(1) {
+        return DeathTier::Embarrassing;
+    }
+    DeathTier::Mundane
+}
+
 /// Coarse class of mass-casualty event source (spec §4, §7.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -140,4 +175,50 @@ pub enum AfflictionSource {
     Cascade { from: AfflictionKey },
     Patron,
     Gamemaker,
+}
+
+#[cfg(test)]
+mod death_tier_tests {
+    use super::{DeathCause, DeathTier, HazardKind, death_tier};
+
+    #[test]
+    fn absurd_causes_always_read_embarrassing() {
+        for cause in [
+            DeathCause::CriticalFumble,
+            DeathCause::Suicide,
+            DeathCause::Hazard(HazardKind::Other),
+            DeathCause::Drowning,
+            DeathCause::Fire,
+        ] {
+            assert_eq!(
+                death_tier(&cause, 99, Some(1)),
+                DeathTier::Embarrassing,
+                "{cause:?} reads embarrassing regardless of record"
+            );
+        }
+    }
+
+    #[test]
+    fn decorated_fighter_in_combat_earns_glorious() {
+        assert_eq!(
+            death_tier(&DeathCause::Combat, 3, Some(4)),
+            DeathTier::Glorious
+        );
+        assert_eq!(
+            death_tier(&DeathCause::Character("Stinky".to_string()), 3, Some(4)),
+            DeathTier::Glorious
+        );
+        assert_eq!(
+            death_tier(&DeathCause::Combat, 2, Some(4)),
+            DeathTier::Mundane
+        );
+    }
+
+    #[test]
+    fn dying_on_the_opening_swing_reads_embarrassing() {
+        assert_eq!(
+            death_tier(&DeathCause::Combat, 0, Some(1)),
+            DeathTier::Embarrassing
+        );
+    }
 }
