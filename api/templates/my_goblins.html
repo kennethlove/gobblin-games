@@ -44,6 +44,24 @@
           placeholder="Leave blank and a clan name is generated for you"
         >
       </div>
+      <input type="hidden" name="offer" value="{{ offer | join(sep=',') }}">
+      <fieldset>
+        <legend class="block text-sm font-medium text-gray-300 mb-1">Starting trait (your pick)</legend>
+        <div class="flex flex-wrap gap-3">
+          {% for trait in offer %}
+          <label class="flex items-center gap-1 text-sm text-gray-200">
+            <input type="radio" name="trait" value="{{ trait }}" {% if loop.first %}checked{% endif %} required>
+            {{ trait }}
+          </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <div>
+        <label for="best-stat" class="block text-sm font-medium text-gray-300 mb-1">Best stat (+1)</label>
+        <select id="best-stat" name="best_stat" class="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-amber-500">
+          {% for stat in best_stats %}<option value="{{ stat }}">{{ stat }}</option>{% endfor %}
+        </select>
+      </div>
       <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded">Create Goblin</button>
     </form>
   </section>

@@ -57,6 +57,19 @@ pub struct CreateOwnedCharacter {
     pub name: Option<String>,
     #[validate(length(max = 100, message = "Clan name must be at most 100 characters"))]
     pub clan_name: Option<String>,
+    /// Creation couple (6bl §3): the three server-rolled trait ids the
+    /// form displayed, comma separated. Optional so the JSON API keeps
+    /// its old contract — the page form always sends it.
+    #[serde(default)]
+    pub offer: Option<String>,
+    /// The trait the owner picked from `offer` (the wire name the form
+    /// posts is `trait`).
+    #[serde(default, rename = "trait")]
+    pub trait_pick: Option<String>,
+    /// The stat that gets the +1 "best stat" bump (one of
+    /// [`ATTRIBUTE_NAMES`]).
+    #[serde(default)]
+    pub best_stat: Option<String>,
 }
 
 /// Payload for `PUT /api/characters/{identifier}` (owner-only edit).
@@ -820,6 +833,86 @@ async fn store_character_avatar(
 /// Creation is capped per user (state.max_goblins_per_user): the count
 /// is of the caller's owned characters (indexed on `created_by`), so
 /// deleting a goblin frees a slot.
+/// Attribute names the best-stat pick accepts (and the order the form
+/// lists them in).
+pub const ATTRIBUTE_NAMES: [&str; 8] = [
+    "strength",
+    "toughness",
+    "bravery",
+    "intelligence",
+    "persuasion",
+    "luck",
+    "speed",
+    "perception",
+];
+
+fn bump_stat(attributes: &mut characters::Attributes, name: &str) -> Option<()> {
+    let stat = match name {
+        "strength" => &mut attributes.strength,
+        "toughness" => &mut attributes.toughness,
+        "bravery" => &mut attributes.bravery,
+        "intelligence" => &mut attributes.intelligence,
+        "persuasion" => &mut attributes.persuasion,
+        "luck" => &mut attributes.luck,
+        "speed" => &mut attributes.speed,
+        "perception" => &mut attributes.perception,
+        _ => return None,
+    };
+    *stat = stat.saturating_add(1);
+    Some(())
+}
+
+/// Validate and apply the owner's creation picks (6bl §3): `offer` = the
+/// three server-rolled trait ids the form displayed (comma separated),
+/// `chosen` must be one of them, `best_stat` gets +1 after the roll.
+///
+/// WHY pool-bounded rather than a signed offer: the draw is a UX
+/// convenience, not an economy lock — every offered id must be a real,
+/// distinct trait (the trust boundary), and a client shuffling within
+/// the pool gains nothing the roll could have handed it anyway.
+pub fn apply_creation_picks(
+    character: &mut Character,
+    offer: &str,
+    chosen: &str,
+    best_stat: &str,
+) -> Result<(), AppError> {
+    let reject = |message: &str| AppError::ValidationError(message.to_string());
+    let ids: Vec<&str> = offer
+        .split(',')
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .collect();
+    if ids.len() != 3 {
+        return Err(reject("the trait offer must list exactly three traits"));
+    }
+    let mut parsed = Vec::with_capacity(3);
+    for id in ids {
+        let trait_: characters::traits::Trait =
+            serde_json::from_value(serde_json::Value::String(id.to_string()))
+                .map_err(|_| reject("the trait offer names an unknown trait"))?;
+        if parsed.contains(&trait_) {
+            return Err(reject("the trait offer must list three distinct traits"));
+        }
+        parsed.push(trait_);
+    }
+    let picked: characters::traits::Trait =
+        serde_json::from_value(serde_json::Value::String(chosen.to_string()))
+            .map_err(|_| reject("the picked trait is unknown"))?;
+    if !parsed.contains(&picked) {
+        return Err(reject("the picked trait must come from the offer"));
+    }
+    // Conflict/duplicate at apply time (the character's own roll may
+    // collide): fall back to +1 luck — the same shape as the revival
+    // scar fallback, so creation never fails on a roll collision.
+    if character.gain_trait(picked).is_err() {
+        character.attributes.luck = character.attributes.luck.saturating_add(1);
+    }
+    if bump_stat(&mut character.attributes, best_stat).is_none() {
+        return Err(reject("unknown best stat"));
+    }
+    Ok(())
+}
+
 pub async fn create_owned_character(
     State(state): State<AppState>,
     Extension(AuthDb(db)): Extension<AuthDb>,
@@ -828,6 +921,9 @@ pub async fn create_owned_character(
     let payload = CreateOwnedCharacter {
         name: generated_unless_present(payload.name),
         clan_name: generated_unless_present(payload.clan_name),
+        offer: payload.offer,
+        trait_pick: payload.trait_pick,
+        best_stat: payload.best_stat,
     };
     if let Err(e) = validator::Validate::validate(&payload) {
         return Err(AppError::ValidationError(format!("{}", e)));
@@ -862,6 +958,13 @@ pub async fn create_owned_character(
     };
     let mut character = Character::new(name, None, None);
     character.clan_name = generated_clan;
+    // Creation couple: owner's trait pick + best-stat bump (optional for
+    // direct API callers; the page form always sends both).
+    if let (Some(offer), Some(chosen), Some(best_stat)) =
+        (&payload.offer, &payload.trait_pick, &payload.best_stat)
+    {
+        apply_creation_picks(&mut character, offer, chosen, best_stat)?;
+    }
 
     let body = serde_json::to_value(&character)
         .map_err(|e| AppError::InternalServerError(format!("Failed to encode character: {e}")))?;
