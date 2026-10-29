@@ -902,15 +902,37 @@ impl<'a> CombatRoundLoop<'a> {
         // Execute: the verdict kills the cowerer outright. Drain their blood
         // (same observable death state an attack kill leaves behind for the
         // cycle's death processing) and report the kill.
-        let (killer_ref, victim_ref, damage) = {
+        let (killer_ref, victim_ref, damage, victim_wins) = {
             let (killer, victim) = two_refs(chars, verdict_idx, cowerer_idx);
             let damage = victim.blood;
+            let victim_wins = victim.statistics.wins;
             victim.blood = 0;
-            (tref(&*killer), tref(&*victim), damage)
+            (tref(&*killer), tref(&*victim), damage, victim_wins)
         };
 
+        // ul6: the verdict kill gets its copy here (it used to ride in with
+        // an empty content line) — tiered by cause absurdity, the victim's
+        // record, and the round they fell on.
+        let kill_content = match shared::afflictions::death_tier(
+            &shared::afflictions::DeathCause::Combat,
+            victim_wins,
+            Some(round_no),
+        ) {
+            shared::afflictions::DeathTier::Glorious => format!(
+                "{} is finished off by {} — a valiant last stand.",
+                victim_ref.name, killer_ref.name
+            ),
+            shared::afflictions::DeathTier::Embarrassing => format!(
+                "{} is executed in round {round_no} — barely a fight at all.",
+                victim_ref.name
+            ),
+            shared::afflictions::DeathTier::Mundane => format!(
+                "{} is finished off by {}.",
+                victim_ref.name, killer_ref.name
+            ),
+        };
         events.push(TaggedEvent::new(
-            String::new(),
+            kill_content,
             MessagePayload::CharacterKilled {
                 victim: victim_ref.clone(),
                 killer: Some(killer_ref.clone()),

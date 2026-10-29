@@ -132,7 +132,12 @@ impl Character {
                     let died_content =
                         GameOutput::CharacterAttackDied(character_name.as_str(), "themselves")
                             .to_string();
-                    let combined = format!("{fumble_content} {died_content}");
+                    // ul6: fumble deaths are always the embarrassing tier —
+                    // the quip is the copy variant.
+                    let combined = format!(
+                        "{fumble_content} {died_content} {}'s story ends in the dumbest way possible.",
+                        character_name
+                    );
                     events.push(TaggedEvent::new(
                         combined,
                         MessagePayload::CharacterKilled {

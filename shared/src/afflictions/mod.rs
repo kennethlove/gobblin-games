@@ -19,7 +19,8 @@ pub use mechanics::{
 pub use phobia::{PhobiaMetadata, PhobiaOrigin};
 pub use severity::Severity;
 pub use source::{
-    AfflictionKey, AfflictionSource, BeastKind, CauseClass, DeathCause, HazardKind, TraumaSource,
+    AfflictionKey, AfflictionSource, BeastKind, CauseClass, DeathCause, DeathTier, HazardKind,
+    TraumaSource, death_tier,
 };
 pub use trapped::{
     CYCLES_DECAY_PER_CYCLE, ESCAPE_ROLL_CAP, ESCAPE_STAT_BONUS_MAX, PARTIAL_RESCUE_THRESHOLD,
