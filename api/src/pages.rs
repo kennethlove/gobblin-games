@@ -19,6 +19,7 @@ use axum::Json;
 use axum::extract::{Extension, Form, Path, Query, State};
 use axum::response::{IntoResponse, Redirect, Response};
 use characters::Character;
+use rand::seq::SliceRandom;
 use serde::Deserialize;
 use serde_json::Value;
 use surrealdb::Surreal;
@@ -163,6 +164,13 @@ pub struct GoblinForm {
     pub name: Option<String>,
     #[serde(default)]
     pub clan_name: Option<String>,
+    /// Creation couple: the three rolled trait ids the form showed.
+    #[serde(default)]
+    pub offer: Option<String>,
+    #[serde(default, rename = "trait")]
+    pub trait_pick: Option<String>,
+    #[serde(default)]
+    pub best_stat: Option<String>,
     pub csrf_token: String,
 }
 
@@ -225,10 +233,31 @@ pub async fn my_goblins_handler(
 
     let mut ctx = tera_engine::base_context("My Goblins", &auth);
     ctx.insert("goblins", &goblins);
+    // Creation couple: roll the three-trait offer the create form shows.
+    let offer = roll_creation_offer(&mut rand::rng());
+    ctx.insert("offer", &offer);
+    ctx.insert("best_stats", &crate::characters::ATTRIBUTE_NAMES);
     if let Some(error) = params.error.as_deref().filter(|error| !error.is_empty()) {
         ctx.insert("error", error);
     }
     html_with_csrf(tera_engine::render("my_goblins.html", &ctx), &csrf)
+}
+
+/// Three distinct trait ids from the full pool, rolled per page load for
+/// the creation-couple offer (6bl §3). Ids are the serde unit-variant
+/// keys the character record uses, so the form round-trips them as-is.
+pub fn roll_creation_offer<R: rand::Rng + ?Sized>(rng: &mut R) -> Vec<String> {
+    let mut pool: Vec<characters::traits::Trait> = characters::traits::ALL_TRAITS.to_vec();
+    pool.shuffle(rng);
+    pool.truncate(3);
+    pool.into_iter()
+        .map(|trait_| {
+            serde_json::to_string(&trait_)
+                .unwrap_or_default()
+                .trim_matches('"')
+                .to_string()
+        })
+        .collect()
 }
 
 /// CSRF + session preamble shared by the My Goblins form posts: validate
@@ -273,6 +302,9 @@ pub async fn my_goblins_create_handler(
     let payload = CreateOwnedCharacter {
         name: form.name,
         clan_name: form.clan_name,
+        offer: form.offer,
+        trait_pick: form.trait_pick,
+        best_stat: form.best_stat,
     };
     match create_owned_character(State(state), Extension(AuthDb(user_db)), Json(payload)).await {
         Ok(_) => Redirect::to("/my-goblins").into_response(),
