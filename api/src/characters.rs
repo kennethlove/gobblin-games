@@ -293,6 +293,44 @@ pub async fn list_joinable_goblins(db: &Surreal<Any>) -> Result<Vec<Character>, 
 /// `created_by` and are exempt); roster under 24; a team under
 /// `goblins_per_team`. Assigns the team with the fewest members that
 /// still has space and records the `playing_in` edge.
+///
+/// Entry also requires zero pending advancements (6bl slice 2) — the
+/// owner spends them on the character page first.
+/// Cash in one pending advancement (+1 to the chosen stat) — owner-only,
+/// the counterpart to the `join_game` gate. Persists xp, the spent
+/// counter, the touched attributes, and the `XpPurchase` event log.
+pub async fn character_advance(
+    db: &Surreal<Any>,
+    character_identifier: &str,
+    stat: characters::advancement::AdvancementStat,
+) -> Result<(), AppError> {
+    require_owned_character(db, character_identifier).await?;
+    let mut character = fetch_full_character(db, character_identifier).await?;
+    character
+        .spend_advancement(stat)
+        .map_err(|e| AppError::Conflict(e.to_string()))?;
+    let attributes = serde_json::to_value(&character.attributes).unwrap_or_default();
+    let log = serde_json::to_value(&character.advancement_log).unwrap_or_default();
+    let mut response = db
+        .query(
+            "UPDATE character SET xp = $xp, advancements_spent = $spent, attributes = $attributes, advancement_log = $log WHERE identifier = $identifier",
+        )
+        .bind(("identifier", character_identifier.to_owned()))
+        .bind(("xp", character.xp))
+        .bind(("spent", character.advancements_spent))
+        .bind(("attributes", attributes))
+        .bind(("log", log))
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to record advancement: {e}")))?;
+    let updated: Vec<serde_json::Value> = response.take(0).map_err(|e| {
+        AppError::InternalServerError(format!("Failed to read advancement result: {e}"))
+    })?;
+    if updated.is_empty() {
+        return Err(AppError::NotFound("Goblin not found".to_string()));
+    }
+    Ok(())
+}
+
 pub async fn join_game(
     db: &Surreal<Any>,
     game_identifier: &str,
@@ -341,6 +379,15 @@ pub async fn join_game(
     let character = fetch_full_character(db, character_identifier).await?;
     if !character.is_alive() {
         return Err(AppError::Conflict("That goblin is dead".to_string()));
+    }
+    // 6bl slice 2: unspent advancements block entry — `join_game` is the
+    // only door, so the owner spends them on the character page first.
+    let pending = character.pending_advancements();
+    if pending > 0 {
+        return Err(AppError::Conflict(format!(
+            "{} has {} unspent advancement(s)",
+            character.name, pending
+        )));
     }
 
     let mut in_game_response = db

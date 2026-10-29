@@ -35,6 +35,7 @@ pub use movement::TravelResult;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::advancement::{AdvancementStat, SpendAdvancementError};
 use crate::afflictions::{AcquireResolution, can_acquire};
 use crate::events::CharacterEvent;
 use actions::{Action, AttackOutcome};
@@ -414,7 +415,25 @@ pub struct Character {
     /// trace left behind.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub temporary_traits: BTreeMap<traits::Trait, u32>,
+    /// Lifetime experience (6bl slice 2). Awarded at the finish seam
+    /// ([`award_xp`]); levels derive from it (they are never stored), so
+    /// old rows hydrate at zero with no migration.
+    #[serde(default)]
+    pub xp: u32,
+    /// How many levels the owner has already cashed in
+    /// ([`Character::spend_advancement`]). Lifetime counter, survives
+    /// settle like `xp` does.
+    #[serde(default)]
+    pub advancements_spent: u32,
 }
+
+/// XP per completed game (finish seam, 6bl slice 2).
+pub const XP_PER_GAME: u32 = 10;
+/// Bonus XP for the winning side at the finish seam.
+pub const XP_PER_WIN: u32 = 10;
+/// One level per this much lifetime XP (placeholder table; the shape is
+/// pinned by 6bl, the numbers tune from play data).
+pub const XP_PER_LEVEL: u32 = 100;
 
 impl Default for Character {
     fn default() -> Self {
@@ -492,7 +511,54 @@ impl Character {
             game_baseline: None,
             advancement_log: Vec::new(),
             temporary_traits: BTreeMap::new(),
+            xp: 0,
+            advancements_spent: 0,
         }
+    }
+
+    /// Levels are derived from lifetime XP (placeholder table, 6bl
+    /// slice 2): one level per [`XP_PER_LEVEL`]. Spending is the owner's
+    /// call and is enforced at the join gate (`join_game`) — nobody
+    /// enters a game carrying unspent advancements.
+    pub fn level(&self) -> u32 {
+        self.xp / XP_PER_LEVEL
+    }
+
+    /// Levels earned but not yet cashed in.
+    pub fn pending_advancements(&self) -> u32 {
+        self.level().saturating_sub(self.advancements_spent)
+    }
+
+    /// Award XP (finish-seam call, [game]'s `post_game_recovery`):
+    /// lifetime counter, no cap, no cap-check needed because levels
+    /// derive. WHY placeholders: the table tunes from play data; the
+    /// 6bl doc pins the shape (per-game + win bonus), not the numbers.
+    pub fn award_xp(&mut self, amount: u32) {
+        self.xp = self.xp.saturating_add(amount);
+    }
+
+    /// Cash in one advancement: +1 to `stat` (non-negative-only by
+    /// spec §10.9 — the high-water rule means XP can only buy upward),
+    /// stamped as an [`advancement::AdvancementEvent::XpPurchase`] so the
+    /// durable-change record stays complete. Errors when nothing is
+    /// pending.
+    pub fn spend_advancement(
+        &mut self,
+        stat: AdvancementStat,
+    ) -> Result<(), SpendAdvancementError> {
+        if self.pending_advancements() == 0 {
+            return Err(SpendAdvancementError::NothingPending);
+        }
+        stat.apply(&mut self.attributes);
+        self.advancements_spent += 1;
+        advancement::push_event(
+            &mut self.advancement_log,
+            advancement::AdvancementEvent::XpPurchase {
+                detail: format!("+1 {}", stat.as_str()),
+                amount: 1,
+            },
+        );
+        Ok(())
     }
 
     /// Add a trait through the one sanctioned mutation path (spec §3):
@@ -633,6 +699,8 @@ impl Character {
             ever_addicted_to,
             advancement_log,
             temporary_traits,
+            xp,
+            advancements_spent,
             // Everything else is per-game and dies with the old character.
             ..
         } = self;
@@ -666,6 +734,9 @@ impl Character {
             },
             ever_addicted_to,
             advancement_log,
+            // Progression rides along: lifetime counters, not per-game.
+            xp,
+            advancements_spent,
             game_baseline: Some(baseline),
             // Re-derived from the surviving traits (clears psychotic
             // breaks and preferred-action overrides from the last game).
@@ -781,6 +852,8 @@ impl Character {
             game_baseline: None,
             advancement_log: Vec::new(),
             temporary_traits: BTreeMap::new(),
+            xp: 0,
+            advancements_spent: 0,
         }
     }
 

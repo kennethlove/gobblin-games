@@ -239,6 +239,27 @@ fn test_post_game_recovery_wakes_dead_and_restores_survivor() {
 }
 
 #[test]
+fn test_post_game_recovery_awards_xp_to_every_goblin() {
+    // 6bl slice 2: everyone who played earns the per-game XP; the
+    // winning side adds the win bonus. Losers get the base only.
+    let mut survivor = create_character("Stinky", true);
+    survivor.team = 1;
+    let mut loser = create_character("Billy Slick", false);
+    loser.team = 2;
+    loser.dies();
+    let mut game = create_test_game_with_characters(vec![survivor, loser]);
+    assert_eq!(game.characters[0].xp, 0);
+
+    game.post_game_recovery();
+
+    assert_eq!(
+        game.characters[0].xp,
+        characters::XP_PER_GAME + characters::XP_PER_WIN
+    );
+    assert_eq!(game.characters[1].xp, characters::XP_PER_GAME);
+}
+
+#[test]
 fn test_post_game_recovery_ticks_temporary_traits_at_the_boundary() {
     use std::collections::BTreeMap;
     // A survivor whose Tough boon ran its last game: the boundary tick

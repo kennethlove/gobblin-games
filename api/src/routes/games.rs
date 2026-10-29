@@ -1039,6 +1039,8 @@ pub async fn game_character_detail_handler(
             let character_html = game_detail::render_character_detail(&character, &game_id);
             let mut ctx = tera_engine::base_context(&character.name, &auth);
             ctx.insert("game_id", &game_id);
+            ctx.insert("character_id", &character_id);
+            ctx.insert("pending_advancements", &character.pending_advancements());
             ctx.insert("character_detail_html", &character_html);
             html_with_csrf(tera_engine::render("character_detail.html", &ctx), &csrf)
         }
