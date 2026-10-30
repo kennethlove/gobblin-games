@@ -34,6 +34,7 @@ pub(crate) fn create_character(name: &str, is_alive: bool) -> Character {
 }
 
 mod alliances;
+mod day_log;
 mod messaging;
 mod private;
 mod survival;
