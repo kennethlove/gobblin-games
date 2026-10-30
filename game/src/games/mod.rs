@@ -666,7 +666,9 @@ impl Game {
                     "Day {}: Patrons take note of the remaining goblins.",
                     current_day
                 ),
-                _ => format!("Day {} dawns over the arena.", current_day),
+                // The day slot repeats (08...16): keep mid-day copy free
+                // of dawn wording — dawn is announced at the 06 slot.
+                _ => format!("Day {}: the games continue.", current_day),
             },
             DaySlot::Night => format!("Night {} falls. The arena grows dark.", current_day),
         };
