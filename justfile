@@ -25,6 +25,9 @@ watch-css:
 # Start full development environment (DB + API + CSS)
 dev:
     #!/usr/bin/env bash
+    # Export .env into this recipe's environment: the api reads process
+    # env only (main.rs SURREAL_HOST), nothing else loads the file.
+    set -a; . ./.env; set +a
     echo "==> Starting SurrealDB..."
     surreal start --log info --user root --pass root --bind 0.0.0.0:8000 surrealkv://.surrealdb &
     DB_PID=$!
