@@ -467,7 +467,7 @@ impl Game {
                 let area_event_kind = area_details_map
                     .get(&character.location.area)
                     .and_then(|&idx| self.areas.get(idx))
-                    .and_then(|a| a.events.first())
+                    .and_then(|a| a.cell_hazards.first().map(|h| &h.event))
                     .map(area_event_to_kind);
                 if let Some(kind) = area_event_kind {
                     let mut wake_events: Vec<world::messages::TaggedEvent> = Vec::new();
@@ -934,7 +934,7 @@ impl Game {
                             areas::DestinationInfo {
                                 area: neighbor_area,
                                 terrain: ad.terrain.clone(),
-                                active_events: ad.events.clone(),
+                                active_events: ad.live_events(),
                                 stamina_cost,
                             }
                         })

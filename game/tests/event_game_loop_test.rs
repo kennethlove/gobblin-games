@@ -20,7 +20,13 @@ fn test_event_survival_integration_with_game_loop() {
     );
 
     // Manually add wildfire event (simulate what trigger_cycle_events does)
-    area_details.events.push(AreaEvent::Wildfire);
+    area_details.cell_hazards.push(areas::CellHazard {
+        sub: areas::hex::SubTriangle::new(0),
+
+        event: AreaEvent::Wildfire,
+
+        blocks_left: 3,
+    });
     game.areas.push(area_details);
 
     // Create characters in forest with vulnerable health
@@ -41,8 +47,13 @@ fn test_event_survival_integration_with_game_loop() {
 
     // Process event survival checks
     let mut rng = SmallRng::seed_from_u64(123);
-    game.process_event_for_area(&AreaId::sector1(), &AreaEvent::Wildfire, &mut rng)
-        .unwrap();
+    game.process_event_for_area(
+        &AreaId::sector1(),
+        areas::hex::SubTriangle::new(0),
+        &AreaEvent::Wildfire,
+        &mut rng,
+    )
+    .unwrap();
 
     // Check that some characters died (probabilistic, but should happen)
     let final_alive = game.living_characters().len();
@@ -114,8 +125,20 @@ fn test_trigger_cycle_events_calls_process_event() {
     // process_event_for_area (which trigger_cycle_events now calls)
 
     // Manually trigger events (simulating what trigger_cycle_events does)
-    game.areas[0].events.push(AreaEvent::Wildfire);
-    game.areas[1].events.push(AreaEvent::Sandstorm);
+    game.areas[0].cell_hazards.push(areas::CellHazard {
+        sub: areas::hex::SubTriangle::new(0),
+
+        event: AreaEvent::Wildfire,
+
+        blocks_left: 3,
+    });
+    game.areas[1].cell_hazards.push(areas::CellHazard {
+        sub: areas::hex::SubTriangle::new(0),
+
+        event: AreaEvent::Sandstorm,
+
+        blocks_left: 3,
+    });
 
     let initial_alive = game.living_characters().len();
 
@@ -124,10 +147,20 @@ fn test_trigger_cycle_events_calls_process_event() {
 
     // Process events (what trigger_cycle_events now does internally)
     let mut rng = SmallRng::seed_from_u64(99);
-    game.process_event_for_area(&AreaId::sector1(), &AreaEvent::Wildfire, &mut rng)
-        .unwrap();
-    game.process_event_for_area(&AreaId::sector4(), &AreaEvent::Sandstorm, &mut rng)
-        .unwrap();
+    game.process_event_for_area(
+        &AreaId::sector1(),
+        areas::hex::SubTriangle::new(0),
+        &AreaEvent::Wildfire,
+        &mut rng,
+    )
+    .unwrap();
+    game.process_event_for_area(
+        &AreaId::sector4(),
+        areas::hex::SubTriangle::new(0),
+        &AreaEvent::Sandstorm,
+        &mut rng,
+    )
+    .unwrap();
 
     let final_alive = game.living_characters().len();
 
@@ -167,7 +200,13 @@ fn test_terrain_affinity_improves_survival() {
             AreaId::sector1(),
             TerrainType::new(BaseTerrain::Forest, vec![]).unwrap(),
         );
-        area.events.push(AreaEvent::Flood);
+        area.cell_hazards.push(areas::CellHazard {
+            sub: areas::hex::SubTriangle::new(0),
+
+            event: AreaEvent::Flood,
+
+            blocks_left: 3,
+        });
         game_with.areas.push(area);
 
         let mut character = Character::new("Affinity Character".to_string(), Some(1), None);
@@ -178,7 +217,12 @@ fn test_terrain_affinity_improves_survival() {
         game_with.characters.push(character);
 
         game_with
-            .process_event_for_area(&AreaId::sector1(), &AreaEvent::Flood, &mut rng_with)
+            .process_event_for_area(
+                &AreaId::sector1(),
+                areas::hex::SubTriangle::new(0),
+                &AreaEvent::Flood,
+                &mut rng_with,
+            )
             .unwrap();
 
         if game_with.characters[0].effective_health() == 0 {
@@ -194,7 +238,13 @@ fn test_terrain_affinity_improves_survival() {
             AreaId::sector1(),
             TerrainType::new(BaseTerrain::Forest, vec![]).unwrap(),
         );
-        area2.events.push(AreaEvent::Flood);
+        area2.cell_hazards.push(areas::CellHazard {
+            sub: areas::hex::SubTriangle::new(0),
+
+            event: AreaEvent::Flood,
+
+            blocks_left: 3,
+        });
         game_without.areas.push(area2);
 
         let mut character2 = Character::new("No Affinity Character".to_string(), Some(1), None);
@@ -205,7 +255,12 @@ fn test_terrain_affinity_improves_survival() {
         game_without.characters.push(character2);
 
         game_without
-            .process_event_for_area(&AreaId::sector1(), &AreaEvent::Flood, &mut rng_without)
+            .process_event_for_area(
+                &AreaId::sector1(),
+                areas::hex::SubTriangle::new(0),
+                &AreaEvent::Flood,
+                &mut rng_without,
+            )
             .unwrap();
 
         if game_without.characters[0].effective_health() == 0 {

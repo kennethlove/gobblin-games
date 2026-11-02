@@ -42,7 +42,7 @@ fn test_game_loop_generates_terrain_appropriate_events() {
     for _ in 0..100 {
         // Clear previous events
         for area_detail in &mut game.areas {
-            area_detail.events.clear();
+            area_detail.cell_hazards.clear();
         }
 
         // Manually trigger events (we can't directly call private trigger_cycle_events)
@@ -50,7 +50,13 @@ fn test_game_loop_generates_terrain_appropriate_events() {
         let mut rng = rand::rng();
         for area_detail in &mut game.areas {
             let event = AreaEvent::random_for_terrain(&area_detail.terrain.base, &mut rng);
-            area_detail.events.push(event.clone());
+            area_detail.cell_hazards.push(areas::CellHazard {
+                sub: areas::hex::SubTriangle::new(0),
+
+                event: event.clone(),
+
+                blocks_left: 3,
+            });
 
             let area_name = area_detail.area.as_ref().unwrap().to_string();
             let event_name = event.to_string();

@@ -26,8 +26,16 @@ fn test_announce_area_events() {
     let mut game = Game::new("Test Game");
     let mut area = AreaDetails::new(Some("Lake".to_string()), AreaId::hub());
     let mut rng = rand::rng();
-    area.events.push(AreaEvent::random(&mut rng));
-    area.events.push(AreaEvent::random(&mut rng));
+    area.cell_hazards.push(areas::CellHazard {
+        sub: areas::hex::SubTriangle::new(0),
+        event: AreaEvent::random(&mut rng),
+        blocks_left: 3,
+    });
+    area.cell_hazards.push(areas::CellHazard {
+        sub: areas::hex::SubTriangle::new(0),
+        event: AreaEvent::random(&mut rng),
+        blocks_left: 3,
+    });
     game.areas.push(area);
 
     assert!(!game.areas[0].is_open());

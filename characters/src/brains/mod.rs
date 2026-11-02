@@ -372,7 +372,19 @@ impl Brain {
             .map(|dest| AreaDetails {
                 area: Some(dest.area),
                 terrain: dest.terrain.clone(),
-                events: dest.active_events.clone(),
+                // WHY: DestinationInfo carries area-level events (no cell
+                // data at scoring time), so they fold into triangle 0;
+                // choose_destination only reads is_open/live_events().
+                cell_hazards: dest
+                    .active_events
+                    .clone()
+                    .into_iter()
+                    .map(|event| areas::CellHazard {
+                        sub: areas::hex::SubTriangle::new(0),
+                        event,
+                        blocks_left: 1,
+                    })
+                    .collect(),
                 ..AreaDetails::default()
             })
             .collect();

@@ -239,13 +239,11 @@ pub struct AreaDetails {
     pub axial: Option<crate::hex::Axial>,
     #[serde(default)]
     pub items: Vec<Item>,
+    /// Live hazards keyed to one sub-tile triangle each (q6k): the
+    /// cell the hazard struck, its event, and q7k's block TTL (set on
+    /// arrival, aged one per cycle, dropped at 0). Empty = open.
     #[serde(default)]
-    pub events: Vec<AreaEvent>,
-    /// Blocks (time blocks) this area's hazards stay active; None =
-    /// no hazards. Set when an event arrives, aged down each cycle,
-    /// and cleared with `events` at 0 (q7k: max 3 blocks lifetime).
-    #[serde(default)]
-    pub hazard_blocks: Option<u8>,
+    pub cell_hazards: Vec<CellHazard>,
     #[serde(default = "default_terrain")]
     pub terrain: TerrainType,
     /// Authored sub-tile atmosphere from the arena preset snapshot, in
@@ -265,6 +263,17 @@ pub fn default_terrain() -> TerrainType {
     TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap()
 }
 
+/// One live hazard on one sub-tile triangle of an area hex (q6k):
+/// survival rolls and announcements are scoped to `sub`; the area-level
+/// readers (status effects, brain avoidance) flatten these via
+/// [`AreaDetails::live_events`].
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CellHazard {
+    pub sub: crate::hex::SubTriangle,
+    pub event: AreaEvent,
+    pub blocks_left: u8,
+}
+
 impl Default for AreaDetails {
     fn default() -> Self {
         Self {
@@ -273,8 +282,7 @@ impl Default for AreaDetails {
             area: None,
             axial: None,
             items: vec![],
-            events: vec![],
-            hazard_blocks: None,
+            cell_hazards: vec![],
             placed_traps: vec![],
             terrain: TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap(),
             sub_tiles: vec![],
@@ -324,8 +332,7 @@ impl AreaDetails {
             area: Some(area),
             axial: None,
             items: vec![],
-            events: vec![],
-            hazard_blocks: None,
+            cell_hazards: vec![],
             placed_traps: vec![],
             terrain: TerrainType::new(BaseTerrain::Clearing, vec![]).unwrap(),
             sub_tiles: vec![],
@@ -339,8 +346,7 @@ impl AreaDetails {
             area: Some(area),
             axial: None,
             items: vec![],
-            events: vec![],
-            hazard_blocks: None,
+            cell_hazards: vec![],
             placed_traps: vec![],
             terrain,
             sub_tiles: vec![],
@@ -348,7 +354,14 @@ impl AreaDetails {
     }
 
     pub fn is_open(&self) -> bool {
-        self.events.is_empty()
+        self.cell_hazards.is_empty()
+    }
+
+    /// Area-level flatten of every live cell hazard (q6k): the
+    /// pass-one view for status effects and brain avoidance, which
+    /// stay hex-level while survival rolls go cell-level.
+    pub fn live_events(&self) -> Vec<AreaEvent> {
+        self.cell_hazards.iter().map(|h| h.event.clone()).collect()
     }
 }
 
@@ -402,8 +415,12 @@ mod tests {
     fn add_event() {
         let mut area_details = AreaDetails::new(None, AreaId::sector1());
         let event = AreaEvent::Wildfire;
-        area_details.events.push(event.clone());
-        assert!(area_details.events.contains(&event));
+        area_details.cell_hazards.push(CellHazard {
+            sub: crate::hex::SubTriangle::new(0),
+            event: event.clone(),
+            blocks_left: 3,
+        });
+        assert!(area_details.cell_hazards.iter().any(|h| h.event == event));
     }
 
     #[test]
@@ -411,7 +428,11 @@ mod tests {
         let mut area_details = AreaDetails::new(None, AreaId::sector1());
         assert!(area_details.is_open());
         let event = AreaEvent::Wildfire;
-        area_details.events.push(event.clone());
+        area_details.cell_hazards.push(CellHazard {
+            sub: crate::hex::SubTriangle::new(0),
+            event: event.clone(),
+            blocks_left: 3,
+        });
         assert!(!area_details.is_open());
     }
 

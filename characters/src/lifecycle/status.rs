@@ -40,7 +40,8 @@ impl Character {
 
     /// Applies statuses to the character based on events in the current area.
     pub(crate) fn apply_area_effects(&mut self, area_details: &AreaDetails) {
-        for event in &area_details.events {
+        let live = area_details.live_events();
+        for event in &live {
             match event {
                 AreaEvent::Wildfire => {
                     self.try_acquire_affliction(AfflictionDraft {
@@ -463,7 +464,13 @@ mod tests {
     #[rstest]
     fn process_status_from_area_event(mut character: Character, mut small_rng: SmallRng) {
         let mut area_details = AreaDetails::new(Some("Forest".to_string()), AreaId::hub());
-        area_details.events.push(AreaEvent::Wildfire);
+        area_details.cell_hazards.push(areas::CellHazard {
+            sub: areas::hex::SubTriangle::new(0),
+
+            event: AreaEvent::Wildfire,
+
+            blocks_left: 3,
+        });
 
         character.process_status(&area_details, &mut small_rng, &mut Vec::new());
         assert!(
@@ -476,7 +483,13 @@ mod tests {
     #[rstest]
     fn wildfire_sets_affliction(mut character: Character) {
         let mut area_details = AreaDetails::new(Some("Forest".to_string()), areas::AreaId::hub());
-        area_details.events.push(AreaEvent::Wildfire);
+        area_details.cell_hazards.push(areas::CellHazard {
+            sub: areas::hex::SubTriangle::new(0),
+
+            event: AreaEvent::Wildfire,
+
+            blocks_left: 3,
+        });
 
         character.apply_area_effects(&area_details);
 
@@ -490,7 +503,13 @@ mod tests {
     #[rstest]
     fn blizzard_sets_affliction(mut character: Character) {
         let mut area_details = AreaDetails::new(Some("Tundra".to_string()), areas::AreaId::hub());
-        area_details.events.push(AreaEvent::Blizzard);
+        area_details.cell_hazards.push(areas::CellHazard {
+            sub: areas::hex::SubTriangle::new(0),
+
+            event: AreaEvent::Blizzard,
+
+            blocks_left: 3,
+        });
 
         character.apply_area_effects(&area_details);
 
@@ -504,7 +523,13 @@ mod tests {
     #[rstest]
     fn heatwave_sets_affliction(mut character: Character) {
         let mut area_details = AreaDetails::new(Some("Desert".to_string()), areas::AreaId::hub());
-        area_details.events.push(AreaEvent::Heatwave);
+        area_details.cell_hazards.push(areas::CellHazard {
+            sub: areas::hex::SubTriangle::new(0),
+
+            event: AreaEvent::Heatwave,
+
+            blocks_left: 3,
+        });
 
         character.apply_area_effects(&area_details);
 
@@ -518,7 +543,13 @@ mod tests {
     #[rstest]
     fn sandstorm_sets_affliction(mut character: Character) {
         let mut area_details = AreaDetails::new(Some("Desert".to_string()), areas::AreaId::hub());
-        area_details.events.push(AreaEvent::Sandstorm);
+        area_details.cell_hazards.push(areas::CellHazard {
+            sub: areas::hex::SubTriangle::new(0),
+
+            event: AreaEvent::Sandstorm,
+
+            blocks_left: 3,
+        });
 
         character.apply_area_effects(&area_details);
 
@@ -532,7 +563,13 @@ mod tests {
     #[rstest]
     fn drought_sets_affliction(mut character: Character) {
         let mut area_details = AreaDetails::new(Some("Desert".to_string()), areas::AreaId::hub());
-        area_details.events.push(AreaEvent::Drought);
+        area_details.cell_hazards.push(areas::CellHazard {
+            sub: areas::hex::SubTriangle::new(0),
+
+            event: AreaEvent::Drought,
+
+            blocks_left: 3,
+        });
 
         character.apply_area_effects(&area_details);
 
@@ -546,7 +583,13 @@ mod tests {
     #[rstest]
     fn flood_sets_trapped_affliction(mut character: Character) {
         let mut area_details = AreaDetails::new(Some("River".to_string()), areas::AreaId::hub());
-        area_details.events.push(AreaEvent::Flood);
+        area_details.cell_hazards.push(areas::CellHazard {
+            sub: areas::hex::SubTriangle::new(0),
+
+            event: AreaEvent::Flood,
+
+            blocks_left: 3,
+        });
 
         character.apply_area_effects(&area_details);
 
@@ -560,7 +603,13 @@ mod tests {
     #[rstest]
     fn earthquake_sets_trapped_affliction(mut character: Character) {
         let mut area_details = AreaDetails::new(Some("Cave".to_string()), areas::AreaId::hub());
-        area_details.events.push(AreaEvent::Earthquake);
+        area_details.cell_hazards.push(areas::CellHazard {
+            sub: areas::hex::SubTriangle::new(0),
+
+            event: AreaEvent::Earthquake,
+
+            blocks_left: 3,
+        });
 
         character.apply_area_effects(&area_details);
 

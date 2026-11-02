@@ -634,10 +634,8 @@ impl Game {
             self.day = Some(self.day.unwrap_or(0) + 1);
         }
 
-        // Clear all events from the previous cycle
-        for area in self.areas.iter_mut() {
-            area.events.clear();
-        }
+        // Hazards persist across cycles (q7k): hazard_survival() ages
+        // blocks_left out; nothing wipes them at cycle boundaries.
         Ok(())
     }
 
@@ -748,6 +746,7 @@ impl Game {
     pub fn process_event_for_area(
         &mut self,
         area: &AreaId,
+        sub: areas::hex::SubTriangle,
         event: &AreaEvent,
         rng: &mut impl Rng,
     ) -> Result<(), GameError> {
@@ -759,7 +758,15 @@ impl Game {
                 .position(|a| a.area.as_ref() == Some(area));
 
             match area_idx {
-                Some(idx) => (self.areas[idx].terrain.base, self.areas[idx].events.clone()),
+                Some(idx) => (
+                    self.areas[idx].terrain.base,
+                    self.areas[idx]
+                        .cell_hazards
+                        .iter()
+                        .filter(|h| h.sub == sub)
+                        .map(|h| h.event.clone())
+                        .collect::<Vec<_>>(),
+                ),
                 None => return Ok(()), // AreaId not found
             }
         };
@@ -769,7 +776,7 @@ impl Game {
             .characters
             .iter()
             .enumerate()
-            .filter(|(_, t)| t.is_alive() && t.location.area == area)
+            .filter(|(_, t)| t.is_alive() && t.location.area == area && t.location.sub == sub)
             .map(|(idx, _)| idx)
             .collect();
 

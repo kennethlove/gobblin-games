@@ -62,14 +62,14 @@ pub fn is_present(trigger: &PhobiaTrigger, character: &Character, ctx: &PhobiaCo
 
 fn is_fire_present(ctx: &PhobiaContext<'_>) -> bool {
     ctx.area
-        .events
+        .live_events()
         .iter()
         .any(|e| matches!(e, AreaEvent::Wildfire))
 }
 
 fn is_water_present(ctx: &PhobiaContext<'_>) -> bool {
     ctx.area
-        .events
+        .live_events()
         .iter()
         .any(|e| matches!(e, AreaEvent::Flood))
         || matches!(ctx.area.terrain.base, BaseTerrain::Wetlands)
@@ -141,7 +141,14 @@ mod tests {
     fn make_area_details(terrain: BaseTerrain, events: Vec<AreaEvent>) -> AreaDetails {
         let mut area = AreaDetails::new(None, AreaId::hub());
         area.terrain = TerrainType::new(terrain, vec![]).unwrap();
-        area.events = events;
+        area.cell_hazards = events
+            .into_iter()
+            .map(|event| areas::CellHazard {
+                sub: areas::hex::SubTriangle::new(0),
+                event,
+                blocks_left: 1,
+            })
+            .collect();
         area
     }
 
