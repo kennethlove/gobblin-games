@@ -288,6 +288,48 @@ async fn test_duplicate_username() {
     test_db.cleanup().await;
 }
 
+/// Duplicate email must surface a conflict, not the masked generic failure:
+/// SIGNUP masks inner DB errors (cause: None), so the pre-signup
+/// `email_taken` check is what produces the message (gobblin-games-2zf).
+#[tokio::test]
+async fn test_duplicate_email_conflict() {
+    let test_db = TestDb::new().await;
+    let app_state = test_db.app_state();
+    let router = create_test_router(app_state);
+    let server = TestServer::new(router);
+
+    let first = TestUser::new("email_owner");
+    server
+        .post("/api/users")
+        .json(&json!({
+            "display_name": first.username,
+            "email": first.email,
+            "password": first.password,
+        }))
+        .await
+        .assert_status(axum::http::StatusCode::CREATED);
+
+    // Same email, different display name (names are not unique) — 409.
+    let second = TestUser::new("email_thief");
+    let response = server
+        .post("/api/users")
+        .json(&json!({
+            "display_name": second.username,
+            "email": first.email,
+            "password": second.password,
+        }))
+        .await;
+
+    assert_eq!(response.status_code(), axum::http::StatusCode::CONFLICT);
+    let body = response.json::<serde_json::Value>();
+    assert_eq!(
+        body.get("error").and_then(|v| v.as_str()),
+        Some("Email already taken")
+    );
+
+    test_db.cleanup().await;
+}
+
 /// Test session endpoint (requires authentication)
 #[tokio::test]
 async fn test_session_endpoint() {
@@ -374,11 +416,11 @@ async fn require_auth_accepts_valid_session_cookie() {
         .expect("access_token")
         .to_string();
 
-    // No cookie → rejected.
+    // No cookie -> rejected.
     let empty = axum::http::HeaderMap::new();
     assert!(api::auth::require_auth(&app_state, &empty).await.is_err());
 
-    // Fresh session cookie → accepted with the right identity.
+    // Fresh session cookie -> accepted with the right identity.
     let mut headers = axum::http::HeaderMap::new();
     headers.insert(
         axum::http::header::COOKIE,

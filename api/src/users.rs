@@ -9,6 +9,8 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use shared::{EmailRegistrationUser, UserSession};
 use std::sync::LazyLock;
+use surrealdb::Surreal;
+use surrealdb::engine::any::Any;
 use surrealdb::opt::auth::Record;
 use surrealdb_types::{RecordId, SerdeWrapper};
 use validator::Validate;
@@ -89,6 +91,24 @@ async fn session(Extension(AuthDb(db)): Extension<AuthDb>) -> Result<Json<UserSe
     }))
 }
 
+/// True when some account already uses this email.
+///
+/// The record-access SIGNUP layer masks inner DB errors (`cause: None`),
+/// so the unique_email violation never reaches the caller — check before
+/// signing up. Fails open: signup stays the authority on the race.
+pub async fn email_taken(db: &Surreal<Any>, email: &str) -> bool {
+    let Ok(mut resp) = db
+        .query("SELECT id FROM user WHERE email = $email LIMIT 1")
+        .bind(("email", email.to_string()))
+        .await
+    else {
+        return false;
+    };
+    resp.take::<Option<RecordId>>(0)
+        .map(|row| row.is_some())
+        .unwrap_or(false)
+}
+
 async fn user_create(
     state: State<AppState>,
     Json(payload): Json<EmailRegistrationUser>,
@@ -103,6 +123,11 @@ async fn user_create(
         .use_db(&state.database)
         .await
         .map_err(|e| AppError::DbError(format!("Failed to scope signup session: {e}")))?;
+    // SIGNUP masks inner DB errors (cause: None), so unique_email can
+    // never be classified after the fact — check the address first.
+    if email_taken(&user_db, &payload.email).await {
+        return Err(AppError::Conflict("Email already taken".to_string()));
+    }
     let result = user_db
         .signup(Record {
             access: "user".to_string(),
@@ -120,15 +145,7 @@ async fn user_create(
             })),
         )
             .into_response()),
-        Err(e) => {
-            let combined = format!("{e} {e:?}").to_lowercase();
-            eprintln!("DEBUG_SIGNUP_ERROR: {e} {e:?}");
-            if combined.contains("unique_email") {
-                Err(AppError::Conflict("Email already taken".to_string()))
-            } else {
-                Err(AppError::DbError(format!("Failed to create user: {e}")))
-            }
-        }
+        Err(e) => Err(AppError::DbError(format!("Failed to create user: {e}"))),
     }
 }
 

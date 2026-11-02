@@ -258,6 +258,16 @@ pub async fn handle_register_post(
         return redirect_with_error("/auth", "register", "Database error");
     }
 
+    // SIGNUP masks inner DB errors (cause: None), so unique_email can
+    // never be classified in the match below — check the address first.
+    if api::users::email_taken(&user_db, &email).await {
+        return redirect_with_error(
+            "/auth",
+            "register",
+            "An account with this email already exists",
+        );
+    }
+
     let result = user_db
         .signup(surrealdb::opt::auth::Record {
             access: "user".to_string(),
@@ -298,14 +308,6 @@ pub async fn handle_register_post(
             .into_response()
         }
         Err(e) => {
-            let combined = format!("{e} {e:?}").to_lowercase();
-            if combined.contains("unique_email") || combined.contains("already exists") {
-                return redirect_with_error(
-                    "/auth",
-                    "register",
-                    "An account with this email already exists",
-                );
-            }
             tracing::warn!("Registration failed with unrecognized error: {}", e);
             redirect_with_error("/auth", "register", "Registration failed")
         }
