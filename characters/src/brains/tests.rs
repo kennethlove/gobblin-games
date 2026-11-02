@@ -646,10 +646,10 @@ fn brain_act_routes_first_hop_to_non_neighbor_goal(
             // The shortest path to Sector4 goes Sector1 -> Hub
             // -> Sector4, so the first hop must be Hub. Brains are
             // area-level: the destination's canonical sub-tile
-            // (triangle 0 via Location::center) stands in.
+            // (triangle 0 via Location::canonical) stands in.
             assert_eq!(
                 first_hop,
-                Location::center(AreaId::hub()),
+                Location::canonical(AreaId::hub()),
                 "expected first hop toward Sector4 to be Hub, got {first_hop:?}"
             );
         }

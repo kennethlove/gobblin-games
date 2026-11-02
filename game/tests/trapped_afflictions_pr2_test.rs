@@ -122,7 +122,7 @@ fn trapped_blocked_from_moving() {
 
     let result = hard_gates_with_terrain(
         &character,
-        &Action::Move(Some(Location::center(AreaId::sector1()))),
+        &Action::Move(Some(Location::canonical(AreaId::sector1()))),
         None,
     );
     assert_eq!(result, Some(Action::None));
@@ -153,9 +153,9 @@ fn trapped_override_blocks_move() {
 
     let result = affliction_override(
         &character,
-        &Action::Move(Some(
-            areas::location::Location::center(areas::AreaId::hub()),
-        )),
+        &Action::Move(Some(areas::location::Location::canonical(
+            areas::AreaId::hub(),
+        ))),
     );
     assert_eq!(result, Some(Action::None));
 }

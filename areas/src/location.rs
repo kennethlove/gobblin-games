@@ -63,7 +63,7 @@ fn default_sub() -> SubTriangle {
 impl Default for Location {
     /// Hub, sub-tile triangle 0 — matches the serde defaults.
     fn default() -> Self {
-        Self::center(AreaId::hub())
+        Self::canonical(AreaId::hub())
     }
 }
 
@@ -73,11 +73,11 @@ impl Location {
     }
 
     /// The default sub-tile of an area: triangle 0, whose apex touches
-    /// the hex center. (Name kept from the sub-tile era, where the center
-    /// slot was literally the hex center; in the triangle layout every
-    /// triangle reaches the center, and triangle 0 is the canonical
-    /// spawn/default position.)
-    pub const fn center(area: AreaId) -> Self {
+    /// the hex center. (Renamed from `center` in gobblin-games-61m: the
+    /// old slot name outlived its meaning — every triangle reaches the
+    /// hex center, and triangle 0 is the canonical spawn/default
+    /// position.)
+    pub const fn canonical(area: AreaId) -> Self {
         Self {
             area,
             sub: SubTriangle::new(0),
@@ -107,7 +107,7 @@ pub fn all_locations(layout: &[(AreaId, Axial)]) -> impl Iterator<Item = Locatio
 /// Hub triangle 0.
 pub fn random_spawn_location<R: Rng + ?Sized>(rng: &mut R, areas: &[AreaId]) -> Location {
     if areas.is_empty() {
-        return Location::center(AreaId::hub());
+        return Location::canonical(AreaId::hub());
     }
     let area = areas[rng.random_range(0..areas.len())];
     Location::new(
@@ -381,7 +381,7 @@ mod tests {
     fn serde_empty_payload_defaults_to_hub_center() {
         let loc: Location = serde_json::from_value(serde_json::json!({})).unwrap();
         assert_eq!(loc, Location::default());
-        assert_eq!(loc, Location::center(AreaId::hub()));
+        assert_eq!(loc, Location::canonical(AreaId::hub()));
     }
 
     /// Legacy sub-tile rows carried `sub` as `{"q": .., "r": ..}`. That
@@ -610,23 +610,43 @@ mod tests {
         // ring triangles at 1 hop, the next pair at 2, the opposite
         // triangle at 3 — the6-cycle structure with no shortcuts.
         assert_eq!(
-            distance(&default_layout(), Location::center(AreaId::hub()), hub(1)),
+            distance(
+                &default_layout(),
+                Location::canonical(AreaId::hub()),
+                hub(1)
+            ),
             Some(1)
         );
         assert_eq!(
-            distance(&default_layout(), Location::center(AreaId::hub()), hub(5)),
+            distance(
+                &default_layout(),
+                Location::canonical(AreaId::hub()),
+                hub(5)
+            ),
             Some(1)
         );
         assert_eq!(
-            distance(&default_layout(), Location::center(AreaId::hub()), hub(2)),
+            distance(
+                &default_layout(),
+                Location::canonical(AreaId::hub()),
+                hub(2)
+            ),
             Some(2)
         );
         assert_eq!(
-            distance(&default_layout(), Location::center(AreaId::hub()), hub(4)),
+            distance(
+                &default_layout(),
+                Location::canonical(AreaId::hub()),
+                hub(4)
+            ),
             Some(2)
         );
         assert_eq!(
-            distance(&default_layout(), Location::center(AreaId::hub()), hub(3)),
+            distance(
+                &default_layout(),
+                Location::canonical(AreaId::hub()),
+                hub(3)
+            ),
             Some(3)
         );
     }
@@ -666,7 +686,7 @@ mod tests {
     /// walk the Sector 1 ring (3 more hops) —4 hops total.
     #[test]
     fn hub_center_to_sector1_triangle0_is_four_hops_via_door() {
-        let from = Location::center(AreaId::hub());
+        let from = Location::canonical(AreaId::hub());
         let to = at(AreaId::sector1(), 0);
         assert_eq!(distance(&default_layout(), from, to), Some(4));
         let path = shortest_path(&default_layout(), from, to).unwrap();
@@ -682,8 +702,8 @@ mod tests {
 
     #[test]
     fn shortest_path_steps_are_mutual_neighbors() {
-        let from = Location::center(AreaId::hub());
-        let to = Location::center(AreaId::sector5());
+        let from = Location::canonical(AreaId::hub());
+        let to = Location::canonical(AreaId::sector5());
         let path = shortest_path(&default_layout(), from, to).unwrap();
         assert_eq!(path.first(), Some(&from));
         assert_eq!(path.last(), Some(&to));
@@ -706,7 +726,7 @@ mod tests {
 
     #[test]
     fn all_forty_two_cells_reachable_from_hub_center() {
-        let from = Location::center(AreaId::hub());
+        let from = Location::canonical(AreaId::hub());
         let mut reached = 0;
         for target in all_locations(&default_layout()) {
             let d = distance(&default_layout(), from, target).expect("every cell reachable");
@@ -746,7 +766,7 @@ mod tests {
 
     #[test]
     fn shortest_path_while_detours_around_a_blocked_cell() {
-        let from = Location::center(AreaId::hub());
+        let from = Location::canonical(AreaId::hub());
         let to = at(AreaId::sector1(), 0);
         let door = at(AreaId::sector1(), 3); // the Hub0 <-> Sector1-3 door
         let path = shortest_path_while(&default_layout(), from, to, |cell| cell == door)
@@ -767,7 +787,7 @@ mod tests {
 
     #[test]
     fn shortest_path_while_returns_none_when_goal_is_behind_a_blocked_area() {
-        let from = Location::center(AreaId::hub());
+        let from = Location::canonical(AreaId::hub());
         let to = at(AreaId::sector1(), 0);
         let path = shortest_path_while(&default_layout(), from, to, |cell| {
             cell.area == AreaId::sector1()
@@ -777,7 +797,7 @@ mod tests {
 
     #[test]
     fn shortest_path_while_allows_the_start_cell_even_if_marked_blocked() {
-        let from = Location::center(AreaId::hub());
+        let from = Location::canonical(AreaId::hub());
         let to = hub(2);
         let path = shortest_path_while(&default_layout(), from, to, |cell| cell == from).unwrap();
         assert_eq!(path.first(), Some(&from));

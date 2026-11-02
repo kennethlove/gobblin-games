@@ -925,7 +925,7 @@ impl Game {
                         .map(|ad| {
                             // Crossing price into this neighbor
                             let move_action = Action::Move(Some(
-                                areas::location::Location::center(neighbor_area),
+                                areas::location::Location::canonical(neighbor_area),
                             ));
                             let to_cost =
                                 calculate_stamina_cost(&move_action, &ad.terrain, character);

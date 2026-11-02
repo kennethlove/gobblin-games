@@ -301,7 +301,7 @@ mod tests {
         // Sector 1 triangle 3, then around the ring — 4 hops total;
         // each Move beat commits exactly one of them.
         let result = character.travels(
-            Some(Location::center(AreaId::sector1())),
+            Some(Location::canonical(AreaId::sector1())),
             &default_test_areas(),
             &mut events,
         );
@@ -319,7 +319,7 @@ mod tests {
 
         // Second Move beat toward the same goal: one more hop.
         let result = character.travels(
-            Some(Location::center(AreaId::sector1())),
+            Some(Location::canonical(AreaId::sector1())),
             &default_test_areas(),
             &mut events,
         );
@@ -406,7 +406,7 @@ mod tests {
         ];
         // AreaId::hub() triangle 0 -> AreaId::sector1() triangle 3 crosses the door.
         let result = character.travels(
-            Some(Location::center(AreaId::sector1())),
+            Some(Location::canonical(AreaId::sector1())),
             &all_areas,
             &mut Vec::new(),
         );
@@ -425,7 +425,7 @@ mod tests {
         // Exactly one crossing price: beat 1 empties the pool.
         character.stamina = hop_price(&character);
         let result = character.travels(
-            Some(Location::center(AreaId::sector1())),
+            Some(Location::canonical(AreaId::sector1())),
             &default_test_areas(),
             &mut Vec::new(),
         );
@@ -439,7 +439,7 @@ mod tests {
         // fails with the travel-exhausted event and the location stays.
         let mut events = Vec::new();
         let result = character.travels(
-            Some(Location::center(AreaId::sector1())),
+            Some(Location::canonical(AreaId::sector1())),
             &default_test_areas(),
             &mut events,
         );
@@ -460,7 +460,7 @@ mod tests {
         let start = character.location;
         let mut events = Vec::new();
         let result = character.travels(
-            Some(Location::center(AreaId::sector1())),
+            Some(Location::canonical(AreaId::sector1())),
             &default_test_areas(),
             &mut events,
         );
@@ -476,9 +476,9 @@ mod tests {
     #[tokio::test]
     async fn travels_fail_already_there(character: Character) {
         let mut character = character;
-        character.location = Location::center(AreaId::sector1());
+        character.location = Location::canonical(AreaId::sector1());
         let result = character.travels(
-            Some(Location::center(AreaId::sector1())),
+            Some(Location::canonical(AreaId::sector1())),
             &default_test_areas(),
             &mut Vec::new(),
         );

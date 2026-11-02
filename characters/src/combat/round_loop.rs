@@ -2222,7 +2222,7 @@ mod tests {
         let mut a = char_named("Alice");
         let mut b = char_named("Bob");
         let mut c = char_named("Carol");
-        c.location = areas::location::Location::center(areas::AreaId::sector1());
+        c.location = areas::location::Location::canonical(areas::AreaId::sector1());
         c.attributes.strength = 0;
         a.allies = vec![c.id];
 
@@ -2301,7 +2301,7 @@ mod tests {
     #[test]
     fn call_ally_brings_a_neighbor_in() {
         let mut a = char_named("Alice");
-        a.location = areas::location::Location::center(areas::AreaId::hub());
+        a.location = areas::location::Location::canonical(areas::AreaId::hub());
         a.attributes.strength = 0;
         a.attributes.speed = 100;
         let mut b = char_named("Bob");
@@ -2391,14 +2391,14 @@ mod tests {
     #[test]
     fn call_ignores_allies_beyond_one_hop() {
         let mut a = char_named("Alice");
-        a.location = areas::location::Location::center(areas::AreaId::hub());
+        a.location = areas::location::Location::canonical(areas::AreaId::hub());
         a.attributes.strength = 0;
         a.attributes.speed = 100;
         let mut b = char_named("Bob");
         b.attributes.strength = 0;
         b.attributes.speed = 0;
         let mut c = char_named("Carol");
-        c.location = areas::location::Location::center(areas::AreaId::sector3());
+        c.location = areas::location::Location::canonical(areas::AreaId::sector3());
         c.attributes.strength = 0;
         c.attributes.speed = 0;
         a.allies = vec![c.id]; // an ally, but past the one-hop reach

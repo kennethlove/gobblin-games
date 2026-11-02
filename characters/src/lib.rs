@@ -197,7 +197,7 @@ pub struct Character {
     pub id: Uuid,
     /// Where are they? AreaId-hex plus sub-tile slot. Flattened so the
     /// legacy top-level `area` column keeps hydrating (area preserved,
-    /// sub defaults to the canonical triangle 0 via `Location::center`);
+    /// sub defaults to the canonical triangle 0 via `Location::canonical`);
     /// the wire carries `area` and `sub` as
     /// sibling top-level columns.
     #[serde(flatten)]
@@ -465,7 +465,7 @@ impl Character {
         Self {
             identifier: id,
             id: id_uuid,
-            location: Location::center(AreaId::hub()),
+            location: Location::canonical(AreaId::hub()),
             name: name.clone(),
             team,
             clan_name: String::new(),
@@ -745,7 +745,7 @@ impl Character {
             terrain_affinity: world::clans::roll_terrain_affinity(&mut rng),
             traits,
             // Per-game state: zeroed by construction.
-            location: Location::center(AreaId::hub()),
+            location: Location::canonical(AreaId::hub()),
             status: CharacterStatus::default(),
             editable: true,
             stamina: max_stamina,
@@ -806,7 +806,7 @@ impl Character {
         Self {
             identifier: id,
             id: id_uuid,
-            location: Location::center(AreaId::hub()),
+            location: Location::canonical(AreaId::hub()),
             name,
             team,
             clan_name: String::new(),
