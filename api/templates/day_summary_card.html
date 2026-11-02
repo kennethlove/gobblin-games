@@ -1,21 +1,21 @@
-<div class="event-card summary" data-archetype="summary" style="border-left-color:var(--muted);">
-  <div class="card-head">
-    <span class="card-badge" style="background:var(--muted);">DAY SUMMARY</span>
+<article class="event-card summary" data-archetype="summary" data-kind-color="muted">
+  <header class="card-head">
+    <span class="card-badge">DAY SUMMARY</span>
     <span class="card-timestamp">D{{ day }}</span>
-  </div>
+  </header>
   <div class="card-body">
-    <span style="font-weight:600;">Day {{ day }}</span>
+    <span class="card-kind">Day {{ day }}</span>
     — {{ fallen }} fallen, {{ survivors }} standing. {{ deaths }} deaths,
     {{ formed }} alliances formed, {{ dissolved }} dissolved, {{ betrays }} betrayals,
     {{ found }} items found, {{ used }} items used.
     {% if leaders %}
     <div class="card-timestamp">Kills: {% for l in leaders %}{{ l.name }} ({{ l.kills }}){% if not loop.last %}, {% endif %}{% endfor %}</div>
     {% endif %}
-    <details style="margin-top:6px;">
-      <summary style="cursor:pointer; color:var(--muted);">{{ goblins | length }} goblins</summary>
-      <table style="width:100%; margin-top:6px; font-size:var(--fs-xs);">
+    <details class="summary-details">
+      <summary>{{ goblins | length }} goblins</summary>
+      <table class="goblin-table">
         <thead>
-          <tr style="text-align:left; color:var(--muted);">
+          <tr>
             <th>Goblin</th>
             <th>Team</th>
             <th>Kills</th>
@@ -41,4 +41,4 @@
       </table>
     </details>
   </div>
-</div>
+</article>

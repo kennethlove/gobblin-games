@@ -132,38 +132,38 @@ fn message_kind_label(payload: &shared::messages::MessagePayload) -> &'static st
 fn kind_color(payload: &shared::messages::MessagePayload) -> &'static str {
     use shared::messages::MessageKind::*;
     match payload.kind() {
-        CharacterKilled => "var(--danger)",
+        CharacterKilled => "danger",
         Combat | CombatBeat | CombatRoundStart | CombatJoined | CombatEnded | CharacterAttacked
-        | CharacterWounded | TrapSet | TrapTriggered => "var(--waiting)",
+        | CharacterWounded | TrapSet | TrapTriggered => "waiting",
         AllianceFormed | AllianceProposed | AllianceDissolved | BetrayalTriggered
-        | TrustShockBreak => "var(--info)",
-        CharacterMoved | CharacterHidden | AreaClosed => "var(--accent)",
-        AreaEvent => "var(--danger)",
-        ItemFound | ItemUsed | ItemDropped | PatronGift => "var(--gold)",
+        | TrustShockBreak => "info",
+        CharacterMoved | CharacterHidden | AreaClosed => "accent",
+        AreaEvent => "danger",
+        ItemFound | ItemUsed | ItemDropped | PatronGift => "gold",
         CharacterRested | CharacterStarved | CharacterDehydrated | SanityBreak
         | HungerBandChanged | ThirstBandChanged | StaminaBandChanged | ShelterSought | Foraged
         | Drank | Ate | CharacterSlept | CharacterWoke | CycleStart | CycleEnd | PhaseStarted
         | PhaseEnded | GameEnded | Generic | CharacterBledOut | WoundInfected | WoundHealed
         | WoundInflicted | WoundBled | WoundTreated | WoundAmputated | ConditionAcquired
-        | ConditionResolved | CharacterDesperate => "var(--danger)",
+        | ConditionResolved | CharacterDesperate => "danger",
         TraumaAcquired | TraumaReinforced | TraumaEscalated | TraumaFlashback | TraumaAvoidance
-        | TraumaObserved | TraumaForgotten | TraumaHabituated => "var(--purple)",
+        | TraumaObserved | TraumaForgotten | TraumaHabituated => "purple",
         PhobiaAcquired | PhobiaTriggered | PhobiaEscalated | PhobiaHabituated | PhobiaObserved
-        | PhobiaForgotten => "var(--purple)",
+        | PhobiaForgotten => "purple",
         FixationAcquired | FixationEscalated | FixationFired | FixationConsummated
-        | FixationThwarted | FixationFaded => "var(--purple)",
+        | FixationThwarted | FixationFaded => "purple",
         AfflictionAcquired | AfflictionProgressed | AfflictionHealed | AfflictionCascaded
         | SubstanceUsed | AddictionAcquired | AddictionReinforced | AddictionEscalated
         | AddictionResisted | AddictionRelapse | AddictionCraving | AddictionObserved
-        | AddictionForgotten | AddictionHabituated => "var(--warning)",
+        | AddictionForgotten | AddictionHabituated => "warning",
         CharacterTrapped
         | Struggling
         | TrappedEscaped
         | CharacterDiedWhileTrapped
         | RescueAttempted
-        | PartialRescueProgress => "var(--warning)",
-        SleepIncident => "var(--info)",
-        DaySummary => "var(--muted)",
+        | PartialRescueProgress => "warning",
+        SleepIncident => "info",
+        DaySummary => "muted",
     }
 }
 

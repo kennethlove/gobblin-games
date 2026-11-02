@@ -127,13 +127,13 @@ pub fn archetype_label(value: &Value, _: Kwargs, _: &State) -> TeraResult<Value>
 pub fn kind_color(value: &Value, _: Kwargs, _: &State) -> TeraResult<Value> {
     let kind = value.as_str().unwrap_or("");
     let color = match kind {
-        "death" => "var(--danger)",
-        "combat" => "var(--waiting)",
-        "alliance" | "betrayal" => "var(--info)",
-        "movement" => "var(--accent)",
-        "item" => "var(--gold)",
-        "hazard" | "event" => "var(--purple)",
-        _ => "var(--muted)",
+        "death" => "danger",
+        "combat" => "waiting",
+        "alliance" | "betrayal" => "info",
+        "movement" => "accent",
+        "item" => "gold",
+        "hazard" | "event" => "purple",
+        _ => "muted",
     };
     Ok(Value::from(color))
 }
