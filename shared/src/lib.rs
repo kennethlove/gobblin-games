@@ -91,7 +91,7 @@ fn validate_uuid(value: &str) -> Result<(), ValidationError> {
         .map_err(|_| ValidationError::new("invalid_uuid"))
 }
 
-/// Default roster: 8 teams × 3 goblins = 24.
+/// Default roster: 8 teams x 3 goblins = 24.
 pub const DEFAULT_TEAM_COUNT: u32 = 8;
 pub const DEFAULT_GOBLINS_PER_TEAM: u32 = 3;
 pub const DEFAULT_ROSTER_CAP: u32 = DEFAULT_TEAM_COUNT * DEFAULT_GOBLINS_PER_TEAM;
@@ -102,7 +102,7 @@ pub const DEFAULT_MAX_GOBINS_PER_PLAYER: u32 = 1;
 /// MAX_ROSTER_CAP-sized draft. Server-configurable; this is the fallback.
 pub const DEFAULT_MAX_GOBLINS_PER_USER: u32 = 128;
 /// Hard ceiling on a game's roster: every goblin costs processing, rows,
-/// and storage. Set to the component bounds' own product (16 × 8) so any
+/// and storage. Set to the component bounds' own product (16 x 8) so any
 /// valid team/goblins combination fits; stress testing tracked separately.
 pub const MAX_ROSTER_CAP: u32 = 128;
 
@@ -124,9 +124,6 @@ pub struct CreateGame {
     #[serde(default)]
     pub event_frequency: EventFrequency,
 
-    /// Starting health range for characters (optional, defaults to 80-100)
-    pub starting_health_range: Option<(u32, u32)>,
-
     /// Owned characters the creator brings into the game at creation.
     /// Empty = fallback: auto-spawn the legacy full 24-bot roster.
     /// Creators may field as many of their own as they like; other
@@ -134,7 +131,7 @@ pub struct CreateGame {
     #[serde(default)]
     pub characters: Vec<String>,
 
-    /// Teams in the game; roster = team_count × goblins_per_team.
+    /// Teams in the game; roster = team_count x goblins_per_team.
     #[serde(default)]
     #[validate(range(min = 2, max = 16, message = "Team count must be between 2 and 16"))]
     pub team_count: Option<u32>,
@@ -165,7 +162,7 @@ pub struct CreateGame {
     pub nightfall_hour: Option<u8>,
 }
 
-/// Roster ceiling: team_count × goblins_per_team must stay within
+/// Roster ceiling: team_count x goblins_per_team must stay within
 /// [`MAX_ROSTER_CAP`]. Component ranges are validated per-field.
 pub fn validate_roster_size(game: &CreateGame) -> Result<(), ValidationError> {
     let teams = game.team_count.unwrap_or(DEFAULT_TEAM_COUNT);
@@ -452,6 +449,16 @@ pub struct PaginatedGames {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Legacy clients and rows may still carry `starting_health_range`;
+    /// the field is gone, but unknown keys must keep parsing (gobblin-games-clp).
+    #[test]
+    fn create_game_tolerates_removed_starting_health_range() {
+        let legacy = r#"{"name":"Old Row","starting_health_range":[80,100]}"#;
+        let game: CreateGame =
+            serde_json::from_str(legacy).expect("legacy field must stay tolerated");
+        assert_eq!(game.name.as_deref(), Some("Old Row"));
+    }
 
     #[test]
     fn day_night_hours_defaults_are_valid() {
