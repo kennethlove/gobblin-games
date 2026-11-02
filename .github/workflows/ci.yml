@@ -126,8 +126,19 @@ jobs:
           # A distinct key segment gives api its own ~1GB entry; total
           # storage stays far under the 10GB budget that motivated
           # shared-key in the first place.
-          key: api
+          key: api-v2
           cache-on-failure: true
+          # WHY: rust-cache skips ~/.cargo/registry/src, so every run
+          # re-extracts sources with fresh mtimes and cargo rebuilds all
+          # ~460 dependency crates despite a full-match cache hit
+          # (measured: 460 Compiling / 0 Fresh / 16m41s; the epoch-touch
+          # attempt failed too — fingerprints compare exact mtimes).
+          # Caching src preserves the mtimes the fingerprints recorded.
+          # v2: GitHub cache keys are immutable — the pre-src "api" entry
+          # can never be updated, so the key must change once for this
+          # content to land; later runs then share the src-inclusive one.
+          cache-directories: |
+            ~/.cargo/registry/src
       - name: Test (api integration)
         # api/tests/common/mod.rs spins up an in-memory SurrealDB per test
         # and sets SURREAL_MIG_PATH exactly once via OnceLock,
