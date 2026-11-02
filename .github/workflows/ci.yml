@@ -128,18 +128,14 @@ jobs:
           # shared-key in the first place.
           key: api
           cache-on-failure: true
-      - name: Make restored registry sources ancient
-        # WHY: cargo fingerprints are mtime-based. A full-match cache hit
-        # still rebuilt all 460 crates (0 Fresh) because the restored /
-        # re-extracted registry sources carry mtimes newer than the
-        # recorded build state. Epoch-old registry sources let cargo skip
-        # every dependency; workspace sources come from the checkout
-        # (fresh) and rebuild as normal. Baseline: api job = 15m31s
-        # compile with this hit — compare the run after this change.
-        run: >-
-          find "$HOME/.cargo/registry/src"
-          -exec touch -d '2000-01-01T00:00:00Z' {} +
-          2>/dev/null || true
+          # WHY: rust-cache skips ~/.cargo/registry/src, so every run
+          # re-extracts sources with fresh mtimes and cargo rebuilds all
+          # ~460 dependency crates despite a full-match cache hit
+          # (measured: 460 Compiling / 0 Fresh / 16m41s; the epoch-touch
+          # attempt failed too — fingerprints compare exact mtimes).
+          # Caching src preserves the mtimes the fingerprints recorded.
+          cache-directories: |
+            ~/.cargo/registry/src
       - name: Test (api integration)
         # api/tests/common/mod.rs spins up an in-memory SurrealDB per test
         # and sets SURREAL_MIG_PATH exactly once via OnceLock,
