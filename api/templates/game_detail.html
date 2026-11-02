@@ -1,4 +1,7 @@
 {% extends "base.html" %}
+{% block nav_back %}
+<a href="/games" class="nav-link back-link">ALL GAMES</a>
+{% endblock %}
 {% block content %}
 <div class="broadcast-theme">
   <div hx-ext="sse" sse-connect="/api/games/{{ game.identifier }}/events">

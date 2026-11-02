@@ -1,10 +1,10 @@
-<div class="event-card {{ archetype }}" data-archetype="{{ archetype }}" style="border-left-color:{{ color }};">
-  <div class="card-head">
-    <span class="card-badge" style="background:{{ color }};">{{ badge }}</span>
-    <span class="card-timestamp">{{ ts }}</span>
-  </div>
+<article class="event-card {{ archetype }}" data-archetype="{{ archetype }}" data-kind-color="{{ color }}">
+  <header class="card-head">
+    <span class="card-badge">{{ badge }}</span>
+    <time class="card-timestamp">{{ ts }}</time>
+  </header>
   <div class="card-body">
-    <span style="font-weight:600;">{{ kind }}</span>
+    <span class="card-kind">{{ kind }}</span>
     — {{ content }}
   </div>
-</div>
+</article>

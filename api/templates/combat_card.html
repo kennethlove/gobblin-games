@@ -1,22 +1,22 @@
-<div class="event-card combat combat-card" data-archetype="combat" style="border-left-color:{{ color }};">
-  <div class="card-head">
-    <span class="card-badge" style="background:{{ color }};">COMBAT</span>
-    <span class="card-timestamp">{{ ts }}</span>
-  </div>
+<article class="event-card combat combat-card" data-archetype="combat" data-kind-color="{{ color }}">
+  <header class="card-head">
+    <span class="card-badge">COMBAT</span>
+    <time class="card-timestamp">{{ ts }}</time>
+  </header>
   <div class="card-body">
-    <span style="font-weight:600;">{{ title }}</span>
+    <span class="card-kind">{{ title }}</span>
     {% if sides %}
-    <div class="combat-sides" style="display:flex;gap:6px;margin-top:4px;">
+    <div class="combat-sides">
       {% for s in sides %}
-      <span style="background:{{ color }};color:#fff;padding:1px 6px;border-radius:3px;font-size:0.85em;">{{ s.label }}: {{ s.names }}</span>
+      <span class="kind-chip">{{ s.label }}: {{ s.names }}</span>
       {% endfor %}
     </div>
     {% endif %}
     {% for j in joins %}
-    <div style="color:{{ color }};font-size:0.9em;margin-top:2px;">{{ j }}</div>
+    <div class="kind-note">{{ j }}</div>
     {% endfor %}
     {% if result_text %}
-    <div class="fight-verdict" style="border-left-color:{{ color }};">{{ result_text }}</div>
+    <p class="fight-verdict">{{ result_text }}</p>
     {% endif %}
   </div>
   <div class="combat-rounds-list">
@@ -24,4 +24,4 @@
     {% include "combat_round.html" %}
     {% endfor %}
   </div>
-</div>
+</article>
