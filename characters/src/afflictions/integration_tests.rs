@@ -320,7 +320,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(AreaId::sector1()))),
+            &Action::Move(Some(Location::canonical(AreaId::sector1()))),
             Some(world::terrain::BaseTerrain::Mountains),
         );
         assert_eq!(result, Some(Action::Rest));
@@ -335,7 +335,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(AreaId::sector1()))),
+            &Action::Move(Some(Location::canonical(AreaId::sector1()))),
             Some(world::terrain::BaseTerrain::Highlands),
         );
         assert_eq!(result, Some(Action::Rest));
@@ -350,7 +350,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(AreaId::sector1()))),
+            &Action::Move(Some(Location::canonical(AreaId::sector1()))),
             Some(world::terrain::BaseTerrain::Wetlands),
         );
         assert_eq!(result, Some(Action::Rest));
@@ -365,7 +365,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(AreaId::sector1()))),
+            &Action::Move(Some(Location::canonical(AreaId::sector1()))),
             Some(world::terrain::BaseTerrain::Forest),
         );
         assert!(result.is_none(), "Forest should be allowed");
@@ -377,7 +377,7 @@ mod tests {
             make_ttribute_with_affliction("Character", AfflictionKind::MissingLeg, Severity::Mild);
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(AreaId::sector1()))),
+            &Action::Move(Some(Location::canonical(AreaId::sector1()))),
             Some(world::terrain::BaseTerrain::Mountains),
         );
         assert!(result.is_none(), "Mild MissingLeg should not block terrain");
@@ -392,7 +392,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(AreaId::sector1()))),
+            &Action::Move(Some(Location::canonical(AreaId::sector1()))),
             Some(world::terrain::BaseTerrain::Mountains),
         );
         assert_eq!(result, Some(Action::Rest));
@@ -443,7 +443,7 @@ mod tests {
         );
         let result = hard_gates_with_terrain(
             &character,
-            &Action::Move(Some(Location::center(AreaId::sector1()))),
+            &Action::Move(Some(Location::canonical(AreaId::sector1()))),
             None,
         );
         assert!(

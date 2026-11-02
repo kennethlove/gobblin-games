@@ -52,7 +52,7 @@ impl<'a> AreaGraph<'a> {
         let detail = self.details.get(&area).copied();
         if let Some(ad) = detail {
             calculate_stamina_cost(
-                &Action::Move(Some(Location::center(area))),
+                &Action::Move(Some(Location::canonical(area))),
                 &ad.terrain,
                 self.character,
             )

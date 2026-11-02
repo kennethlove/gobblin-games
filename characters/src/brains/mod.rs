@@ -349,13 +349,13 @@ impl Brain {
             // legacy escape-hatch is gone. If the best area is still
             // the current one, the destination is the current cell.
             if best_goal == character.location.area {
-                return Some(Location::center(best_goal));
+                return Some(Location::canonical(best_goal));
             }
             if let Some((path, _cost)) =
                 crate::path::plan_path(all_areas, character, character.location.area, best_goal)
                 && path.len() >= 2
             {
-                return Some(Location::center(path[1]));
+                return Some(Location::canonical(path[1]));
             }
             // Unreachable goal: fall through to the neighbor-only pick.
         }
@@ -379,7 +379,7 @@ impl Brain {
 
         // Choose best destination using terrain scoring
         self.choose_destination(&area_details, character, enemy_density)
-            .map(Location::center)
+            .map(Location::canonical)
     }
 
     /// The two beats of one phase (owner decision C): every phase runs
