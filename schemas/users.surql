@@ -1,6 +1,10 @@
 DEFINE TABLE OVERWRITE user SCHEMAFULL
     PERMISSIONS
         FOR select WHERE $auth
+        -- The ACCESS SIGNUP clause runs `CREATE user` unauthenticated, so the
+        -- table must grant create or every registration fails (masked as
+        -- "record access signup query failed"; found live with `create NONE`).
+        FOR create FULL
         FOR update, delete WHERE id = $auth.id;
 
 DEFINE FIELD OVERWRITE username ON user TYPE string
