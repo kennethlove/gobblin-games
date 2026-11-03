@@ -1,7 +1,9 @@
 # Gobblin Games — Design System (v1)
 
 **Date:** 2026-05-04
-**Status:** Approved foundations. Special UI elements (e.g. arena map, kill-cam, victor card) deferred to follow-up specs.
+**Status:** Superseded by [Design System (v2)](2026-11-03-design-system-v2-design.md) (2026-11-03). Kept as the record of the approved partial implementation; where v2 and this doc disagree — tone mix, faces, palette, platform — v2 wins and token values live in repo-root `DESIGN.md`.
+
+**Original status:** Approved foundations. Special UI elements (e.g. arena map, kill-cam, victor card) deferred to follow-up specs.
 **Replaces:** existing `theme1` / `theme2` / `theme3` ad-hoc themes and gold-gradient utilities in `web/assets/src/main.css`.
 
 ---
