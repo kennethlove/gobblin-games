@@ -26,7 +26,7 @@
         <button
           hx-post="/auth/resend-verification"
           hx-vals="{{ '{' }}"email":"{{ address }}","csrf_token":"{{ csrf_token }}"{{ '}' }}"
-          hx-target="find .resend-feedback"
+          hx-target=".resend-feedback"
           hx-swap="innerHTML"
           class="text-amber-400 hover:underline cursor-pointer bg-transparent border-none p-0 inline"
         >send another one.</button>
