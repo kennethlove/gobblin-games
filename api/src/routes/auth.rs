@@ -322,7 +322,7 @@ pub async fn check_email_handler(
     let (auth, csrf) = extract_auth(&headers);
     let mut ctx = tera_engine::base_context("Check Email", &auth);
     if let Some(addr) = params.address.as_deref() {
-        ctx.insert("email_address", addr);
+        ctx.insert("address", addr);
     }
     html_with_csrf(tera_engine::render("check_email.html", &ctx), &csrf)
 }
