@@ -168,7 +168,11 @@ mod tests {
         static AREA: LazyLock<areas::AreaDetails> = LazyLock::new(|| {
             let mut area = areas::AreaDetails::new(None, AreaId::hub());
             area.terrain = TerrainType::new(BaseTerrain::Forest, vec![]).unwrap();
-            area.events = vec![AreaEvent::Wildfire];
+            area.cell_hazards = vec![areas::CellHazard {
+                sub: areas::hex::SubTriangle::new(0),
+                event: AreaEvent::Wildfire,
+                blocks_left: 1,
+            }];
             area
         });
         PhobiaContext {
@@ -305,7 +309,11 @@ mod tests {
         static AREA: LazyLock<areas::AreaDetails> = LazyLock::new(|| {
             let mut area = areas::AreaDetails::new(None, AreaId::hub());
             area.terrain = TerrainType::new(BaseTerrain::Forest, vec![]).unwrap();
-            area.events = vec![AreaEvent::Wildfire];
+            area.cell_hazards = vec![areas::CellHazard {
+                sub: areas::hex::SubTriangle::new(0),
+                event: AreaEvent::Wildfire,
+                blocks_left: 1,
+            }];
             area
         });
         PhobiaContext {

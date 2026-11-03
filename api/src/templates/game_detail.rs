@@ -1200,16 +1200,19 @@ pub fn render_hex_map(
             .filter(|a| !a.is_open())
             .map(|a| {
                 let names: Vec<String> = a
-                    .events
+                    .cell_hazards
                     .iter()
-                    .map(|e| e.to_string().to_uppercase())
+                    .map(|h| {
+                        format!(
+                            "{} T{} · {} BLK",
+                            h.event.to_string().to_uppercase(),
+                            h.sub.index() + 1,
+                            h.blocks_left
+                        )
+                    })
                     .collect();
-                let blocks = a
-                    .hazard_blocks
-                    .map(|b| format!(" · {b} BLK"))
-                    .unwrap_or_default();
                 format!(
-                    r#"<text x="{cx}" y="{cy:.1}" text-anchor="middle" dominant-baseline="middle" fill="var(--danger)" font-size="7" font-family="var(--font-condensed)" dy="21" font-weight="700" letter-spacing="0.5">{}{blocks}</text>"#,
+                    r#"<text x="{cx}" y="{cy:.1}" text-anchor="middle" dominant-baseline="middle" fill="var(--danger)" font-size="7" font-family="var(--font-condensed)" dy="21" font-weight="700" letter-spacing="0.5">{}</text>"#,
                     names.join(" · ")
                 )
             })

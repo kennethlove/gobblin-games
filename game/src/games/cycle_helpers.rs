@@ -1,8 +1,7 @@
 use super::*;
+use areas::AreaId;
 use areas::events::AreaEvent;
-use areas::{AreaDetails, AreaId};
 use rand::rngs::SmallRng;
-use std::collections::HashMap;
 
 /// Blocks (time cycles) a hazard stays active after arrival; each
 /// cycle re-runs the survival pass and ages by one, then it wipes.
@@ -23,25 +22,32 @@ impl Game {
     /// each cycle; there is no close summary — nothing closes anymore.
     pub(super) fn announce_area_events(&mut self) -> Result<(), GameError> {
         // Snapshot to avoid borrow conflicts with self.messages below.
-        let snapshots: Vec<(String, Vec<String>)> = self
+        let snapshots: Vec<(String, Vec<(String, String)>)> = self
             .areas
             .iter()
             .filter(|a| !a.is_open())
             .filter_map(|a| {
                 a.area.map(|area| {
-                    (
-                        area.to_string(),
-                        a.events.iter().map(|e| e.to_string()).collect(),
-                    )
+                    let lines = a
+                        .cell_hazards
+                        .iter()
+                        .map(|h| {
+                            (
+                                format!("{} (triangle {})", h.event, h.sub.index() + 1),
+                                h.event.to_string(),
+                            )
+                        })
+                        .collect();
+                    (area.to_string(), lines)
                 })
             })
             .collect();
 
         for (area_name, event_names) in snapshots {
             let subject = format!("area:{}", area_name);
-            for event_name in &event_names {
+            for (display, kind_key) in &event_names {
                 let content = crate::events::GameEvent::AreaEvent {
-                    area_event: event_name.clone(),
+                    area_event: display.clone(),
                     area_name: area_name.clone(),
                 }
                 .to_string();
@@ -50,7 +56,7 @@ impl Game {
                         identifier: area_name.clone().into(),
                         name: area_name.clone(),
                     },
-                    kind: Self::area_event_kind(event_name),
+                    kind: Self::area_event_kind(kind_key),
                     description: content.clone(),
                 };
                 self.push_message(
@@ -81,37 +87,33 @@ impl Game {
         }
     }
 
-    /// Hazards (q7k): every active hazard re-runs its survival pass
-    /// for this cycle, then ages one block. At 0 blocks it wipes.
-    /// Replaces `ensure_open_area`: no movement block exists anymore,
-    /// so an all-hazard map is a legitimate state.
+    /// Hazards: every live cell hazard re-runs its survival pass for
+    /// this cycle, then ages one block; at 0 blocks it drops out of
+    /// the cell (q7k TTL, q6k per cell). One roll per cell per cycle
+    /// for the characters standing ON that triangle.
     pub(super) fn hazard_survival(&mut self, rng: &mut SmallRng) -> Result<(), GameError> {
-        // Two-phase: gather first so `process_event_for_area` can take
+        // Two-phase: gather first so the survival pass can take
         // `&mut self` without fighting the areas borrow (E0499 — same
         // trap as the cycle event closure).
-        let mut active: Vec<(AreaId, Vec<AreaEvent>)> = Vec::new();
+        let mut active: Vec<(AreaId, areas::hex::SubTriangle, AreaEvent)> = Vec::new();
         for area_details in self.areas.iter_mut() {
-            match area_details.hazard_blocks {
-                Some(blocks) if blocks > 0 => {
-                    active.push((area_details.area.unwrap(), area_details.events.clone()));
-                    area_details.hazard_blocks = Some(blocks - 1);
-                }
-                // Rows written before the TTL field: treat as a fresh
-                // hazard so they age out instead of sticking forever.
-                None if !area_details.events.is_empty() => {
-                    active.push((area_details.area.unwrap(), area_details.events.clone()));
-                    area_details.hazard_blocks = Some(MAX_HAZARD_BLOCKS - 1);
-                }
-                _ => {
-                    area_details.events.clear();
-                    area_details.hazard_blocks = None;
-                }
+            if area_details.cell_hazards.is_empty() {
+                continue;
             }
+            let area = area_details.area.unwrap();
+            let mut survivors = Vec::with_capacity(area_details.cell_hazards.len());
+            for mut hazard in area_details.cell_hazards.drain(..) {
+                if hazard.blocks_left == 0 {
+                    continue;
+                }
+                active.push((area, hazard.sub, hazard.event.clone()));
+                hazard.blocks_left -= 1;
+                survivors.push(hazard);
+            }
+            area_details.cell_hazards = survivors;
         }
-        for (area, events) in active {
-            for event in events {
-                self.process_event_for_area(&area, &event, rng)?;
-            }
+        for (area, sub, event) in active {
+            self.process_event_for_area(&area, sub, &event, rng)?;
         }
         Ok(())
     }
@@ -146,12 +148,26 @@ impl Game {
                     // Generate terrain-appropriate event
                     let area_event = AreaEvent::random_for_terrain(&area_details.terrain.base, rng);
 
-                    // Add event to area
-                    area_details.events.push(area_event.clone());
-
-                    // Hazards (q7k): arrival sets/refreshes the block
-                    // budget — fresh events extend an active hazard.
-                    area_details.hazard_blocks = Some(MAX_HAZARD_BLOCKS);
+                    // q6k: one roll per cycle picks WHICH of the hex's
+                    // six triangles the hazard strikes.
+                    let cell = areas::hex::SubTriangle::new(
+                        rng.random_range(0..areas::hex::SubTriangle::COUNT as u8),
+                    );
+                    if let Some(existing) = area_details
+                        .cell_hazards
+                        .iter_mut()
+                        .find(|h| h.sub == cell && h.event == area_event)
+                    {
+                        // Same cell, same event: extend the TTL (q7k's
+                        // refresh rule, now per cell).
+                        existing.blocks_left = MAX_HAZARD_BLOCKS;
+                    } else {
+                        area_details.cell_hazards.push(areas::CellHazard {
+                            sub: cell,
+                            event: area_event,
+                            blocks_left: MAX_HAZARD_BLOCKS,
+                        });
+                    }
                 }
             }
         }
@@ -169,51 +185,43 @@ impl Game {
     pub(super) fn constrain_areas(&mut self, rng: &mut SmallRng) -> Result<(), GameError> {
         let character_count = self.living_characters_count() as u32;
         let odds = character_count as f64 / 24.0;
-        let mut area_events: HashMap<String, (AreaDetails, Vec<AreaEvent>)> = HashMap::new();
 
         // WHY: read the config field (was a dead duplicate of this
         // const); tests with tiny casts disable the random closing rolls.
-        if (1..self.config.low_character_threshold).contains(&character_count) {
-            // If there is an open area, close it.
-            if let Some(area_details) = self.random_open_area() {
-                let event = AreaEvent::random(rng);
-                let area_name = area_details.area.unwrap().to_string();
-                area_events.insert(area_name, (area_details.clone(), vec![event.clone()]));
-            }
+        if !(1..self.config.low_character_threshold).contains(&character_count) {
+            return Ok(());
+        }
 
-            if rng.random_bool(odds) {
-                // Assuming there's still an open area.
-                if let Some(area_details) = self.random_open_area() {
-                    let event = AreaEvent::random(rng);
-                    let area_name = area_details.area.unwrap().to_string();
-                    if area_events.contains_key(&area_name) {
-                        let mut events = area_events[&area_name].1.clone();
-                        events.push(event.clone());
-                        area_events.insert(area_name, (area_details.clone(), events));
-                    } else {
-                        area_events.insert(area_name, (area_details.clone(), vec![event.clone()]));
-                    }
-                }
-            }
+        // Forced hazards land on a random cell of a still-open area —
+        // same terrain-honest picker as the trigger (q6k policy fix:
+        // the valve used to roll terrain-agnostic events, Sinkhole
+        // included). Kept for tuning per q7k.
+        let mut forced: Vec<(AreaId, AreaEvent)> = Vec::new();
+        if let Some(area_details) = self.random_open_area() {
+            forced.push((
+                area_details.area.unwrap(),
+                AreaEvent::random_for_terrain(&area_details.terrain.base, rng),
+            ));
+        }
+        if rng.random_bool(odds)
+            && let Some(area_details) = self.random_open_area()
+        {
+            forced.push((
+                area_details.area.unwrap(),
+                AreaEvent::random_for_terrain(&area_details.terrain.base, rng),
+            ));
+        }
 
-            // Add events to each area and announce them
-            for (area_name, (mut area_details, events)) in area_events.drain() {
-                for event in events {
-                    area_details.events.push(event.clone());
-                    let _event_name = event.to_string();
-                    // let area_name = area_details.area.clone().unwrap().to_string();
-                }
-
-                // Update the corresponding area with the new events
-                for area in self.areas.iter_mut() {
-                    let key = area.area.unwrap().to_string();
-                    if key == area_name {
-                        area.events = area_details.events;
-                        // Forced hazards get the same TTL (q7k).
-                        area.hazard_blocks = Some(MAX_HAZARD_BLOCKS);
-                        break;
-                    }
-                }
+        for (area_id, event) in forced {
+            let cell = areas::hex::SubTriangle::new(
+                rng.random_range(0..areas::hex::SubTriangle::COUNT as u8),
+            );
+            if let Some(details) = self.areas.iter_mut().find(|a| a.area == Some(area_id)) {
+                details.cell_hazards.push(areas::CellHazard {
+                    sub: cell,
+                    event,
+                    blocks_left: MAX_HAZARD_BLOCKS,
+                });
             }
         }
         Ok(())

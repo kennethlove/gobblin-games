@@ -55,7 +55,7 @@ fn area_event_survival_narration_reaches_game_messages() {
 
     let messages_before = game.messages.len();
 
-    game.process_event_for_area(&area, &event, &mut rng)
+    game.process_event_for_area(&area, areas::hex::SubTriangle::new(0), &event, &mut rng)
         .expect("process_event_for_area succeeded");
 
     let new_messages: Vec<&GameMessage> = game.messages.iter().skip(messages_before).collect();

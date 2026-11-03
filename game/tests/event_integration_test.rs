@@ -37,7 +37,12 @@ fn test_wildfire_in_forest_kills_characters() {
     for _ in 0..10 {
         let mut test_game = game.clone();
         test_game
-            .process_event_for_area(&area_name, &event, &mut rng)
+            .process_event_for_area(
+                &area_name,
+                areas::hex::SubTriangle::new(0),
+                &event,
+                &mut rng,
+            )
             .unwrap();
         if test_game.characters[0].effective_health() == 0 {
             death_count += 1;
@@ -81,7 +86,12 @@ fn test_wildfire_in_desert_minor_impact() {
     for _ in 0..10 {
         let mut test_game = game.clone();
         test_game
-            .process_event_for_area(&area_name, &event, &mut rng)
+            .process_event_for_area(
+                &area_name,
+                areas::hex::SubTriangle::new(0),
+                &event,
+                &mut rng,
+            )
             .unwrap();
         if test_game.characters[0].effective_health() == 0 {
             death_count += 1;

@@ -129,7 +129,7 @@ fn terrain(ctx: &PhobiaBrainContext<'_>) -> Option<BaseTerrain> {
 fn is_fire_present(ctx: &PhobiaBrainContext<'_>) -> bool {
     ctx.area
         .map(|a| {
-            a.events
+            a.live_events()
                 .iter()
                 .any(|e| matches!(e, areas::events::AreaEvent::Wildfire))
         })
@@ -140,7 +140,7 @@ fn is_water_present(ctx: &PhobiaBrainContext<'_>) -> bool {
     let area_has_flood = ctx
         .area
         .map(|a| {
-            a.events
+            a.live_events()
                 .iter()
                 .any(|e| matches!(e, areas::events::AreaEvent::Flood))
         })
@@ -182,7 +182,14 @@ mod tests {
     fn make_area(terrain: BaseTerrain, events: Vec<AreaEvent>) -> AreaDetails {
         let mut area = AreaDetails::new(None, AreaId::hub());
         area.terrain = TerrainType::new(terrain, vec![]).unwrap();
-        area.events = events;
+        area.cell_hazards = events
+            .into_iter()
+            .map(|event| areas::CellHazard {
+                sub: areas::hex::SubTriangle::new(0),
+                event,
+                blocks_left: 1,
+            })
+            .collect();
         area
     }
 

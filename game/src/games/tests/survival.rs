@@ -143,7 +143,11 @@ fn test_random_open_area() {
     game.areas.push(area2.clone());
     let mut rng = rand::rng();
     let event = AreaEvent::random(&mut rng);
-    game.areas[0].events.push(event.clone());
+    game.areas[0].cell_hazards.push(areas::CellHazard {
+        sub: areas::hex::SubTriangle::new(0),
+        event: event.clone(),
+        blocks_left: 3,
+    });
     assert_eq!(game.random_open_area().unwrap(), area2);
 }
 
@@ -335,15 +339,24 @@ fn test_prepare_cycle() {
     let event = AreaEvent::random(&mut rng);
     game.day = Some(1);
     game.areas.push(area);
-    game.areas[0].events.push(event.clone());
+    game.areas[0].cell_hazards.push(areas::CellHazard {
+        sub: areas::hex::SubTriangle::new(0),
+        event: event.clone(),
+        blocks_left: 3,
+    });
     let _ = game.prepare_cycle(Phase::DAWN);
     assert_eq!(game.day, Some(2));
-    assert_eq!(game.areas[0].events.len(), 0);
+    // q6k: prepare_cycle no longer wipes — hazards age out in hazard_survival.
+    assert_eq!(game.areas[0].cell_hazards.len(), 1);
 
-    game.areas[0].events.push(event.clone());
+    game.areas[0].cell_hazards.push(areas::CellHazard {
+        sub: areas::hex::SubTriangle::new(0),
+        event: event.clone(),
+        blocks_left: 3,
+    });
     let _ = game.prepare_cycle(Phase::NIGHT);
     assert_eq!(game.day, Some(2));
-    assert_eq!(game.areas[0].events.len(), 0);
+    assert_eq!(game.areas[0].cell_hazards.len(), 2);
 }
 
 #[test]
@@ -373,7 +386,12 @@ fn smoke_night_event_frequency_uses_configured_hours() {
         }
         game
     };
-    let areas_that_fired = |game: &Game| game.areas.iter().filter(|a| !a.events.is_empty()).count();
+    let areas_that_fired = |game: &Game| {
+        game.areas
+            .iter()
+            .filter(|a| !a.cell_hazards.is_empty())
+            .count()
+    };
     let mut rng = SmallRng::seed_from_u64(0);
 
     // Default hours: 18 is the dusk anchor — the substrate stays silent.
@@ -449,7 +467,12 @@ fn smoke_cycle_event_frequency_drives_cadence() {
         }
         game
     };
-    let areas_that_fired = |game: &Game| game.areas.iter().filter(|a| !a.events.is_empty()).count();
+    let areas_that_fired = |game: &Game| {
+        game.areas
+            .iter()
+            .filter(|a| !a.cell_hazards.is_empty())
+            .count()
+    };
     // Hour 22 is an ordinary night phase under the default hours.
     let night = Phase::from_hour(22).unwrap();
 
@@ -533,20 +556,23 @@ fn hazard_lasts_three_blocks_then_wipes() {
         AreaId::sector1(),
     ));
     let mut rng = SmallRng::seed_from_u64(4);
-    game.areas[0].events.push(AreaEvent::random(&mut rng));
-    game.areas[0].hazard_blocks = Some(3);
+    game.areas[0].cell_hazards.push(areas::CellHazard {
+        sub: areas::hex::SubTriangle::new(0),
+        event: AreaEvent::random(&mut rng),
+        blocks_left: 3,
+    });
 
     game.hazard_survival(&mut rng).unwrap();
-    assert_eq!(game.areas[0].hazard_blocks, Some(2));
-    assert!(!game.areas[0].events.is_empty());
+    assert_eq!(game.areas[0].cell_hazards[0].blocks_left, 2);
+    assert!(!game.areas[0].cell_hazards.is_empty());
     game.hazard_survival(&mut rng).unwrap();
     game.hazard_survival(&mut rng).unwrap();
-    assert_eq!(game.areas[0].hazard_blocks, Some(0));
-    assert!(!game.areas[0].events.is_empty());
+    assert_eq!(game.areas[0].cell_hazards[0].blocks_left, 0);
+    assert!(!game.areas[0].cell_hazards.is_empty());
 
+    // blocks_left 0 expires the cell at the next aging pass.
     game.hazard_survival(&mut rng).unwrap();
-    assert!(game.areas[0].events.is_empty());
-    assert_eq!(game.areas[0].hazard_blocks, None);
+    assert!(game.areas[0].cell_hazards.is_empty());
 }
 
 #[test]
@@ -561,7 +587,13 @@ fn test_open_and_closed_areas() {
     assert!(game.closed_areas().is_empty());
 
     let mut rng = rand::rng();
-    game.areas[0].events.push(AreaEvent::random(&mut rng));
+    game.areas[0].cell_hazards.push(areas::CellHazard {
+        sub: areas::hex::SubTriangle::new(0),
+
+        event: AreaEvent::random(&mut rng),
+
+        blocks_left: 3,
+    });
 
     assert_eq!(game.open_areas().len(), 1);
     assert_eq!(game.closed_areas().len(), 1);
@@ -862,7 +894,13 @@ fn area_event_interrupts_sleeping_character() {
     let prior_stamina = t.stamina;
     let mut game = create_test_game_with_characters(vec![t.clone()]);
     let mut area = AreaDetails::new(Some("Lake".to_string()), AreaId::hub());
-    area.events.push(AreaEvent::Wildfire);
+    area.cell_hazards.push(areas::CellHazard {
+        sub: areas::hex::SubTriangle::new(0),
+
+        event: AreaEvent::Wildfire,
+
+        blocks_left: 3,
+    });
     game.areas.push(area);
     let mut rng = SmallRng::seed_from_u64(42);
     let _ = game.run_character_cycle(Phase::NIGHT, &mut rng, vec![t], 1);
