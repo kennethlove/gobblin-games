@@ -371,7 +371,16 @@ pub async fn resend_verification_handler(
     headers: axum::http::HeaderMap,
     Form(form): Form<ResendVerificationRequest>,
 ) -> impl IntoResponse {
+    // WHY: htmx follows redirects transparently and would swap the final
+    // full page into the feedback span; check-email also never reads
+    // ?error=. HX requests get an inline fragment instead (30r).
+    let htmx = headers.contains_key("HX-Request");
+    let fb = |msg: &str| -> Response { axum::response::Html(msg.to_string()).into_response() };
+
     if !validate_csrf(&headers, &form.csrf_token) {
+        if htmx {
+            return fb("Refresh the page and try again.");
+        }
         return Redirect::to("/auth?tab=login").into_response();
     }
 
@@ -380,6 +389,9 @@ pub async fn resend_verification_handler(
     if let Some(last_sent) = RESEND_COOLDOWN.lock().unwrap().get(&cooldown_key)
         && now.duration_since(*last_sent).as_secs() < 60
     {
+        if htmx {
+            return fb("Please wait 60 seconds before requesting another email.");
+        }
         return Redirect::to(&format!(
             "/auth/check-email?address={}&error={}",
             urlencoding(&form.email),
@@ -395,6 +407,9 @@ pub async fn resend_verification_handler(
         .await
         .is_err()
     {
+        if htmx {
+            return fb("Something went wrong. Please try again.");
+        }
         return Redirect::to(&format!(
             "/auth/check-email?address={}&error={}",
             urlencoding(&form.email),
@@ -418,6 +433,9 @@ pub async fn resend_verification_handler(
             let row: Option<EmailRow> = row.map(|w| w.0);
             match row {
                 Some(r) if r.email_verified.unwrap_or(false) => {
+                    if htmx {
+                        return fb("That address is already verified. Sign in instead.");
+                    }
                     Redirect::to("/auth?tab=login&error=Email+already+verified").into_response()
                 }
                 Some(_) => {
@@ -444,25 +462,42 @@ pub async fn resend_verification_handler(
 
                     RESEND_COOLDOWN.lock().unwrap().insert(cooldown_key, now);
 
+                    if htmx {
+                        return fb(
+                            "If that address has an account, a new verification email is on the way.",
+                        );
+                    }
                     Redirect::to(&format!(
                         "/auth/check-email?address={}",
                         urlencoding(&form.email)
                     ))
                     .into_response()
                 }
-                None => Redirect::to(&format!(
-                    "/auth/check-email?address={}",
-                    urlencoding(&form.email)
-                ))
-                .into_response(),
+                None => {
+                    if htmx {
+                        return fb(
+                            "If that address has an account, a new verification email is on the way.",
+                        );
+                    }
+                    Redirect::to(&format!(
+                        "/auth/check-email?address={}",
+                        urlencoding(&form.email)
+                    ))
+                    .into_response()
+                }
             }
         }
-        Err(_) => Redirect::to(&format!(
-            "/auth/check-email?address={}&error={}",
-            urlencoding(&form.email),
-            urlencoding("Something went wrong. Please try again.")
-        ))
-        .into_response(),
+        Err(_) => {
+            if htmx {
+                return fb("Something went wrong. Please try again.");
+            }
+            Redirect::to(&format!(
+                "/auth/check-email?address={}&error={}",
+                urlencoding(&form.email),
+                urlencoding("Something went wrong. Please try again.")
+            ))
+            .into_response()
+        }
     }
 }
 
