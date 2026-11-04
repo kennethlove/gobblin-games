@@ -31,6 +31,10 @@ thiserror = "2.0.18"
 tokio = { version = "1.52.1", features = ["full"] }
 tokio-cron-scheduler = "0.15"
 tokio-stream = { version = "0.1", features = ["sync"] }
+# WHY: parse the create-game form body's repeated keys by hand —
+# serde_urlencoded's derive rejects sequence fields (see
+# routes/games.rs::split_character_field). Already in the lock.
+serde_urlencoded = "0.7"
 url = "2.5"
 tower-http = { version = "0.6.8", features = ["trace", "cors", "fs", "normalize-path"] }
 tower = { version = "0.5.3", features = ["util", "timeout"] }

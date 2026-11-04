@@ -188,6 +188,7 @@ dependencies = [
  "resend-rs",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "shared",
  "strum 0.28.0",
  "surrealdb",

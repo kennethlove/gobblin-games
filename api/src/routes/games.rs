@@ -38,7 +38,11 @@ pub struct CreateGameRequest {
     pub public_game: Option<String>,
     #[serde(default)]
     pub csrf_token: String,
-    /// Goblins checked in the roster picker; empty = bot fallback.
+    /// Goblins checked in the roster picker, one id per checked box —
+    /// submitted as repeated `characters` keys and collected out-of-band
+    /// by the handler (see split_character_field): serde_urlencoded's
+    /// derive cannot represent a sequence field (one value per key, or
+    /// "duplicate field" on repeats). Absent = bot fallback.
     #[serde(default)]
     pub characters: Vec<String>,
     /// Teams in the game (default 8, range 2-16).
@@ -62,6 +66,68 @@ pub struct CreateGameRequest {
 }
 
 // ── HTMX page handlers ──────────────────────────────────────────────
+
+/// Peel repeated `characters` pairs out of a parsed form body; every
+/// other key stays unique for the CreateGameRequest derive. WHY:
+/// urlencoded forms carry sequences as repeated keys (one per checked
+/// goblin), which serde_urlencoded's derive cannot represent — one
+/// value per field name, or "duplicate field" on repeats.
+fn split_character_field(pairs: Vec<(String, String)>) -> (Vec<String>, Vec<(String, String)>) {
+    let mut characters = Vec::new();
+    let mut rest = Vec::new();
+    for (k, v) in pairs {
+        if k == "characters" {
+            characters.push(v);
+        } else {
+            rest.push((k, v));
+        }
+    }
+    (characters, rest)
+}
+
+#[cfg(test)]
+mod characters_form_tests {
+    use super::*;
+
+    fn parse(body: &str) -> CreateGameRequest {
+        let pairs: Vec<(String, String)> = url::form_urlencoded::parse(body.as_bytes())
+            .map(|(k, v)| (k.into_owned(), v.into_owned()))
+            .collect();
+        let (characters, rest) = split_character_field(pairs);
+        let rest_str = url::form_urlencoded::Serializer::new(String::new())
+            .extend_pairs(rest)
+            .finish();
+        let mut form: CreateGameRequest =
+            serde_urlencoded::from_str(&rest_str).expect("form body must deserialize");
+        form.characters = characters;
+        form
+    }
+
+    // Regression: the roster picker submits one `characters` key per
+    // checked goblin. Through Form<T> a single value failed with
+    // "invalid type: string, expected a sequence" and repeats with
+    // "duplicate field characters" — only zero checked ever worked.
+    #[test]
+    fn repeated_characters_keys_collect() {
+        let form = parse("csrf_token=abc&characters=aaa&characters=bbb&name=Goblins");
+        assert_eq!(form.characters, ["aaa", "bbb"]);
+        assert_eq!(form.name.as_deref(), Some("Goblins"));
+    }
+
+    #[test]
+    fn single_characters_key_collects() {
+        let form = parse("characters=d3310a75-c093-456c-b518-5ef13aebc3d0");
+        assert_eq!(form.characters, ["d3310a75-c093-456c-b518-5ef13aebc3d0"]);
+    }
+
+    #[test]
+    fn absent_characters_is_bot_fallback_and_rest_roundtrips() {
+        let form = parse("csrf_token=x&name=Tom%26Jerry+2%3D3");
+        assert!(form.characters.is_empty());
+        // Roundtrip: values containing & = + survive re-encoding into the derive.
+        assert_eq!(form.name.as_deref(), Some("Tom&Jerry 2=3"));
+    }
+}
 
 /// GET / — home page.
 pub async fn home_handler(headers: axum::http::HeaderMap) -> Response {
@@ -1089,8 +1155,29 @@ pub async fn create_game_handler(
 pub async fn create_game_post_handler(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
-    Form(form): Form<CreateGameRequest>,
+    body: String,
 ) -> Response {
+    // WHY: repeated form keys (one `characters` per checked goblin) can't
+    // pass through Form<T> — serde_urlencoded rejects a lone value for
+    // a sequence field and errors "duplicate field" for repeats. Peel
+    // `characters` off the raw pairs; derive the rest with serde.
+    let (characters, rest) = split_character_field(
+        url::form_urlencoded::parse(body.as_bytes())
+            .map(|(k, v)| (k.into_owned(), v.into_owned()))
+            .collect(),
+    );
+    let rest_str = url::form_urlencoded::Serializer::new(String::new())
+        .extend_pairs(rest)
+        .finish();
+    let mut form: CreateGameRequest = match serde_urlencoded::from_str(&rest_str) {
+        Ok(f) => f,
+        Err(e) => {
+            tracing::warn!(error = %e, "invalid create-game form body");
+            return Redirect::to("/games/new").into_response();
+        }
+    };
+    form.characters = characters;
+
     if !validate_csrf(&headers, &form.csrf_token) {
         return Redirect::to("/auth").into_response();
     }
