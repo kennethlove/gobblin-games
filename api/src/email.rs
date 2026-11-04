@@ -32,6 +32,27 @@ static EMAIL_FROM: LazyLock<String> = LazyLock::new(|| {
     std::env::var("EMAIL_FROM").unwrap_or_else(|_| "noreply@gobblin.games".to_string())
 });
 
+/// Base URL for links in outgoing emails.
+/// WHY: APP_URL is optional config that may never reach the container;
+/// Coolify's FQDN env already holds the configured public URL, so links
+/// work with zero setup. Explicit APP_URL still wins.
+fn app_url() -> String {
+    for var in ["APP_URL", "SERVICE_FQDN_BACKEND_3000"] {
+        if let Ok(v) = std::env::var(var) {
+            let v = v.trim().trim_end_matches('/');
+            if v.is_empty() {
+                continue;
+            }
+            return if v.contains("://") {
+                v.to_string()
+            } else {
+                format!("https://{}", v)
+            };
+        }
+    }
+    "http://localhost:3000".to_string()
+}
+
 /// Generate a self-contained email verification token.
 ///
 /// Uses AES-GCM encryption via `confirm-email` crate.
@@ -58,11 +79,7 @@ pub async fn send_verification_email(to: &str, token: &str) -> Result<(), EmailE
         }
     });
 
-    let verify_url = format!(
-        "{}/auth/verify-email?token={}",
-        std::env::var("APP_URL").unwrap_or_else(|_| "http://localhost:3000".to_string()),
-        token
-    );
+    let verify_url = format!("{}/auth/verify-email?token={}", app_url(), token);
 
     let html_body = format!(
         r#"<!DOCTYPE html>
@@ -123,11 +140,7 @@ pub async fn send_password_reset_email(to: &str, token: &str) -> Result<(), Emai
         }
     });
 
-    let reset_url = format!(
-        "{}/auth/reset-password?token={}",
-        std::env::var("APP_URL").unwrap_or_else(|_| "http://localhost:3000".to_string()),
-        token
-    );
+    let reset_url = format!("{}/auth/reset-password?token={}", app_url(), token);
 
     let html_body = format!(
         r#"<!DOCTYPE html>
