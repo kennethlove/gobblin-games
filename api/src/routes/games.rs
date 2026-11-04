@@ -353,12 +353,17 @@ pub async fn game_detail_handler(
         .await;
 
     let game = match result {
-        Ok(mut result) => {
-            let game: Option<SerdeWrapper<shared::DisplayGame>> =
-                result.take(0).unwrap_or_default();
-            game.map(|w| w.0)
+        Ok(mut result) => match result.take::<Option<SerdeWrapper<shared::DisplayGame>>>(0) {
+            Ok(game) => game.map(|w| w.0),
+            Err(err) => {
+                tracing::warn!("game detail row for {identifier} failed to deserialize: {err}");
+                None
+            }
+        },
+        Err(err) => {
+            tracing::warn!("game detail query for {identifier} failed: {err}");
+            None
         }
-        Err(_) => None,
     };
 
     let Some(game) = game else {
@@ -785,12 +790,17 @@ pub async fn timeline_handler(
         .await;
 
     let game = match game_result {
-        Ok(mut result) => {
-            let game: Option<SerdeWrapper<shared::DisplayGame>> =
-                result.take(0).unwrap_or_default();
-            game.map(|w| w.0)
+        Ok(mut result) => match result.take::<Option<SerdeWrapper<shared::DisplayGame>>>(0) {
+            Ok(game) => game.map(|w| w.0),
+            Err(err) => {
+                tracing::warn!("timeline row for {identifier} failed to deserialize: {err}");
+                None
+            }
+        },
+        Err(err) => {
+            tracing::warn!("timeline query for {identifier} failed: {err}");
+            None
         }
-        Err(_) => None,
     };
 
     let game = match game {
@@ -1257,6 +1267,7 @@ pub async fn create_game_post_handler(
         .await
         .is_err()
     {
+        tracing::warn!("game upsert failed for {game_identifier}");
         return Redirect::to("/games/new").into_response();
     }
 
@@ -1269,6 +1280,7 @@ pub async fn create_game_post_handler(
         });
         let character_results = futures::future::join_all(character_futures).await;
         if character_results.into_iter().any(|r| r.is_err()) {
+            tracing::warn!("bot roster creation failed for {game_identifier}");
             return Redirect::to("/games/new").into_response();
         }
     } else {
@@ -1277,6 +1289,10 @@ pub async fn create_game_post_handler(
                 .await
                 .is_err()
             {
+                tracing::warn!(
+                    character_id,
+                    "join_game failed during create for {game_identifier}"
+                );
                 let _ = user_db.query("DELETE $rid").bind(("rid", game_rid)).await;
                 return Redirect::to("/games/new").into_response();
             }
@@ -1302,6 +1318,7 @@ pub async fn create_game_post_handler(
             });
     let area_results = futures::future::join_all(area_futures).await;
     if area_results.into_iter().any(|r| r.is_err()) {
+        tracing::warn!("area creation failed for {game_identifier}");
         return Redirect::to("/games/new").into_response();
     }
 
