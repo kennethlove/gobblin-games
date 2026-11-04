@@ -39,7 +39,7 @@ pub static AUTH_ROUTER: LazyLock<Router<AppState>> = LazyLock::new(|| {
 });
 
 #[derive(Deserialize)]
-struct ResetPasswordRequest {
+pub struct ResetPasswordRequest {
     email: String,
     #[serde(default)]
     #[allow(dead_code)]
@@ -47,7 +47,7 @@ struct ResetPasswordRequest {
 }
 
 #[derive(Deserialize)]
-struct CompleteResetRequest {
+pub struct CompleteResetRequest {
     token: String,
     password: String,
     confirm_password: String,
@@ -57,7 +57,7 @@ struct CompleteResetRequest {
 }
 
 #[derive(Deserialize)]
-struct ResetTokenQuery {
+pub struct ResetTokenQuery {
     token: String,
 }
 
@@ -329,7 +329,7 @@ async fn logout(
 /// Always redirects to `/auth?tab=login` to avoid disclosing whether
 /// the email exists. If user exists and verified, generates a token
 /// and sends the reset email asynchronously.
-async fn request_password_reset(
+pub async fn request_password_reset(
     State(state): State<AppState>,
     Form(req): Form<ResetPasswordRequest>,
 ) -> Redirect {
@@ -388,7 +388,7 @@ async fn request_password_reset(
 }
 
 /// Handle GET /auth/reset-password?token=... — show the new-password form.
-async fn show_reset_form(
+pub async fn show_reset_form(
     State(_state): State<AppState>,
     headers: HeaderMap,
     Query(query): Query<ResetTokenQuery>,
@@ -414,7 +414,7 @@ async fn show_reset_form(
 }
 
 /// Handle POST /auth/reset-password/complete — update password.
-async fn complete_password_reset(
+pub async fn complete_password_reset(
     State(state): State<AppState>,
     Form(req): Form<CompleteResetRequest>,
 ) -> Redirect {
