@@ -140,6 +140,13 @@ pub async fn home_handler(headers: axum::http::HeaderMap) -> Response {
     html_with_csrf(tera_engine::render("home.html", &ctx), &csrf)
 }
 
+/// GET /faq — static FAQ & credits page.
+pub async fn faq_handler(headers: axum::http::HeaderMap) -> Response {
+    let (auth, csrf) = extract_auth(&headers);
+    let ctx = tera_engine::base_context("FAQ", &auth);
+    html_with_csrf(tera_engine::render("faq.html", &ctx), &csrf)
+}
+
 /// GET /games — list paginated games.
 pub async fn games_list_handler(
     State(state): State<AppState>,

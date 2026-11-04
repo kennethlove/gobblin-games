@@ -375,6 +375,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )),
         )
         .route("/", axum::routing::get(home_handler))
+        .route("/faq", axum::routing::get(faq_handler))
         .route("/account", axum::routing::get(account_handler))
         .route(
             "/account/settings",

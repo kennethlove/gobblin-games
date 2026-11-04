@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-header">
+  <div class="container">
+    <p class="section-header">FAQ &amp; credits</p>
+    <h1>How the games work.</h1>
+    <p class="deck">The rules that hold, the numbers you set, and what happens to a goblin that goes down.</p>
+    <p><a class="btn btn-primary" href="/games/new">Create a game</a></p>
+  </div>
+</section>
+
+<div class="container">
+  <div class="detail-grid">
+    <div class="detail-col">
+
+      <section class="panel" id="topic-gameplay" aria-labelledby="topic-gameplay-heading">
+        <div class="panel-head">
+          <h2 id="topic-gameplay-heading">Gameplay</h2>
+          <p class="panel-note">the shape of a game</p>
+        </div>
+        <div class="faq-list">
+          <details class="faq-item">
+            <summary class="faq-head"><span class="faq-index">Q01</span><span class="faq-q">What is Gobblin Games?</span><span class="faq-mark" aria-hidden="true"></span></summary>
+            <div class="faq-a"><p>Goblins with deterministic brains battle it out until one team is left standing. You set up the game and draft the teams; the arena runs the days; everyone watches.</p></div>
+          </details>
+          <details class="faq-item">
+            <summary class="faq-head"><span class="faq-index">Q02</span><span class="faq-q">What does "deterministic brains" mean?</span><span class="faq-mark" aria-hidden="true"></span></summary>
+            <div class="faq-a"><p>A goblin reacts the same way to the same state. What changes is the state: almost every state change carries some randomness, so behaviour varies from occasion to occasion and no two games play out the same.</p></div>
+          </details>
+          <details class="faq-item">
+            <summary class="faq-head"><span class="faq-index">Q03</span><span class="faq-q">How does a game end?</span><span class="faq-mark" aria-hidden="true"></span></summary>
+            <div class="faq-a"><p>When only one team remains. Until then the arena keeps raising the sun and running days.</p></div>
+          </details>
+          <details class="faq-item">
+            <summary class="faq-head"><span class="faq-index">Q04</span><span class="faq-q">How many days is a game?</span><span class="faq-mark" aria-hidden="true"></span></summary>
+            <div class="faq-a"><p>As many as it takes. The total only becomes known once the game is over — a running game shows where you are, not where it ends.</p></div>
+          </details>
+          <details class="faq-item">
+            <summary class="faq-head"><span class="faq-index">Q05</span><span class="faq-q">What do I do while a game runs?</span><span class="faq-mark" aria-hidden="true"></span></summary>
+            <div class="faq-a"><p>Watch. The in-game page streams events as they happen, and every finished day stays open as a recap you can page back through.</p></div>
+          </details>
+        </div>
+      </section>
+
+      <section class="panel" id="topic-goblins" aria-labelledby="topic-goblins-heading">
+        <div class="panel-head">
+          <h2 id="topic-goblins-heading">Goblins</h2>
+          <p class="panel-note">making them, keeping them</p>
+        </div>
+        <div class="faq-list">
+          <details class="faq-item">
+            <summary class="faq-head"><span class="faq-index">Q06</span><span class="faq-q">What is a goblin?</span><span class="faq-mark" aria-hidden="true"></span></summary>
+            <div class="faq-a"><p>A name, a clan, a portrait, character stats you set at creation, and a record the arena keeps up to date.</p></div>
+          </details>
+          <details class="faq-item">
+            <summary class="faq-head"><span class="faq-index">Q07</span><span class="faq-q">Can a goblin play two games at once?</span><span class="faq-mark" aria-hidden="true"></span></summary>
+            <div class="faq-a"><p>No. One game at a time. The goblin is yours again when that game ends.</p></div>
+          </details>
+          <details class="faq-item">
+            <summary class="faq-head"><span class="faq-index">Q08</span><span class="faq-q">What happens when a goblin goes down?</span><span class="faq-mark" aria-hidden="true"></span></summary>
+            <div class="faq-a"><p>Out for that game. Afterwards the goblin is revived, with a boon or a penalty attached to the revival — which one lands is part of the fun.</p></div>
+          </details>
+          <details class="faq-item">
+            <summary class="faq-head"><span class="faq-index">Q09</span><span class="faq-q">Can I edit my goblin's record?</span><span class="faq-mark" aria-hidden="true"></span></summary>
+            <div class="faq-a"><p>No. Wins, losses, eliminations and revivals come from the arena's database. Character stats are yours to set; the record is earned.</p></div>
+          </details>
+        </div>
+      </section>
+
+      <section class="panel" id="topic-games" aria-labelledby="topic-games-heading">
+        <div class="panel-head">
+          <h2 id="topic-games-heading">Games &amp; players</h2>
+          <p class="panel-note">setting one up</p>
+        </div>
+        <div class="faq-list">
+          <details class="faq-item">
+            <summary class="faq-head"><span class="faq-index">Q10</span><span class="faq-q">How many teams and goblins can a game have?</span><span class="faq-mark" aria-hidden="true"></span></summary>
+            <div class="faq-a"><p>Yours to set — team counts and team sizes both vary. The classic default is 8 teams of 3.</p></div>
+          </details>
+          <details class="faq-item">
+            <summary class="faq-head"><span class="faq-index">Q11</span><span class="faq-q">How many players can join one game?</span><span class="faq-mark" aria-hidden="true"></span></summary>
+            <div class="faq-a"><p>Up to 128, capped by the game's goblins — everyone controls at least one. If players don't fill every slot, the leftovers can be played by the CPU.</p></div>
+          </details>
+          <details class="faq-item">
+            <summary class="faq-head"><span class="faq-index">Q12</span><span class="faq-q">What is the difference between private and public?</span><span class="faq-mark" aria-hidden="true"></span></summary>
+            <div class="faq-a"><p>A private game runs on an invite link you share with friends — only people with the link can see it. A public game sits in the open list where anyone can find it.</p></div>
+          </details>
+          <details class="faq-item">
+            <summary class="faq-head"><span class="faq-index">Q13</span><span class="faq-q">Who can delete a game?</span><span class="faq-mark" aria-hidden="true"></span></summary>
+            <div class="faq-a"><p>The host who created it, and only after a confirmation step. Everyone else gets a view action and nothing more.</p></div>
+          </details>
+        </div>
+      </section>
+
+      <section class="panel" id="topic-running" aria-labelledby="topic-running-heading">
+        <div class="panel-head">
+          <h2 id="topic-running-heading">Running &amp; watching</h2>
+          <p class="panel-note">while the sun comes up</p>
+        </div>
+        <div class="faq-list">
+          <details class="faq-item">
+            <summary class="faq-head"><span class="faq-index">Q14</span><span class="faq-q">Who decides when the game moves on?</span><span class="faq-mark" aria-hidden="true"></span></summary>
+            <div class="faq-a"><p>The host. Advancing the game starts the next day, and that day's events stream in live for everyone watching — host and spectators alike.</p></div>
+          </details>
+          <details class="faq-item">
+            <summary class="faq-head"><span class="faq-index">Q15</span><span class="faq-q">How do I follow the action?</span><span class="faq-mark" aria-hidden="true"></span></summary>
+            <div class="faq-a"><p>Three ways at once. The day strip pages through the game one day at a time, the day's timeline runs top to bottom across twelve numbered periods, and the arena map shows where every goblin is standing.</p></div>
+          </details>
+        </div>
+      </section>
+
+    </div>
+
+    <aside class="rail" aria-label="FAQ navigation">
+      <div>
+        <p class="rail-title">Topics</p>
+        <nav class="topic-list">
+          <a href="#topic-gameplay">Gameplay · 5</a>
+          <a href="#topic-goblins">Goblins · 4</a>
+          <a href="#topic-games">Games &amp; players · 4</a>
+          <a href="#topic-running">Running &amp; watching · 2</a>
+        </nav>
+      </div>
+    </aside>
+  </div>
+
+  <section class="panel credits-panel" id="topic-credits" aria-labelledby="credits-heading">
+    <div class="panel-head">
+      <h2 id="credits-heading">Credits &amp; colophon</h2>
+      <p class="panel-note">the making of</p>
+    </div>
+    <div class="credits-grid">
+      <div class="fact-list">
+        <div class="fact-row"><span class="fact-key">Concept &amp; rules</span><span class="fact-val">Gobblin Games</span></div>
+        <div class="fact-row"><span class="fact-key">Portrait art</span><span class="fact-val">placeholders in use</span></div>
+        <div class="fact-row"><span class="fact-key">Typefaces</span><span class="fact-val">Barrio · Fraunces · Source Serif 4 · Atkinson Hyperlegible · Caveat</span></div>
+        <div class="fact-row"><span class="fact-key">Design system</span><span class="fact-val">DESIGN.md</span></div>
+      </div>
+      <div class="credits-note">
+        <p>Portraits are labeled placeholders until the real art lands.</p>
+        <p>Typefaces are open-licensed: Fraunces (Undercase Type, OFL), Source Serif 4 (Adobe, OFL), Atkinson Hyperlegible and Atkinson Hyperlegible Mono (Braille Institute of America, OFL), Barrio (Omnibus-Type, OFL), and Caveat (Impallari Type, OFL).</p>
+        <p>Numbers describe the current rules and can change as the game settles.</p>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
