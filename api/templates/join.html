@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block nav_back %}
+<a href="/games/{{ game.identifier }}" class="nav-link back-link">GAME INFO</a>
+{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <p class="section-header">JOIN GAME</p>
+    <h1>{{ game.name }}</h1>
+    <p class="deck">Pick a goblin to enter. You can only join while the game is waiting.</p>
+  </div>
+
+  {% if error %}
+    <div class="error-banner" role="alert">{{ error }}</div>
+  {% endif %}
+
+  <section class="panel" aria-labelledby="facts-heading">
+    <div class="panel-head"><h2 id="facts-heading">The game</h2></div>
+    <dl class="summary-list">
+      <div class="summary-row"><dt>Status</dt><dd>{{ game.status }}</dd></div>
+      <div class="summary-row"><dt>Day</dt><dd class="num">{{ game.day }}</dd></div>
+      <div class="summary-row"><dt>Goblins</dt><dd class="num">{{ total }} total · {{ alive }} alive</dd></div>
+      <div class="summary-row"><dt>Host</dt><dd>{{ game.created_by.username }}</dd></div>
+      <div class="summary-row"><dt>Visibility</dt><dd>{% if game.private %}Private{% else %}Public{% endif %}</dd></div>
+    </dl>
+  </section>
+
+  <div class="join-grid">
+    <section class="panel" aria-labelledby="pick-heading">
+      <div class="panel-head"><h2 id="pick-heading">Your goblins</h2></div>
+      {% if game.status != 'NotStarted' %}
+        <p class="empty-state">This game has already started — no new goblins can join.</p>
+      {% elif joinable_goblins | length == 0 %}
+        <p class="empty-state">You have no goblins free to enter. <a href="/my-goblins">Create one</a> first.</p>
+      {% else %}
+        <form method="POST" action="/games/{{ game.identifier }}/join" class="pick-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <fieldset class="pick-list">
+            <legend class="sr-only">Choose a goblin to enter</legend>
+            {% for goblin in joinable_goblins %}
+              <label class="pick-card">
+                <input type="radio" name="character_id" value="{{ goblin.identifier }}" required>
+                <span class="pick-name">{{ goblin.name }}</span>
+                <span class="pick-meta num">Team {{ goblin.team }}</span>
+              </label>
+            {% endfor %}
+          </fieldset>
+          <button type="submit" class="btn btn-primary">Join the game</button>
+        </form>
+      {% endif %}
+    </section>
+
+    <aside class="panel" aria-labelledby="roster-heading">
+      <div class="panel-head"><h2 id="roster-heading">Game roster</h2></div>
+      <div class="roster-list">
+        {% if character_rows | length == 0 %}
+          <p class="empty-state">No goblins yet.</p>
+        {% else %}
+          {{ character_rows | safe }}
+        {% endif %}
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}

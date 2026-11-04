@@ -411,9 +411,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route("/games", axum::routing::get(games_list_handler))
         .route("/games/{id}", axum::routing::get(game_detail_handler))
+        .route("/games/{id}/play", axum::routing::get(game_arena_handler))
         .route(
             "/games/{id}/join",
-            axum::routing::post(game_join_post_handler),
+            axum::routing::get(game_join_page_handler).post(game_join_post_handler),
         )
         .route("/games/{id}/areas", axum::routing::get(game_areas_handler))
         .route("/games/{id}/log", axum::routing::get(game_log_handler))

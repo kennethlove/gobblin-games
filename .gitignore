@@ -56,6 +56,7 @@ api/assets/dist/main.css
 # Local assets and notes — kept out of the repo
 /Avatars/
 /docs/DESIGN.md
+/art/
 
 # UX verification screenshots (local capture evidence)
 .ux/
