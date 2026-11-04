@@ -264,7 +264,7 @@ pub async fn game_join_post_handler(
             let query = url::form_urlencoded::Serializer::new(String::new())
                 .append_pair("error", &error.to_string())
                 .finish();
-            Redirect::to(&format!("/games/{game_identifier}?{query}")).into_response()
+            Redirect::to(&format!("/games/{game_identifier}/join?{query}")).into_response()
         }
     }
 }
@@ -330,6 +330,46 @@ pub async fn game_detail_handler(
     headers: axum::http::HeaderMap,
     axum::extract::Path(game_identifier): axum::extract::Path<uuid::Uuid>,
     Query(query): Query<DayQuery>,
+) -> Response {
+    render_game_page(
+        state,
+        headers,
+        game_identifier,
+        query,
+        "game_detail.html",
+        false,
+    )
+    .await
+}
+
+pub async fn game_arena_handler(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    axum::extract::Path(game_identifier): axum::extract::Path<uuid::Uuid>,
+    Query(query): Query<DayQuery>,
+) -> Response {
+    render_game_page(state, headers, game_identifier, query, "arena.html", true).await
+}
+
+pub async fn game_join_page_handler(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    axum::extract::Path(game_identifier): axum::extract::Path<uuid::Uuid>,
+    Query(query): Query<DayQuery>,
+) -> Response {
+    render_game_page(state, headers, game_identifier, query, "join.html", false).await
+}
+
+/// Shared page builder for the game detail / arena / join pages. `live`
+/// gates the arena-only work (commentary query, event cards, SSE triggers)
+/// so the info and join pages skip it.
+async fn render_game_page(
+    state: AppState,
+    headers: axum::http::HeaderMap,
+    game_identifier: uuid::Uuid,
+    query: DayQuery,
+    template: &'static str,
+    live: bool,
 ) -> Response {
     let (auth, csrf) = extract_auth(&headers);
     let identifier = game_identifier.to_string();
@@ -473,25 +513,28 @@ SELECT (
         Err(_) => vec![],
     };
 
-    let commentary_result = state
-        .db
-        .query(
-            r#"SELECT game_id, day, phase, lines, generated_at, model_used
+    let segments: Vec<announcers::CommentarySegment> = if live {
+        let commentary_result = state
+            .db
+            .query(
+                r#"SELECT game_id, day, phase, lines, generated_at, model_used
             FROM commentary_segments
             WHERE game_id = $identifier
             ORDER BY day, phase;"#,
-        )
-        .bind(("identifier", identifier.clone()))
-        .await;
-
-    let segments: Vec<announcers::CommentarySegment> = match commentary_result {
-        Ok(mut result) => result
-            .take::<Vec<SerdeWrapper<announcers::CommentarySegment>>>(0)
-            .unwrap_or_default()
-            .into_iter()
-            .map(|w| w.0)
-            .collect(),
-        Err(_) => vec![],
+            )
+            .bind(("identifier", identifier.clone()))
+            .await;
+        match commentary_result {
+            Ok(mut result) => result
+                .take::<Vec<SerdeWrapper<announcers::CommentarySegment>>>(0)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|w| w.0)
+                .collect(),
+            Err(_) => vec![],
+        }
+    } else {
+        Vec::new()
     };
 
     // Pre-compute context data
@@ -522,10 +565,15 @@ SELECT (
     };
 
     // Pre-render event cards (combat runs collapse into grouped fight cards)
-    let mut event_cards = game_detail::render_event_cards(&messages);
-    for seg in &segments {
-        event_cards.push_str(&game_detail::render_commentary_card(seg));
-    }
+    let event_cards = if live {
+        let mut cards = game_detail::render_event_cards(&messages);
+        for seg in &segments {
+            cards.push_str(&game_detail::render_commentary_card(seg));
+        }
+        cards
+    } else {
+        String::new()
+    };
 
     // Pre-render character rows — grouped by team
     let team_groups = game_detail::build_team_groups(&sorted_characters);
@@ -539,7 +587,11 @@ SELECT (
 
     // SSE triggers: derived from MessageKind so they always match the
     // event names sse.rs actually emits (see sse_trigger_list).
-    let sse_events = sse_trigger_list();
+    let sse_events = if live {
+        sse_trigger_list()
+    } else {
+        String::new()
+    };
 
     // Team victory: label of the only team with living members, if exactly
     // one team stands (the engine ends the game at that point).
@@ -564,7 +616,9 @@ SELECT (
     };
 
     let mut ctx = tera_engine::base_context(&game.name, &auth);
-    ctx.insert("body_class", "broadcast");
+    if live {
+        ctx.insert("body_class", "broadcast");
+    }
     ctx.insert("error", &query.error);
     ctx.insert("joinable_goblins", &joinable_goblins);
     ctx.insert("game", &game);
@@ -585,8 +639,10 @@ SELECT (
     ctx.insert("segments", &segments);
     let day_count = game.day.unwrap_or(0) + 1;
     ctx.insert("day_count", &day_count);
+    ctx.insert("has_prev_day", &(current_day > 1));
+    ctx.insert("has_next_day", &(current_day < game.day.unwrap_or(0)));
 
-    html_with_csrf(tera_engine::render("game_detail.html", &ctx), &csrf)
+    html_with_csrf(tera_engine::render(template, &ctx), &csrf)
 }
 
 /// GET /games/{id}/characters — characters for a game.
