@@ -66,6 +66,7 @@ DEFINE FUNCTION OVERWRITE fn::get_full_game($game_id: string) {
 DEFINE FUNCTION OVERWRITE fn::get_display_game($game_id: string) {
     LET $characters = (
         SELECT  in.id,
+                in.identifier,
                 in.name,
                 in.team,
                 in.blood
