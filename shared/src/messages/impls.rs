@@ -121,14 +121,16 @@ impl MessagePayload {
             | AddictionRelapse { .. } => Importance::Persist,
 
             // --- Persist: arena + game lifecycle ------------------------
-            AreaClosed { .. } | AreaEvent { .. } | GameEnded { .. } | DaySummary { .. } => {
+            // CharacterMoved persists: historical position is NOT derivable
+            // (character.location is overwritten in place), so the move row
+            // IS the record — map/snapshots read it per day.
+            AreaClosed { .. } | AreaEvent { .. } | GameEnded { .. } | DaySummary { .. } | CharacterMoved { .. } => {
                 Importance::Persist
             }
 
             // --- ServerLogOnly: derivable state / low drama -------------
             Generic
             | CharacterAttacked { .. }
-            | CharacterMoved { .. }
             | CharacterHidden { .. }
             | ItemDropped { .. }
             | CharacterRested { .. }

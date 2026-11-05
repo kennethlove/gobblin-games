@@ -342,6 +342,21 @@ mod tests {
     fn partition_drops_server_only_and_keeps_important() {
         use shared::messages::MessagePayload;
         let server_only = vec![
+            log(MessagePayload::PhaseStarted {
+                day: 1,
+                phase: Phase::DAY,
+                weather_summary: None,
+            }),
+            log(MessagePayload::HungerBandChanged {
+                character: CharacterRef {
+                    identifier: "c".into(),
+                    name: "C".into(),
+                },
+                from: shared::messages::HungerBand::Sated,
+                to: shared::messages::HungerBand::Starving,
+            }),
+        ];
+        let important = vec![
             log(MessagePayload::CharacterMoved {
                 character: CharacterRef {
                     identifier: "c".into(),
@@ -358,21 +373,6 @@ mod tests {
                 from_sub: None,
                 to_sub: None,
             }),
-            log(MessagePayload::PhaseStarted {
-                day: 1,
-                phase: Phase::DAY,
-                weather_summary: None,
-            }),
-            log(MessagePayload::HungerBandChanged {
-                character: CharacterRef {
-                    identifier: "c".into(),
-                    name: "C".into(),
-                },
-                from: shared::messages::HungerBand::Sated,
-                to: shared::messages::HungerBand::Starving,
-            }),
-        ];
-        let important = vec![
             log(MessagePayload::CycleStart {
                 day: 1,
                 phase: Phase::DAY_START,
@@ -389,8 +389,8 @@ mod tests {
         let mut all = server_only.clone();
         all.extend(important.clone());
         let (persist, dropped) = partition_persist(all);
-        assert_eq!(persist.len(), 2);
-        assert_eq!(dropped.len(), 3);
+        assert_eq!(persist.len(), 3);
+        assert_eq!(dropped.len(), 2);
         assert!(
             persist
                 .iter()

@@ -648,7 +648,7 @@ fn importance_tiers_match_decision() {
                 from_sub: None,
                 to_sub: None,
             },
-            ServerLogOnly, // position derivable; from/to goes to server logs
+            Persist, // historical position is not derivable — move row is the record
         ),
         (
             CharacterHidden {
