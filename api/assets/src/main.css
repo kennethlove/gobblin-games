@@ -208,7 +208,10 @@ h1, h2, h3, h4 { text-wrap: balance; }
   font-family: var(--font-condensed);
   letter-spacing: 1px;
 }
-.topnav-inner { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; }
+.topnav-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; row-gap: 8px; padding: 8px 16px;
+}
 .nav-left { display: flex; align-items: center; gap: 18px; }
 .site-brand {
   font-weight: 700; font-size: var(--fs-h2); letter-spacing: normal;
@@ -227,7 +230,8 @@ h1, h2, h3, h4 { text-wrap: balance; }
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 }
 .site-brand .brand-accent { color: var(--accent); }
-.nav-right { display: flex; align-items: center; gap: 8px; }
+/* margin-left auto keeps the single-row space-between layout intact once wrapping is on. */
+.nav-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .nav-link {
   color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1.5px;
   text-decoration: none; padding: 4px 10px; border: 1px solid transparent;
@@ -2463,3 +2467,624 @@ h1, h2, h3, h4 { text-wrap: balance; }
 .beats-ordinary { margin: 4px 0 0; padding-left: 1.1em; color: var(--muted); font-size: var(--fs-xs); }
 .beats-ordinary li { padding: 1px 0; }
 .filter-pill { font-variant-numeric: tabular-nums; }
+
+/* ══════════════════════════════════════════════════════════════
+   In-game page (arena) — .game-shell
+   WHY: .broadcast-theme stays on the wrapper — server-rendered
+   roster/alliance/hex HTML emits inline var(--broad-*) refs that
+   need it. Everything below re-skins the broadcast chrome to
+   DESIGN tokens; the .game-shell prefix out-specifies the legacy
+   broadcast rules, including inside their @media blocks.
+   ══════════════════════════════════════════════════════════════ */
+
+/* Re-assert the DESIGN scale: .broadcast-theme shrinks --fs-* to
+   broadcast sizes and points --font-condensed at Arial Narrow. */
+.game-shell.broadcast-theme {
+  --fs-hero: clamp(2.75rem, 6vw, 4.5rem);
+  --fs-h2: clamp(1.5rem, 3vw, 2rem);
+  --fs-h3: 1.25rem;
+  --fs-body: 1rem;
+  --fs-sm: 0.875rem;
+  --fs-xs: 0.75rem;
+  --fs-xxs: 0.75rem;
+  --font-condensed: var(--font-ui);
+}
+
+/* App shell: shell + SSE wrapper are flex columns so the grid below is
+   viewport-bounded and regions scroll inside instead of growing the page. */
+.game-shell {
+  display: flex; flex-direction: column; flex: 1; min-height: 0;
+  font-family: var(--font-ui);
+  color: var(--fg);
+}
+/* WHY: the SSE wrapper div has no class (hx-ext/sse-connect attrs). */
+.game-shell > div {
+  display: flex; flex-direction: column; flex: 1; min-height: 0;
+}
+
+/* Marks (day number, ticker/feed highlights) use the one accent. */
+.game-shell .hl { color: var(--gold); }
+.game-shell .ticker-bar .ticker-text .hl,
+.game-shell .feed-header .title .hl { color: var(--gold); }
+
+/* ── Game header ─────────────────────────────────────────────── */
+.game-shell .game-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--gap-sm) var(--gap-md);
+  padding: var(--gap-sm) var(--gap-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.game-shell .game-head-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--gap-sm) var(--gap-md);
+}
+.game-shell .game-head-id {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: normal;
+}
+.game-shell .game-head-name {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: normal;
+  padding-left: var(--gap-md);
+  border-left: 1px solid var(--border);
+}
+
+/* Status: 8px dot + text label, never color alone. */
+.game-shell .status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-xs);
+  padding: var(--gap-xs) var(--gap-sm);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+.game-shell .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.game-shell .status-chip-running { color: var(--running); }
+.game-shell .status-chip-waiting { color: var(--waiting); }
+.game-shell .status-chip-finished { color: var(--finished); }
+
+/* ── Counts ──────────────────────────────────────────────────── */
+.game-shell .game-stats {
+  display: flex;
+  gap: var(--gap-sm);
+}
+.game-shell .game-stats .stat {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-xs);
+  padding: var(--gap-xs) var(--gap-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.game-shell .game-stats .num {
+  font-size: var(--fs-h3);
+  font-weight: 700;
+}
+.game-shell .game-stats .alive { color: var(--success); }
+.game-shell .game-stats .fallen { color: var(--danger); }
+.game-shell .game-stats .stat-label {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: normal;
+}
+
+/* ── Day navigation ──────────────────────────────────────────── */
+.game-shell .day-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--gap-xs) var(--gap-md);
+  padding: var(--gap-xs) var(--gap-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-bottom: none;
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  color: var(--fg);
+}
+.game-shell .day-nav .day-left {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-xs);
+}
+.game-shell .day-nav .day-label {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: normal;
+}
+.game-shell .day-nav .day-arrow {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out;
+}
+.game-shell .day-nav .day-arrow:hover {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+.game-shell .day-nav .day-arrow.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+  cursor: default;
+}
+.game-shell .day-nav .day-nav-divider { color: var(--muted); }
+.game-shell .day-nav .day-nav-select {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  padding: var(--gap-xs) var(--gap-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--fg);
+  cursor: pointer;
+  transition: border-color 150ms ease-out;
+}
+.game-shell .day-nav .day-nav-select:hover { border-color: var(--border-strong); }
+.game-shell .day-nav .day-nav-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.game-shell .day-nav .day-right {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+}
+
+/* Primary CTA — the one gold button. */
+.game-shell .day-nav .phase-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-xs);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: normal;
+  padding: var(--gap-xs) var(--gap-md);
+  border: 1px solid var(--gold);
+  border-radius: var(--radius);
+  background: var(--gold);
+  color: var(--on-gold);
+  cursor: pointer;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out;
+}
+.game-shell .day-nav .phase-btn:hover {
+  background: var(--gold-hover);
+  border-color: var(--gold-hover);
+}
+.game-shell .day-nav .phase-btn:active {
+  background: var(--gold-active);
+  border-color: var(--gold-active);
+}
+.game-shell .day-nav .phase-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.game-shell .day-nav .phase-btn:disabled:hover {
+  background: var(--gold);
+  border-color: var(--gold);
+}
+
+/* ── Ticker ──────────────────────────────────────────────────── */
+.game-shell .ticker-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--gap-xs) var(--gap-md);
+  padding: var(--gap-xs) var(--gap-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--fg);
+}
+.game-shell .ticker-bar .ticker-left {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  min-width: 0;
+}
+.game-shell .ticker-bar .live-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--running);
+}
+.game-shell .ticker-bar .live-label {
+  font-weight: 700;
+  color: var(--running);
+  letter-spacing: normal;
+}
+.game-shell .ticker-bar .ticker-divider {
+  width: 1px;
+  height: 1em;
+  background: var(--border);
+}
+.game-shell .ticker-bar .ticker-text { color: var(--muted); }
+.game-shell .ticker-bar .ticker-text .danger { color: var(--danger); }
+.game-shell .ticker-bar .ticker-text .gold { color: var(--gold); }
+.game-shell .ticker-bar .ticker-right {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-md);
+  margin-left: auto;
+}
+.game-shell .ticker-bar .ticker-stat { color: var(--muted); }
+.game-shell .ticker-bar .ticker-stat .num {
+  color: var(--fg);
+  font-weight: 700;
+}
+
+/* ── Error banner ────────────────────────────────────────────── */
+.game-shell .error-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  margin-top: var(--gap-sm);
+  padding: var(--gap-sm) var(--gap-md);
+  background: var(--event-death-soft);
+  border: 1px solid var(--event-death);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+}
+.game-shell .error-icon { color: var(--event-death); }
+
+/* ── Winner banner ───────────────────────────────────────────── */
+.game-shell .winner-banner {
+  margin-top: var(--gap-sm);
+  margin-bottom: 0;
+  background: color-mix(in oklch, var(--gold) 15%, var(--surface));
+  border: 1px solid var(--gold);
+  border-radius: var(--radius);
+  color: var(--fg);
+}
+.game-shell .winner-banner .winner-stats {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Main grid: map + roster | commentary feed ───────────────── */
+.game-shell .game-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap-sm);
+  flex: 1;
+  min-height: 0;
+  margin-top: var(--gap-sm);
+}
+.game-shell .game-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+  min-height: 0;
+  overflow: hidden;
+}
+.game-shell .map-section,
+.game-shell .roster-section,
+.game-shell .feed-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+/* Map flexes to fill the leftover column height (basis 0, split evenly with
+   the roster); media rules below fix heights for the stacked layout. */
+.game-shell .map-section { flex: 1 1 0; min-height: 140px; }
+/* contain: size: the feed section takes its height from the grid stretch /
+   sibling column, never from its 100-card content. */
+.game-shell .feed-section {
+  display: flex; flex-direction: column; contain: size;
+}
+
+/* Region headers: hairline rule, no tracked-out eyebrow. */
+.game-shell .section-header,
+.game-shell .feed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--gap-xs) var(--gap-sm);
+  padding: var(--gap-sm) var(--gap-md);
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: normal;
+}
+.game-shell .section-header .title,
+.game-shell .feed-header .title {
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--fg);
+  text-transform: uppercase;
+  letter-spacing: normal;
+}
+
+/* ── Commentary feed ─────────────────────────────────────────── */
+.game-shell .feed-scroll {
+  /* On desktop contain: size handles sizing; in the stacked layout the
+     section is content-sized, so cap the scroller (see media block below). */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--gap-sm);
+  gap: var(--gap-sm);
+}
+/* Newest row tinted while the game runs (newest is first). */
+.game-shell .feed-live > .event-card:first-child {
+  background: var(--surface-2);
+}
+.game-shell .feed-scroll::-webkit-scrollbar-thumb,
+.game-shell .roster-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+}
+
+/* ── Event / commentary cards ────────────────────────────────── */
+.game-shell .event-card {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-left-width: 3px;
+  border-left-color: var(--kc, var(--border));
+  border-radius: var(--radius);
+}
+.game-shell .event-card .card-head {
+  gap: var(--gap-sm);
+  padding: var(--gap-xs) var(--gap-sm);
+  color: var(--muted);
+}
+.game-shell .event-card .card-badge {
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: normal;
+  border-radius: var(--radius-sm);
+}
+.game-shell .event-card .card-timestamp {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.game-shell .event-card .card-body {
+  padding: var(--gap-xs) var(--gap-sm) var(--gap-sm);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+}
+.game-shell .event-card .comment-text {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.game-shell .event-card.commentary .comment-text {
+  padding: var(--gap-xs) 0 var(--gap-xs) var(--gap-sm);
+  border-left: 2px solid var(--gold);
+}
+.game-shell .event-card .comment-speaker {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-xs);
+  margin-top: var(--gap-xs);
+}
+.game-shell .event-card .speaker-avatar {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--muted);
+}
+.game-shell .event-card .speaker-info {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-xs);
+  min-width: 0;
+}
+.game-shell .event-card .speaker-name {
+  font-family: var(--font-flavor);
+  font-size: var(--fs-lead);
+  font-weight: 700;
+  color: var(--fg);
+}
+.game-shell .event-card .speaker-role {
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: normal;
+}
+.game-shell .event-card.death .death-quote {
+  font-family: var(--font-body);
+}
+.game-shell .event-card.event .event-title {
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: normal;
+}
+
+/* ── Arena map ───────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  /* Stacked layout: shell un-flexes, page scrolls normally like the prototype. */
+  .game-shell, .game-shell > div { display: block; }
+  .game-shell .game-grid { grid-template-columns: 1fr; }
+  .game-shell .map-section { flex: 0 0 auto; height: 260px; }
+  .game-shell .roster-section { flex: 0 0 auto; }
+  /* Stacked: block flow, so the feed sizes from content — cap it. */
+  .game-shell .feed-section { contain: none; }
+  .game-shell .feed-scroll { max-height: 520px; }
+}
+@media (max-width: 720px) {
+  .game-shell .map-section { height: 220px; }
+}
+
+/* ── Roster ──────────────────────────────────────────────────── */
+.game-shell .roster-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: 520px;
+  overflow-y: auto;
+  padding: var(--gap-sm);
+  gap: var(--gap-xs);
+}
+.game-shell .roster-controls {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.game-shell .roster-controls .num {
+  color: var(--fg);
+  font-weight: 700;
+}
+.game-shell .alliance-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-sm);
+  padding: var(--gap-xs) var(--gap-sm);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: normal;
+}
+.game-shell .alliance-name { font-weight: 700; }
+.game-shell .alliance-count {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+/* Server HTML wraps the four cells in one div — grid it here. */
+.game-shell .roster-row {
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  color: inherit;
+  transition: background-color 150ms ease-out;
+}
+.game-shell .roster-row:hover { background: var(--surface-2); }
+.game-shell .roster-row:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+.game-shell .roster-row > div {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 72px 56px;
+  align-items: center;
+  gap: var(--gap-sm);
+  padding: var(--gap-xs) var(--gap-sm);
+}
+.game-shell .roster-info {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-xs);
+  min-width: 0;
+}
+.game-shell .roster-name {
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--fg);
+}
+.game-shell .roster-clan {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.game-shell .roster-health { min-width: 0; }
+.game-shell .roster-health-bar {
+  width: 100%;
+  height: var(--gap-xs);
+  background: var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.game-shell .roster-health-fill {
+  height: 100%;
+  border-radius: var(--radius-sm);
+  transition: width 300ms ease-out;
+}
+.game-shell .roster-health-fill.high { background: var(--success); }
+.game-shell .roster-health-fill.mid { background: var(--warning); }
+.game-shell .roster-health-fill.low { background: var(--danger); }
+.game-shell .roster-health-fill.empty { background: var(--border-strong); }
+.game-shell .roster-status {
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-align: right;
+  text-transform: uppercase;
+  letter-spacing: normal;
+}
+.game-shell .roster-status.alive { color: var(--success); }
+.game-shell .roster-status.dead { color: var(--danger); }
+.game-shell .roster-status.injured { color: var(--warning); }
+
+/* Hidden hx status node kept for behavior; CSS hides it. */
+.game-shell #game-status { display: none; }
+
+/* Focus ring: blue, 2px, offset — everywhere in the shell. */
+.game-shell a:focus-visible,
+.game-shell button:focus-visible,
+.game-shell select:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
