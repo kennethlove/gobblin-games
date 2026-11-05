@@ -28,6 +28,10 @@ DEFINE FIELD OVERWRITE starving_since_day ON character TYPE option<int>;
 DEFINE FIELD OVERWRITE dehydrated_since_day ON character TYPE option<int>;
 DEFINE FIELD OVERWRITE afflictions ON character TYPE option<array<object>>;
 DEFINE FIELD OVERWRITE created_by ON character VALUE $auth READONLY;
+-- Bot-filled goblin (3ue): stamped by the start/create backfill so readers
+-- keep bots out of stables, pickers, and per-player caps. Rows written
+-- before this field existed read as NONE, which passes `bot != true`.
+DEFINE FIELD OVERWRITE bot ON character TYPE bool DEFAULT false;
 
 DEFINE INDEX OVERWRITE character_identifier ON character FIELDS identifier UNIQUE;
 DEFINE INDEX OVERWRITE character_created_by ON character FIELDS created_by;

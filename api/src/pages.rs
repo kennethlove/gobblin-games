@@ -195,7 +195,9 @@ pub async fn my_goblins_handler(
     };
 
     let characters: Vec<Character> = user_db
-        .query("SELECT * FROM character WHERE created_by = $auth ORDER BY identifier")
+        .query(
+            "SELECT * FROM character WHERE created_by = $auth AND bot != true ORDER BY identifier",
+        )
         .await
         .ok()
         .and_then(|mut response| response.take::<Vec<Value>>(0).ok())

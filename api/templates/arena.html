@@ -64,6 +64,7 @@
         {% if game.is_mine and game.status == 'InProgress' %}
           <button
             class="phase-btn"
+            type="button"
             hx-put="/api/games/{{ game.identifier }}/next"
             hx-swap="none"
             hx-disabled-elt="this"
@@ -80,6 +81,7 @@
         {% elif game.is_mine and game.status == 'NotStarted' %}
           <button
             class="phase-btn"
+            type="button"
             hx-put="/api/games/{{ game.identifier }}/next"
             hx-swap="none"
             hx-disabled-elt="this"
