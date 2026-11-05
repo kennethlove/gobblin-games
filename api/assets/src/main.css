@@ -655,6 +655,14 @@ h1, h2, h3, h4 { text-wrap: balance; }
   color: var(--waiting);
 }
 
+.winner-banner .winner-stats {
+  margin-left: auto;
+  font-size: var(--fs-meta);
+  font-weight: 400;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Back link */
 .back-link {
   display: inline-flex;
