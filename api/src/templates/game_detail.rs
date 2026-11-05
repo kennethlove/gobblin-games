@@ -522,6 +522,57 @@ pub fn render_event_cards(msgs: &[shared::messages::GameMessage]) -> String {
     html
 }
 
+/// Play-page event list: messages plus announcer commentary interleaved by
+/// (day, period). Each period's messages render first (fight grouping
+/// intact), then that period's commentary.
+///
+/// WHY: commentary used to be appended after the whole log unfiltered, so a
+/// day/period-filtered view still showed other days' lines, and the all-days
+/// view read out of order (dfp).
+pub fn render_timeline_cards(
+    msgs: &[shared::messages::GameMessage],
+    segs: &[announcers::CommentarySegment],
+) -> String {
+    use std::collections::BTreeSet;
+
+    // Input is sorted by (day, period, ...), so equal keys are contiguous.
+    let mut runs: Vec<((u32, String), Vec<shared::messages::GameMessage>)> = Vec::new();
+    for m in msgs {
+        let key = (m.game_day, m.phase.to_string());
+        match runs.last_mut() {
+            Some((k, run)) if *k == key => run.push(m.clone()),
+            _ => runs.push((key, vec![m.clone()])),
+        }
+    }
+    let seg_key = |s: &announcers::CommentarySegment| (s.day, s.phase.clone());
+
+    // Commentaries are one per (day, period); SQL orders them by day, phase.
+    let mut segs_by_key: std::collections::BTreeMap<(u32, String), &announcers::CommentarySegment> =
+        std::collections::BTreeMap::new();
+    for s in segs {
+        segs_by_key.insert(seg_key(s), s);
+    }
+
+    let keys: BTreeSet<(u32, String)> = runs
+        .iter()
+        .map(|(k, _)| k.clone())
+        .chain(segs_by_key.keys().cloned())
+        .collect();
+
+    let mut html = String::new();
+    let mut run_i = 0usize;
+    for key in keys {
+        if run_i < runs.len() && runs[run_i].0 == key {
+            html.push_str(&render_event_cards(&runs[run_i].1));
+            run_i += 1;
+        }
+        if let Some(seg) = segs_by_key.get(&key) {
+            html.push_str(&render_commentary_card(seg));
+        }
+    }
+    html
+}
+
 /// "Name" or "A & B" with the right verb form ("X wins" / "X & Y win").
 fn join_names(victors: &[shared::messages::CharacterRef], plural: &str, singular: &str) -> String {
     match victors {

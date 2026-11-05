@@ -568,7 +568,8 @@ SELECT (
         let commentary_result = state
             .db
             .query(
-                r#"SELECT game_id, day, phase, lines, generated_at, model_used
+                r#"SELECT game_id, day, phase, lines,
+            type::string(generated_at) AS generated_at, model_used
             FROM commentary_segments
             WHERE game_id = $identifier
             ORDER BY day, phase;"#,
@@ -576,13 +577,19 @@ SELECT (
             .bind(("identifier", identifier.clone()))
             .await;
         match commentary_result {
-            Ok(mut result) => result
+            Ok(mut result) => match result
                 .take::<Vec<SerdeWrapper<announcers::CommentarySegment>>>(0)
-                .unwrap_or_default()
-                .into_iter()
-                .map(|w| w.0)
-                .collect(),
-            Err(_) => vec![],
+            {
+                Ok(rows) => rows.into_iter().map(|w| w.0).collect(),
+                Err(e) => {
+                    tracing::error!("commentary rows for {identifier} failed to deserialize: {e}");
+                    vec![]
+                }
+            },
+            Err(e) => {
+                tracing::error!("commentary query for {identifier} failed: {e}");
+                vec![]
+            }
         }
     } else {
         Vec::new()
@@ -615,13 +622,20 @@ SELECT (
         vec![]
     };
 
-    // Pre-render event cards (combat runs collapse into grouped fight cards)
+    // Commentary obeys the same day/period filter as the log (dfp): the SQL
+    // fetches all segments, the filter mirrors the message query above.
+    let segments: Vec<announcers::CommentarySegment> = segments
+        .into_iter()
+        .filter(|s| {
+            (current_day == 0 || s.day == current_day)
+                && (current_phase == "all" || s.phase == current_phase)
+        })
+        .collect();
+
+    // Pre-render event cards (combat runs collapse into grouped fight cards;
+    // commentary interleaves per period — dfp)
     let event_cards = if live {
-        let mut cards = game_detail::render_event_cards(&messages);
-        for seg in &segments {
-            cards.push_str(&game_detail::render_commentary_card(seg));
-        }
-        cards
+        game_detail::render_timeline_cards(&messages, &segments)
     } else {
         String::new()
     };
@@ -806,7 +820,8 @@ pub async fn game_log_handler(
     let commentary_result = state
         .db
         .query(
-            r#"SELECT game_id, day, phase, lines, generated_at, model_used
+            r#"SELECT game_id, day, phase, lines,
+            type::string(generated_at) AS generated_at, model_used
             FROM commentary_segments
             WHERE game_id = $identifier
             ORDER BY day, phase;"#,
