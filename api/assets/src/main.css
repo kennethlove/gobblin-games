@@ -2402,6 +2402,15 @@ h1, h2, h3, h4 { text-wrap: balance; }
 .edit-form .field-group { margin-bottom: var(--gap-sm); }
 .edit-form .field-group:last-of-type { margin-bottom: var(--gap-md); }
 
+/* Cluster D: home shell (uqw.7) */
+.continue-strip { display: flex; flex-direction: column; gap: var(--gap-md); }
+.session-strip { display: flex; flex-wrap: wrap; gap: var(--gap-sm); }
+.continue-row { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: var(--gap-md); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--gap-md); text-decoration: none; color: inherit; transition: border-color 150ms ease-out; }
+.continue-row:hover { border-color: var(--border-strong); }
+.continue-title { font-family: var(--font-display); font-size: var(--fs-h3); }
+.continue-meta { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.continue-enter { font-family: var(--font-ui); font-size: var(--fs-sm); font-weight: 600; color: var(--link); }
+
 /* Cluster C: game sub-pages (uqw.6) */
 .page-body { padding-block: var(--gap-lg); }
 .page-head-row {

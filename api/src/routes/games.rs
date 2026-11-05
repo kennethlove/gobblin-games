@@ -8,7 +8,7 @@ use axum::Form;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Redirect, Response};
 use serde::Deserialize;
-use shared::ListDisplayGame;
+use shared::{GameStatus, ListDisplayGame};
 use std::str::FromStr;
 use surrealdb_types::SerdeWrapper;
 
@@ -130,13 +130,50 @@ mod characters_form_tests {
 }
 
 /// GET / — home page.
-pub async fn home_handler(headers: axum::http::HeaderMap) -> Response {
+pub async fn home_handler(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> Response {
     let (auth, csrf) = extract_auth(&headers);
     let mut ctx = tera_engine::base_context("Home", &auth);
-    ctx.insert(
-        "stats",
-        &serde_json::json!({"running": 0, "waiting": 0, "finished": 0, "total": 0}),
-    );
+
+    // Logged-in home: continue row + open sessions (needs $auth bound).
+    let authenticated = ctx
+        .get("auth_authenticated")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
+    if authenticated {
+        let token = read_cookie(&headers, SESSION_COOKIE).unwrap_or_default();
+        if let Ok(user_db) = authenticate_db(&state, token).await {
+            let all_games: Vec<ListDisplayGame> = user_db
+                .query("SELECT * FROM fn::get_list_games(50, 0)")
+                .await
+                .ok()
+                .and_then(|mut rows| rows.take::<Vec<SerdeWrapper<ListDisplayGame>>>(0).ok())
+                .unwrap_or_default()
+                .into_iter()
+                .map(|wrapper| wrapper.0)
+                .collect();
+
+            // Open sessions: running/waiting games, capped at three.
+            let sessions: Vec<serde_json::Value> = all_games
+                .iter()
+                .filter(|g| matches!(g.status, GameStatus::InProgress | GameStatus::NotStarted))
+                .take(3)
+                .map(serde_json::to_value)
+                .filter_map(Result::ok)
+                .collect();
+            ctx.insert("sessions", &sessions);
+
+            // Continue row: my most recent game (is_mine from fn::get_list_games).
+            let continue_row = all_games
+                .iter()
+                .find(|g| g.is_mine)
+                .and_then(|g| serde_json::to_value(g).ok());
+            ctx.insert("continue_row", &continue_row);
+        }
+    }
+
     html_with_csrf(tera_engine::render("home.html", &ctx), &csrf)
 }
 
