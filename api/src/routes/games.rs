@@ -194,8 +194,15 @@ pub async fn games_list_handler(
     let limit = params.limit.min(100);
     let offset = params.offset.min(10000);
 
-    let result = state
-        .db
+    // Bind $auth when a session cookie is present, so fn::get_list_games
+    // includes the caller's private games; anonymous sees public only.
+    let token = read_cookie(&headers, SESSION_COOKIE).unwrap_or_default();
+    let db = match authenticate_db(&state, token).await {
+        Ok(user_db) => user_db,
+        Err(_) => (*state.db).clone(),
+    };
+
+    let result = db
         .query("SELECT * FROM fn::get_list_games($limit, $offset)")
         .bind(("limit", limit))
         .bind(("offset", offset))
