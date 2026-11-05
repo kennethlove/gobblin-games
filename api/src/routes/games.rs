@@ -279,9 +279,6 @@ fn filter_games_by_status(games: &[ListDisplayGame], status: Option<&str>) -> Ve
 pub struct DayQuery {
     pub day: Option<u32>,
     pub phase: Option<String>,
-    /// `?error=` after a failed join (POST/Redirect/GET).
-    #[serde(default)]
-    pub error: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -311,12 +308,11 @@ pub async fn game_join_post_handler(
     };
     match api::characters::join_game(&user_db, &game_identifier, &form.character_id).await {
         Ok(()) => Redirect::to(&format!("/games/{game_identifier}")).into_response(),
-        Err(error) => {
-            let query = url::form_urlencoded::Serializer::new(String::new())
-                .append_pair("error", &error.to_string())
-                .finish();
-            Redirect::to(&format!("/games/{game_identifier}/join?{query}")).into_response()
-        }
+        Err(error) => crate::redirect_with_flash(
+            &format!("/games/{game_identifier}/join"),
+            &error.to_string(),
+            None,
+        ),
     }
 }
 
@@ -833,7 +829,9 @@ SELECT (
     if live {
         ctx.insert("body_class", "broadcast");
     }
-    ctx.insert("error", &query.error);
+    if let Some((error, _)) = crate::take_flash(&headers) {
+        ctx.insert("error", &error);
+    }
     ctx.insert("joinable_goblins", &joinable_goblins);
     ctx.insert("game", &game);
     ctx.insert("winning_team", &winning_team);
@@ -884,7 +882,9 @@ SELECT (
     ctx.insert("has_prev_day", &(current_day > 1));
     ctx.insert("has_next_day", &(current_day < game.day.unwrap_or(0)));
 
-    html_with_csrf(tera_engine::render(template, &ctx), &csrf)
+    let mut response = html_with_csrf(tera_engine::render(template, &ctx), &csrf);
+    crate::clear_flash(&mut response);
+    response
 }
 
 /// GET /games/{id}/characters — characters for a game.

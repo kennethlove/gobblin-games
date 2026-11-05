@@ -66,7 +66,7 @@ async fn test_my_goblins_page_requires_auth() {
         .assert_status_see_other()
         .assert_header("location", "/auth?tab=login");
 
-    // No session cookie → the CSRF check bounces the create post to /auth.
+    // No session cookie -> the CSRF check bounces the create post to /auth.
     server
         .post("/my-goblins")
         .form(&json!({ "csrf_token": "guess" }))
@@ -338,9 +338,21 @@ async fn test_my_goblins_create_form_enforces_cap() {
         .to_str()
         .expect("location is utf-8")
         .to_string();
+    assert_eq!(
+        location, "/my-goblins",
+        "over-cap redirect must keep message text out of the URL (tk1)"
+    );
+    let flash = blocked
+        .headers()
+        .get_all("set-cookie")
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .find(|value| value.starts_with("gg_flash="))
+        .expect("over-cap redirect should carry the error in a flash cookie")
+        .to_string();
     assert!(
-        location.starts_with("/my-goblins?error="),
-        "over-cap form post should redirect with the error, got {location}"
+        flash.contains("m="),
+        "flash cookie should carry the error message, got {flash}"
     );
 
     let list = server
