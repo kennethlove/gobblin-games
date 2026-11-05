@@ -3,6 +3,9 @@
 <div class="auth-card">
   <div class="auth-logo">Gobblin <span>Games</span></div>
   <div class="check-email">
+    {% if error %}
+      <div class="error-banner">{{ error }}</div>
+    {% endif %}
     <div class="mail-icon">
       {{ "mail" | icon | safe }}
     </div>
