@@ -51,6 +51,7 @@ pub struct VerifyQuery {
 #[derive(Deserialize)]
 pub struct CheckEmailQuery {
     pub address: Option<String>,
+    pub error: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -161,11 +162,12 @@ pub async fn handle_login_post(
             struct AuthRow {
                 id: surrealdb_types::RecordId,
                 username: String,
+                email: String,
                 email_verified: Option<bool>,
             }
 
             let mut resp = match user_db
-                .query("SELECT id, username, email_verified FROM $auth")
+                .query("SELECT id, username, email, email_verified FROM $auth")
                 .await
             {
                 Ok(r) => r,
@@ -178,6 +180,7 @@ pub async fn handle_login_post(
             let AuthRow {
                 id: user_id,
                 username: display_name,
+                email,
                 email_verified,
             } = match row.map(|w| w.0) {
                 Some(r) => r,
@@ -185,11 +188,14 @@ pub async fn handle_login_post(
             };
 
             if !email_verified.unwrap_or(false) {
-                return redirect_with_error(
-                    "/auth",
-                    "login",
-                    "Please verify your email before signing in",
-                );
+                // Land on the resend interstitial instead of a dead end (0oi):
+                // the page carries the address so the resend button works.
+                return Redirect::to(&format!(
+                    "/auth/check-email?address={}&error={}",
+                    urlencoding(&email),
+                    urlencoding("Please verify your email before signing in.")
+                ))
+                .into_response();
             }
 
             let access_token = match generate_access_token(
@@ -324,6 +330,9 @@ pub async fn check_email_handler(
     if let Some(addr) = params.address.as_deref() {
         ctx.insert("address", addr);
     }
+    if let Some(err) = params.error.as_deref() {
+        ctx.insert("error", err);
+    }
     html_with_csrf(tera_engine::render("check_email.html", &ctx), &csrf)
 }
 
@@ -439,39 +448,46 @@ pub async fn resend_verification_handler(
                     Redirect::to("/auth?tab=login&error=Email+already+verified").into_response()
                 }
                 Some(_) => {
-                    let email_for_token = form.email.clone();
-                    tokio::spawn(async move {
-                        match api::email::generate_verification_token(&email_for_token) {
-                            Ok(token) => {
-                                if let Err(e) =
-                                    api::email::send_verification_email(&email_for_token, &token)
-                                        .await
-                                {
-                                    tracing::error!("Resend failed for {}: {}", email_for_token, e);
-                                }
-                            }
-                            Err(e) => {
-                                tracing::error!(
-                                    "Token generation failed for {}: {}",
-                                    email_for_token,
-                                    e
+                    // Await the send so failures reach the user instead of a
+                    // silent log line (0oi gap 2): the button must not lie.
+                    let send_result = match api::email::generate_verification_token(&form.email) {
+                        Ok(token) => api::email::send_verification_email(&form.email, &token)
+                            .await
+                            .map_err(|e| e.to_string()),
+                        Err(e) => {
+                            tracing::error!("Token generation failed for {}: {}", form.email, e);
+                            Err(e.to_string())
+                        }
+                    };
+
+                    match send_result {
+                        Ok(()) => {
+                            RESEND_COOLDOWN.lock().unwrap().insert(cooldown_key, now);
+                            if htmx {
+                                return fb(
+                                    "If that address has an account, a new verification email is on the way.",
                                 );
                             }
+                            Redirect::to(&format!(
+                                "/auth/check-email?address={}",
+                                urlencoding(&form.email)
+                            ))
+                            .into_response()
                         }
-                    });
-
-                    RESEND_COOLDOWN.lock().unwrap().insert(cooldown_key, now);
-
-                    if htmx {
-                        return fb(
-                            "If that address has an account, a new verification email is on the way.",
-                        );
+                        Err(e) => {
+                            tracing::error!("Resend failed for {}: {}", form.email, e);
+                            let msg = "Couldn't send the verification email. Check your spam folder, then try again in a minute.";
+                            if htmx {
+                                return fb(msg);
+                            }
+                            Redirect::to(&format!(
+                                "/auth/check-email?address={}&error={}",
+                                urlencoding(&form.email),
+                                urlencoding(msg)
+                            ))
+                            .into_response()
+                        }
                     }
-                    Redirect::to(&format!(
-                        "/auth/check-email?address={}",
-                        urlencoding(&form.email)
-                    ))
-                    .into_response()
                 }
                 None => {
                     if htmx {
