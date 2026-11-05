@@ -696,6 +696,30 @@ SELECT (
     ctx.insert("day_numbers", &day_numbers);
     ctx.insert("current_day", &current_day);
     ctx.insert("current_phase", current_phase);
+    // Play-order phase options with human hour ranges (cra): Phase::all()
+    // starts at New Day (06), so the dropdown follows the play order, not
+    // natural midnight-first order.
+    fn hour_range_label(start: u8) -> String {
+        fn compact(h: u8) -> (String, &'static str) {
+            let meridiem = if h < 12 { "am" } else { "pm" };
+            let twelve = if h.is_multiple_of(12) { 12 } else { h % 12 };
+            (twelve.to_string(), meridiem)
+        }
+        let (s, sm) = compact(start);
+        let (e, em) = compact((start + 2) % 24);
+        format!("{s}{sm}-{e}{em}")
+    }
+    let mut phase_options: Vec<serde_json::Value> = vec![serde_json::json!({
+        "value": "all",
+        "label": "All day",
+    })];
+    phase_options.extend(shared::messages::Phase::all().iter().map(|p| {
+        serde_json::json!({
+            "value": format!("{:02}", p.hour()),
+            "label": hour_range_label(p.hour()),
+        })
+    }));
+    ctx.insert("phase_options", &phase_options);
     ctx.insert("sse_events", &sse_events);
     ctx.insert("character_rows", &character_rows);
     ctx.insert("hex_map", &hex_map);
