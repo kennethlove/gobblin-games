@@ -204,16 +204,26 @@ async fn message_volume_budget_at_128() {
         !entries.is_empty(),
         "the day must have produced persisted messages"
     );
-    // Budget: observed ~140 rows/day gated at 128 goblins (previously
-    // thousands — movement alone was 768-1536/day). 400 = ~3x headroom
-    // for RNG variance while still tripping on any single re-gated class
-    // (e.g. CharacterMoved coming back = +800).
+    // Budget split: non-movement rows observed ~140/day at 128 goblins
+    // (previously thousands — any single re-gated class blows past 400, so
+    // this half still trips on that). CharacterMoved is Persist BY DECISION
+    // since 80c (history is not derivable — location is overwritten in
+    // place), observed ~780 move rows/day at 128; ceiling kept at 2x the
+    // observation to catch an explosion without flagging the decision.
     const MESSAGE_BUDGET_PER_DAY: usize = 400;
+    const MOVE_BUDGET_PER_DAY: usize = 1600;
+    let moves = entries
+        .iter()
+        .filter(|e| e["payload"]["type"] == "CharacterMoved")
+        .count();
+    let non_moves = entries.len() - moves;
     assert!(
-        entries.len() <= MESSAGE_BUDGET_PER_DAY,
-        "stored message rows {} exceed the per-day budget {}",
-        entries.len(),
-        MESSAGE_BUDGET_PER_DAY
+        non_moves <= MESSAGE_BUDGET_PER_DAY,
+        "stored non-movement message rows {non_moves} exceed the per-day budget {MESSAGE_BUDGET_PER_DAY}"
+    );
+    assert!(
+        moves <= MOVE_BUDGET_PER_DAY,
+        "stored CharacterMoved rows {moves} exceed the move budget {MOVE_BUDGET_PER_DAY}"
     );
 
     // The digest is part of the stored stream.
