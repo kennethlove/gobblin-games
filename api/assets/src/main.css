@@ -2401,3 +2401,48 @@ h1, h2, h3, h4 { text-wrap: balance; }
 }
 .edit-form .field-group { margin-bottom: var(--gap-sm); }
 .edit-form .field-group:last-of-type { margin-bottom: var(--gap-md); }
+
+/* Cluster C: game sub-pages (uqw.6) */
+.page-body { padding-block: var(--gap-lg); }
+.page-head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--gap-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--gap-md);
+}
+.tl-events { display: flex; flex-direction: column; gap: 8px; }
+.tl-filters { margin-bottom: var(--gap-md); }
+.tl-filters.tight { margin-bottom: var(--gap-sm); }
+.tl-empty p { margin-top: 8px; }
+.trait-list { padding-top: 4px; margin-bottom: var(--gap-md); }
+.trait-list-head { color: var(--muted); font-size: var(--fs-xs); margin-bottom: 2px; }
+.trait-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; padding: 2px 0; }
+.trait-name { font-weight: 500; }
+.trait-tag {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  border: 1px solid currentColor;
+}
+.trait-tag.boon { color: var(--info); }
+.trait-tag.curse { color: var(--danger); }
+.trait-meta { color: var(--muted); font-size: var(--fs-xs); }
+.advance-form { margin-top: var(--gap-md); }
+.replay-stack { display: flex; flex-direction: column; gap: var(--gap-lg); padding-bottom: var(--gap-xl); }
+.replay-stack section { scroll-margin-top: var(--gap-lg); }
+.combat-rounds { margin-top: var(--gap-sm); border-top: 1px solid var(--border); padding-top: 6px; }
+.combat-rounds summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.combat-rounds .beat { font-size: var(--fs-sm); padding: 2px 0; }
+.beats-ordinary { margin: 4px 0 0; padding-left: 1.1em; color: var(--muted); font-size: var(--fs-xs); }
+.beats-ordinary li { padding: 1px 0; }
+.filter-pill { font-variant-numeric: tabular-nums; }
