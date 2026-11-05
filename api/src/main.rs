@@ -76,6 +76,38 @@ fn initialize_logging() {
         .init()
 }
 
+/// Serve `/uploads/*` in s3 mode: fetch from object storage so the bucket
+/// never needs public access. Local mode uses ServeDir on disk instead.
+async fn uploads_handler(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    axum::extract::Path(path): axum::extract::Path<String>,
+) -> Result<Response, api::AppError> {
+    let data = state.storage.read(&path).await?;
+    let content_type = match std::path::Path::new(&path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "png" => "image/png",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        _ => "image/jpeg",
+    };
+    Ok((
+        [
+            (axum::http::header::CONTENT_TYPE, content_type.to_string()),
+            (
+                axum::http::header::CACHE_CONTROL,
+                "public, max-age=31536000, immutable".to_string(),
+            ),
+        ],
+        data,
+    )
+        .into_response())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     initialize_logging();
@@ -266,13 +298,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .ok_or("Failed to build GovernorConfig")?,
     );
 
-    // Initialize storage backend
-    use api::storage::LocalStorage;
+    // Initialize storage backend: STORAGE_BACKEND=s3 -> any S3-compatible
+    // object store (Cloudflare R2 / MinIO / AWS); unset -> local files under
+    // STORAGE_PATH (unchanged dev behavior).
+    use api::storage::{LocalStorage, S3Storage};
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let storage_path = env::var("STORAGE_PATH").unwrap_or_else(|_| "uploads".to_string());
-    let storage = Arc::new(LocalStorage::new(&storage_path, "/uploads"));
-    storage.init().await?;
-    tracing::info!("Storage initialized at: {}", storage_path);
+    let s3_mode = env::var("STORAGE_BACKEND").is_ok_and(|v| v.eq_ignore_ascii_case("s3"));
+    let storage: Arc<dyn api::storage::StorageBackend> = if s3_mode {
+        let backend = S3Storage::from_env()?;
+        tracing::info!(
+            "Storage backend: s3 ({})",
+            env::var("S3_ENDPOINT").unwrap_or_default()
+        );
+        Arc::new(backend)
+    } else {
+        let backend = LocalStorage::new(&storage_path, "/uploads");
+        backend.init().await?;
+        tracing::info!("Storage initialized at: {}", storage_path);
+        Arc::new(backend)
+    };
 
     // Initialize WebSocket broadcaster
     use api::websocket::GameBroadcaster;
@@ -338,12 +383,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
             .nest("/auth", AUTH_ROUTER.clone());
 
+    // s3 mode proxies /uploads through the api (bucket stays private);
+    // local mode serves straight off disk, same as before.
+    let uploads_service = if s3_mode {
+        Router::new().route("/{*path}", axum::routing::get(uploads_handler))
+    } else {
+        Router::new().fallback_service(tower_http::services::ServeDir::new(&storage_path))
+    };
+
     let router = Router::new()
         .nest("/api", api_routes)
-        .nest_service(
-            "/uploads",
-            tower_http::services::ServeDir::new(&storage_path),
-        )
+        .nest("/uploads", uploads_service)
         .nest_service(
             "/assets",
             tower_http::services::ServeDir::new(

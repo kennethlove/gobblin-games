@@ -27,6 +27,10 @@ world = { path = "../world" }
 strum = { version = "0.28", features = ["derive"] }
 surrealdb = "3.1.2"
 surrealdb-types = "3.1.2"
+# WHY: reuse the S3 client already in this tree (transitive via
+# surrealdb-core 3.1.3) for the upload backend (cxi -> Cloudflare R2) —
+# no second S3-compatible client crate.
+object_store = { version = "0.13", features = ["aws"] }
 thiserror = "2.0.18"
 tokio = { version = "1.52.1", features = ["full"] }
 tokio-cron-scheduler = "0.15"

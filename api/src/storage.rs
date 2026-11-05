@@ -1,4 +1,5 @@
 use crate::AppError;
+use object_store::ObjectStoreExt; // put/get/head/delete convenience methods
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use tokio::fs;
@@ -52,6 +53,9 @@ pub trait StorageBackend: Send + Sync {
 
     /// Check if a file exists
     async fn exists(&self, path: &str) -> Result<bool, AppError>;
+
+    /// Read a file's bytes (remote mode: proxy reads keep the bucket private)
+    async fn read(&self, path: &str) -> Result<Vec<u8>, AppError>;
 
     /// Get the public URL for accessing the file
     fn public_url(&self, path: &str) -> String;
@@ -118,6 +122,124 @@ impl StorageBackend for LocalStorage {
     async fn exists(&self, path: &str) -> Result<bool, AppError> {
         let file_path = self.base_path.join(path);
         Ok(file_path.exists())
+    }
+
+    async fn read(&self, path: &str) -> Result<Vec<u8>, AppError> {
+        let file_path = self.base_path.join(path);
+        match fs::read(&file_path).await {
+            Ok(data) => Ok(data),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                Err(AppError::NotFound(format!("Upload not found: {path}")))
+            }
+            Err(e) => Err(AppError::InternalServerError(format!(
+                "Failed to read {}: {e}",
+                file_path.display()
+            ))),
+        }
+    }
+
+    fn public_url(&self, path: &str) -> String {
+        if IMAGE_CDN_PREFIX.is_empty() {
+            format!("{}/{}", self.public_prefix, path)
+        } else {
+            format!(
+                "{}{}/{}",
+                IMAGE_CDN_PREFIX.as_str(),
+                self.public_prefix,
+                path
+            )
+        }
+    }
+}
+
+/// Object storage for any S3-compatible API — Cloudflare R2 (the cxi
+/// target), MinIO, or AWS S3. Selected with `STORAGE_BACKEND=s3`.
+/// `public_url` keeps the same `/uploads/...` shape as `LocalStorage`, so
+/// stored avatar rows stay valid and reads proxy through the api with the
+/// bucket kept private.
+pub struct S3Storage {
+    store: object_store::aws::AmazonS3,
+    public_prefix: String,
+}
+
+impl S3Storage {
+    /// Required env: `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`,
+    /// `S3_SECRET_ACCESS_KEY`. Optional: `S3_REGION` (default `auto` — the
+    /// value Cloudflare R2 requires).
+    pub fn from_env() -> Result<Self, AppError> {
+        let need = |key: &str| -> Result<String, AppError> {
+            std::env::var(key).map_err(|_| {
+                AppError::InternalServerError(format!("{key} must be set when STORAGE_BACKEND=s3"))
+            })
+        };
+        let endpoint = need("S3_ENDPOINT")?;
+        let store = object_store::aws::AmazonS3Builder::new()
+            .with_bucket_name(need("S3_BUCKET")?)
+            .with_endpoint(&endpoint)
+            .with_region(std::env::var("S3_REGION").unwrap_or_else(|_| "auto".to_string()))
+            .with_access_key_id(need("S3_ACCESS_KEY_ID")?)
+            .with_secret_access_key(need("S3_SECRET_ACCESS_KEY")?)
+            .with_virtual_hosted_style_request(false)
+            .with_allow_http(endpoint.starts_with("http://"))
+            .build()
+            .map_err(|e| AppError::InternalServerError(format!("S3 client config: {e}")))?;
+        Ok(Self {
+            store,
+            public_prefix: "/uploads".to_string(),
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl StorageBackend for S3Storage {
+    async fn save(&self, path: &str, data: &[u8]) -> Result<String, AppError> {
+        self.store
+            .put(&object_store::path::Path::from(path), data.to_vec().into())
+            .await
+            .map_err(|e| AppError::InternalServerError(format!("S3 put {path}: {e}")))?;
+        Ok(path.to_string())
+    }
+
+    async fn delete(&self, path: &str) -> Result<(), AppError> {
+        match self
+            .store
+            .delete(&object_store::path::Path::from(path))
+            .await
+        {
+            Ok(()) => Ok(()),
+            Err(object_store::Error::NotFound { .. }) => Ok(()),
+            Err(e) => Err(AppError::InternalServerError(format!(
+                "S3 delete {path}: {e}"
+            ))),
+        }
+    }
+
+    async fn exists(&self, path: &str) -> Result<bool, AppError> {
+        match self.store.head(&object_store::path::Path::from(path)).await {
+            Ok(_) => Ok(true),
+            Err(object_store::Error::NotFound { .. }) => Ok(false),
+            Err(e) => Err(AppError::InternalServerError(format!(
+                "S3 head {path}: {e}"
+            ))),
+        }
+    }
+
+    async fn read(&self, path: &str) -> Result<Vec<u8>, AppError> {
+        let result = self
+            .store
+            .get(&object_store::path::Path::from(path))
+            .await
+            .map_err(|e| match e {
+                object_store::Error::NotFound { .. } => {
+                    AppError::NotFound(format!("Upload not found: {path}"))
+                }
+                other => AppError::InternalServerError(format!("S3 get {path}: {other}")),
+            })?;
+        result
+            .bytes()
+            .await
+            .map_err(|e| AppError::InternalServerError(format!("S3 read {path}: {e}")))
+            .map(|bytes| bytes.to_vec())
     }
 
     fn public_url(&self, path: &str) -> String {
