@@ -54,10 +54,9 @@
           <span class="day-arrow disabled">&raquo;</span>
         {% endif %}
         <span class="day-nav-divider">/</span>
-        {% set all_phases = ["00", "02", "04", "06", "08", "10", "12", "14", "16", "18", "20", "22"] %}
         <select class="day-nav-select" onchange="window.location.href='/games/{{ game.identifier }}/play?day={{ current_day }}&phase=' + this.value">
-          {% for p in all_phases %}
-            <option value="{{ p }}" {% if current_phase == p %}selected{% endif %}>{{ p | upper }}</option>
+          {% for p in phase_options %}
+            <option value="{{ p.value }}" {% if current_phase == p.value %}selected{% endif %}>{{ p.label }}</option>
           {% endfor %}
         </select>
       </div>
