@@ -2337,3 +2337,67 @@ h1, h2, h3, h4 { text-wrap: balance; }
   font-family: var(--font-mono);
   font-size: var(--fs-h3);
 }
+
+/* ── Goblin stable (uqw.5) ─────────────────────────────────────────── */
+.field-group select {
+  width: 100%; padding: 10px 14px;
+  font-size: 15px; font-family: var(--font-body);
+  background: var(--bg); border: 2px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--fg); outline: none;
+  transition: border-color 200ms, box-shadow 200ms;
+}
+.field-group select:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--blue), transparent 60%);
+}
+.trait-options { border: 0; padding: 0; margin: 0 0 20px; }
+.trait-options legend {
+  font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--muted); margin-bottom: 6px; padding: 0;
+}
+.trait-options label {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-meta); cursor: pointer;
+}
+.trait-options label:has(input:checked) { border-color: var(--accent); }
+.trait-options input { accent-color: var(--accent); margin: 0; }
+.goblin-row {
+  display: flex; gap: var(--gap-md); align-items: flex-start;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--gap-md);
+  margin-bottom: var(--gap-sm);
+}
+.goblin-main { flex: 1 1 280px; min-width: 0; }
+.goblin-head { display: flex; gap: var(--gap-sm); align-items: center; }
+.goblin-head h3 { margin: 0; }
+.goblin-head .avatar-preview { width: 56px; height: 56px; }
+.goblin-meta {
+  display: flex; align-items: center; gap: var(--gap-xs);
+  margin: 2px 0 0; flex-wrap: wrap;
+}
+.goblin-traits { margin-top: var(--gap-sm); }
+.avatar-upload {
+  display: flex; gap: var(--gap-xs); align-items: center;
+  flex-wrap: wrap; margin-top: var(--gap-sm);
+}
+.avatar-upload input[type="file"] { font-size: var(--fs-xs); }
+.goblin-actions { display: flex; gap: var(--gap-xs); align-items: flex-start; flex-wrap: wrap; }
+.edit-disclosure summary { list-style: none; }
+.edit-disclosure summary::-webkit-details-marker { display: none; }
+.edit-form {
+  margin-top: var(--gap-xs);
+  padding: var(--gap-sm);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  min-width: 260px;
+}
+.edit-form .field-group { margin-bottom: var(--gap-sm); }
+.edit-form .field-group:last-of-type { margin-bottom: var(--gap-md); }
