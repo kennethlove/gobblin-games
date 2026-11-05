@@ -1,17 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="container" style="padding-block: var(--gap-lg);">
+<div class="container page-body">
   <a href="/games/{{ game_id }}" class="back-link">
     {{ "arrow-left" | icon | safe }}
     Back to Game
   </a>
 
-  <div style="margin-bottom: var(--gap-md); display: flex; justify-content: space-between; align-items: baseline; gap: var(--gap-md);">
-    <div>
-      <h1 style="font-family: var(--font-display); font-size: var(--fs-h3); font-weight: 600; color: var(--broad-accent);">Timeline</h1>
-      <p style="font-size: var(--fs-xs); color: var(--muted);">Day {{ current_day }} · {{ current_phase | phase_label }}</p>
+  <div class="page-head-row">
+    <div class="page-header">
+      <h1>Timeline</h1>
+      <p class="deck">Day {{ current_day }} · {{ current_phase | phase_label }}</p>
     </div>
-    <a href="/games/{{ game_id }}/fights" style="font-size: var(--fs-xs); letter-spacing: 0.08em; color: var(--broad-accent); text-decoration: none; white-space: nowrap;">Fight replay</a>
+    <a href="/games/{{ game_id }}/fights" class="btn-link">Fight replay</a>
   </div>
 
   <div class="tl-layout{% if not periods %} is-single{% endif %}">
@@ -23,14 +23,15 @@
       {% set period_url = "/games/" ~ game_id ~ "/timeline?day=" ~ period.day ~ "&phase=" ~ period.phase %}
       {% if filter %}{% set period_url = period_url ~ "&filter=" ~ filter %}{% endif %}
       {% if character_filter %}{% set period_url = period_url ~ "&character=" ~ character_filter %}{% endif %}
-      <a href="{{ period_url }}"
-         class="tl-period{% if is_selected %} is-selected{% endif %}"
-         {% if is_selected %}aria-current="page"{% endif %}>
+      {% set period_class = "" %}
+      {% set period_cur = "false" %}
+      {% if is_selected %}{% set period_class = "is-selected" %}{% set period_cur = "page" %}{% endif %}
+      <a href="{{ period_url }}" class="tl-period {{ period_class }}" aria-current="{{ period_cur }}">
         <span class="tl-label">D{{ period.day }} {{ period.phase | phase_label }}</span>
         {% if is_current %}
         <span class="tl-now">Now</span>
         {% endif %}
-        {% if period.deaths > 0 %}
+        {% if period.deaths != 0 %}
         <span class="tl-deaths">
           {{ "skull" | icon | safe }}
           {{ period.deaths }}
@@ -43,54 +44,42 @@
     {% endif %}
 
     <div class="tl-main">
-      <div class="tl-filters" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--gap-sm);">
+      <div class="filter-pills tl-filters tight">
         {% for f in filter_options %}
         {% set is_active = f.value == filter %}
-        {% if is_active %}
-        {% set chip_style = "background: var(--broad-accent); color: #fff;" %}
-        {% else %}
-        {% set chip_style = "background: var(--broad-surface); color: var(--muted);" %}
-        {% endif %}
         {% set chip_url = "/games/" ~ game_id ~ "/timeline?filter=" ~ f.value %}
         {% if selected_day %}{% set chip_url = chip_url ~ "&day=" ~ selected_day %}{% endif %}
         {% if selected_phase %}{% set chip_url = chip_url ~ "&phase=" ~ selected_phase %}{% endif %}
         {% if character_filter %}{% set chip_url = chip_url ~ "&character=" ~ character_filter %}{% endif %}
-        <a href="{{ chip_url }}"
-           style="padding: 4px 10px; border-radius: 9999px; font-size: var(--fs-xs); font-weight: 500; text-decoration: none; {{ chip_style }}">
+        {% set chip_class = "filter-pill" %}
+        {% if is_active %}{% set chip_class = "filter-pill active" %}{% endif %}
+        <a href="{{ chip_url }}" class="{{ chip_class }}">
           {{ f.icon_name | icon | safe }} {{ f.label }}
         </a>
         {% endfor %}
       </div>
 
       {% if characters %}
-      <div class="tl-filters" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--gap-md);">
+      <div class="filter-pills tl-filters">
         {% set is_all = character_filter == "" %}
-        {% if is_all %}
-        {% set all_style = "background: var(--info); color: #fff;" %}
-        {% else %}
-        {% set all_style = "background: var(--broad-surface); color: var(--muted);" %}
-        {% endif %}
         {% set all_url = "/games/" ~ game_id ~ "/timeline" %}
         {% if filter %}{% set all_url = all_url ~ "?filter=" ~ filter %}{% endif %}
         {% if selected_day %}{% set all_url = all_url ~ "&day=" ~ selected_day %}{% endif %}
         {% if selected_phase %}{% set all_url = all_url ~ "&phase=" ~ selected_phase %}{% endif %}
-        <a href="{{ all_url }}"
-           style="padding: 2px 8px; border-radius: 9999px; font-size: var(--fs-xs); text-decoration: none; {{ all_style }}">
+        {% set all_class = "filter-pill" %}
+        {% if is_all %}{% set all_class = "filter-pill active" %}{% endif %}
+        <a href="{{ all_url }}" class="{{ all_class }}">
           All
         </a>
         {% for character in characters %}
         {% set is_active = character_filter == character.name %}
-        {% if is_active %}
-        {% set t_style = "background: var(--info); color: #fff;" %}
-        {% else %}
-        {% set t_style = "background: var(--broad-surface); color: var(--muted);" %}
-        {% endif %}
         {% set t_url = "/games/" ~ game_id ~ "/timeline?character=" ~ character.name %}
         {% if filter %}{% set t_url = t_url ~ "&filter=" ~ filter %}{% endif %}
         {% if selected_day %}{% set t_url = t_url ~ "&day=" ~ selected_day %}{% endif %}
         {% if selected_phase %}{% set t_url = t_url ~ "&phase=" ~ selected_phase %}{% endif %}
-        <a href="{{ t_url }}"
-           style="padding: 2px 8px; border-radius: 9999px; font-size: var(--fs-xs); text-decoration: none; {{ t_style }}">
+        {% set t_class = "filter-pill" %}
+        {% if is_active %}{% set t_class = "filter-pill active" %}{% endif %}
+        <a href="{{ t_url }}" class="{{ t_class }}">
           {{ character.name }}
         </a>
         {% endfor %}
@@ -101,9 +90,7 @@
          lines for the selected goblin (spec §10.7); hidden when nobody is
          selected. Rows live in trait_list.html. #}
       {% if traits %}
-      <div style="margin-bottom: var(--gap-md);">
         {% include "trait_list.html" %}
-      </div>
       {% endif %}
 
       {% if selected_day and selected_phase %}
@@ -112,7 +99,7 @@
           {% if selected_period %}
           <div class="tl-meta">
             <span>{{ selected_period.event_count }} events</span>
-            {% if selected_period.deaths > 0 %}
+            {% if selected_period.deaths != 0 %}
             <span class="tl-deaths">
               {{ "skull" | icon | safe }}
               {{ selected_period.deaths }}
@@ -122,7 +109,7 @@
           {% endif %}
         </div>
         {% if rendered_events %}
-        <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div class="tl-events">
           {% for card_html in rendered_events %}
           {{ card_html | safe }}
           {% endfor %}
@@ -130,14 +117,14 @@
         {% else %}
         <div class="tl-empty">
           {{ "ghost" | icon | safe }}
-          <p style="margin-top: 8px;">No events for this period.</p>
+          <p>No events for this period.</p>
         </div>
         {% endif %}
       {% else %}
         {% if periods %}
         <div class="tl-empty">
           {{ "ghost" | icon | safe }}
-          <p style="margin-top: 8px;">Choose a period from the index.</p>
+          <p>Choose a period from the index.</p>
           {% for p in periods %}
           {% if p.is_current %}
           <a href="/games/{{ game_id }}/timeline?day={{ p.day }}&phase={{ p.phase }}{% if filter %}&filter={{ filter }}{% endif %}{% if character_filter %}&character={{ character_filter }}{% endif %}">
@@ -149,7 +136,7 @@
         {% else %}
         <div class="tl-empty">
           {{ "ghost" | icon | safe }}
-          <p style="margin-top: 8px;">No periods yet.</p>
+          <p>No periods yet.</p>
         </div>
         {% endif %}
       {% endif %}
