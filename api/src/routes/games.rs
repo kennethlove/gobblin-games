@@ -749,6 +749,78 @@ SELECT (
         }
     };
 
+    // az7: the finished verdict and final stats come from the RECORD
+    // (GameEnded + last DaySummary rows), not the live roster —
+    // post_game_recovery revives characters, which turned the live team
+    // set multi-team and made the banner vanish exactly when it matters.
+    let (finish_label, finish_day, finish_survivors, finish_fallen) = if game.status
+        == shared::GameStatus::Finished
+    {
+        let record = state
+            .db
+            .query(
+                r#"SELECT game_day, tick, emit_index, payload FROM message
+            WHERE string::starts_with(subject, $prefix)
+              AND (string::contains(payload, 'GameEnded')
+                OR string::contains(payload, 'DaySummary'))
+            ORDER BY game_day DESC, tick DESC, emit_index DESC;"#,
+            )
+            .bind(("prefix", format!("{}:", identifier)))
+            .await;
+        let mut label: Option<String> = None;
+        let mut day: Option<u32> = None;
+        let mut survivors: Option<u32> = None;
+        let mut fallen: Option<u32> = None;
+        match record {
+            Ok(mut result) => {
+                let rows: Vec<serde_json::Value> = result.take(0).unwrap_or_default();
+                for row in rows {
+                    let Some(payload) = row["payload"].as_str() else {
+                        continue;
+                    };
+                    let Ok(msg) = serde_json::from_str::<shared::messages::MessagePayload>(payload)
+                    else {
+                        continue;
+                    };
+                    match msg {
+                        shared::messages::MessagePayload::GameEnded {
+                            winner,
+                            winning_team,
+                        } => {
+                            if label.is_none() {
+                                label = Some(match (winner, winning_team) {
+                                    (_, Some(team)) => {
+                                        format!("GAME OVER — {} win", team.label)
+                                    }
+                                    (Some(winner), None) => {
+                                        format!("GAME OVER — {} survives alone", winner.name)
+                                    }
+                                    (None, None) => "GAME OVER — no one survives".to_string(),
+                                });
+                            }
+                        }
+                        shared::messages::MessagePayload::DaySummary {
+                            day: summary_day,
+                            rollup,
+                            ..
+                        } if day.is_none() => {
+                            day = Some(summary_day);
+                            survivors = Some(rollup.survivors);
+                            fallen = Some(rollup.fallen);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::error!("finish record for {identifier} failed: {e}");
+            }
+        }
+        (label, day, survivors, fallen)
+    } else {
+        (None, None, None, None)
+    };
+
     let joinable_goblins = if game.status == shared::GameStatus::NotStarted {
         api::characters::list_joinable_goblins(&db)
             .await
@@ -765,6 +837,10 @@ SELECT (
     ctx.insert("joinable_goblins", &joinable_goblins);
     ctx.insert("game", &game);
     ctx.insert("winning_team", &winning_team);
+    ctx.insert("finish_label", &finish_label);
+    ctx.insert("finish_day", &finish_day);
+    ctx.insert("finish_survivors", &finish_survivors);
+    ctx.insert("finish_fallen", &finish_fallen);
     ctx.insert("alive", &alive);
     ctx.insert("fallen", &fallen);
     ctx.insert("total", &total);

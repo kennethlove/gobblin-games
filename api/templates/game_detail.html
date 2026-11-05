@@ -17,9 +17,10 @@
     <div class="error-banner" role="alert">{{ error }}</div>
   {% endif %}
 
-  {% if game.status == 'Finished' and winning_team is defined and winning_team %}
-    <div class="winner-banner winner-banner-gold">
-      <span>☠ WINNER: {{ winning_team }} ☠</span>
+  {% if game.status == 'Finished' %}
+    <div class="winner-banner winner-banner-gold" role="status">
+      <span>{% if finish_label %}{{ finish_label }}{% elif winning_team %}☠ WINNER: {{ winning_team }} ☠{% else %}GAME OVER{% endif %}</span>
+      {% if finish_day %}<span class="winner-stats">Day {{ finish_day }} · {{ finish_survivors }} standing · {{ finish_fallen }} fallen</span>{% endif %}
     </div>
   {% endif %}
 
