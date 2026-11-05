@@ -469,7 +469,7 @@ async fn render_game_page(
         .bind(("identifier", identifier.clone()))
         .await;
 
-    let characters: Vec<characters::Character> = match characters_result {
+    let mut characters: Vec<characters::Character> = match characters_result {
         Ok(mut result) => {
             let raw_rows: Vec<serde_json::Value> = result.take(0).unwrap_or_default();
             raw_rows
@@ -594,6 +594,83 @@ SELECT (
     } else {
         Vec::new()
     };
+
+    // 9re(b): a past-day view renders that day's state — who had fallen
+    // by then and where they stood — instead of the live roster. Kills
+    // are exact; positions only exist for moves persisted since #167
+    // (older games keep their start cell). Wound history is out of scope:
+    // non-fallen characters render Healthy.
+    if current_day > 0 && current_day < game.day.unwrap_or(0) {
+        let history_result = state
+            .db
+            .query(
+                r#"SELECT game_day, payload FROM message
+            WHERE string::starts_with(subject, $prefix)
+              AND (string::contains(payload, 'CharacterKilled')
+                OR string::contains(payload, 'CharacterMoved'))
+            ORDER BY game_day, tick, emit_index;"#,
+            )
+            .bind(("prefix", format!("{}:", identifier)))
+            .await;
+        let rows: Vec<serde_json::Value> = match history_result {
+            Ok(mut result) => result.take(0).unwrap_or_default(),
+            Err(e) => {
+                tracing::error!("day-state history for {identifier} failed: {e}");
+                vec![]
+            }
+        };
+        let mut fallen_ids: std::collections::HashSet<String> = Default::default();
+        let mut positions: std::collections::HashMap<String, areas::location::Location> =
+            Default::default();
+        for row in rows {
+            let day = row["game_day"].as_u64().unwrap_or(0) as u32;
+            if day > current_day {
+                continue;
+            }
+            let Some(payload) = row["payload"].as_str() else {
+                continue;
+            };
+            let Ok(msg) = serde_json::from_str::<shared::messages::MessagePayload>(payload) else {
+                continue;
+            };
+            match msg {
+                shared::messages::MessagePayload::CharacterKilled { victim, .. } => {
+                    fallen_ids.insert(victim.identifier.to_string());
+                }
+                shared::messages::MessagePayload::CharacterMoved {
+                    character,
+                    to,
+                    to_sub,
+                    ..
+                } => {
+                    let sub = to_sub
+                        .map(areas::hex::SubTriangle::new)
+                        .unwrap_or(areas::hex::SubTriangle::new(0));
+                    let area = to
+                        .identifier
+                        .to_string()
+                        .parse::<areas::AreaId>()
+                        .unwrap_or(areas::AreaId::hub());
+                    positions.insert(
+                        character.identifier.to_string(),
+                        areas::location::Location::new(area, sub),
+                    );
+                }
+                _ => {}
+            }
+        }
+        for character in characters.iter_mut() {
+            let id = character.id.to_string();
+            if fallen_ids.contains(&id) {
+                character.status = characters::statuses::CharacterStatus::Dead;
+            } else {
+                character.status = characters::statuses::CharacterStatus::Healthy;
+            }
+            if let Some(location) = positions.get(&id) {
+                character.location = *location;
+            }
+        }
+    }
 
     // Pre-compute context data
     let alive = characters.iter().filter(|t| t.is_alive()).count() as u32;
