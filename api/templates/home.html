@@ -1,41 +1,56 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="container">
-  <div class="page-header">
-    <h1>Gobblin Games</h1>
-    <p class="deck">Twenty-four goblins enter. One walks out.</p>
-  </div>
+  <section class="hero">
+    <div class="hero-copy">
+      <h1>Every goblin has a story.</h1>
+      <p>Build a clan, choose their battles, and write down what they did.</p>
+      <div class="cta-row">
+        <a href="/auth?tab=register" class="btn btn-primary">Create account</a>
+        <a href="/auth?tab=login" class="btn">Sign in</a>
+      </div>
+      <p class="hero-note">Gobblin Games is free to play. No download required.</p>
+    </div>
+    <div class="hero-art" aria-hidden="true">🗡️</div>
+  </section>
 
-  <div class="action-row">
-    <div class="launch-block">
-      <button class="quickstart-btn" hx-post="/api/games/quickstart" hx-swap="none">Quick Game</button>
-      <div class="or-divider"><span>or</span></div>
-      <div class="create-form">
-        <h3>Create Custom Game</h3>
-        <form hx-post="/api/games" hx-swap="none">
-          <input type="text" name="name" placeholder="Game name..." required>
-          <button type="submit" class="btn btn-primary">Create</button>
-        </form>
-      </div>
+  {% if continue_row %}
+  {% set continue_pill = "finished" %}
+  {% if continue_row.status == "InProgress" %}{% set continue_pill = "running" %}{% elif continue_row.status == "NotStarted" %}{% set continue_pill = "waiting" %}{% endif %}
+  <section class="continue-strip">
+    <div class="panel-head">
+      <h2>Continue your campaign</h2>
+      <a href="/games" class="btn-link">All games</a>
     </div>
-    <div class="stats-col">
-      <div class="summary-card">
-        <div class="s-val">{{ stats.running }}</div>
-        <div class="s-label">Running</div>
-      </div>
-      <div class="summary-card">
-        <div class="s-val">{{ stats.waiting }}</div>
-        <div class="s-label">Waiting</div>
-      </div>
-      <div class="summary-card">
-        <div class="s-val">{{ stats.finished }}</div>
-        <div class="s-label">Finished</div>
-      </div>
-      <div class="summary-card">
-        <div class="s-val">{{ stats.total }}</div>
-        <div class="s-label">Total</div>
-      </div>
+    <a class="continue-row" href="/games/{{ continue_row.identifier }}">
+      <span class="status-pill {{ continue_pill }}"></span>
+      <span class="continue-title">{{ continue_row.name }}</span>
+      <span class="continue-meta">Day {{ continue_row.day }} · {{ continue_row.living_count }} living</span>
+      <span class="continue-enter">Enter</span>
+    </a>
+  </section>
+  {% endif %}
+
+  {% if sessions %}
+  <section class="continue-strip">
+    <div class="panel-head">
+      <h2>Open sessions</h2>
+      <a href="/games" class="btn-link">All games</a>
     </div>
-  </div>
+    <div class="session-strip">
+      {% for s in sessions %}
+      <a class="filter-pill" href="/games/{{ s.identifier }}">{{ s.name }} · {{ s.living_count }} living</a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="launch-block">
+    <div class="launch-row">
+      <a class="launch-link" href="/games">All games</a>
+      <a class="launch-link" href="/faq">How to play</a>
+      <a class="launch-link" href="/my-goblins">Create a goblin</a>
+    </div>
+  </section>
 </div>
 {% endblock %}
