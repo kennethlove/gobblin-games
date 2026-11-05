@@ -144,7 +144,7 @@ pub async fn home_handler(
         .unwrap_or(false);
     if authenticated {
         let token = read_cookie(&headers, SESSION_COOKIE).unwrap_or_default();
-        if let Ok(user_db) = authenticate_db(&state, &token).await {
+        if let Ok(user_db) = authenticate_db(&state, token).await {
             let all_games: Vec<ListDisplayGame> = user_db
                 .query("SELECT * FROM fn::get_list_games(50, 0)")
                 .await
