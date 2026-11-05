@@ -1067,6 +1067,9 @@ impl Game {
         // Check if the game is over, and if so, end it.
         self.check_for_winner()?;
 
+        // WHY: no early return here — the detecting phase must finish
+        // (death announcements, clean_up_recent_deaths run in this phase);
+        // run_full_day breaks the loop after this phase instead (9re).
         self.prepare_cycle(phase)?;
         self.announce_cycle_start(phase)?;
         self.do_a_cycle(phase)?;
@@ -1086,6 +1089,11 @@ impl Game {
         // (06 -> 08 -> ... -> 04); the day counter advances after 04.
         for &p in &shared::messages::Phase::all() {
             self.run_phase(p)?;
+            // WHY: stop the day the game ends (9re) — no remaining phases,
+            // and the summary below compiles the state at the win.
+            if self.status == GameStatus::Finished {
+                break;
+            }
         }
         // Compiled digest: the day's one stored summary row, labelled with
         // the same game_day the phase messages carry (counter flips next).

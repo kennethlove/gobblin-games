@@ -1,5 +1,6 @@
 use super::*;
 use serial_test::serial;
+use shared::messages::MessagePayload;
 
 #[test]
 fn test_game_new() {
@@ -972,5 +973,53 @@ fn alliance_summons_wakes_sleeping_target() {
     assert!(
         woke,
         "expected CharacterWoke{{Interrupted/AllianceSummons}}"
+    );
+}
+
+/// 9re: once a game ends mid-day the day must stop simulating — no
+/// phases, kills, or area events after GameEnded, and the day label
+/// stays on the day the win happened on.
+#[test]
+fn run_full_day_stops_simulating_once_game_ends() {
+    let mut game = Game::new("End Day");
+    let mut keeper = Character::default();
+    let mut faller = Character::default();
+    keeper.team = 1;
+    faller.team = 2;
+    game.characters.push(keeper);
+    game.characters.push(faller);
+    game.start().expect("start game");
+    // One team standing: the win decides at the day's first phase.
+    game.characters[1].status = CharacterStatus::Dead;
+    assert_eq!(game.winning_team(), Some(1));
+
+    game.run_full_day().expect("full day");
+
+    assert_eq!(game.status, GameStatus::Finished);
+    // Day label = the day the win happened on (day-boundary bump kept).
+    assert_eq!(game.day, Some(1));
+
+    let msgs = &game.messages;
+    let end_idx = msgs
+        .iter()
+        .position(|m| matches!(m.payload, MessagePayload::GameEnded { .. }))
+        .expect("GameEnded pushed at the first phase");
+    let after = &msgs[end_idx + 1..];
+    assert!(
+        !after.is_empty(),
+        "DaySummary must still compile for the played day"
+    );
+    // The detecting phase (06 = DAY_START) completes its own death
+    // handling, then the day stops: no later phase may run.
+    assert!(
+        after.iter().all(|m| {
+            matches!(m.payload, MessagePayload::DaySummary { .. })
+                || m.phase == shared::messages::Phase::DAY_START
+        }),
+        "phases after the winning phase ran: {:?}",
+        after
+            .iter()
+            .map(|m| format!("{:?}", m.payload))
+            .collect::<Vec<_>>()
     );
 }
