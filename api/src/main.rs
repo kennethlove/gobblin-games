@@ -1,6 +1,6 @@
 extern crate core;
 
-use api::auth::AUTH_ROUTER;
+use api::auth::{AUTH_ROUTER, complete_password_reset, request_password_reset, show_reset_form};
 use api::cleanup::start_cleanup_scheduler;
 use api::games::GAMES_ROUTER;
 use api::users::{USERS_PROTECTED_ROUTER, USERS_PUBLIC_ROUTER};
@@ -398,6 +398,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/auth/logout", axum::routing::post(logout_handler))
         .route("/auth/register", axum::routing::post(register_post_handler))
         .route("/auth/check-email", axum::routing::get(check_email_handler))
+        .route(
+            "/auth/reset-password",
+            axum::routing::get(show_reset_form).post(request_password_reset),
+        )
+        .route(
+            "/auth/reset-password/complete",
+            axum::routing::post(complete_password_reset),
+        )
         .route(
             "/auth/verify-email",
             axum::routing::get(verify_email_handler),

@@ -1,50 +1,63 @@
 {% extends "base.html" %}
 {% block content %}
-<div>
-  <div class="mb-8 p-4 bg-gray-900 border border-gray-800 rounded-lg">
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-xl font-bold text-amber-400">{{ "user" | icon | safe }} {{ session.username }}</h1>
-        <p class="text-sm text-gray-400 mt-1">Account Dashboard</p>
-      </div>
-    </div>
+<section class="page-header">
+  <div class="container">
+    <p class="section-header">Account</p>
+    <h1>{{ session.username }}</h1>
+    <p class="deck">Your games, your goblins, your settings.</p>
+  </div>
+</section>
+
+<div class="container">
+  <div class="action-row">
+    <a href="/games/new" class="btn btn-primary">Create a Game</a>
+    <a href="/my-goblins" class="btn btn-ghost">My Goblins</a>
+    <a href="/account/settings" class="btn btn-ghost">Settings</a>
+    <form method="POST" action="/auth/logout">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn btn-ghost">Log Out</button>
+    </form>
   </div>
 
-  <div class="mb-6 flex items-center gap-3">
-    <a href="/games/new" class="inline-block bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded">Create New Game</a>
-    <a href="/my-goblins" class="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded">My Goblins</a>
+  <div class="game-list-header">
+    <h2>Your Games</h2>
   </div>
-
-  <h2 class="text-lg font-semibold text-amber-400 mb-4">Your Games</h2>
 
   {% if games | length == 0 %}
-    <p class="text-gray-400">You haven't created any games yet.</p>
-  {% else %}
-    <div class="space-y-3">
-      {% for game in games %}
-        <a href="/games/{{ game.identifier }}" class="block bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-lg p-4 transition-colors">
-          <div class="flex items-center justify-between">
-            <div>
-              <h3 class="text-lg font-semibold text-white">{{ game.name }}</h3>
-              <p class="text-sm text-gray-400">
-                Day {{ game.day | default(value=0) }}
-                ·
-                <span style="color: {{ game.status | status_color }}">{{ game.status }}</span>
-                · {{ game.living_count }}/{{ game.character_count }} alive
-              </p>
-            </div>
-            <div class="flex items-center gap-2">
-              {% if game.private %}
-                <span class="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded">Private</span>
-              {% endif %}
-              {% if game.ready %}
-                <span class="text-xs text-green-400 bg-green-900/30 px-2 py-1 rounded">Ready</span>
-              {% endif %}
-            </div>
-          </div>
-        </a>
-      {% endfor %}
+    <div class="empty-state">
+      <p>You haven't created any games yet.</p>
+      <p>Create a game to get started.</p>
     </div>
+  {% else %}
+    {% for game in games %}
+      <div class="game-card {% if game.status == 'InProgress' %}running{% elif game.status == 'NotStarted' %}waiting{% else %}finished{% endif %}">
+        <div class="game-info">
+          <h3 class="game-name">
+            <a href="/games/{{ game.identifier }}">{{ game.name }}</a>
+          </h3>
+          <div class="game-meta">
+            <span><span class="num">{{ game.character_count }}</span> goblins</span>
+            <span><span class="num">{{ game.living_count }}</span> alive</span>
+            {% if game.day is defined and game.day %}
+              <span>Day <span class="num">{{ game.day }}</span></span>
+            {% endif %}
+            {% if game.ready %}
+              <span class="meta">Ready</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="game-status">
+          {% if game.private %}<span class="status-pill muted">Private</span>{% endif %}
+          {% if game.status == 'InProgress' %}
+            <span class="status-pill running">Running</span>
+          {% elif game.status == 'NotStarted' %}
+            <span class="status-pill waiting">Waiting</span>
+          {% else %}
+            <span class="status-pill finished">Finished</span>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
   {% endif %}
 </div>
 {% endblock %}
