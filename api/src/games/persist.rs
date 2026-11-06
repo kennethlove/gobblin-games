@@ -44,9 +44,83 @@ pub(crate) fn format_debug_line(game_id: &str, game_day: u32, log: &GameMessage)
     line
 }
 
+/// O(1) count of this game's persisted messages, read from the
+/// `message_count` counter kept on the game row. Rows written before
+/// the counter existed fall back to the subject-prefix scan; the save's
+/// UPDATE materialises the field, so the scan runs at most once per
+/// legacy game.
+async fn read_message_count(db: &Surreal<Any>, game_id: &str) -> u64 {
+    let game_identifier = RecordId::new("game", game_id);
+    let stored: Vec<serde_json::Value> = db
+        .query("SELECT message_count FROM $rid")
+        .bind(("rid", game_identifier))
+        .await
+        .ok()
+        .and_then(|mut r| r.take(0).ok())
+        .unwrap_or_default();
+    if let Some(n) = stored
+        .first()
+        .and_then(|row| row.get("message_count"))
+        .and_then(|v| v.as_u64())
+    {
+        return n;
+    }
+    db.query("RETURN count(SELECT id FROM message WHERE string::starts_with(subject, $game_id))")
+        .bind(("game_id", game_id))
+        .await
+        .ok()
+        .and_then(|mut r| r.take(0).ok().flatten())
+        .unwrap_or(0)
+}
+
+/// Delete the `count` oldest messages of this game, returning how many
+/// rows were actually removed. `DELETE ... ORDER BY ... LIMIT` is a
+/// silent no-op in SurrealDB 3.1 (probe-verified), so the oldest ids
+/// are selected first and deleted by id.
+async fn delete_oldest_messages(
+    db: &Surreal<Any>,
+    game_identifier: &str,
+    count: usize,
+) -> Result<usize, AppError> {
+    let oldest: Vec<RecordId> = db
+        .query(
+            r#"
+            SELECT VALUE id FROM message
+            WHERE string::starts_with(subject, $game_id)
+            ORDER BY timestamp ASC
+            LIMIT $delete_count
+            "#,
+        )
+        .bind(("game_id", game_identifier.to_string()))
+        .bind(("delete_count", count))
+        .await
+        .map_err(|e| {
+            AppError::InternalServerError(format!("Failed to select oldest messages: {e}"))
+        })?
+        .take(0)
+        .map_err(|e| {
+            AppError::InternalServerError(format!("Failed to read oldest messages: {e}"))
+        })?;
+    if oldest.is_empty() {
+        return Ok(0);
+    }
+    let removed = oldest.len();
+    db.query("DELETE message WHERE id IN $ids")
+        .bind(("ids", oldest))
+        .await
+        .map_err(|e| {
+            AppError::InternalServerError(format!("Failed to rotate old messages: {e}"))
+        })?;
+    Ok(removed)
+}
+
 pub(crate) async fn save_game(
     game: &mut Game,
     db: &Surreal<Any>,
+    // Root-authenticated connection: the `message` table is
+    // `PERMISSIONS ... FOR update, delete NONE`, so the rotation DELETE
+    // through the user-scoped request connection is a silent no-op.
+    server_db: &Surreal<Any>,
     broadcaster: &GameBroadcaster,
 ) -> Result<Json<Game>, AppError> {
     let game_identifier = RecordId::new("game", game.identifier.clone());
@@ -55,6 +129,10 @@ pub(crate) async fn save_game(
     db.query("BEGIN TRANSACTION").await.map_err(|e| {
         AppError::InternalServerError(format!("Failed to start transaction: {}", e))
     })?;
+
+    // Rolling count of this game's persisted messages, kept on the game
+    // row so the save path never scans the (ever-growing) message table.
+    let mut message_count = read_message_count(db, &game.identifier).await;
 
     // Drain events accumulated during the most recent run_day_night_cycle.
     let logs: Vec<GameMessage> = std::mem::take(&mut game.messages);
@@ -102,25 +180,14 @@ pub(crate) async fn save_game(
             })
             .collect();
 
-        // Check current message count for this game
-        let current_count: u32 = db
-            .query(
-                "RETURN count(SELECT id FROM message WHERE string::starts_with(subject, $game_id))",
-            )
-            .bind(("game_id", game.identifier.clone()))
-            .await
-            .ok()
-            .and_then(|mut r| r.take(0).ok().flatten())
-            .unwrap_or(0);
-
         let new_messages_count = game_logs.len();
-        let total_after_insert = current_count as usize + new_messages_count;
+        let total_after_insert = message_count as usize + new_messages_count;
 
         // Log warning if approaching limit
-        if current_count >= 9000 && current_count < MAX_MESSAGES as u32 {
+        if message_count >= 9000 && message_count < MAX_MESSAGES as u64 {
             tracing::warn!(
                 game_id = %game.identifier,
-                current_count = %current_count,
+                current_count = %message_count,
                 "Game message count approaching limit (9000+)"
             );
         }
@@ -130,32 +197,28 @@ pub(crate) async fn save_game(
             let messages_to_delete = total_after_insert - MAX_MESSAGES;
             tracing::info!(
                 game_id = %game.identifier,
-                current_count = %current_count,
+                current_count = %message_count,
                 new_count = %new_messages_count,
                 deleting = %messages_to_delete,
                 "Rotating old messages to maintain {} message limit", MAX_MESSAGES
             );
 
-            if let Err(e) = db
-                .query(
-                    r#"
-                    DELETE message
-                    WHERE string::starts_with(subject, $game_id)
-                    ORDER BY timestamp ASC
-                    LIMIT $delete_count
-                    "#,
-                )
-                .bind(("game_id", game.identifier.clone()))
-                .bind(("delete_count", messages_to_delete))
-                .await
-            {
-                tracing::error!(
-                    game_id = %game.identifier,
-                    error = %e,
-                    "Failed to rotate old messages"
-                );
-                // Continue anyway - this is not critical enough to fail the save
+            match delete_oldest_messages(server_db, &game.identifier, messages_to_delete).await {
+                Ok(removed) => {
+                    message_count = (total_after_insert - removed) as u64;
+                }
+                Err(e) => {
+                    tracing::error!(
+                        game_id = %game.identifier,
+                        error = %e,
+                        "Failed to rotate old messages"
+                    );
+                    // Keep the un-rotated total so the next save retries.
+                    message_count = total_after_insert as u64;
+                }
             }
+        } else {
+            message_count = total_after_insert as u64;
         }
 
         // The structured `event` payload rides as a plain JSON string
@@ -247,7 +310,9 @@ pub(crate) async fn save_game(
     // around the message payload above), so we use a plain UPDATE query that
     // names the fields we want written.
     if let Err(e) = db
-        .query("UPDATE $record_id SET day = $day, status = $status, config = $config")
+        .query(
+            "UPDATE $record_id SET day = $day, status = $status, config = $config, message_count = $message_count",
+        )
         .bind(("record_id", game_identifier.clone()))
         .bind(("day", game.day.unwrap_or(0) as i64))
         .bind(("status", game.status.to_string()))
@@ -255,6 +320,7 @@ pub(crate) async fn save_game(
             "config",
             serde_json::to_value(&game.config).unwrap_or(serde_json::Value::Null),
         ))
+        .bind(("message_count", message_count as i64))
         .await
     {
         let _ = db.query("ROLLBACK").await;

@@ -22,6 +22,10 @@ DEFINE FIELD OVERWRITE max_goblins_per_player ON game TYPE int DEFAULT 1;
 -- plain data (validated by GameConfig serde + create handler), and a
 -- per-key schema would churn on every config change.
 DEFINE FIELD OVERWRITE config ON game TYPE object DEFAULT {};
+-- Rolling count of persisted messages for this game; save_game reads
+-- it O(1) instead of scanning the message table per advance. DEFAULT 0
+-- covers pre-migration rows (first save materialises the real count).
+DEFINE FIELD OVERWRITE message_count ON game TYPE int DEFAULT 0;
 DEFINE FIELD OVERWRITE config.* ON game TYPE any;
 -- Arena snapshot: the resolved arena preset stored at game creation;
 -- areas are instantiated from it. DEFAULT {} covers pre-migration rows.
