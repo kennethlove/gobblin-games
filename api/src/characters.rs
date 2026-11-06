@@ -152,7 +152,7 @@ pub async fn resolve_owned_character_identifier(
         return Ok(id);
     }
     let mut response = db
-        .query("SELECT identifier, name FROM character WHERE created_by = $auth")
+        .query("SELECT identifier, name FROM character WHERE created_by = $auth AND bot != true")
         .await
         .map_err(|e| AppError::InternalServerError(format!("Failed to resolve character: {e}")))?;
     let rows: Vec<serde_json::Value> = response
@@ -270,7 +270,7 @@ pub async fn fewest_team_with_space(
 /// on create-game and the join form on a not-started game's page.
 pub async fn list_joinable_goblins(db: &Surreal<Any>) -> Result<Vec<Character>, AppError> {
     let mut owned = db
-        .query("SELECT * FROM character WHERE created_by = $auth ORDER BY name")
+        .query("SELECT * FROM character WHERE created_by = $auth AND bot != true ORDER BY name")
         .await
         .map_err(|e| AppError::InternalServerError(format!("Failed to list goblins: {e}")))?;
     let owned_rows: Vec<serde_json::Value> = owned
@@ -420,7 +420,7 @@ pub async fn join_game(
 
     let mut mine_response = db
         .query(
-            "RETURN count(SELECT id FROM playing_in WHERE out.identifier = $game AND in.created_by = $auth)",
+            "RETURN count(SELECT id FROM playing_in WHERE out.identifier = $game AND in.created_by = $auth AND in.bot != true)",
         )
         .bind(("game", game_identifier.to_owned()))
         .await
@@ -558,7 +558,11 @@ pub async fn create_character(
         return Err(AppError::GameFull("Game is full".to_string()));
     }
 
+    // `None` = bot filler (start/create backfill sites): tag the row so
+    // stables, pickers, and caps can exclude it (3ue).
+    let is_bot = character.is_none();
     let mut character = character.unwrap_or_else(Character::random);
+    character.bot = is_bot;
     // Spawn (0s6): one uniform draw per goblin across the game's own
     // areas x 6 triangles, at creation only — no mid-run joins exist.
     let spawn_areas = game_spawn_areas(db, game_identifier).await?;
@@ -932,7 +936,7 @@ pub async fn create_owned_character(
     // Lifetime cap: count this user's own characters before writing.
     // Deletion hard-deletes the row, so freed slots return immediately.
     let mut count_response = db
-        .query("RETURN count(SELECT id FROM character WHERE created_by = $auth)")
+        .query("RETURN count(SELECT id FROM character WHERE created_by = $auth AND bot != true)")
         .await
         .map_err(|e| {
             AppError::InternalServerError(format!("Failed to count owned characters: {e}"))
@@ -979,12 +983,15 @@ pub async fn create_owned_character(
 }
 
 /// `GET /api/characters` — every character created by the caller
-/// (`created_by = $auth`, backed by the `character_created_by` index).
+/// (`created_by = $auth` plus the bot filter, backed by the
+/// `character_created_by` index).
 pub async fn list_owned_characters(
     Extension(AuthDb(db)): Extension<AuthDb>,
 ) -> Result<Json<OwnedCharacterList>, AppError> {
     let mut response = db
-        .query("SELECT * FROM character WHERE created_by = $auth ORDER BY identifier")
+        .query(
+            "SELECT * FROM character WHERE created_by = $auth AND bot != true ORDER BY identifier",
+        )
         .await
         .map_err(|e| AppError::InternalServerError(format!("Failed to list characters: {e}")))?;
     let rows: Vec<serde_json::Value> = response

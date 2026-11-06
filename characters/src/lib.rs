@@ -223,6 +223,13 @@ pub struct Character {
     /// one game at a time — same home as stamina/area/allies, reset on entry.
     #[serde(default)]
     pub team: u32,
+    /// Bot-filled goblin: backfilled by the start/create paths so the
+    /// roster is always playable, never owned by a player (3ue). Readers
+    /// filter `bot != true` so bots stay out of stables, pickers, and
+    /// per-player caps; `created_by` still stamps the session user so
+    /// schema permissions (`FOR create WHERE created_by = $auth`) pass.
+    #[serde(default)]
+    pub bot: bool,
     /// Persistent clan name (lore only — no mechanics). Empty until a
     /// generator or editor fills it in.
     #[serde(default)]
@@ -469,6 +476,7 @@ impl Character {
             name: name.clone(),
             team,
             clan_name: String::new(),
+            bot: false,
             brain,
             status: CharacterStatus::default(),
             avatar,
@@ -691,6 +699,7 @@ impl Character {
             name,
             team,
             clan_name,
+            bot,
             avatar,
             human_player_name,
             attributes,
@@ -712,6 +721,7 @@ impl Character {
             id,
             name,
             team,
+            bot,
             clan_name,
             avatar,
             human_player_name,
@@ -810,6 +820,7 @@ impl Character {
             name,
             team,
             clan_name: String::new(),
+            bot: false,
             brain,
             status: CharacterStatus::default(),
             avatar,
