@@ -16,7 +16,7 @@ use crate::cookies::{CSRF_COOKIE, SESSION_COOKIE, generate_csrf_token, read_cook
 use crate::templates::{AuthState, tera_engine};
 use crate::{AppState, AuthDb};
 use axum::Json;
-use axum::extract::{Extension, Form, Path, Query, State};
+use axum::extract::{Extension, Form, Path, State};
 use axum::response::{IntoResponse, Redirect, Response};
 use characters::Character;
 use rand::seq::SliceRandom;
@@ -133,14 +133,6 @@ pub async fn authenticate_db(
 
 // ── My Goblins page ─────────────────────────────────────────────────
 
-/// Query params accepted by `GET /my-goblins`. Form-post failures redirect
-/// back with the API's message in `?error=`.
-#[derive(Deserialize, Default)]
-pub struct MyGoblinsQuery {
-    #[serde(default)]
-    pub error: Option<String>,
-}
-
 /// One persistent goblin rendered by `my_goblins.html`.
 #[derive(Debug, serde::Serialize)]
 pub struct MyGoblin {
@@ -188,7 +180,6 @@ pub struct DeleteGoblinForm {
 pub async fn my_goblins_handler(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
-    Query(params): Query<MyGoblinsQuery>,
 ) -> Response {
     let (auth, csrf) = extract_auth(&headers);
     if require_auth(&state, &headers).await.is_err() {
@@ -237,10 +228,12 @@ pub async fn my_goblins_handler(
     let offer = roll_creation_offer(&mut rand::rng());
     ctx.insert("offer", &offer);
     ctx.insert("best_stats", &crate::characters::ATTRIBUTE_NAMES);
-    if let Some(error) = params.error.as_deref().filter(|error| !error.is_empty()) {
-        ctx.insert("error", error);
+    if let Some((error, _)) = take_flash(&headers) {
+        ctx.insert("error", &error);
     }
-    html_with_csrf(tera_engine::render("my_goblins.html", &ctx), &csrf)
+    let mut response = html_with_csrf(tera_engine::render("my_goblins.html", &ctx), &csrf);
+    clear_flash(&mut response);
+    response
 }
 
 /// Three distinct trait ids from the full pool, rolled per page load for
@@ -281,12 +274,65 @@ pub async fn form_write_db(
     authenticate_db(state, &token).await.ok()
 }
 
-/// Redirect back to the page with the API's error message in `?error=`.
+/// One-shot flash cookie: the message rides a short-lived HttpOnly cookie
+/// instead of the URL (tk1) — errors never land in browser history, access
+/// logs, or Referer headers, and a refresh cannot re-show a stale one.
+/// Value is form-urlencoded `m=<message>` with optional `r=<address>`.
+pub const FLASH_COOKIE: &str = "gg_flash";
+
+/// Attach a flash cookie to any response.
+pub fn append_flash(response: &mut Response, message: &str, resend_address: Option<&str>) {
+    let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+    serializer.append_pair("m", message);
+    if let Some(address) = resend_address {
+        serializer.append_pair("r", address);
+    }
+    let cookie = format!(
+        "{FLASH_COOKIE}={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=60",
+        serializer.finish()
+    );
+    if let Ok(value) = cookie.parse() {
+        response
+            .headers_mut()
+            .append(axum::http::header::SET_COOKIE, value);
+    }
+}
+
+/// Read and consume the flash: returns (message, resend address) and
+/// expires the cookie on the way out.
+pub fn take_flash(headers: &axum::http::HeaderMap) -> Option<(String, Option<String>)> {
+    let raw = read_cookie(headers, FLASH_COOKIE)?;
+    if raw.is_empty() {
+        return None;
+    }
+    let mut message = None;
+    let mut resend_address = None;
+    for (key, value) in url::form_urlencoded::parse(raw.as_bytes()) {
+        match key.as_ref() {
+            "m" => message = Some(value.into_owned()),
+            "r" => resend_address = Some(value.into_owned()),
+            _ => {}
+        }
+    }
+    message.map(|message| (message, resend_address))
+}
+
+/// Expire the flash cookie on a response that just consumed it.
+pub fn clear_flash(response: &mut Response) {
+    let cookie = format!("{FLASH_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+    if let Ok(value) = cookie.parse() {
+        response
+            .headers_mut()
+            .append(axum::http::header::SET_COOKIE, value);
+    }
+}
+
+/// Redirect back to the my-goblins page with the API's error message in a
+/// flash cookie (never in the URL).
 fn goblins_error_redirect(error: impl std::fmt::Display) -> Response {
-    let query = url::form_urlencoded::Serializer::new(String::new())
-        .append_pair("error", &error.to_string())
-        .finish();
-    Redirect::to(&format!("/my-goblins?{query}")).into_response()
+    let mut response = Redirect::to("/my-goblins").into_response();
+    append_flash(&mut response, &error.to_string(), None);
+    response
 }
 
 /// POST /my-goblins — create a goblin from the page form, then redirect

@@ -45,7 +45,10 @@ use routes::*;
 // Page-rendering helpers live in the library (`api::pages`) so integration
 // tests can mount the same handlers the binary serves; re-exported here so
 // the handlers in `routes/` keep importing them through `crate::`.
-pub use api::pages::{authenticate_db, extract_auth, html_with_csrf, validate_csrf};
+pub use api::pages::{
+    append_flash, authenticate_db, clear_flash, extract_auth, html_with_csrf, take_flash,
+    validate_csrf,
+};
 
 pub static DATABASE: LazyLock<Arc<Surreal<Any>>> = LazyLock::new(|| Arc::new(Surreal::init()));
 
@@ -701,16 +704,26 @@ impl KeyExtractor for CompoundKeyExtractor {
     }
 }
 
-/// Redirect to an auth tab with an error message in the query string.
-/// Uses `url::form_urlencoded` for robust query construction and
-/// percent-encoding. Handles paths that already contain query strings.
-fn redirect_with_error(path: &str, tab: &str, error: &str) -> Response {
+/// Redirect to an auth tab with the error in a flash cookie — the query
+/// string carries only the tab, never message text (tk1).
+pub(crate) fn redirect_with_error(path: &str, tab: &str, error: &str) -> Response {
     let query = url::form_urlencoded::Serializer::new(String::new())
         .append_pair("tab", tab)
-        .append_pair("error", error)
         .finish();
     let separator = if path.contains('?') { "&" } else { "?" };
-    Redirect::to(&format!("{}{}{}", path, separator, query)).into_response()
+    redirect_with_flash(&format!("{}{}{}", path, separator, query), error, None)
+}
+
+/// Redirect to an absolute path with the error in a flash cookie (tk1):
+/// nothing message-shaped ever enters the URL.
+pub(crate) fn redirect_with_flash(
+    path: &str,
+    error: &str,
+    resend_address: Option<&str>,
+) -> Response {
+    let mut response = Redirect::to(path).into_response();
+    append_flash(&mut response, error, resend_address);
+    response
 }
 fn urlencoding(s: &str) -> String {
     let mut result = String::with_capacity(s.len());

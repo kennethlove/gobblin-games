@@ -1,5 +1,6 @@
 use crate::{
-    RESEND_COOLDOWN, extract_auth, html_with_csrf, redirect_with_error, urlencoding, validate_csrf,
+    RESEND_COOLDOWN, clear_flash, extract_auth, html_with_csrf, redirect_with_error,
+    redirect_with_flash, take_flash, urlencoding, validate_csrf,
 };
 use api::AppState;
 use api::auth::{
@@ -22,7 +23,6 @@ use validator::Validate;
 #[derive(Deserialize)]
 pub struct AuthTabQuery {
     pub tab: Option<String>,
-    pub error: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -51,7 +51,6 @@ pub struct VerifyQuery {
 #[derive(Deserialize)]
 pub struct CheckEmailQuery {
     pub address: Option<String>,
-    pub error: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -86,10 +85,12 @@ pub async fn auth_handler(
         AuthTab::Reset => "reset",
     };
     ctx.insert("tab", tab_str);
-    if let Some(err) = params.error.as_deref() {
-        ctx.insert("error", err);
+    if let Some((err, _)) = take_flash(&headers) {
+        ctx.insert("error", &err);
     }
-    html_with_csrf(tera_engine::render("auth.html", &ctx), &csrf)
+    let mut response = html_with_csrf(tera_engine::render("auth.html", &ctx), &csrf);
+    clear_flash(&mut response);
+    response
 }
 
 /// POST /login — authenticate user.
@@ -190,12 +191,11 @@ pub async fn handle_login_post(
             if !email_verified.unwrap_or(false) {
                 // Land on the resend interstitial instead of a dead end (0oi):
                 // the page carries the address so the resend button works.
-                return Redirect::to(&format!(
-                    "/auth/check-email?address={}&error={}",
-                    urlencoding(&email),
-                    urlencoding("Please verify your email before signing in.")
-                ))
-                .into_response();
+                return crate::redirect_with_flash(
+                    &format!("/auth/check-email?address={}", urlencoding(&email)),
+                    "Please verify your email before signing in.",
+                    None,
+                );
             }
 
             let access_token = match generate_access_token(
@@ -330,10 +330,12 @@ pub async fn check_email_handler(
     if let Some(addr) = params.address.as_deref() {
         ctx.insert("address", addr);
     }
-    if let Some(err) = params.error.as_deref() {
-        ctx.insert("error", err);
+    if let Some((err, _)) = take_flash(&headers) {
+        ctx.insert("error", &err);
     }
-    html_with_csrf(tera_engine::render("check_email.html", &ctx), &csrf)
+    let mut response = html_with_csrf(tera_engine::render("check_email.html", &ctx), &csrf);
+    clear_flash(&mut response);
+    response
 }
 
 /// GET /auth/verify-email?token=... — verify email address.
@@ -344,8 +346,12 @@ pub async fn verify_email_handler(
     let email = match validate_verification_token(&params.token) {
         Ok(email) => email,
         Err(_) => {
-            return Redirect::to("/auth?tab=login&error=Invalid+or+expired+verification+link")
-                .into_response();
+            return redirect_with_flash(
+                "/auth?tab=login",
+                "Invalid or expired verification link",
+                None,
+            )
+            .into_response();
         }
     };
 
@@ -356,7 +362,7 @@ pub async fn verify_email_handler(
         .await
         .is_err()
     {
-        return Redirect::to("/auth?tab=login&error=Database+error").into_response();
+        return redirect_with_flash("/auth?tab=login", "Database error", None).into_response();
     }
 
     let result = user_db
@@ -368,8 +374,12 @@ pub async fn verify_email_handler(
         Ok(_) => Redirect::to("/auth/email-verified").into_response(),
         Err(e) => {
             tracing::error!("Failed to verify email {}: {}", email, e);
-            Redirect::to("/auth?tab=login&error=Verification+failed.+Please+try+again.")
-                .into_response()
+            redirect_with_flash(
+                "/auth?tab=login",
+                "Verification failed. Please try again.",
+                None,
+            )
+            .into_response()
         }
     }
 }
@@ -401,12 +411,11 @@ pub async fn resend_verification_handler(
         if htmx {
             return fb("Please wait 60 seconds before requesting another email.");
         }
-        return Redirect::to(&format!(
-            "/auth/check-email?address={}&error={}",
-            urlencoding(&form.email),
-            urlencoding("Please wait 60 seconds before requesting another email.")
-        ))
-        .into_response();
+        return redirect_with_flash(
+            &format!("/auth/check-email?address={}", urlencoding(&form.email)),
+            "Please wait 60 seconds before requesting another email.",
+            None,
+        );
     }
 
     let user_db = (*state.db).clone();
@@ -419,12 +428,11 @@ pub async fn resend_verification_handler(
         if htmx {
             return fb("Something went wrong. Please try again.");
         }
-        return Redirect::to(&format!(
-            "/auth/check-email?address={}&error={}",
-            urlencoding(&form.email),
-            urlencoding("Something went wrong. Please try again.")
-        ))
-        .into_response();
+        return redirect_with_flash(
+            &format!("/auth/check-email?address={}", urlencoding(&form.email)),
+            "Something went wrong. Please try again.",
+            None,
+        );
     }
 
     let result = user_db
@@ -445,7 +453,7 @@ pub async fn resend_verification_handler(
                     if htmx {
                         return fb("That address is already verified. Sign in instead.");
                     }
-                    Redirect::to("/auth?tab=login&error=Email+already+verified").into_response()
+                    redirect_with_flash("/auth?tab=login", "Email already verified", None)
                 }
                 Some(_) => {
                     // Await the send so failures reach the user instead of a

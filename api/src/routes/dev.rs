@@ -13,7 +13,9 @@ pub async fn dev_verify_email_handler(
 ) -> impl IntoResponse {
     let email = match form.get("email") {
         Some(e) => e.trim().to_lowercase(),
-        None => return Redirect::to("/auth?tab=login&error=Missing+email").into_response(),
+        None => {
+            return crate::redirect_with_flash("/auth?tab=login", "Missing email", None);
+        }
     };
 
     let env_mode = std::env::var("ENV").unwrap_or_else(|_| "production".to_string());
@@ -28,7 +30,7 @@ pub async fn dev_verify_email_handler(
         .await
         .is_err()
     {
-        return Redirect::to("/auth?tab=login&error=Database+error").into_response();
+        return crate::redirect_with_flash("/auth?tab=login", "Database error", None);
     }
 
     match state
@@ -37,11 +39,14 @@ pub async fn dev_verify_email_handler(
         .bind(("email", email.clone()))
         .await
     {
-        Ok(_) => Redirect::to("/auth?tab=login&error=Email+verified!+You+can+now+sign+in.")
-            .into_response(),
+        Ok(_) => crate::redirect_with_flash(
+            "/auth?tab=login",
+            "Email verified! You can now sign in.",
+            None,
+        ),
         Err(e) => {
             tracing::error!("Dev verify failed for {}: {}", email, e);
-            Redirect::to("/auth?tab=login&error=Verification+failed.+Try+again.").into_response()
+            crate::redirect_with_flash("/auth?tab=login", "Verification failed. Try again.", None)
         }
     }
 }
