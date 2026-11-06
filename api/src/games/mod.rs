@@ -402,7 +402,7 @@ async fn run_game_cycles(
     // Clone messages before save_game drains them for commentary.
     let phase_events: Vec<GameMessage> = game.messages.clone();
 
-    let _ = persist::save_game(game, db, broadcaster).await?;
+    let _ = persist::save_game(game, db, server_db, broadcaster).await?;
 
     // Spawn commentary generation as a non-blocking background task.
     if let (Some(commentator), Some(day)) = (commentator, game.day)
