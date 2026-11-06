@@ -140,7 +140,9 @@ pub struct MyGoblin {
     pub name: String,
     pub clan_name: String,
     pub status: String,
-    pub avatar_url: Option<String>,
+    /// Uploaded avatar URL, or the DiceBear fallback (critters, seeded
+    /// by identifier) when there is no upload.
+    pub avatar_url: String,
     /// Pre-rendered trait panel (`trait_list.html` via
     /// `render_trait_panel`), empty string when the goblin has no traits.
     /// Evolution and revival can change traits between games (dww.10), so
@@ -208,19 +210,23 @@ pub async fn my_goblins_handler(
 
     let goblins: Vec<MyGoblin> = characters
         .into_iter()
-        .map(|character| MyGoblin {
-            identifier: character.identifier,
-            name: character.name,
-            clan_name: character.clan_name,
-            status: character.status.to_string(),
-            avatar_url: character
-                .avatar
-                .as_deref()
-                .map(|path| state.storage.public_url(path)),
-            traits_html: crate::templates::game_detail::render_trait_panel(
-                &character.traits,
-                &character.temporary_traits,
-            ),
+        .map(|character| {
+            let fallback = crate::storage::goblin_avatar_url(&character.identifier);
+            MyGoblin {
+                identifier: character.identifier,
+                name: character.name,
+                clan_name: character.clan_name,
+                status: character.status.to_string(),
+                avatar_url: character
+                    .avatar
+                    .as_deref()
+                    .map(|path| state.storage.public_url(path))
+                    .unwrap_or_else(|| fallback),
+                traits_html: crate::templates::game_detail::render_trait_panel(
+                    &character.traits,
+                    &character.temporary_traits,
+                ),
+            }
         })
         .collect();
 

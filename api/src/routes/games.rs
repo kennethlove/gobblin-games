@@ -1375,6 +1375,17 @@ pub async fn account_settings_handler(
     ctx.insert("current_email", &current_email);
     if let Some(ref url) = avatar_url {
         ctx.insert("avatar_url", url);
+    } else {
+        // No upload yet: DiceBear fallback, Electric (light) / Cool (dark).
+        ctx.insert(
+            "dicebear_light",
+            &api::storage::player_avatar_url(&current_email, false),
+        );
+        ctx.insert(
+            "dicebear_dark",
+            &api::storage::player_avatar_url(&current_email, true),
+        );
+        ctx.insert("dicebear_title", &format!("{} avatar", session.username));
     }
     html_with_csrf(tera_engine::render("account_settings.html", &ctx), &csrf)
 }

@@ -8,6 +8,14 @@ announcers = { path = "../announcers" }
 async-trait = "0.1.89"
 axum = { version = "0.8.9", features = ["macros", "multipart", "ws"] }
 base64-url = "3.0.3"
+# WHY: hash player emails into stable, one-way DiceBear avatar seeds —
+# stdlib has no hash; blake3 is already in the lock (transitive).
+blake3 = "1"
+# WHY: render avatars in-process (user instruction: Rust library, not the
+# HTTP API) — core parses+renders deterministic SVG, styles crate ships
+# only the style definitions, one feature per embedded style.
+dicebear-core = "10"
+dicebear-styles = { version = "10", features = ["avataaars-neutral", "critters"] }
 chrono = { version = "0.4.44", features = ["serde"] }
 confirm-email = "0.1"
 futures = "0.3.32"

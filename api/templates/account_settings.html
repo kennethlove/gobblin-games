@@ -52,7 +52,8 @@
       {% if avatar_url %}
         <img src="{{ avatar_url }}" alt="Your avatar" class="avatar-preview">
       {% else %}
-        <div class="avatar-preview avatar-placeholder" aria-hidden="true">?</div>
+        <img src="{{ dicebear_light }}" alt="{{ dicebear_title }}" title="{{ dicebear_title }}" class="avatar-preview avatar-theme-light">
+        <img src="{{ dicebear_dark }}" alt="{{ dicebear_title }}" title="{{ dicebear_title }}" class="avatar-preview avatar-theme-dark">
       {% endif %}
       <form
         hx-post="/api/users/me/avatar"
