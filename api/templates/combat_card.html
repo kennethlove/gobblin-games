@@ -8,7 +8,7 @@
     {% if sides %}
     <div class="combat-sides">
       {% for s in sides %}
-      <span class="kind-chip">{{ s.label }}: {{ s.names }}</span>
+      <span class="kind-chip">{% if s.label %}{{ s.label }} {% endif %}{{ s.names }}</span>
       {% endfor %}
     </div>
     {% endif %}
