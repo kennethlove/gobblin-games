@@ -1017,15 +1017,16 @@ h1, h2, h3, h4 { text-wrap: balance; }
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
-.htmx-indicator {
-  display: none;
-  position: absolute;
-  right: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
-}
+/* WHY: indicator is in-flow, not absolute (its original rule anchored it to a
+   distant positioned ancestor, so it never showed on the control it belongs
+   to). Every .htmx-indicator sits inline inside its own button. */
+.htmx-indicator { display: none; }
 .htmx-request .htmx-indicator,
 .htmx-indicator.htmx-request { display: inline; }
+/* Text swap while the request runs: pending shows, idle label hides. */
+.pending-label { display: none; }
+.htmx-request .pending-label { display: inline; }
+.htmx-request .swap-label { display: none; }
 
 /* Icon sizing (replaces Tailwind w-4 h-4 inline) */
 .icon {

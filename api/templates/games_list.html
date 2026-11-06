@@ -92,7 +92,7 @@
                     <a href="/games/{{ game.identifier }}/characters" class="reveal-btn">Goblins</a>
                     <a href="/games/{{ game.identifier }}/areas" class="reveal-btn">Arena Map</a>
                     <a href="/games/{{ game.identifier }}/odds" class="reveal-btn">Odds</a>
-                    <button class="reveal-btn" hx-put="/api/games/{{ game.identifier }}/next" hx-swap="none" hx-on::after-request="window.location.reload()">Advance</button>
+                    <button class="reveal-btn" hx-put="/api/games/{{ game.identifier }}/next" hx-swap="none" hx-disabled-elt="this" hx-on::after-request="window.location.reload()"><span class="swap-label">Advance</span><span class="pending-label">advancing…</span></button>
                     <button class="reveal-btn danger" hx-delete="/api/games/{{ game.identifier }}" hx-confirm="Delete this game? This cannot be undone." hx-target="closest .game-card" hx-swap="outerHTML">Delete</button>
                   </div>
                 </div>
@@ -127,7 +127,7 @@
                     <a href="/games/{{ game.identifier }}" class="reveal-btn">Broadcast</a>
                     <a href="/games/{{ game.identifier }}/characters" class="reveal-btn">Goblins</a>
                     <a href="/games/{{ game.identifier }}/areas" class="reveal-btn">Arena Map</a>
-                    <button class="reveal-btn" hx-put="/api/games/{{ game.identifier }}/next" hx-swap="none" hx-on::after-request="window.location.reload()">Advance</button>
+                    <button class="reveal-btn" hx-put="/api/games/{{ game.identifier }}/next" hx-swap="none" hx-disabled-elt="this" hx-on::after-request="window.location.reload()"><span class="swap-label">Advance</span><span class="pending-label">advancing…</span></button>
                     <button class="reveal-btn danger" hx-delete="/api/games/{{ game.identifier }}" hx-confirm="Delete this game? This cannot be undone." hx-target="closest .game-card" hx-swap="outerHTML">Delete</button>
                   </div>
                 </div>

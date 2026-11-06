@@ -89,7 +89,8 @@
             hx-disabled-elt="this"
             hx-indicator="#play-spinner"
             hx-on::after-request="window.location.href='/games/{{ game.identifier }}/play'">
-            ADVANCE +
+            <span class="swap-label">ADVANCE +</span>
+            <span class="pending-label">advancing…</span>
             <span id="play-spinner" class="htmx-indicator">
               <svg class="spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-opacity="0.25"></circle>
@@ -106,7 +107,8 @@
             hx-disabled-elt="this"
             hx-indicator="#start-spinner"
             hx-on::after-request="window.location.href='/games/{{ game.identifier }}/play'">
-            START
+            <span class="swap-label">START</span>
+            <span class="pending-label">starting…</span>
             <span id="start-spinner" class="htmx-indicator">
               <svg class="spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-opacity="0.25"></circle>
