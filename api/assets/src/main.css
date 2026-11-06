@@ -2349,6 +2349,10 @@ h1, h2, h3, h4 { text-wrap: balance; }
   font-family: var(--font-mono);
   font-size: var(--fs-h3);
 }
+/* DiceBear fallbacks: Electric by default, Night Shift under dark theme */
+.avatar-theme-dark { display: none; }
+[data-theme="dark"] .avatar-theme-light { display: none; }
+[data-theme="dark"] .avatar-theme-dark { display: block; }
 
 /* ── Goblin stable (uqw.5) ─────────────────────────────────────────── */
 .field-group select {

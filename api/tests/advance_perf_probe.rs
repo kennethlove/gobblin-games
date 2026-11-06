@@ -17,10 +17,13 @@ const TEAM_COUNT: u32 = 16;
 const GOBLINS_PER_TEAM: u32 = 8;
 
 /// Acceptance bound from the issue: advance well under a couple seconds
-/// at day 30 with the full roster. Observed ~1.1-1.2s; 2500ms leaves CI
-/// headroom while still catching the unbounded-count regression (the
-/// counter scan alone grew past that by day 30 before the fix).
-const DAY_30_BUDGET_MS: u128 = 2500;
+/// at day 30 with the full roster. Local ~1.1-1.2s; GitHub runners
+/// observed 2509ms (this PR) and 3132ms (main) for the same fixed code,
+/// so a 2500ms line fails on runner noise alone — main's own CI is red
+/// on it. 5000ms keeps a multi-x regression signal; the pre-fix
+/// unbounded-count regression (table grew past 58k rows) is guarded
+/// primarily by the `message_count <= 11000` assert above.
+const DAY_30_BUDGET_MS: u128 = 5000;
 
 async fn create_authenticated_user(test_db: &TestDb, server: &TestServer) -> TestUser {
     let test_user = TestUser::new("advance_probe");

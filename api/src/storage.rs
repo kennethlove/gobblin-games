@@ -1,5 +1,7 @@
 use crate::AppError;
+use dicebear_core::{Avatar, Style};
 use object_store::ObjectStoreExt; // put/get/head/delete convenience methods
+use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use tokio::fs;
@@ -14,6 +16,88 @@ static IMAGE_CDN_PREFIX: LazyLock<String> = LazyLock::new(|| {
         .trim_end_matches('/')
         .to_string()
 });
+
+/// DiceBear renders in-process (user instruction: Rust library, not the
+/// HTTP API) — no service to host, no outbound call per avatar. Style
+/// definitions embed at compile time (one cargo feature per style);
+/// parse once, render per call.
+static PLAYER_STYLE: LazyLock<Style> = LazyLock::new(|| {
+    Style::from_str(dicebear_styles::AVATAAARS_NEUTRAL)
+        .expect("embedded avataaars-neutral style parses")
+});
+static GOBLIN_STYLE: LazyLock<Style> = LazyLock::new(|| {
+    Style::from_str(dicebear_styles::CRITTERS).expect("embedded critters style parses")
+});
+
+// avataaars-neutral presets (verified against the hosted service earlier):
+// "Electric" on light themes, "Cool" on dark. idRandomization keeps ids
+// from repeating when seeds collide (DiceBear docs).
+const AVATARAARS_LIGHT: &str = "ff2e88,00e5ff,7cff00,ffe600,ff6a00,b400ff";
+const AVATARAARS_DARK: &str = "3b82f6,06b6d4,8b5cf6,38bdf8,6366f1,0ea5e9";
+
+/// Player avatar: avataaars-neutral, Electric (light) / Cool (dark).
+/// Seed = one-way hash of the email; raw addresses never reach the
+/// markup. Returns a data URI (locally rendered, percent-encoded SVG).
+pub fn player_avatar_url(email: &str, dark: bool) -> String {
+    let seed = blake3::hash(email.as_bytes()).to_hex().to_string();
+    let background: Vec<&str> = if dark {
+        AVATARAARS_DARK
+    } else {
+        AVATARAARS_LIGHT
+    }
+    .split(',')
+    .collect();
+    let options = json!({
+        "seed": seed,
+        "idRandomization": true,
+        "mouthVariant": [
+            "concerned", "default", "disbelief", "grimace", "sad",
+            "screamOpen", "serious", "smile", "twinkle",
+        ],
+        "backgroundColor": background,
+    });
+    Avatar::new(&PLAYER_STYLE, options)
+        .expect("fixed avataaars options render")
+        .to_data_uri()
+}
+
+/// Critters goblin avatar, stable per character (theme-neutral).
+/// Animation on (seed picks one of the three speeds), bounded variant
+/// sets, and body/accent/ink palettes — lighter blues, yellow->browns,
+/// muted reds, several greens, with accent/ink = the same palette slightly
+/// darker (user spec, 2026-11-06). The goblin's title rides on the HTML
+/// `<img>` attributes.
+pub fn goblin_avatar_url(identifier: &str) -> String {
+    let options = json!({
+        "seed": identifier,
+        "idRandomization": true,
+        "tags": ["animation"],
+        "animationVariant": ["slow", "medium", "fast"],
+        "topVariant": ["earsDroop", "earsPointy", "horns", "hornsIn", "hornsSmall"],
+        "bodyVariant": [
+            "bell", "blob", "dome", "lean", "peak", "round", "squat", "tilt", "tower",
+        ],
+        "eyesVariant": [
+            "angry", "bigPupils", "close", "dots", "inward", "round",
+            "sideeye", "sleepy", "uneven", "wide",
+        ],
+        "bodyColor": [
+            "8ecdf0", "aeddf7", "c3e6fb", "ecc75e", "d4a03c", "ad7c33", "c98372",
+            "b5705f", "a06868", "a8cf82", "8bbf68", "72ac5c", "5f9a6a",
+        ],
+        "accentColor": [
+            "74a8c5", "8fb5cb", "a0bdce", "c2a34d", "ae8331", "8e662a",
+            "a56b5d", "945c4e", "835555", "8aaa6b", "729d55", "5d8d4b", "4e7e57",
+        ],
+        "inkColor": [
+            "74a8c5", "8fb5cb", "a0bdce", "c2a34d", "ae8331", "8e662a",
+            "a56b5d", "945c4e", "835555", "8aaa6b", "729d55", "5d8d4b", "4e7e57",
+        ],
+    });
+    Avatar::new(&GOBLIN_STYLE, options)
+        .expect("fixed critters options render")
+        .to_data_uri()
+}
 
 /// File validation constraints
 pub struct UploadConstraints {
@@ -365,5 +449,51 @@ mod tests {
         let constraints = UploadConstraints::default();
         let data = vec![0xFF; 50];
         assert!(validate_upload(&data, "test.exe", &constraints).is_err());
+    }
+
+    /// Background fill of the avatar's canvas rect (percent-encoded SVG).
+    fn bg(svg: &str) -> &str {
+        const NEEDLE: &str = "width%3D%22112%22%20height%3D%22112%22%20fill%3D%22%23";
+        let i = svg.find(NEEDLE).expect("canvas rect present") + NEEDLE.len();
+        let rest = &svg[i..];
+        &rest[..rest.find("%22").expect("color closes")]
+    }
+
+    /// Component variant chosen for this seed: the element id up to the
+    /// per-render random suffix (e.g. `mouth-sad` — renders differ only
+    /// in that suffix, so compare picks, not whole strings).
+    fn pick<'a>(svg: &'a str, component: &'a str) -> &'a str {
+        let needle = format!("{component}-");
+        let i = svg.find(&needle).expect("component id present") + needle.len();
+        let end = svg[i..].find('-').expect("variant suffix");
+        &svg[i - component.len() - 1..i + end]
+    }
+
+    #[test]
+    fn test_player_avatar_url_hides_email_and_varies_by_theme() {
+        let light = player_avatar_url("player@example.com", false);
+        let dark = player_avatar_url("player@example.com", true);
+        assert!(light.starts_with("data:image/svg+xml;charset=utf-8,"));
+        assert!(!light.contains("player@example.com"));
+        // Same email, same seed: same feature picks; only the theme
+        // preset (background) changes.
+        assert_eq!(
+            pick(&light, "mouth"),
+            pick(&player_avatar_url("player@example.com", false), "mouth")
+        );
+        assert_ne!(bg(&light), bg(&dark));
+    }
+
+    #[test]
+    fn test_goblin_avatar_url_seeded_by_identifier() {
+        let avatar = goblin_avatar_url("gob-42");
+        assert!(avatar.starts_with("data:image/svg+xml;charset=utf-8,"));
+        // Animated critters render the reduced-motion hook.
+        assert!(avatar.contains("prefers-reduced-motion"));
+        // Same identifier, same goblin: variant picks are seed-driven.
+        assert_eq!(
+            pick(&avatar, "body"),
+            pick(&goblin_avatar_url("gob-42"), "body")
+        );
     }
 }
