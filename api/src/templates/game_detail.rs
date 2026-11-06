@@ -757,7 +757,11 @@ pub fn render_commentary_card(seg: &announcers::CommentarySegment) -> String {
     crate::templates::tera_engine::render("commentary_card.html", &ctx)
 }
 
-pub fn render_character_row(character: &characters::Character, game_id: &str) -> String {
+pub fn render_character_row(
+    character: &characters::Character,
+    game_id: &str,
+    storage: &dyn crate::storage::StorageBackend,
+) -> String {
     let is_alive = character.is_alive();
     let health = character.effective_health();
     let health_class = if health > 60 {
@@ -769,7 +773,12 @@ pub fn render_character_row(character: &characters::Character, game_id: &str) ->
     } else {
         "empty"
     };
-    let initial = character.name.chars().next().unwrap_or('?');
+    // Avatar where it belongs (81u): the uploaded image, else the DiceBear
+    // fallback seeded by identifier — same rule as the my-goblins page.
+    let avatar_src = match character.avatar.as_deref() {
+        Some(path) => storage.public_url(path),
+        None => crate::storage::goblin_avatar_url(&character.identifier),
+    };
     let avatar_color = if is_alive {
         "var(--broad-accent)"
     } else {
@@ -784,7 +793,7 @@ pub fn render_character_row(character: &characters::Character, game_id: &str) ->
     format!(
         r#"<a href="/games/{game_id}/characters/{character_id}" class="roster-row{dead_class}" style="text-decoration:none;color:inherit;display:block;">
           <div>
-            <div class="roster-avatar" style="border-color:{avatar_color};color:{avatar_color}">{initial}</div>
+            <div class="roster-avatar" style="border-color:{avatar_color};color:{avatar_color}"><img src="{avatar_src}" alt=""></div>
             <div class="roster-info">
               <span class="roster-name">{name}</span>
               <span class="roster-clan" style="background:{team_hex};color:#fff;padding:1px 6px;border-radius:3px;" title="{team_title}">{team_name}</span>
@@ -1081,6 +1090,7 @@ pub fn render_alliance_group(
     group: &AllianceGroup,
     characters: &[&characters::Character],
     game_id: &str,
+    storage: &dyn crate::storage::StorageBackend,
 ) -> String {
     let alive_count = group
         .characters
@@ -1090,7 +1100,7 @@ pub fn render_alliance_group(
 
     let mut rows = String::new();
     for &idx in &group.characters {
-        rows.push_str(&render_character_row(characters[idx], game_id));
+        rows.push_str(&render_character_row(characters[idx], game_id, storage));
     }
 
     format!(
@@ -1136,10 +1146,14 @@ pub fn build_team_groups<'a>(characters: &[&'a characters::Character]) -> Vec<Te
     result
 }
 
-pub fn render_team_group(group: &TeamGroup, game_id: &str) -> String {
+pub fn render_team_group(
+    group: &TeamGroup,
+    game_id: &str,
+    storage: &dyn crate::storage::StorageBackend,
+) -> String {
     let mut rows = String::new();
     for character in &group.characters {
-        rows.push_str(&render_character_row(character, game_id));
+        rows.push_str(&render_character_row(character, game_id, storage));
     }
     let team_color = world::clans::team_color(group.team);
     format!(

@@ -266,8 +266,9 @@ pub async fn fewest_team_with_space(
         .ok_or_else(|| AppError::GameFull("Game is full".to_string()))
 }
 
-/// Owned goblins that have not entered any game yet — the roster picker
-/// on create-game and the join form on a not-started game's page.
+/// Owned goblins not held by an unfinished game — the roster picker on
+/// create-game and the join form on a not-started game's page. A
+/// finished game releases its goblins; the edge stays, the status decides.
 pub async fn list_joinable_goblins(db: &Surreal<Any>) -> Result<Vec<Character>, AppError> {
     let mut owned = db
         .query("SELECT * FROM character WHERE created_by = $auth AND bot != true ORDER BY name")
@@ -282,14 +283,17 @@ pub async fn list_joinable_goblins(db: &Surreal<Any>) -> Result<Vec<Character>, 
         .collect();
 
     let mut entered = db
-        .query("SELECT in.identifier AS identifier FROM playing_in")
+        .query("SELECT in.identifier AS identifier, out.status AS status FROM playing_in")
         .await
         .map_err(|e| AppError::InternalServerError(format!("Failed to read entries: {e}")))?;
     let entered_rows: Vec<serde_json::Value> = entered
         .take(0)
         .map_err(|e| AppError::InternalServerError(format!("Failed to read entries: {e}")))?;
+    // WHY: a finished game releases its goblins (70j) — only an edge whose
+    // game is not "Finished" (missing status included) keeps a goblin out.
     let entered_ids: std::collections::HashSet<String> = entered_rows
         .iter()
+        .filter(|row| row["status"].as_str() != Some("Finished"))
         .filter_map(|row| row["identifier"].as_str().map(str::to_owned))
         .collect();
     Ok(characters
@@ -301,8 +305,8 @@ pub async fn list_joinable_goblins(db: &Surreal<Any>) -> Result<Vec<Character>, 
 /// Enter an owned character into a game that hasn't started.
 ///
 /// Gates, in order: game exists and is `NotStarted`; caller owns the
-/// character (404 missing / 403 foreign); the character isn't in another
-/// game; the caller has no goblin in this game yet (bot fillers have no
+/// character (404 missing / 403 foreign); the character isn't in an
+/// unfinished game; the caller has no goblin in this game yet (bot fillers have no
 /// `created_by` and are exempt); roster under 24; a team under
 /// `goblins_per_team`. Assigns the team with the fewest members that
 /// still has space and records the `playing_in` edge.
@@ -404,15 +408,19 @@ pub async fn join_game(
     }
 
     let mut in_game_response = db
-        .query("RETURN count(SELECT id FROM playing_in WHERE in.identifier = $character)")
+        .query("SELECT out.status AS status FROM playing_in WHERE in.identifier = $character")
         .bind(("character", character_identifier.to_owned()))
         .await
         .map_err(|e| AppError::InternalServerError(format!("Failed to check goblin: {e}")))?;
-    let in_game: u32 = in_game_response
-        .take::<Option<u32>>(0)
-        .map_err(|e| AppError::InternalServerError(format!("Failed to check goblin: {e}")))?
-        .unwrap_or(0);
-    if in_game > 0 {
+    let in_game_rows: Vec<serde_json::Value> = in_game_response
+        .take(0)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to check goblin: {e}")))?;
+    // Mirrors list_joinable_goblins: only a game still running holds the
+    // goblin back (70j) — a Finished game releases it.
+    let in_unfinished = in_game_rows
+        .iter()
+        .any(|row| row["status"].as_str() != Some("Finished"));
+    if in_unfinished {
         return Err(AppError::Conflict(
             "That goblin is already in a game".to_string(),
         ));

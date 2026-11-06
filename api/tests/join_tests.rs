@@ -1308,3 +1308,70 @@ async fn test_start_seeds_team_alliances_that_survive_reload() {
 
     test_db.cleanup().await;
 }
+
+#[tokio::test]
+async fn test_finished_game_releases_goblins_for_the_next_one() {
+    let test_db = TestDb::new().await;
+    let router = create_test_router(test_db.app_state());
+    let server = TestServer::new(router);
+
+    let alice = create_authenticated_user(&test_db, &server, "fin_alice").await;
+    let goblin = create_owned_goblin(&server, &alice, "Retired Pete").await;
+
+    // Enter a game the usual way: creator roster at create time.
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({ "name": "Season One", "characters": [goblin.clone()] }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let first_game = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Picker source, on an authenticated connection ($auth gates the query).
+    let state = test_db.app_state();
+    let authed = api::pages::authenticate_db(&state, alice.access_token.as_ref().expect("token"))
+        .await
+        .expect("authed db");
+
+    // While that game runs, the goblin stays out of the picker.
+    let listable = api::characters::list_joinable_goblins(&authed)
+        .await
+        .expect("list joinable");
+    assert!(
+        !listable.iter().any(|c| c.identifier == goblin),
+        "goblin in a running game must stay hidden"
+    );
+
+    // Finish the game — same string form the app persists for GameStatus.
+    test_db
+        .db
+        .query("UPDATE $game SET status = 'Finished'")
+        .bind((
+            "game",
+            surrealdb_types::RecordId::new("game", first_game.clone()),
+        ))
+        .await
+        .expect("finish game");
+
+    // Released: visible in the picker again ...
+    let listable = api::characters::list_joinable_goblins(&authed)
+        .await
+        .expect("list joinable");
+    assert!(
+        listable.iter().any(|c| c.identifier == goblin),
+        "finished game must release the goblin"
+    );
+
+    // ... and able to enter the next game (70j gate mirrors the picker).
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", alice.auth_header())
+        .json(&json!({ "name": "Season Two", "characters": [goblin.clone()] }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+
+    test_db.cleanup().await;
+}
