@@ -677,10 +677,15 @@ fn render_combat_card(
             if !sides[slot].contains(&character.name) {
                 sides[slot].push(character.name.clone());
             }
-            join_lines.push(format!("{} joins the fight ({})", character.name, side));
+            join_lines.push(format!("{} joins the fight", character.name));
         }
     }
-    let sides_ctx: Vec<serde_json::Value> = ["side-1", "side-2"]
+    // WHY: "side-1"/"side-2" is wire jargon, not player language (qy2) —
+    // the first chip carries bare names; the second reads "vs" only when
+    // there is a first side to be against.
+    let second_label = if sides[0].is_empty() { "" } else { "vs" };
+    let labels = ["", second_label];
+    let sides_ctx: Vec<serde_json::Value> = labels
         .iter()
         .enumerate()
         .filter(|(i, _)| !sides[*i].is_empty())
@@ -721,7 +726,10 @@ fn beat_line(beat: &shared::combat_beat::CombatBeat, content: &str) -> (String, 
         // narrative lives in the payload. Derive it here; the old "engine
         // content narrates" assumption left every round body blank.
         use characters::combat_beat::CombatBeatExt;
-        beat.to_log_lines().join(" · ")
+        // One engine line per visual line: combat_card renders .beat with
+        // white-space:pre-line, so the emoji column stacks instead of running
+        // on behind mid-sentence " · " joins (qy2).
+        beat.to_log_lines().join("\n")
     } else {
         content.to_string()
     };
@@ -1782,12 +1790,16 @@ mod day_summary_card_tests {
             1,
             "join must not split the fight card: {html}"
         );
+        assert!(html.contains("Carol joins the fight"), "join line: {html}");
         assert!(
-            html.contains("Carol joins the fight (side-1)"),
-            "join line: {html}"
+            html.contains("<span class=\"kind-chip\">Boblin, Carol</span>"),
+            "first chip: {html}"
         );
-        assert!(html.contains("side-1: Boblin, Carol"), "side-1: {html}");
-        assert!(html.contains("side-2: Stinky"), "side-2: {html}");
+        assert!(
+            html.contains("<span class=\"kind-chip\">vs Stinky</span>"),
+            "second chip: {html}"
+        );
+        assert!(!html.contains("side-1"), "wire jargon leaked: {html}");
     }
 
     #[test]
@@ -1795,7 +1807,11 @@ mod day_summary_card_tests {
         let html = render_event_cards(&[joined(1, "Carol", "side-2")]);
         assert_eq!(html.matches("event-card combat").count(), 1, "{html}");
         assert!(html.contains("fight in progress"), "{html}");
-        assert!(html.contains("side-2: Carol"), "{html}");
+        assert!(
+            html.contains("<span class=\"kind-chip\">Carol</span>"),
+            "{html}"
+        );
+        assert!(!html.contains("side-2"), "wire jargon leaked: {html}");
     }
 
     #[test]
