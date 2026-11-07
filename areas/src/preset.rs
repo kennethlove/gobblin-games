@@ -343,7 +343,7 @@ mod tests {
         let layout = crate::hex::default_layout();
         for (kind, _) in layout {
             assert_eq!(
-                kind.neighbors_from_layout(&layout),
+                kind.neighbors_from_layout(layout),
                 kind.neighbors(),
                 "{kind:?}"
             );

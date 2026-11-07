@@ -475,8 +475,8 @@ mod tests {
     /// `area.to_string()`).
     #[test]
     fn area_serde_roundtrip_uses_display_form() {
-        for variant in AreaId::iter().into_iter() {
-            let json = serde_json::to_string(&variant).unwrap();
+        for variant in AreaId::iter() {
+            let json = serde_json::to_string(variant).unwrap();
             // Display form: "Hub", "Sector 1", ..., "Sector 6"
             assert_eq!(json, format!("\"{}\"", variant));
             let back: AreaId = serde_json::from_str(&json).unwrap();

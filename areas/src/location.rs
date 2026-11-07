@@ -413,13 +413,13 @@ mod tests {
 
     #[test]
     fn all_locations_covers_42_unique_cells() {
-        let all: Vec<Location> = all_locations(&default_layout()).collect();
+        let all: Vec<Location> = all_locations(default_layout()).collect();
         let set: HashSet<Location> = all.iter().copied().collect();
         assert_eq!(all.len(), 42);
         assert_eq!(
             set.len(),
             42,
-            "duplicate cells in all_locations(&default_layout())"
+            "duplicate cells in all_locations(default_layout())"
         );
         assert!(all.iter().all(|l| is_occupied(*l)));
     }
@@ -475,9 +475,9 @@ mod tests {
 
     #[test]
     fn neighbor_slots_are_only_own_and_adjacent_directions() {
-        for loc in all_locations(&default_layout()) {
+        for loc in all_locations(default_layout()) {
             let t = loc.sub.base_direction();
-            let n = sub_neighbors(&default_layout(), loc);
+            let n = sub_neighbors(default_layout(), loc);
             for (i, neighbor) in n.iter().enumerate() {
                 let adjacent = i == t || i == (t + 1) % 6 || i == (t + 5) % 6;
                 if adjacent {
@@ -506,9 +506,9 @@ mod tests {
 
     #[test]
     fn cross_parent_door_is_base_to_base_across_shared_edge() {
-        for loc in all_locations(&default_layout()) {
+        for loc in all_locations(default_layout()) {
             let t = loc.sub.base_direction();
-            let n = sub_neighbors(&default_layout(), loc);
+            let n = sub_neighbors(default_layout(), loc);
             let parent = area_axial(loc.area);
             let expected = area_at(parent.neighbors()[t]).map(|area| at(area, ((t + 3) % 6) as u8));
             assert_eq!(n[t], expected, "{loc:?} cross slot {t}");
@@ -518,7 +518,7 @@ mod tests {
                 assert_eq!(other.sub, SubTriangle::new(((t + 3) % 6) as u8));
                 // Mutuality: the reverse door leads back.
                 assert!(
-                    sub_neighbors(&default_layout(), other).contains(&Some(loc)),
+                    sub_neighbors(default_layout(), other).contains(&Some(loc)),
                     "{loc:?} <-> {other:?} door not mutual"
                 );
             }
@@ -533,8 +533,8 @@ mod tests {
             if x <= y { (x, y) } else { (y, x) }
         };
         let mut actual: HashSet<((AreaId, u8), (AreaId, u8))> = HashSet::new();
-        for loc in all_locations(&default_layout()) {
-            for neighbor in sub_neighbors(&default_layout(), loc).into_iter().flatten() {
+        for loc in all_locations(default_layout()) {
+            for neighbor in sub_neighbors(default_layout(), loc).into_iter().flatten() {
                 if neighbor.area == loc.area {
                     continue;
                 }
@@ -558,8 +558,8 @@ mod tests {
 
     #[test]
     fn cross_parent_doors_agree_with_area_neighbors() {
-        for loc in all_locations(&default_layout()) {
-            for neighbor in sub_neighbors(&default_layout(), loc).into_iter().flatten() {
+        for loc in all_locations(default_layout()) {
+            for neighbor in sub_neighbors(default_layout(), loc).into_iter().flatten() {
                 if neighbor.area != loc.area {
                     assert!(
                         loc.area.neighbors().contains(&neighbor.area),
@@ -574,8 +574,8 @@ mod tests {
 
     #[test]
     fn neighbors_are_never_duplicated() {
-        for loc in all_locations(&default_layout()) {
-            let n = sub_neighbors(&default_layout(), loc);
+        for loc in all_locations(default_layout()) {
+            let n = sub_neighbors(default_layout(), loc);
             let occupied: Vec<Location> = n.into_iter().flatten().collect();
             let set: HashSet<Location> = occupied.iter().copied().collect();
             assert_eq!(set.len(), occupied.len(), "duplicates for {loc:?}");
@@ -589,8 +589,8 @@ mod tests {
     fn edge_count_is_84_within_and_24_cross_directed() {
         let mut within_directed = 0;
         let mut cross_directed = 0;
-        for loc in all_locations(&default_layout()) {
-            for neighbor in sub_neighbors(&default_layout(), loc).into_iter().flatten() {
+        for loc in all_locations(default_layout()) {
+            for neighbor in sub_neighbors(default_layout(), loc).into_iter().flatten() {
                 if neighbor.area == loc.area {
                     within_directed += 1;
                 } else {
@@ -611,7 +611,7 @@ mod tests {
         // triangle at 3 — the6-cycle structure with no shortcuts.
         assert_eq!(
             distance(
-                &default_layout(),
+                default_layout(),
                 Location::canonical(AreaId::hub()),
                 hub(1)
             ),
@@ -619,7 +619,7 @@ mod tests {
         );
         assert_eq!(
             distance(
-                &default_layout(),
+                default_layout(),
                 Location::canonical(AreaId::hub()),
                 hub(5)
             ),
@@ -627,7 +627,7 @@ mod tests {
         );
         assert_eq!(
             distance(
-                &default_layout(),
+                default_layout(),
                 Location::canonical(AreaId::hub()),
                 hub(2)
             ),
@@ -635,7 +635,7 @@ mod tests {
         );
         assert_eq!(
             distance(
-                &default_layout(),
+                default_layout(),
                 Location::canonical(AreaId::hub()),
                 hub(4)
             ),
@@ -643,7 +643,7 @@ mod tests {
         );
         assert_eq!(
             distance(
-                &default_layout(),
+                default_layout(),
                 Location::canonical(AreaId::hub()),
                 hub(3)
             ),
@@ -676,9 +676,9 @@ mod tests {
     fn cross_parent_door_is_one_hop() {
         let from = hub(0);
         let door = at(AreaId::sector1(), 3);
-        assert_eq!(sub_neighbors(&default_layout(), from)[0], Some(door));
-        assert_eq!(distance(&default_layout(), from, door), Some(1));
-        assert_eq!(distance(&default_layout(), door, from), Some(1));
+        assert_eq!(sub_neighbors(default_layout(), from)[0], Some(door));
+        assert_eq!(distance(default_layout(), from, door), Some(1));
+        assert_eq!(distance(default_layout(), door, from), Some(1));
     }
 
     /// A cross-hex path: Hub triangle 0 to Sector 1 triangle 0 must
@@ -688,8 +688,8 @@ mod tests {
     fn hub_center_to_sector1_triangle0_is_four_hops_via_door() {
         let from = Location::canonical(AreaId::hub());
         let to = at(AreaId::sector1(), 0);
-        assert_eq!(distance(&default_layout(), from, to), Some(4));
-        let path = shortest_path(&default_layout(), from, to).unwrap();
+        assert_eq!(distance(default_layout(), from, to), Some(4));
+        let path = shortest_path(default_layout(), from, to).unwrap();
         assert_eq!(path.len(), 5, "path: {path:?}");
         assert_eq!(path.first(), Some(&from));
         assert_eq!(
@@ -704,23 +704,23 @@ mod tests {
     fn shortest_path_steps_are_mutual_neighbors() {
         let from = Location::canonical(AreaId::hub());
         let to = Location::canonical(AreaId::sector5());
-        let path = shortest_path(&default_layout(), from, to).unwrap();
+        let path = shortest_path(default_layout(), from, to).unwrap();
         assert_eq!(path.first(), Some(&from));
         assert_eq!(path.last(), Some(&to));
         for window in path.windows(2) {
             let (a, b) = (window[0], window[1]);
             assert!(
-                sub_neighbors(&default_layout(), a).contains(&Some(b)),
+                sub_neighbors(default_layout(), a).contains(&Some(b)),
                 "{a:?} !-> {b:?}"
             );
             assert!(
-                sub_neighbors(&default_layout(), b).contains(&Some(a)),
+                sub_neighbors(default_layout(), b).contains(&Some(a)),
                 "{b:?} !-> {a:?}"
             );
         }
         assert_eq!(
             path.len() as u32 - 1,
-            distance(&default_layout(), from, to).unwrap()
+            distance(default_layout(), from, to).unwrap()
         );
     }
 
@@ -728,9 +728,9 @@ mod tests {
     fn all_forty_two_cells_reachable_from_hub_center() {
         let from = Location::canonical(AreaId::hub());
         let mut reached = 0;
-        for target in all_locations(&default_layout()) {
-            let d = distance(&default_layout(), from, target).expect("every cell reachable");
-            let path = shortest_path(&default_layout(), from, target).unwrap();
+        for target in all_locations(default_layout()) {
+            let d = distance(default_layout(), from, target).expect("every cell reachable");
+            let path = shortest_path(default_layout(), from, target).unwrap();
             assert_eq!(path.len() as u32 - 1, d);
             reached += 1;
         }
@@ -739,12 +739,12 @@ mod tests {
 
     #[test]
     fn distance_is_symmetric_and_matches_path_length() {
-        for a in all_locations(&default_layout()) {
-            for b in all_locations(&default_layout()) {
-                let ab = distance(&default_layout(), a, b).unwrap();
-                let ba = distance(&default_layout(), b, a).unwrap();
+        for a in all_locations(default_layout()) {
+            for b in all_locations(default_layout()) {
+                let ab = distance(default_layout(), a, b).unwrap();
+                let ba = distance(default_layout(), b, a).unwrap();
                 assert_eq!(ab, ba, "asymmetric for {a:?} <-> {b:?}");
-                let path = shortest_path(&default_layout(), a, b).unwrap();
+                let path = shortest_path(default_layout(), a, b).unwrap();
                 assert_eq!(path.len() as u32 - 1, ab);
             }
         }
@@ -754,12 +754,12 @@ mod tests {
     fn unoccupied_sub_triangles_have_no_distance_or_path() {
         let dead = Location::new(AreaId::hub(), SubTriangle::new(6));
         assert!(!is_occupied(dead));
-        assert_eq!(distance(&default_layout(), hub(0), dead), None);
-        assert_eq!(shortest_path(&default_layout(), hub(0), dead), None);
-        assert_eq!(distance(&default_layout(), dead, hub(0)), None);
-        assert_eq!(shortest_path(&default_layout(), dead, hub(0)), None);
+        assert_eq!(distance(default_layout(), hub(0), dead), None);
+        assert_eq!(shortest_path(default_layout(), hub(0), dead), None);
+        assert_eq!(distance(default_layout(), dead, hub(0)), None);
+        assert_eq!(shortest_path(default_layout(), dead, hub(0)), None);
         // An unoccupied sub has no neighbors at all.
-        assert_eq!(sub_neighbors(&default_layout(), dead), [None; 6]);
+        assert_eq!(sub_neighbors(default_layout(), dead), [None; 6]);
     }
 
     // ---- blocked-cell BFS -------------------------------------------
@@ -769,14 +769,14 @@ mod tests {
         let from = Location::canonical(AreaId::hub());
         let to = at(AreaId::sector1(), 0);
         let door = at(AreaId::sector1(), 3); // the Hub0 <-> Sector1-3 door
-        let path = shortest_path_while(&default_layout(), from, to, |cell| cell == door)
+        let path = shortest_path_while(default_layout(), from, to, |cell| cell == door)
             .expect("a route into Sector1 exists through another door");
         assert!(!path.contains(&door), "blocked cell on path: {path:?}");
         assert_eq!(path.first(), Some(&from));
         assert_eq!(path.last(), Some(&to));
         for window in path.windows(2) {
             assert!(
-                sub_neighbors(&default_layout(), window[0]).contains(&Some(window[1])),
+                sub_neighbors(default_layout(), window[0]).contains(&Some(window[1])),
                 "{:?} !-> {:?}",
                 window[0],
                 window[1]
@@ -789,7 +789,7 @@ mod tests {
     fn shortest_path_while_returns_none_when_goal_is_behind_a_blocked_area() {
         let from = Location::canonical(AreaId::hub());
         let to = at(AreaId::sector1(), 0);
-        let path = shortest_path_while(&default_layout(), from, to, |cell| {
+        let path = shortest_path_while(default_layout(), from, to, |cell| {
             cell.area == AreaId::sector1()
         });
         assert_eq!(path, None, "every route to Sector1 enters Sector1");
@@ -799,7 +799,7 @@ mod tests {
     fn shortest_path_while_allows_the_start_cell_even_if_marked_blocked() {
         let from = Location::canonical(AreaId::hub());
         let to = hub(2);
-        let path = shortest_path_while(&default_layout(), from, to, |cell| cell == from).unwrap();
+        let path = shortest_path_while(default_layout(), from, to, |cell| cell == from).unwrap();
         assert_eq!(path.first(), Some(&from));
         assert_eq!(path.last(), Some(&to));
     }

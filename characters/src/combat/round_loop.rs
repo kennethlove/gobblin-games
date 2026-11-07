@@ -2367,7 +2367,7 @@ mod tests {
         c.attributes.speed = 0;
         // One sub-hop from Alice: her first occupied neighbor triangle (the
         // round scan only covers her own triangle, so the call must).
-        c.location = areas::location::sub_neighbors(&areas::hex::default_layout(), a.location)
+        c.location = areas::location::sub_neighbors(areas::hex::default_layout(), a.location)
             .into_iter()
             .flatten()
             .next()
@@ -2538,7 +2538,7 @@ mod tests {
         c.attributes.strength = 0;
         // One sub-hop away: the round scan covers only Alice's own triangle,
         // so an in-triangle ally would already be a member by round top.
-        c.location = areas::location::sub_neighbors(&areas::hex::default_layout(), a.location)
+        c.location = areas::location::sub_neighbors(areas::hex::default_layout(), a.location)
             .into_iter()
             .flatten()
             .next()
