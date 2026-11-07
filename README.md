@@ -3,7 +3,7 @@
 > A browser-based goblin battle royale built with Rust: twenty-four goblins enter, one walks out. Autonomous goblins, procedurally generated arenas, and deterministic commentary.
 
 [![Rust](https://img.shields.io/badge/rust-edition%202024-orange.svg)](https://www.rust-lang.org/)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 ##  Features
 
@@ -288,7 +288,7 @@ Contributions are welcome! Please follow these guidelines:
 
 ##  License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ##  Acknowledgments
 
