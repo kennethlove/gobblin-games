@@ -717,7 +717,11 @@ SELECT (
     let team_groups = game_detail::build_team_groups(&sorted_characters);
     let mut character_rows = String::new();
     for group in &team_groups {
-        character_rows.push_str(&game_detail::render_team_group(group, &identifier));
+        character_rows.push_str(&game_detail::render_team_group(
+            group,
+            &identifier,
+            &*state.storage,
+        ));
     }
 
     // Build hex arena map SVG

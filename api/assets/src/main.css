@@ -1855,6 +1855,14 @@ h1, h2, h3, h4 { text-wrap: balance; }
   font-weight: 700;
   font-family: var(--font-condensed);
 }
+/* Avatar img fills the circle (uploaded image or DiceBear fallback). */
+.roster-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
 .roster-info {
   display: flex;
   align-items: baseline;
