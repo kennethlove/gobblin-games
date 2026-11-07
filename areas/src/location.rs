@@ -610,43 +610,23 @@ mod tests {
         // ring triangles at 1 hop, the next pair at 2, the opposite
         // triangle at 3 — the6-cycle structure with no shortcuts.
         assert_eq!(
-            distance(
-                default_layout(),
-                Location::canonical(AreaId::hub()),
-                hub(1)
-            ),
+            distance(default_layout(), Location::canonical(AreaId::hub()), hub(1)),
             Some(1)
         );
         assert_eq!(
-            distance(
-                default_layout(),
-                Location::canonical(AreaId::hub()),
-                hub(5)
-            ),
+            distance(default_layout(), Location::canonical(AreaId::hub()), hub(5)),
             Some(1)
         );
         assert_eq!(
-            distance(
-                default_layout(),
-                Location::canonical(AreaId::hub()),
-                hub(2)
-            ),
+            distance(default_layout(), Location::canonical(AreaId::hub()), hub(2)),
             Some(2)
         );
         assert_eq!(
-            distance(
-                default_layout(),
-                Location::canonical(AreaId::hub()),
-                hub(4)
-            ),
+            distance(default_layout(), Location::canonical(AreaId::hub()), hub(4)),
             Some(2)
         );
         assert_eq!(
-            distance(
-                default_layout(),
-                Location::canonical(AreaId::hub()),
-                hub(3)
-            ),
+            distance(default_layout(), Location::canonical(AreaId::hub()), hub(3)),
             Some(3)
         );
     }
