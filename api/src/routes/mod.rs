@@ -18,5 +18,6 @@ pub use games::{
     account_handler, account_settings_handler, create_game_handler, create_game_post_handler,
     faq_handler, game_areas_handler, game_arena_handler, game_character_detail_handler,
     game_characters_handler, game_detail_handler, game_join_page_handler, game_join_post_handler,
-    game_log_handler, game_replay_handler, games_list_handler, home_handler, timeline_handler,
+    game_log_handler, game_map_state_handler, game_replay_handler, games_list_handler,
+    home_handler, timeline_handler,
 };

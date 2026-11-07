@@ -1171,170 +1171,223 @@ pub fn render_team_group(
     )
 }
 
-fn terrain_color(terrain: &world::terrain::BaseTerrain) -> &'static str {
-    use world::terrain::BaseTerrain::*;
-    match terrain {
-        Forest => "#2d5a27",
-        Desert => "#c4a35a",
-        Tundra => "#8fa8b8",
-        Wetlands => "#3a7a6e",
-        Mountains => "#6b7280",
-        UrbanRuins => "#78716c",
-        Jungle => "#1a6b3c",
-        Grasslands => "#6b8e3a",
-        Badlands => "#8b6914",
-        Highlands => "#5b7553",
-        Geothermal => "#b45309",
-        Clearing => "#4a6741",
-    }
+// iak: the map renders client-side now — this payload is the contract
+// between the play page and arena-map.js. Geometry (to_pixel, wedge
+// centroids) lives in the renderer; the server only ships data.
+
+#[derive(Debug, serde::Serialize, PartialEq)]
+pub struct MapState {
+    pub areas: Vec<MapArea>,
+    pub tokens: Vec<MapToken>,
 }
 
-const HEX_SIZE: f64 = 52.0;
-const HEX_H: f64 = 104.0;
-const HEX_W: f64 = 90.0;
-const CENTER_X: f64 = 160.0;
-const CENTER_Y: f64 = 150.0;
-
-fn hex_corners(cx: f64, cy: f64) -> [(f64, f64); 6] {
-    let mut corners = [(0.0, 0.0); 6];
-    for (i, corner) in corners.iter_mut().enumerate() {
-        let angle = std::f64::consts::PI / 180.0 * (60.0 * i as f64 - 30.0);
-        *corner = (cx + HEX_SIZE * angle.cos(), cy + HEX_SIZE * angle.sin());
-    }
-    corners
+#[derive(Debug, serde::Serialize, PartialEq)]
+pub struct MapArea {
+    pub id: areas::AreaId,
+    pub name: String,
+    pub q: i32,
+    pub r: i32,
+    /// Area-wide base terrain; fallback fill when sub_tiles is empty.
+    pub terrain: String,
+    pub open: bool,
+    pub sub_tiles: Vec<MapSubTile>,
+    pub hazards: Vec<MapHazard>,
+    pub items: usize,
 }
 
-fn hex_center(area_idx: usize) -> (f64, f64) {
-    match area_idx {
-        0 => (CENTER_X, CENTER_Y),
-        1 => (CENTER_X + HEX_W, CENTER_Y),
-        2 => (CENTER_X + HEX_W * 0.5, CENTER_Y - HEX_H * 0.75),
-        3 => (CENTER_X - HEX_W * 0.5, CENTER_Y - HEX_H * 0.75),
-        4 => (CENTER_X - HEX_W, CENTER_Y),
-        5 => (CENTER_X - HEX_W * 0.5, CENTER_Y + HEX_H * 0.75),
-        6 => (CENTER_X + HEX_W * 0.5, CENTER_Y + HEX_H * 0.75),
-        _ => (CENTER_X, CENTER_Y),
-    }
+#[derive(Debug, serde::Serialize, PartialEq)]
+pub struct MapSubTile {
+    /// BaseTerrain variant name ("Forest", ...) — keys the renderer palette.
+    pub terrain: String,
+    pub feature: Option<String>,
 }
 
-pub fn render_hex_map(
+#[derive(Debug, serde::Serialize, PartialEq)]
+pub struct MapHazard {
+    pub event: String,
+    pub sub: u8,
+    pub blocks_left: u8,
+}
+
+#[derive(Debug, serde::Serialize, PartialEq)]
+pub struct MapToken {
+    pub id: String,
+    pub name: String,
+    pub team_hex: &'static str,
+    pub area: areas::AreaId,
+    pub sub: u8,
+    pub alive: bool,
+}
+
+pub fn build_map_state(
+    areas: &[areas::AreaDetails],
+    characters: &[&characters::Character],
+) -> MapState {
+    let mut out: Vec<MapArea> = areas
+        .iter()
+        .filter_map(|a| {
+            let id = a.area?;
+            let ax = a.axial.unwrap_or_else(|| areas::location::area_axial(id));
+            Some(MapArea {
+                id,
+                name: if a.name.is_empty() {
+                    id.to_string()
+                } else {
+                    a.name.clone()
+                },
+                q: ax.q,
+                r: ax.r,
+                terrain: format!("{:?}", a.terrain.base),
+                open: a.is_open(),
+                sub_tiles: a
+                    .sub_tiles
+                    .iter()
+                    .map(|t| MapSubTile {
+                        terrain: format!("{:?}", t.terrain),
+                        feature: t.feature.clone(),
+                    })
+                    .collect(),
+                hazards: a
+                    .cell_hazards
+                    .iter()
+                    .map(|h| MapHazard {
+                        event: h.event.to_string(),
+                        sub: h.sub.index(),
+                        blocks_left: h.blocks_left,
+                    })
+                    .collect(),
+                items: a.items.len(),
+            })
+        })
+        .collect();
+    // Stable order for tests; the renderer positions by q/r anyway.
+    out.sort_by_key(|a| (a.q, a.r));
+
+    let mut tokens: Vec<MapToken> = characters
+        .iter()
+        .map(|c| MapToken {
+            id: c.identifier.clone(),
+            name: c.name.clone(),
+            team_hex: world::clans::team_color(c.team).hex,
+            area: c.location.area,
+            sub: c.location.sub.index(),
+            alive: c.is_alive(),
+        })
+        .collect();
+    tokens.sort_by(|a, b| a.id.cmp(&b.id));
+
+    MapState { areas: out, tokens }
+}
+
+/// JSON for the `<script type="application/json">` embed: `<` escaped so
+/// a hostile name can't break out of the script element.
+pub fn map_state_json(
     areas: &[areas::AreaDetails],
     characters: &[&characters::Character],
 ) -> String {
-    let area_order = [
-        areas::AreaId::hub(),
-        areas::AreaId::sector1(),
-        areas::AreaId::sector2(),
-        areas::AreaId::sector3(),
-        areas::AreaId::sector4(),
-        areas::AreaId::sector5(),
-        areas::AreaId::sector6(),
-    ];
+    serde_json::to_string(&build_map_state(areas, characters))
+        .expect("MapState is always serializable")
+        .replace('<', "\\u003c")
+}
 
-    let area_map: std::collections::HashMap<areas::AreaId, &areas::AreaDetails> = areas
-        .iter()
-        .filter_map(|a| a.area.map(|area| (area, a)))
-        .collect();
+#[cfg(test)]
+mod map_state_tests {
+    use super::*;
+    use areas::hex::{Axial, SubTriangle};
+    use areas::location::Location;
 
-    let mut hexes = String::new();
-
-    for (idx, area_type) in area_order.iter().enumerate() {
-        let (cx, cy) = hex_center(idx);
-        let corners = hex_corners(cx, cy);
-        let points: String = corners
-            .iter()
-            .map(|(x, y)| format!("{x:.1},{y:.1}"))
-            .collect::<Vec<_>>()
-            .join(" ");
-
-        let terrain = area_map
-            .get(area_type)
-            .map(|a| a.terrain.base)
-            .unwrap_or(world::terrain::BaseTerrain::Clearing);
-        let fill = terrain_color(&terrain);
-
-        let terrain_label = format!("{:?}", terrain).to_uppercase();
-        let area_name = area_map
-            .get(area_type)
-            .map(|a| a.name.clone())
-            .filter(|n| !n.is_empty())
-            .unwrap_or_else(|| area_type.to_string());
-
-        let character_count = characters
-            .iter()
-            .filter(|t| t.is_alive() && *area_type == t.location.area)
-            .count();
-
-        // Hazards (q7k): an area with events is a hazard zone — mark it
-        // with a danger stroke, a dashed rim, and the active events plus
-        // how many blocks it has left.
-        let hazard_line: String = area_map
-            .get(area_type)
-            .filter(|a| !a.is_open())
-            .map(|a| {
-                let names: Vec<String> = a
-                    .cell_hazards
-                    .iter()
-                    .map(|h| {
-                        format!(
-                            "{} T{} · {} BLK",
-                            h.event.to_string().to_uppercase(),
-                            h.sub.index() + 1,
-                            h.blocks_left
-                        )
-                    })
-                    .collect();
-                format!(
-                    r#"<text x="{cx}" y="{cy:.1}" text-anchor="middle" dominant-baseline="middle" fill="var(--danger)" font-size="7" font-family="var(--font-condensed)" dy="21" font-weight="700" letter-spacing="0.5">{}</text>"#,
-                    names.join(" · ")
-                )
-            })
-            .unwrap_or_default();
-        let (stroke, dash) = if hazard_line.is_empty() {
-            ("var(--broad-border-strong)", "")
-        } else {
-            ("var(--danger)", r#" stroke-dasharray="5 3""#)
-        };
-
-        hexes.push_str(&format!(
-            r#"<polygon points="{points}" fill="{fill}" stroke="{stroke}"{dash} stroke-width="2" opacity="0.85"/>
-            <text x="{cx}" y="{cy:.1}" text-anchor="middle" dominant-baseline="middle" fill="rgba(255,255,255,0.9)" font-size="9" font-family="var(--font-condensed)" font-weight="600" letter-spacing="1">{terrain_label}</text>
-            <text x="{cx}" y="{cy:.1}" text-anchor="middle" dominant-baseline="middle" fill="rgba(255,255,255,0.5)" font-size="7" font-family="var(--font-condensed)" dy="12">{area_name}</text>{hazard_line}"#,
-        ));
-
-        // Character dots in this hex
-        let in_hex: Vec<_> = characters
-            .iter()
-            .filter(|t| t.is_alive() && *area_type == t.location.area)
-            .enumerate()
-            .map(|(i, t)| {
-                let angle = std::f64::consts::PI * 2.0 * i as f64 / character_count.max(1) as f64;
-                let r = if character_count <= 1 { 0.0 } else { 16.0 };
-                (t, cx + r * angle.cos(), cy + r * angle.sin())
-            })
-            .collect();
-
-        for (character, dx, dy) in in_hex {
-            let dot_color = if character.is_alive() {
-                "var(--broad-accent)"
-            } else {
-                "var(--broad-fg-muted)"
-            };
-            let r = if character.is_alive() { 4.0 } else { 2.5 };
-            hexes.push_str(&format!(
-                r#"<circle cx="{dx:.1}" cy="{dy:.1}" r="{r}" fill="{dot_color}" stroke="var(--broad-bg)" stroke-width="1"/>"#,
-            ));
+    fn area(id: areas::AreaId) -> areas::AreaDetails {
+        areas::AreaDetails {
+            area: Some(id),
+            name: format!("The {id}"),
+            ..Default::default()
         }
     }
 
-    let view_w = CENTER_X * 2.0 + HEX_W + 20.0;
-    let view_h = CENTER_Y * 2.0 + HEX_H + 20.0;
+    #[test]
+    fn positions_come_from_axial_with_default_fallback() {
+        let mut with_coords = area(areas::AreaId::sector1());
+        with_coords.axial = Some(Axial::new(2, -1));
+        let no_coords = area(areas::AreaId::hub());
+        let state = build_map_state(&[with_coords, no_coords], &[]);
 
-    format!(
-        r#"<svg viewBox="0 0 {view_w:.0} {view_h:.0}" xmlns="http://www.w3.org/2000/svg" class="hex-map">
-          {hexes}
-        </svg>"#,
-    )
+        assert_eq!(state.areas.len(), 2);
+        let s1 = state
+            .areas
+            .iter()
+            .find(|a| a.id == areas::AreaId::sector1())
+            .expect("sector1 area present");
+        assert_eq!((s1.q, s1.r), (2, -1));
+        let hub = state
+            .areas
+            .iter()
+            .find(|a| a.id == areas::AreaId::hub())
+            .expect("hub area present");
+        // No axial on the row: falls back to the default layout (pre-zkp.2).
+        assert_eq!((hub.q, hub.r), (0, 0));
+    }
+
+    #[test]
+    fn area_without_id_is_skipped() {
+        let helper = areas::AreaDetails {
+            name: "route helper".into(),
+            ..Default::default()
+        };
+        let state = build_map_state(&[helper], &[]);
+        assert!(state.areas.is_empty());
+    }
+
+    #[test]
+    fn hazards_sub_tiles_and_items_ride_the_payload() {
+        let mut a = area(areas::AreaId::hub());
+        a.sub_tiles = vec![areas::preset::SubTile {
+            terrain: world::terrain::BaseTerrain::Forest,
+            feature: Some("Hidden Valley".into()),
+            flavor: None,
+        }];
+        a.cell_hazards = vec![areas::CellHazard {
+            sub: SubTriangle::new(2),
+            event: areas::events::AreaEvent::Avalanche,
+            blocks_left: 3,
+        }];
+        let state = build_map_state(&[a], &[]);
+        let hub = &state.areas[0];
+        assert!(!hub.open);
+        assert_eq!(hub.terrain, "Clearing"); // AreaDetails::default terrain
+        assert_eq!(hub.sub_tiles.len(), 1);
+        assert_eq!(hub.sub_tiles[0].terrain, "Forest");
+        assert_eq!(hub.sub_tiles[0].feature.as_deref(), Some("Hidden Valley"));
+        assert_eq!(hub.hazards.len(), 1);
+        assert_eq!(hub.hazards[0].sub, 2);
+        assert_eq!(hub.hazards[0].blocks_left, 3);
+        assert_eq!(hub.items, 0);
+    }
+
+    #[test]
+    fn tokens_carry_team_color_position_and_liveness() {
+        let mut goblin = characters::Character::new("Stinky".into(), Some(2), None);
+        goblin.location = Location::new(areas::AreaId::sector1(), SubTriangle::new(3));
+        let refs: Vec<&characters::Character> = vec![&goblin];
+        let state = build_map_state(&[], &refs);
+
+        assert_eq!(state.tokens.len(), 1);
+        let t = &state.tokens[0];
+        assert_eq!(t.id, goblin.identifier);
+        assert_eq!(t.name, "Stinky");
+        assert_eq!(t.team_hex, world::clans::team_color(2).hex);
+        assert_eq!(t.area, areas::AreaId::sector1());
+        assert_eq!(t.sub, 3);
+        assert!(t.alive);
+    }
+
+    #[test]
+    fn json_embed_escapes_script_breakout() {
+        let mut hostile = area(areas::AreaId::hub());
+        hostile.name = "</script><script>alert(1)</script>".into();
+        let json = map_state_json(&[hostile], &[]);
+        assert!(!json.contains('<'), "raw < leaked: {json}");
+        assert!(json.contains("\\u003c/script>"), "missing escape: {json}");
+    }
 }
 
 #[cfg(test)]

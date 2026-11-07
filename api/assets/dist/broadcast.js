@@ -35,6 +35,10 @@
     function applyTransform() {
       hexMap.style.transform = "translate(" + tx + "px," + ty + "px) scale(" + scale + ")";
       hexMap.style.transformOrigin = "center center";
+      // iak: the arena renderer clusters tokens below scale 0.8 — it
+      // listens for this event and re-lays out its token layer.
+      window.__arenaScale = scale;
+      window.dispatchEvent(new CustomEvent("arena:zoom", { detail: { scale: scale } }));
     }
 
     mapContainer.addEventListener("wheel", function(e) {
