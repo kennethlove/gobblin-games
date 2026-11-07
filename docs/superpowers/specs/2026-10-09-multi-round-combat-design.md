@@ -118,9 +118,9 @@ A fight ends when exactly one of:
 | --- | --- |
 | One combatant dead | `CombatResult::Winner { character }` |
 | One combatant flees successfully | `CombatResult::Fled { fled, remaining }` |
-| Both stamina-empty with no kill possible | `CombatResult::Draw` |
+| Both stamina-empty with no kill possible | Judged on remaining blood: higher total blood wins; exact tie → `CombatResult::Draw` |
 
-- **Both stamina-empty** → draw: neither can keep swinging; they disengage. (Stamina band `Exhausted` and at zero: no attack actions available, so the loop detects no-progress and closes.)
+- **Both stamina-empty** → nobody can keep swinging (Stamina band `Exhausted` and at zero: no attack actions available), so the fight is judged on what is left standing: the side with more total remaining blood wins. An exact blood tie draws. (Retuned from a flat draw — measured 6.6% bare / 19.7% gear draws before; ~0.1% after.)
 - **Mid-round termination:** a kill or successful flee skips the remaining beats of the current round. Nothing to do once the enemy is dead or gone.
 - An optional safety cap on rounds (e.g. 12) prevents pathological infinite stalemates; it terminates in a `Draw`. Value in `CombatTuning`. Every round drains stamina, however, so this cap should be evaluated.
 

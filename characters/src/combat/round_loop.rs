@@ -1015,7 +1015,8 @@ impl<'a> CombatRoundLoop<'a> {
 
     /// Check side-empty / stamina-draw after a beat and set `result` if the
     /// fight ended (design §6): a side with no living members left loses;
-    /// everyone stamina-empty on both sides draws.
+    /// everyone stamina-empty on both sides is judged on remaining blood
+    /// (the side still standing wins; an exact tie draws).
     fn check_termination_after_beat(&mut self, chars: &[&mut Character]) {
         if self.result.is_some() {
             return;
@@ -1036,8 +1037,23 @@ impl<'a> CombatRoundLoop<'a> {
         } else if a.iter().all(|&i| chars[i].stamina == 0)
             && b.iter().all(|&i| chars[i].stamina == 0)
         {
-            // Both sides stamina-empty with no kill possible: disengage (§6).
-            self.result = Some(CombatResult::Draw);
+            // Both sides spent with no kill possible: nobody can keep
+            // swinging, so the fight is judged on what is left standing.
+            // A flat mutual-back-off is the rare case (exact blood tie),
+            // not the default outcome.
+            let blood_a: u32 = a.iter().map(|&i| chars[i].blood).sum();
+            let blood_b: u32 = b.iter().map(|&i| chars[i].blood).sum();
+            self.result = if blood_a > blood_b {
+                Some(CombatResult::Victory {
+                    victors: a.iter().map(|&i| tref(&*chars[i])).collect(),
+                })
+            } else if blood_b > blood_a {
+                Some(CombatResult::Victory {
+                    victors: b.iter().map(|&i| tref(&*chars[i])).collect(),
+                })
+            } else {
+                Some(CombatResult::Draw)
+            };
         }
     }
 }
@@ -1187,25 +1203,62 @@ mod tests {
     }
 
     /// Both combatants at zero stamina disengage as a Draw without a survivor.
+    /// Called directly on the termination rule: a full round always lands
+    /// damage (effective strength floors at 1), so a blood tie can only be
+    /// set up outside the beat loop.
     #[test]
     fn both_stamina_empty_is_a_draw() {
         let mut a = char_named("Alice");
         a.stamina = 0;
         a.max_stamina = 100;
-        a.attributes.strength = 0; // no damage -> no kill
+        a.blood = 1000; // exact tie: the rare draw
 
         let mut b = char_named("Bob");
         b.stamina = 0;
         b.max_stamina = 100;
+        b.blood = 1000;
+
+        let mut combat = CombatRoundLoop::new(&mut a, &mut b, "c2".into(), CombatTuning::default());
+        let chars = std::mem::take(&mut combat.chars);
+        combat.check_termination_after_beat(&chars);
+        combat.chars = chars;
+
+        assert!(combat.is_over());
+        assert_eq!(combat.result(), Some(&CombatResult::Draw));
+    }
+
+    /// Mutual stamina exhaustion judges on remaining blood: the side with
+    /// more blood standing wins instead of a flat back-off.
+    #[test]
+    fn mutual_exhaustion_awards_the_side_with_more_blood() {
+        let mut a = char_named("Alice");
+        a.traits.clear();
+        a.stamina = 0;
+        a.max_stamina = 100;
+        a.attributes.strength = 0; // no damage -> no kill
+        a.blood = 900;
+        let alice = tref(&a);
+
+        let mut b = char_named("Bob");
+        b.traits.clear();
+        b.stamina = 0;
+        b.max_stamina = 100;
         b.attributes.strength = 0;
+        b.blood = 600;
 
         let mut rng = SmallRng::seed_from_u64(3);
         let mut events = Vec::new();
-        let mut combat = CombatRoundLoop::new(&mut a, &mut b, "c2".into(), CombatTuning::default());
+        let mut combat = CombatRoundLoop::new(&mut a, &mut b, "c3".into(), CombatTuning::default());
 
         let _ = combat.advance_round(&mut rng, &mut events);
         assert!(combat.is_over());
-        assert_eq!(combat.result(), Some(&CombatResult::Draw));
+        assert_eq!(
+            combat.result(),
+            Some(&CombatResult::Victory {
+                victors: vec![alice]
+            }),
+            "the fresher side (more blood) wins the standoff"
+        );
     }
 
     /// A successful flee exits the fleer from the fight; in a pair that ends
@@ -1306,13 +1359,15 @@ mod tests {
     #[test]
     fn round_cap_terminates_stalemate_in_draw() {
         let mut a = char_named("Alice");
+        a.traits.clear(); // zero effective strength: no damage, blood stays tied
         a.attributes.strength = 0; // never kills
-        a.stamina = 100;
+        a.stamina = 1000;
         a.max_stamina = 1000; // never stamina-exhausted
 
         let mut b = char_named("Bob");
+        b.traits.clear();
         b.attributes.strength = 0;
-        b.stamina = 100;
+        b.stamina = 1000;
         b.max_stamina = 1000;
 
         let tuning = CombatTuning {
