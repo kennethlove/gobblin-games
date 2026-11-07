@@ -9,7 +9,6 @@ use shared::afflictions::{
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::Character;
-use areas::AreaId;
 use rand::RngExt;
 use rand::SeedableRng;
 use rand::prelude::IndexedRandom;
@@ -65,9 +64,9 @@ pub fn roll_spawn_fixations(character: &mut Character, rng: &mut SmallRng) {
         return;
     }
 
-    // Pick a random area as fixation target
-    let areas: Vec<AreaId> = AreaId::iter().into_iter().collect();
-    if let Some(area) = areas.choose(rng) {
+    // Pick a random area as fixation target — from the layout, not the
+    // id vocabulary (cad: `iter()` covers ids 1..10, games use a subset).
+    if let Some((area, _)) = areas::hex::default_layout().choose(rng) {
         let target = FixationTarget::AreaId(area.to_string());
         let key = (AfflictionKind::Fixation(target.clone()), None);
         let aff = Affliction {
@@ -339,6 +338,7 @@ pub fn process_character_fixations(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use areas::AreaId;
     use rand::SeedableRng;
     use uuid::Uuid;
     use world::items::OwnsItems;

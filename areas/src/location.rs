@@ -495,9 +495,9 @@ mod tests {
 
     #[test]
     fn within_parent_neighbors_are_the_adjacent_ring_triangles() {
-        for (area, _) in default_layout() {
+        for &(area, _) in default_layout() {
             for t in 0..SubTriangle::COUNT {
-                let n = sub_neighbors(&default_layout(), at(area, t as u8));
+                let n = sub_neighbors(default_layout(), at(area, t as u8));
                 assert_eq!(n[(t + 1) % 6], Some(at(area, ((t + 1) % 6) as u8)));
                 assert_eq!(n[(t + 5) % 6], Some(at(area, ((t + 5) % 6) as u8)));
             }
@@ -546,7 +546,7 @@ mod tests {
         // Independent enumeration straight from the layout: every big-hex
         // edge whose direction has a parent neighbor carries one door.
         let mut expected = HashSet::new();
-        for (area, ax) in default_layout() {
+        for &(area, ax) in default_layout() {
             for (i, neighbor_ax) in ax.neighbors().into_iter().enumerate() {
                 if let Some(nb) = area_at(neighbor_ax) {
                     expected.insert(door_key(at(area, i as u8), at(nb, ((i + 3) % 6) as u8)));
@@ -657,13 +657,13 @@ mod tests {
     /// triangle pair.
     #[test]
     fn within_parent_distance_is_the_ring_cycle_distance() {
-        for (area, _) in default_layout() {
+        for &(area, _) in default_layout() {
             for i in 0..SubTriangle::COUNT {
                 for j in 0..SubTriangle::COUNT {
                     let straight = (i as i32 - j as i32).abs();
                     let want = straight.min(SubTriangle::COUNT as i32 - straight) as u32;
                     assert_eq!(
-                        distance(&default_layout(), at(area, i as u8), at(area, j as u8)),
+                        distance(default_layout(), at(area, i as u8), at(area, j as u8)),
                         Some(want),
                         "{area:?} triangle {i} -> {j}"
                     );

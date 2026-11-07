@@ -27,43 +27,61 @@ use world::terrain::{BaseTerrain, TerrainType};
 pub struct AreaId(&'static str);
 
 impl AreaId {
-    pub fn hub() -> Self {
+    pub const fn hub() -> Self {
         Self("Hub")
     }
-    pub fn sector1() -> Self {
+    pub const fn sector1() -> Self {
         Self("Sector 1")
     }
-    pub fn sector2() -> Self {
+    pub const fn sector2() -> Self {
         Self("Sector 2")
     }
-    pub fn sector3() -> Self {
+    pub const fn sector3() -> Self {
         Self("Sector 3")
     }
-    pub fn sector4() -> Self {
+    pub const fn sector4() -> Self {
         Self("Sector 4")
     }
-    pub fn sector5() -> Self {
+    pub const fn sector5() -> Self {
         Self("Sector 5")
     }
-    pub fn sector6() -> Self {
+    pub const fn sector6() -> Self {
         Self("Sector 6")
     }
+    pub const fn sector7() -> Self {
+        Self("Sector 7")
+    }
+    pub const fn sector8() -> Self {
+        Self("Sector 8")
+    }
+    pub const fn sector9() -> Self {
+        Self("Sector 9")
+    }
+    pub const fn sector10() -> Self {
+        Self("Sector 10")
+    }
 
-    /// The classic seven in label order. `generate_area_names`' doc
-    /// pins this order (hub first, then sectors); call sites iterate it
-    /// with `.into_iter()`. Deliberately not an enum-derive: the known
+    /// The known sector vocabulary (hub + sectors 1..10) in label
+    /// order. `generate_area_names`' doc pins hub-first order over the
+    /// classic seven; which ids a given arena actually uses lives in
+    /// its layout, not here. Deliberately not an enum-derive: the known
     /// set is a convention for content/name generation, not a validity
     /// constraint on identity.
-    pub fn iter() -> [AreaId; 7] {
-        [
-            Self::hub(),
-            Self::sector1(),
-            Self::sector2(),
-            Self::sector3(),
-            Self::sector4(),
-            Self::sector5(),
-            Self::sector6(),
-        ]
+    pub fn iter() -> &'static [AreaId] {
+        const KNOWN: [AreaId; 11] = [
+            AreaId::hub(),
+            AreaId::sector1(),
+            AreaId::sector2(),
+            AreaId::sector3(),
+            AreaId::sector4(),
+            AreaId::sector5(),
+            AreaId::sector6(),
+            AreaId::sector7(),
+            AreaId::sector8(),
+            AreaId::sector9(),
+            AreaId::sector10(),
+        ];
+        &KNOWN
     }
 
     pub fn as_str(&self) -> &str {
@@ -87,6 +105,10 @@ fn intern(slot: &str) -> &'static str {
         "sector 4" | "sector4" => "Sector 4",
         "sector 5" | "sector5" => "Sector 5",
         "sector 6" | "sector6" => "Sector 6",
+        "sector 7" | "sector7" => "Sector 7",
+        "sector 8" | "sector8" => "Sector 8",
+        "sector 9" | "sector9" => "Sector 9",
+        "sector 10" | "sector10" => "Sector 10",
         other => Box::leak(other.to_string().into_boxed_str()),
     }
 }
@@ -150,7 +172,7 @@ impl AreaId {
     /// distance 1 from its own coordinate. The ring/wrap falls out of the
     /// layout's coordinates instead of a hardcoded 7-arm match — zkp.1.
     pub fn neighbors(&self) -> Vec<AreaId> {
-        self.neighbors_from_layout(&crate::hex::default_layout())
+        self.neighbors_from_layout(crate::hex::default_layout())
     }
 
     /// Adjacency from a caller-supplied layout: distance-1 of `self`'s
@@ -180,7 +202,7 @@ impl AreaId {
 }
 
 /// Themed display names for a fresh game's seven areas, aligned with
-/// `AreaId::iter().into_iter()` order (Hub first, then Sectors 1..6). The hub keeps a fixed
+/// `AreaId::iter()`'s classic-seven prefix (Hub first, then Sectors 1..6). The hub keeps a fixed
 /// name; each sector gets a unique generated name from the bank below.
 pub fn generate_area_names() -> Vec<String> {
     generated_area_names(&mut rand::rng())
@@ -382,8 +404,8 @@ mod tests {
 
     #[test]
     fn iter() {
-        let areas: Vec<AreaId> = AreaId::iter().into_iter().collect();
-        assert_eq!(areas.len(), 7);
+        let areas: Vec<AreaId> = AreaId::iter().to_vec();
+        assert_eq!(areas.len(), 11);
         assert_eq!(areas[0], AreaId::hub());
         assert_eq!(areas[1], AreaId::sector1());
         assert_eq!(areas[2], AreaId::sector2());
@@ -391,6 +413,10 @@ mod tests {
         assert_eq!(areas[4], AreaId::sector4());
         assert_eq!(areas[5], AreaId::sector5());
         assert_eq!(areas[6], AreaId::sector6());
+        assert_eq!(areas[7], AreaId::sector7());
+        assert_eq!(areas[8], AreaId::sector8());
+        assert_eq!(areas[9], AreaId::sector9());
+        assert_eq!(areas[10], AreaId::sector10());
     }
 
     #[test]
