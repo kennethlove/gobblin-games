@@ -1217,11 +1217,15 @@ pub struct MapToken {
     pub area: areas::AreaId,
     pub sub: u8,
     pub alive: bool,
+    /// Avatar URL: the uploaded image, else the DiceBear fallback seeded by
+    /// identifier — same rule as the roster (81u).
+    pub avatar: String,
 }
 
 pub fn build_map_state(
     areas: &[areas::AreaDetails],
     characters: &[&characters::Character],
+    storage: &dyn crate::storage::StorageBackend,
 ) -> MapState {
     let mut out: Vec<MapArea> = areas
         .iter()
@@ -1272,6 +1276,10 @@ pub fn build_map_state(
             area: c.location.area,
             sub: c.location.sub.index(),
             alive: c.is_alive(),
+            avatar: match c.avatar.as_deref() {
+                Some(path) => storage.public_url(path),
+                None => crate::storage::goblin_avatar_url(&c.identifier),
+            },
         })
         .collect();
     tokens.sort_by(|a, b| a.id.cmp(&b.id));
@@ -1284,8 +1292,9 @@ pub fn build_map_state(
 pub fn map_state_json(
     areas: &[areas::AreaDetails],
     characters: &[&characters::Character],
+    storage: &dyn crate::storage::StorageBackend,
 ) -> String {
-    serde_json::to_string(&build_map_state(areas, characters))
+    serde_json::to_string(&build_map_state(areas, characters, storage))
         .expect("MapState is always serializable")
         .replace('<', "\\u003c")
 }
@@ -1295,6 +1304,10 @@ mod map_state_tests {
     use super::*;
     use areas::hex::{Axial, SubTriangle};
     use areas::location::Location;
+
+    fn storage() -> crate::storage::LocalStorage {
+        crate::storage::LocalStorage::new("/tmp/gg-map-state-test", "/uploads")
+    }
 
     fn area(id: areas::AreaId) -> areas::AreaDetails {
         areas::AreaDetails {
@@ -1309,7 +1322,7 @@ mod map_state_tests {
         let mut with_coords = area(areas::AreaId::sector1());
         with_coords.axial = Some(Axial::new(2, -1));
         let no_coords = area(areas::AreaId::hub());
-        let state = build_map_state(&[with_coords, no_coords], &[]);
+        let state = build_map_state(&[with_coords, no_coords], &[], &storage());
 
         assert_eq!(state.areas.len(), 2);
         let s1 = state
@@ -1333,7 +1346,7 @@ mod map_state_tests {
             name: "route helper".into(),
             ..Default::default()
         };
-        let state = build_map_state(&[helper], &[]);
+        let state = build_map_state(&[helper], &[], &storage());
         assert!(state.areas.is_empty());
     }
 
@@ -1350,7 +1363,7 @@ mod map_state_tests {
             event: areas::events::AreaEvent::Avalanche,
             blocks_left: 3,
         }];
-        let state = build_map_state(&[a], &[]);
+        let state = build_map_state(&[a], &[], &storage());
         let hub = &state.areas[0];
         assert!(!hub.open);
         assert_eq!(hub.terrain, "Clearing"); // AreaDetails::default terrain
@@ -1368,7 +1381,7 @@ mod map_state_tests {
         let mut goblin = characters::Character::new("Stinky".into(), Some(2), None);
         goblin.location = Location::new(areas::AreaId::sector1(), SubTriangle::new(3));
         let refs: Vec<&characters::Character> = vec![&goblin];
-        let state = build_map_state(&[], &refs);
+        let state = build_map_state(&[], &refs, &storage());
 
         assert_eq!(state.tokens.len(), 1);
         let t = &state.tokens[0];
@@ -1381,10 +1394,45 @@ mod map_state_tests {
     }
 
     #[test]
+    fn tokens_carry_avatar_by_roster_rule() {
+        let mut uploaded =
+            characters::Character::new("Uppy".into(), Some(1), Some("avatars/uppy.png".into()));
+        uploaded.location = Location::new(areas::AreaId::hub(), SubTriangle::new(0));
+        let mut plain = characters::Character::new("Plaino".into(), Some(1), None);
+        plain.location = Location::new(areas::AreaId::hub(), SubTriangle::new(1));
+        let refs: Vec<&characters::Character> = vec![&uploaded, &plain];
+
+        let state = build_map_state(&[], &refs, &storage());
+
+        let uppy = state
+            .tokens
+            .iter()
+            .find(|t| t.name == "Uppy")
+            .expect("uploaded token present");
+        assert!(
+            uppy.avatar.ends_with("/uploads/avatars/uppy.png"),
+            "uploaded path resolved through storage: {}",
+            uppy.avatar
+        );
+        let plaino = state
+            .tokens
+            .iter()
+            .find(|t| t.name == "Plaino")
+            .expect("fallback token present");
+        // Not a storage URL: a DiceBear data URI (idRandomization makes
+        // the bytes differ per call, so compare shape, not equality).
+        assert!(
+            plaino.avatar.starts_with("data:image/svg"),
+            "fallback should be a DiceBear data URI: {}",
+            &plaino.avatar[..plaino.avatar.len().min(48)]
+        );
+    }
+
+    #[test]
     fn json_embed_escapes_script_breakout() {
         let mut hostile = area(areas::AreaId::hub());
         hostile.name = "</script><script>alert(1)</script>".into();
-        let json = map_state_json(&[hostile], &[]);
+        let json = map_state_json(&[hostile], &[], &storage());
         assert!(!json.contains('<'), "raw < leaked: {json}");
         assert!(json.contains("\\u003c/script>"), "missing escape: {json}");
     }

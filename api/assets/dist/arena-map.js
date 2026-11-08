@@ -212,9 +212,10 @@
           "data-char-id": t.id
         });
         var inner = el("g", { class: "map-token-inner" });
+        var r = t.alive ? 11 : 8;
         inner.appendChild(
           el("circle", {
-            r: t.alive ? 11 : 8,
+            r: r,
             fill: t.team_hex,
             stroke: "var(--broad-bg)",
             "stroke-width": "1.5"
@@ -228,6 +229,22 @@
           )
         );
         inner.appendChild(el("title", {}, t.name + (t.alive ? "" : " (fallen)")));
+        // Avatar (fsx) clipped to the disc, on top: a broken URL just
+        // leaves the team circle + initial beneath.
+        if (t.avatar) {
+          inner.appendChild(
+            el("image", {
+              class: "map-token-avatar",
+              x: -r,
+              y: -r,
+              width: 2 * r,
+              height: 2 * r,
+              preserveAspectRatio: "xMidYMid slice",
+              "clip-path": "url(#map-token-clip-" + (t.alive ? "alive" : "dead") + ")",
+              href: t.avatar
+            })
+          );
+        }
         g.appendChild(inner);
         gTokens.appendChild(g);
         positions[t.id] = { x: x, y: y, area: t.area };
@@ -319,6 +336,18 @@
       host.appendChild(svg);
     }
     while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    // Shared clips for avatar discs (fsx): one size alive, one fallen.
+    var defs = el("defs", {});
+    defs.appendChild(
+      el("clipPath", { id: "map-token-clip-alive" }, null)
+    );
+    defs.firstChild.appendChild(el("circle", { r: 11 }));
+    defs.appendChild(
+      el("clipPath", { id: "map-token-clip-dead" }, null)
+    );
+    defs.lastChild.appendChild(el("circle", { r: 8 }));
+    svg.appendChild(defs);
 
     var minx = Infinity;
     var miny = Infinity;
