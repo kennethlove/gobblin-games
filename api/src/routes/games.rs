@@ -702,7 +702,7 @@ async fn render_game_page(
     }
 
     // Map payload for the client-side arena renderer (iak)
-    let map_state_json = game_detail::map_state_json(&areas, &sorted_characters);
+    let map_state_json = game_detail::map_state_json(&areas, &sorted_characters, &*state.storage);
 
     // SSE triggers: derived from MessageKind so they always match the
     // event names sse.rs actually emits (see sse_trigger_list).
@@ -1045,7 +1045,7 @@ pub async fn game_map_state_handler(
     };
     let refs: Vec<&characters::Character> = characters.iter().collect();
 
-    axum::Json(game_detail::build_map_state(&areas, &refs))
+    axum::Json(game_detail::build_map_state(&areas, &refs, &*state.storage))
 }
 
 /// GET /games/{id}/fights — dedicated fight-replay view (vt9): every fight
