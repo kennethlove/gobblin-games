@@ -1764,6 +1764,128 @@ h1, h2, h3, h4 { text-wrap: balance; }
   opacity: 1 !important;
   filter: brightness(1.15);
 }
+
+/* iak: layer toggles for the client-rendered arena map */
+.map-layers {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.layer-btn {
+  font-family: var(--font-condensed);
+  font-size: 10px;
+  padding: 3px 7px;
+  border: 1px solid var(--broad-border-strong);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--broad-fg-muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.layer-btn:hover {
+  color: var(--broad-fg);
+  border-color: var(--broad-fg-muted);
+}
+.layer-btn:focus-visible {
+  outline: 2px solid var(--broad-accent);
+  outline-offset: 1px;
+}
+.layer-btn[aria-pressed="true"] {
+  color: var(--broad-bg);
+  background: var(--broad-accent);
+  border-color: var(--broad-accent);
+}
+.layer-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* iak: map parts — names carry a paint-order stroke so they stay
+   legible on both light and dark terrain fills */
+.map-name {
+  font-family: var(--font-condensed);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  fill: rgba(255, 255, 255, 0.92);
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 2px;
+  pointer-events: none;
+}
+.map-feature {
+  font-family: var(--font-condensed);
+  font-size: 6px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  fill: rgba(255, 255, 255, 0.85);
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.5);
+  stroke-width: 1.5px;
+  pointer-events: none;
+}
+.map-hazard {
+  fill: var(--danger);
+  fill-opacity: 0.35;
+  stroke: var(--danger);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 2;
+  pointer-events: none;
+}
+.map-items-dot {
+  fill: var(--broad-bg);
+  stroke: var(--broad-fg);
+  stroke-width: 1.5;
+}
+.map-items-count,
+.map-cluster-count {
+  font-family: var(--font-condensed);
+  font-size: 9px;
+  font-weight: 700;
+  text-anchor: middle;
+  fill: var(--broad-fg);
+}
+.map-cluster-dot {
+  fill: var(--broad-accent);
+  stroke: var(--broad-bg);
+  stroke-width: 2;
+}
+.map-cluster-count {
+  fill: var(--broad-bg);
+}
+.map-token-label {
+  font-family: var(--font-condensed);
+  font-size: 10px;
+  font-weight: 700;
+  text-anchor: middle;
+  fill: oklch(100% 0 0);
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.65);
+  stroke-width: 2.5px;
+  pointer-events: none;
+}
+.map-token-dead {
+  opacity: 0.45;
+}
+.map-trail {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.7;
+  animation: map-trail-fade 2s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes map-trail-fade {
+  to { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hex-map polygon,
+  .layer-btn { transition: none; }
+}
 @media (max-width: 1100px) { .map-section { height: 260px; } }
 @media (max-width: 720px) { .map-section { height: 220px; } }
 

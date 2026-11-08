@@ -478,31 +478,8 @@ async fn render_game_page(
         Err(_) => vec![],
     };
 
-    // Fetch areas with terrain + character slot assignments
-    let areas_result = state
-        .db
-        .query(
-            r#"
-SELECT (
-    SELECT *, ->items->item[*] AS items
-    FROM ->areas->area
-) AS areas FROM game WHERE identifier = $identifier;
-"#,
-        )
-        .bind(("identifier", identifier.clone()))
-        .await;
-
-    let areas: Vec<areas::AreaDetails> = match areas_result {
-        Ok(mut result) => {
-            let rows: Vec<Vec<SerdeWrapper<areas::AreaDetails>>> =
-                result.take("areas").unwrap_or_default();
-            rows.into_iter()
-                .next()
-                .map(|inner| inner.into_iter().map(|w| w.0).collect())
-                .unwrap_or_default()
-        }
-        Err(_) => vec![],
-    };
+    // Areas with terrain + character slot assignments (shared fetch, iak)
+    let areas = fetch_game_areas(&state, &identifier).await;
 
     let current_day = game.day.unwrap_or(0);
     // Override current_day if query param provided
@@ -724,8 +701,8 @@ SELECT (
         ));
     }
 
-    // Build hex arena map SVG
-    let hex_map = game_detail::render_hex_map(&areas, &sorted_characters);
+    // Map payload for the client-side arena renderer (iak)
+    let map_state_json = game_detail::map_state_json(&areas, &sorted_characters);
 
     // SSE triggers: derived from MessageKind so they always match the
     // event names sse.rs actually emits (see sse_trigger_list).
@@ -877,7 +854,7 @@ SELECT (
     ctx.insert("phase_options", &phase_options);
     ctx.insert("sse_events", &sse_events);
     ctx.insert("character_rows", &character_rows);
-    ctx.insert("hex_map", &hex_map);
+    ctx.insert("map_state_json", &map_state_json);
     ctx.insert("event_cards", &event_cards);
     ctx.insert("messages", &messages);
     ctx.insert("segments", &segments);
@@ -930,14 +907,9 @@ pub async fn game_characters_handler(
     html_with_csrf(tera_engine::render("characters.html", &ctx), &csrf)
 }
 
-/// GET /games/{id}/areas — areas for a game.
-pub async fn game_areas_handler(
-    State(state): State<AppState>,
-    headers: axum::http::HeaderMap,
-    axum::extract::Path(game_identifier): axum::extract::Path<uuid::Uuid>,
-) -> Response {
-    let (auth, csrf) = extract_auth(&headers);
-    let identifier = game_identifier.to_string();
+/// Areas with terrain, sub-tiles, and hazards for a game — shared by the
+/// play page, the areas page, and the map-state endpoint (iak).
+async fn fetch_game_areas(state: &AppState, identifier: &str) -> Vec<areas::AreaDetails> {
     let result = state
         .db
         .query(
@@ -948,10 +920,10 @@ SELECT (
 ) AS areas FROM game WHERE identifier = $identifier;
 "#,
         )
-        .bind(("identifier", identifier.clone()))
+        .bind(("identifier", identifier.to_string()))
         .await;
 
-    let areas = match result {
+    match result {
         Ok(mut result) => {
             let areas: Vec<Vec<SerdeWrapper<areas::AreaDetails>>> =
                 result.take("areas").unwrap_or_default();
@@ -962,7 +934,18 @@ SELECT (
                 .unwrap_or_default()
         }
         Err(_) => vec![],
-    };
+    }
+}
+
+/// GET /games/{id}/areas — areas for a game.
+pub async fn game_areas_handler(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    axum::extract::Path(game_identifier): axum::extract::Path<uuid::Uuid>,
+) -> Response {
+    let (auth, csrf) = extract_auth(&headers);
+    let identifier = game_identifier.to_string();
+    let areas = fetch_game_areas(&state, &identifier).await;
 
     let mut ctx = tera_engine::base_context("Areas", &auth);
     ctx.insert("game_id", &identifier);
@@ -1031,6 +1014,38 @@ pub async fn game_log_handler(
     ctx.insert("event_cards", &event_cards);
     ctx.insert("sse_events", &sse_trigger_list());
     html_with_csrf(tera_engine::render("log.html", &ctx), &csrf)
+}
+
+/// GET /games/{id}/map-state — JSON snapshot for the client-side map
+/// renderer (iak). The page embeds the first copy; a hidden hx-live div
+/// refetches this on SSE deltas so the map updates without a reload.
+pub async fn game_map_state_handler(
+    State(state): State<AppState>,
+    axum::extract::Path(game_identifier): axum::extract::Path<uuid::Uuid>,
+) -> axum::Json<game_detail::MapState> {
+    let identifier = game_identifier.to_string();
+    let areas = fetch_game_areas(&state, &identifier).await;
+
+    let characters_result = state
+        .db
+        .query("SELECT * FROM fn::get_characters_by_game($identifier);")
+        .bind(("identifier", identifier))
+        .await;
+    let characters: Vec<characters::Character> = match characters_result {
+        Ok(mut result) => {
+            let raw_rows: Vec<serde_json::Value> = result.take(0).unwrap_or_default();
+            raw_rows
+                .into_iter()
+                .filter_map(|row| row["characters"].as_array().cloned())
+                .flatten()
+                .filter_map(|t| serde_json::from_value(t).ok())
+                .collect()
+        }
+        Err(_) => vec![],
+    };
+    let refs: Vec<&characters::Character> = characters.iter().collect();
+
+    axum::Json(game_detail::build_map_state(&areas, &refs))
 }
 
 /// GET /games/{id}/fights — dedicated fight-replay view (vt9): every fight

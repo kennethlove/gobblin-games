@@ -480,6 +480,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route("/games/{id}/areas", axum::routing::get(game_areas_handler))
         .route("/games/{id}/log", axum::routing::get(game_log_handler))
+        .route(
+            "/games/{id}/map-state",
+            axum::routing::get(game_map_state_handler),
+        )
         .route("/games/{id}/timeline", axum::routing::get(timeline_handler))
         .route(
             "/games/{id}/fights",

@@ -60,3 +60,6 @@ api/assets/dist/main.css
 
 # UX verification screenshots (local capture evidence)
 .ux/
+
+# Local UX render/audit scratch
+/keystone-render/
