@@ -925,15 +925,31 @@ SELECT (
 
     match result {
         Ok(mut result) => {
-            let areas: Vec<Vec<SerdeWrapper<areas::AreaDetails>>> =
-                result.take("areas").unwrap_or_default();
-            areas
+            // WHY: both failures were silent (unwrap_or_default/Err(_) =>
+            // vec![]) — prod served areas:[] with no trace. Log the real
+            // error; the message names the failing field, same as the
+            // legacy `rarity` prod incident.
+            let areas: Vec<Vec<SerdeWrapper<areas::AreaDetails>>> = match result.take("areas") {
+                Ok(areas) => areas,
+                Err(error) => {
+                    tracing::error!(%error, game = identifier, "failed to take areas");
+                    vec![]
+                }
+            };
+            let resolved: Vec<areas::AreaDetails> = areas
                 .into_iter()
                 .next()
                 .map(|inner| inner.into_iter().map(|w| w.0).collect())
-                .unwrap_or_default()
+                .unwrap_or_default();
+            if resolved.is_empty() {
+                tracing::warn!(game = identifier, "areas query returned no rows");
+            }
+            resolved
         }
-        Err(_) => vec![],
+        Err(error) => {
+            tracing::error!(%error, game = identifier, "game areas query failed");
+            vec![]
+        }
     }
 }
 
