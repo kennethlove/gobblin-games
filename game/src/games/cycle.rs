@@ -1652,13 +1652,13 @@ mod combat_scoping_tests {
     #[test]
     fn flee_destination_always_lands_on_an_adjacent_sub_tile() {
         let mut rng = SmallRng::seed_from_u64(7);
-        for from in areas::location::all_locations(&areas::hex::default_layout()) {
-            let dest = flee_destination(&areas::hex::default_layout(), from, &mut rng)
+        for from in areas::location::all_locations(areas::hex::default_layout()) {
+            let dest = flee_destination(areas::hex::default_layout(), from, &mut rng)
                 .unwrap_or_else(|| {
                     panic!("occupied location {from:?} must have a flee destination")
                 });
             assert!(
-                areas::location::sub_neighbors(&areas::hex::default_layout(), from)
+                areas::location::sub_neighbors(areas::hex::default_layout(), from)
                     .contains(&Some(dest)),
                 "flee destination {dest:?} is not adjacent to {from:?}"
             );
@@ -1670,9 +1670,9 @@ mod combat_scoping_tests {
         let mut rng = SmallRng::seed_from_u64(11);
         // Every occupied triangle has both within-parent ring neighbors
         // set, so the within-parent preference always wins.
-        for from in areas::location::all_locations(&areas::hex::default_layout()) {
+        for from in areas::location::all_locations(areas::hex::default_layout()) {
             for _ in 0..8 {
-                let dest = flee_destination(&areas::hex::default_layout(), from, &mut rng)
+                let dest = flee_destination(areas::hex::default_layout(), from, &mut rng)
                     .expect("occupied location");
                 assert_eq!(
                     dest.area, from.area,
@@ -1686,6 +1686,6 @@ mod combat_scoping_tests {
     fn flee_destination_is_none_for_unoccupied_sub() {
         let mut rng = SmallRng::seed_from_u64(3);
         let from = Location::new(AreaId::hub(), SubTriangle::new(6));
-        assert!(flee_destination(&areas::hex::default_layout(), from, &mut rng).is_none());
+        assert!(flee_destination(areas::hex::default_layout(), from, &mut rng).is_none());
     }
 }

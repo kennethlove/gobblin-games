@@ -68,8 +68,11 @@ impl Axial {
 /// The 7-tile default layout, ordered to match the area's numeric label
 /// (`0` for Hub, `1..6` for the surrounding sectors clockwise from
 /// top-right). The order in this slice **is** the numeric label.
-pub fn default_layout() -> [(AreaId, Axial); 7] {
-    [
+///
+/// Returns a static slice (cad): a layout is data, and a given arena's
+/// layout may have any length — this one is only the classic default.
+pub fn default_layout() -> &'static [(AreaId, Axial)] {
+    const DEFAULT: [(AreaId, Axial); 7] = [
         (AreaId::hub(), Axial::new(0, 0)),
         (AreaId::sector1(), Axial::new(1, -1)),
         (AreaId::sector2(), Axial::new(1, 0)),
@@ -77,7 +80,8 @@ pub fn default_layout() -> [(AreaId, Axial); 7] {
         (AreaId::sector4(), Axial::new(-1, 1)),
         (AreaId::sector5(), Axial::new(-1, 0)),
         (AreaId::sector6(), Axial::new(0, -1)),
-    ]
+    ];
+    &DEFAULT
 }
 
 /// One of the six isosceles triangles that subdivide a single area-hex

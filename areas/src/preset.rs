@@ -341,9 +341,9 @@ mod tests {
     #[test]
     fn neighbors_from_layout_matches_default_neighbors() {
         let layout = crate::hex::default_layout();
-        for (kind, _) in &layout {
+        for (kind, _) in layout {
             assert_eq!(
-                kind.neighbors_from_layout(&layout),
+                kind.neighbors_from_layout(layout),
                 kind.neighbors(),
                 "{kind:?}"
             );
@@ -356,8 +356,8 @@ mod tests {
         // is relative geometry, so the ring must come out identical —
         // this is the invariant presets rely on (zkp.2).
         let layout: Vec<(AreaId, crate::hex::Axial)> = crate::hex::default_layout()
-            .into_iter()
-            .map(|(kind, ax)| (kind, crate::hex::Axial::new(ax.q + 1, ax.r)))
+            .iter()
+            .map(|(kind, ax)| (*kind, crate::hex::Axial::new(ax.q + 1, ax.r)))
             .collect();
         for (kind, _) in crate::hex::default_layout() {
             assert_eq!(
@@ -729,7 +729,8 @@ mod arena_generation_poc {
                 .expect("every area present");
             Axial::new(slot.q, slot.r)
         };
-        for area in AreaId::iter().into_iter() {
+        for slot in &preset.areas {
+            let area = slot.area;
             let here = coord_of(area);
             for neighbor in area.clone().neighbors() {
                 let there = coord_of(neighbor);
@@ -740,6 +741,47 @@ mod arena_generation_poc {
                 );
             }
         }
+    }
+
+    /// cad acceptance: a layout whose hex count differs from the classic
+    /// seven validates, spawns, and derives neighbors from its own slots.
+    #[test]
+    fn five_area_layout_validates_spawns_and_neighbors() {
+        use crate::hex::Axial;
+        use crate::location::random_spawn_location;
+
+        // Classic wheel truncated to hub + sectors 1..4 (N=5).
+        let mut slots = default_preset().areas;
+        slots.truncate(5);
+        assert_eq!(slots.len(), 5);
+        validate_layout(&slots).expect("N=5 layout validates");
+
+        let layout: Vec<(AreaId, Axial)> = slots
+            .iter()
+            .map(|s| (s.area, Axial::new(s.q, s.r)))
+            .collect();
+        let kinds: Vec<AreaId> = slots.iter().map(|s| s.area).collect();
+
+        // Spawn stays inside the layout's own areas.
+        for _ in 0..16 {
+            let loc = random_spawn_location(&mut rand::rng(), &kinds);
+            assert!(kinds.contains(&loc.area), "spawn outside layout: {:?}", loc);
+        }
+
+        // Neighbors derive from present slots only: hub keeps sectors
+        // 1..4, and the absent sector 5/6 never appear.
+        let hub_neighbors = AreaId::hub().neighbors_from_layout(&layout);
+        assert_eq!(hub_neighbors.len(), 4);
+        assert!(hub_neighbors.contains(&AreaId::sector4()));
+        assert!(!hub_neighbors.contains(&AreaId::sector5()));
+        assert!(!hub_neighbors.contains(&AreaId::sector6()));
+
+        // Sector 4's classic ring neighbor across the gap (sector 5) is
+        // dropped rather than defaulted.
+        assert_eq!(
+            AreaId::sector4().neighbors_from_layout(&layout),
+            vec![AreaId::hub(), AreaId::sector3()]
+        );
     }
 }
 
