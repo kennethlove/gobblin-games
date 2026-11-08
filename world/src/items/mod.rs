@@ -114,8 +114,23 @@ pub struct Item {
     /// Which affliction this item cures, if any. Persisted items written
     /// before this field existed predate typed cures; the default keeps
     /// them loading as non-cure items (a migration backfills legacy cures).
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_cure_kind")]
     pub cures: Option<CureKind>,
+}
+
+/// WHY: SurrealDB hands back an absent cure as explicit NULL (Value::Null),
+/// but the SDK's deserializer routes Value::Null into `visit_some`, and
+/// CureKind (externally-tagged enum) rejects unit with "invalid type: unit
+/// value, expected string or map". That error failed the whole
+/// `->items->item[*]` take, which blanked every arena map whose game had
+/// picked up an item. NONE and NULL both read as `None` here.
+fn de_cure_kind<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<CureKind>, D::Error> {
+    match Option::<serde_json::Value>::deserialize(d)? {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(v) => Ok(Some(
+            CureKind::deserialize(v).map_err(serde::de::Error::custom)?,
+        )),
+    }
 }
 
 fn default_rarity() -> ItemRarity {
