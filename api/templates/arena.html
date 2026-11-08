@@ -174,7 +174,7 @@
              renderer swaps state and animates movement (iak). #}
           <div id="mapLive" hidden
             hx-get="/api/games/{{ game.identifier }}/map-state"
-            hx-trigger="sse:CharacterMoved sse:CharacterKilled sse:CharacterBledOut sse:CharacterHidden sse:AreaEvent sse:AreaClosed sse:ItemFound sse:ItemDropped sse:ItemUsed"
+            hx-trigger="sse:CharacterMoved, sse:CharacterKilled, sse:CharacterBledOut, sse:CharacterHidden, sse:AreaEvent, sse:AreaClosed, sse:ItemFound, sse:ItemDropped, sse:ItemUsed"
             hx-swap="none"></div>
           {% endif %}
         </div>
