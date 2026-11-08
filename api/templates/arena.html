@@ -155,33 +155,33 @@
     {# ══ MAIN GRID ══ #}
     <div class="game-grid">
 
-      {# ── SIDE: map + roster ── #}
-      <div class="game-side">
-
-        <div class="map-section">
-          <div class="section-header">
-            <span class="title">ARENA SURVEILLANCE</span>
-            <div class="map-layers" role="group" aria-label="Map layers">
-              <button type="button" class="layer-btn" data-layer="terrain" aria-pressed="true">Terrain</button>
-              <button type="button" class="layer-btn" data-layer="tokens" aria-pressed="true">Goblins</button>
-              <button type="button" class="layer-btn" data-layer="hazards" aria-pressed="true">Events</button>
-              <button type="button" class="layer-btn" data-layer="items" aria-pressed="true">Items</button>
-              <button type="button" class="layer-btn" data-layer="trails" aria-pressed="true">Trails</button>
-            </div>
-          </div>
-          <div class="map-container" id="arenaMap">
-            <script type="application/json" id="arenaState">{{ map_state_json | safe }}</script>
-            {% if sse_events %}
-            {# Refetch the map payload on map-relevant SSE deltas; the
-               renderer swaps state and animates movement (iak). #}
-            <div id="mapLive" hidden
-              hx-get="/api/games/{{ game.identifier }}/map-state"
-              hx-trigger="sse:CharacterMoved sse:CharacterKilled sse:CharacterBledOut sse:CharacterHidden sse:AreaEvent sse:AreaClosed sse:ItemFound sse:ItemDropped sse:ItemUsed"
-              hx-swap="none"></div>
-            {% endif %}
+      {# ── MAP: spans both grid columns (a9t) ── #}
+      <div class="map-section">
+        <div class="section-header">
+          <span class="title">ARENA SURVEILLANCE</span>
+          <div class="map-layers" role="group" aria-label="Map layers">
+            <button type="button" class="layer-btn" data-layer="terrain" aria-pressed="true">Terrain</button>
+            <button type="button" class="layer-btn" data-layer="tokens" aria-pressed="true">Goblins</button>
+            <button type="button" class="layer-btn" data-layer="hazards" aria-pressed="true">Events</button>
+            <button type="button" class="layer-btn" data-layer="items" aria-pressed="true">Items</button>
+            <button type="button" class="layer-btn" data-layer="trails" aria-pressed="true">Trails</button>
           </div>
         </div>
+        <div class="map-container" id="arenaMap">
+          <script type="application/json" id="arenaState">{{ map_state_json | safe }}</script>
+          {% if sse_events %}
+          {# Refetch the map payload on map-relevant SSE deltas; the
+             renderer swaps state and animates movement (iak). #}
+          <div id="mapLive" hidden
+            hx-get="/api/games/{{ game.identifier }}/map-state"
+            hx-trigger="sse:CharacterMoved sse:CharacterKilled sse:CharacterBledOut sse:CharacterHidden sse:AreaEvent sse:AreaClosed sse:ItemFound sse:ItemDropped sse:ItemUsed"
+            hx-swap="none"></div>
+          {% endif %}
+        </div>
+      </div>
 
+      {# ── SIDE: roster beneath the map ── #}
+      <div class="game-side">
         <div class="roster-section">
           <div class="section-header">
             <span class="title">GOBLIN ROSTER</span>

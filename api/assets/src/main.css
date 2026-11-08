@@ -2958,6 +2958,8 @@ h1, h2, h3, h4 { text-wrap: balance; }
 .game-shell .game-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  /* Row 1: the map spans both columns (a9t); row 2: roster + feed. */
+  grid-template-rows: minmax(300px, 1.7fr) minmax(0, 1fr);
   gap: var(--gap-sm);
   flex: 1;
   min-height: 0;
@@ -2978,9 +2980,10 @@ h1, h2, h3, h4 { text-wrap: balance; }
   border-radius: var(--radius);
   overflow: hidden;
 }
-/* Map flexes to fill the leftover column height (basis 0, split evenly with
-   the roster); media rules below fix heights for the stacked layout. */
-.game-shell .map-section { flex: 1 1 0; min-height: 140px; }
+/* Map spans both grid columns (a9t); its height comes from the first fr
+   row, not the legacy fixed 320px. Media rules below fix the stacked
+   layout. */
+.game-shell .map-section { grid-column: 1 / -1; height: auto; min-height: 140px; }
 /* contain: size: the feed section takes its height from the grid stretch /
    sibling column, never from its 100-card content. */
 .game-shell .feed-section {
@@ -3128,7 +3131,7 @@ h1, h2, h3, h4 { text-wrap: balance; }
 @media (max-width: 1100px) {
   /* Stacked layout: shell un-flexes, page scrolls normally like the prototype. */
   .game-shell, .game-shell > div { display: block; }
-  .game-shell .game-grid { grid-template-columns: 1fr; }
+  .game-shell .game-grid { grid-template-columns: 1fr; grid-template-rows: auto; }
   .game-shell .map-section { flex: 0 0 auto; height: 260px; }
   .game-shell .roster-section { flex: 0 0 auto; }
   /* Stacked: block flow, so the feed sizes from content — cap it. */
