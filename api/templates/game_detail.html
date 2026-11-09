@@ -46,13 +46,16 @@
 
     <section class="panel" aria-labelledby="arena-heading">
       <div class="panel-head"><h2 id="arena-heading">Arena</h2></div>
-      <div class="map-container overview-map">
-        {% if hex_map %}
-          {{ hex_map | safe }}
-        {% else %}
-          <p class="empty-state">The arena map appears once the game starts.</p>
-        {% endif %}
+      {% if game.day %}
+      <div class="map-container overview-map" id="arenaMap">
+        <script type="application/json" id="arenaState">{{ map_state_json | safe }}</script>
       </div>
+      <script src="/assets/arena-map.js"></script>
+      {% else %}
+      <div class="map-container overview-map">
+        <p class="empty-state">The arena map appears once the game starts.</p>
+      </div>
+      {% endif %}
     </section>
   </div>
 

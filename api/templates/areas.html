@@ -27,7 +27,9 @@
         </ul>
       </div>
       {% endif %}
-      <div class="card-events">{{ area.events | length }} events</div>
+      <div class="card-events">
+        {% if area.cell_hazards %}{{ area.cell_hazards | length }} events{% else %}No events{% endif %}
+      </div>
     </div>
     {% endfor %}
   </div>
