@@ -91,9 +91,11 @@ fn validate_uuid(value: &str) -> Result<(), ValidationError> {
         .map_err(|_| ValidationError::new("invalid_uuid"))
 }
 
-/// Default roster: 8 teams x 3 goblins = 24.
-pub const DEFAULT_TEAM_COUNT: u32 = 8;
-pub const DEFAULT_GOBLINS_PER_TEAM: u32 = 3;
+/// Default roster: 3 teams x 8 goblins = 24.
+// WHY: 3x8 (not more/smaller teams) hits the target outcome mix —1000-run
+// sim: solo64% / team26% / wipeout10% vs 8x3's 77/7/16 (gobblin-games-2qo).
+pub const DEFAULT_TEAM_COUNT: u32 = 3;
+pub const DEFAULT_GOBLINS_PER_TEAM: u32 = 8;
 pub const DEFAULT_ROSTER_CAP: u32 = DEFAULT_TEAM_COUNT * DEFAULT_GOBLINS_PER_TEAM;
 /// How many goblins a joining (non-creator) player may bring by default.
 pub const DEFAULT_MAX_GOBINS_PER_PLAYER: u32 = 1;

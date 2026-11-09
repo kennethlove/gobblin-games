@@ -1,4 +1,4 @@
-//! 2qo lethality probe: N default-format matches (8 teams x 3 goblins)
+//! 2qo lethality probe: N default-format matches (3 teams x 8 goblins)
 //! run full-day until a winner or the day cap.
 //!
 //! Prints one line per run plus a summary, so damage/heal tuning can be
@@ -12,8 +12,9 @@ use game::games::Game;
 use shared::GameStatus;
 use shared::messages::MessagePayload;
 
-const ROSTER: usize = 24;
-const GOBLINS_PER_TEAM: u32 = 3;
+const ROSTER: usize =
+    shared::DEFAULT_TEAM_COUNT as usize * shared::DEFAULT_GOBLINS_PER_TEAM as usize;
+const GOBLINS_PER_TEAM: u32 = shared::DEFAULT_GOBLINS_PER_TEAM;
 const MAX_DAYS: u32 = 30;
 const TARGET_DAY: u32 = 10;
 const SOFT_DAY: u32 = 15;
@@ -66,6 +67,15 @@ fn main() {
     let mut capped = 0usize;
     let mut killed = 0usize;
     let mut bled = 0usize;
+    let mut killed_hazard = 0usize;
+    let mut killed_fumble = 0usize;
+    let mut wipe_killed = 0usize;
+    let mut wipe_bled = 0usize;
+    let mut wipe_fumble = 0usize;
+    let mut wipe_day_hazard = 0usize;
+    let mut wipe_day_combat = 0usize;
+    let mut wipe_day_generic = 0usize;
+    let mut wipe_examples = 0usize;
 
     for i in 0..runs {
         let mut game = build_game(i);
@@ -98,7 +108,16 @@ fn main() {
 
         for m in &game.messages {
             match m.payload {
-                MessagePayload::CharacterKilled { .. } => killed += 1,
+                MessagePayload::CharacterKilled { .. } => {
+                    killed += 1;
+                    if m.content.contains("dies from the") || m.content.contains("instantly killed")
+                    {
+                        killed_hazard += 1;
+                    }
+                    if m.content.contains("themselves") {
+                        killed_fumble += 1;
+                    }
+                }
                 MessagePayload::CharacterBledOut { .. } => bled += 1,
                 _ => {}
             }
@@ -107,6 +126,44 @@ fn main() {
         match finish {
             Some(day) => {
                 let a = alive(&game);
+                if a == 0 {
+                    let mut day_deaths: Vec<String> = Vec::new();
+                    for m in &game.messages {
+                        if m.game_day != day {
+                            continue;
+                        }
+                        match m.payload {
+                            MessagePayload::CharacterKilled { .. } => {
+                                wipe_killed += 1;
+                                if m.content.contains("themselves") {
+                                    wipe_fumble += 1;
+                                }
+                                if m.content.contains("dies from the")
+                                    || m.content.contains("instantly killed")
+                                {
+                                    wipe_day_hazard += 1;
+                                } else if m.content.contains("dies from ") {
+                                    wipe_day_generic += 1;
+                                } else {
+                                    wipe_day_combat += 1;
+                                }
+                                day_deaths.push(m.content.clone());
+                            }
+                            MessagePayload::CharacterBledOut { .. } => {
+                                wipe_bled += 1;
+                                day_deaths.push(m.content.clone());
+                            }
+                            _ => {}
+                        }
+                    }
+                    wipe_examples += 1;
+                    if wipe_examples <= 2 {
+                        eprintln!("wipeout run {i} final day {day} deaths:");
+                        for c in &day_deaths {
+                            eprintln!("    {c}");
+                        }
+                    }
+                }
                 finish_days.push(day);
                 alive_at_finish.push(a);
                 alive_at_soft.push(soft_snapshot.unwrap_or(a));
@@ -159,5 +216,13 @@ fn main() {
         100.0 * team as f64 / fin as f64,
         100.0 * wipeout as f64 / fin as f64,
     );
-    println!("  death causes across all runs: killed in combat: {killed}, bled out: {bled}");
+    println!(
+        "  death causes across all runs: killed in combat: {killed} (hazard {killed_hazard}, fumble {killed_fumble}), bled out: {bled}"
+    );
+    println!(
+        "  final-day deaths inside wipeout runs: killed {wipe_killed} (fumble {wipe_fumble}), bled out {wipe_bled}"
+    );
+    println!(
+        "  wipeout final-day death mix: hazard {wipe_day_hazard}, combat {wipe_day_combat}, generic {wipe_day_generic}"
+    );
 }
