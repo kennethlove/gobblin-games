@@ -613,7 +613,7 @@ pub fn resolve(
         AttackResult::DefenderWins => defend_strength,
         AttackResult::DefenderWinsDecisively => defend_strength * 2,
         AttackResult::CriticalFumble | AttackResult::Miss => 0,
-    } * 6;
+    } * 3;
 
     // Toughness mitigation: the character taking the hit absorbs part of it
     // through effective toughness (wound penalties included). The dodge roll
