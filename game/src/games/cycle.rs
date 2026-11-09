@@ -97,7 +97,7 @@ impl Game {
             current_day,
             action_suggestion,
             area_details_map,
-            characters_by_area,
+            mut characters_by_area,
             enemy_density,
             combat_tuning_snapshot,
             all_areas_snapshot,
@@ -976,9 +976,21 @@ impl Game {
                 .cloned()
                 .collect();
 
+            // ql8 chase: visible enemies elsewhere in this area. Invisible
+            // to pick_target (same-sub rule) but a directed step can close
+            // on them when an attack has no target.
+            let distant_enemies: Vec<areas::location::Location> = nearby_characters
+                .iter()
+                .filter(|t| t.is_visible() && t.identifier != character.identifier)
+                .filter(|t| t.location != character.location)
+                .filter(|t| !character.allies.contains(&t.id))
+                .map(|t| t.location)
+                .collect();
+
             let encounter_context = EncounterContext {
                 nearby_characters_count,
                 potential_targets: targets,
+                distant_enemies,
                 total_living_characters: living_characters_count as u32,
             };
 
@@ -1001,6 +1013,7 @@ impl Game {
                 });
             }
             let mut character_events: Vec<world::messages::TaggedEvent> = Vec::new();
+            let location_before = character.location;
             character.process_turn_phase(
                 override_suggestion,
                 self.config.witnessing.affliction_visibility,
@@ -1009,6 +1022,19 @@ impl Game {
                 rng,
                 &mut character_events,
             );
+            // ql8 chase: keep this phase's encounter snapshot fresh. A later
+            // character reading a stale location would step into the mover's
+            // position and they would swap forever (chase never converges
+            // into a fight).
+            if let Some(members) = characters_by_area.get_mut(&location_before.area)
+                && let Some(pos) = members.iter().position(|c| c.id == character.id)
+            {
+                if character.location.area == location_before.area {
+                    members[pos].location = character.location;
+                } else {
+                    members.remove(pos);
+                }
+            }
             for tagged in character_events {
                 collected_events.push((
                     character.identifier.to_string(),
