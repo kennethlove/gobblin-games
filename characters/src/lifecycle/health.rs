@@ -10,7 +10,7 @@ const MAX_STRENGTH: u32 = 50;
 const MAX_BRAVERY: u32 = 100;
 
 /// Default healing amounts
-const DEFAULT_HEAL: u32 = 5;
+const DEFAULT_HEAL: u32 = 10;
 const DEFAULT_MENTAL_HEAL: u32 = 5;
 
 /// `(base + flat) x percent`, floored at 1: every scale bottom is 1+.
@@ -387,7 +387,7 @@ mod tests {
         character.stamina = 0;
         character.blood = 500;
         character.long_rests();
-        assert_eq!(character.effective_health(), 55);
+        assert_eq!(character.effective_health(), 60);
     }
 
     #[rstest]

@@ -232,7 +232,7 @@ async fn test_delete_character() {
     test_db.cleanup().await;
 }
 
-/// Test that the auto-spawn roster covers every team 1..=8.
+/// Test that the auto-spawn roster covers every team 1..=4.
 #[tokio::test]
 async fn test_auto_spawn_team_coverage() {
     let test_db = TestDb::new().await;
@@ -254,15 +254,15 @@ async fn test_auto_spawn_team_coverage() {
     let unique: std::collections::BTreeSet<_> = teams.iter().copied().collect();
     assert_eq!(
         unique,
-        (1..=8u64).collect(),
-        "every team 1..=8 should be represented"
+        (1..=4u64).collect(),
+        "every team 1..=4 should be represented"
     );
 
     test_db.cleanup().await;
 }
 
 /// The auto-spawn must spread the 24-character
-/// roster evenly: exactly 3 characters in each team 1..=8.
+/// roster evenly: exactly 6 characters in each team 1..=4.
 #[tokio::test]
 async fn test_auto_spawn_three_characters_per_team() {
     let test_db = TestDb::new().await;
@@ -286,12 +286,12 @@ async fn test_auto_spawn_three_characters_per_team() {
         *per_team.entry(team).or_insert(0) += 1;
     }
 
-    assert_eq!(per_team.len(), 8, "teams must all lie within 1..=8");
-    for team in 1..=8u64 {
+    assert_eq!(per_team.len(), 4, "teams must all lie within 1..=4");
+    for team in 1..=4u64 {
         assert_eq!(
             per_team.get(&team),
-            Some(&3),
-            "team {} should have exactly 3 characters",
+            Some(&6),
+            "team {} should have exactly 6 characters",
             team
         );
     }
