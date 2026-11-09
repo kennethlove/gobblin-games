@@ -56,6 +56,10 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 uuid = { version = "1.23.1", features = ["v4"] }
 time = { version = "0.3.47", features = ["serde", "macros"] }
 validator = { version = "0.20", features = ["derive"] }
+opentelemetry = "0.33.1"
+opentelemetry_sdk = "0.33.1"
+opentelemetry-otlp = "0.33.1"
+tracing-opentelemetry = "0.34.0"
 
 [dev-dependencies]
 axum-test = "20.0.0"

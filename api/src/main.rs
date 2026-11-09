@@ -16,6 +16,10 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::{Json, Router, middleware};
 use base64_url::decode;
+use opentelemetry::KeyValue;
+use opentelemetry::trace::TracerProvider as _;
+use opentelemetry_sdk::Resource;
+use opentelemetry_sdk::trace::SdkTracerProvider;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
@@ -25,6 +29,7 @@ use std::string::String;
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
 use surrealdb::opt::auth::{Root, Token};
@@ -35,7 +40,9 @@ use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::key_extractor::KeyExtractor;
 use tower_http::cors::CorsLayer;
 use tower_http::normalize_path::NormalizePathLayer;
-use tower_http::trace::TraceLayer;
+use tower_http::trace::{DefaultMakeSpan, TraceLayer};
+use tracing_opentelemetry::OpenTelemetryLayer;
+use tracing_subscriber::layer::Layer as _;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -57,6 +64,9 @@ pub static DATABASE: LazyLock<Arc<Surreal<Any>>> = LazyLock::new(|| Arc::new(Sur
 static RESEND_COOLDOWN: LazyLock<Mutex<HashMap<String, std::time::Instant>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// Tracer provider kept alive for in-flight spans; flushed on SIGTERM.
+static TRACER_PROVIDER: OnceLock<SdkTracerProvider> = OnceLock::new();
+
 fn initialize_logging() {
     // a layer that logs events to stdout
     let stdout_log = tracing_subscriber::fmt::layer().pretty();
@@ -68,15 +78,76 @@ fn initialize_logging() {
         "debug"
     };
 
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                format!("{}={tracing_level},tower_http={tracing_level},surrealdb={tracing_level},surrealdb_client={tracing_level}",
-                        env!("CARGO_CRATE_NAME")).into()
-            })
-        )
-        .with(stdout_log)
-        .init()
+    // WHY: opentelemetry + opentelemetry_sdk + opentelemetry-otlp +
+    // tracing-opentelemetry — OTLP export for the self-hosted SigNoz
+    // collector. OTEL_EXPORTER_OTLP_ENDPOINT unset skips the provider and
+    // the app behaves exactly as before (local, CI).
+    let otel_layer = match env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
+        Err(_) => None,
+        Ok(_) => match opentelemetry_otlp::SpanExporter::builder()
+            // No with_endpoint(): a programmatic endpoint is taken verbatim
+            // (no signal path appended — that 404s on /). build() reads
+            // OTEL_EXPORTER_OTLP_ENDPOINT and appends /v1/traces per OTLP
+            // spec, which is what a SigNoz base URL wants.
+            .build()
+        {
+            Err(error) => {
+                tracing::warn!(%error, "OTLP exporter build failed; traces disabled");
+                None
+            }
+            Ok(exporter) => {
+                let resource = Resource::builder()
+                    .with_service_name(
+                        env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "gobblin-api".into()),
+                    )
+                    .with_attributes([
+                        KeyValue::new(
+                            "deployment.environment",
+                            if production == "true" {
+                                "production"
+                            } else {
+                                "development"
+                            },
+                        ),
+                        KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
+                    ])
+                    .build();
+                let provider = SdkTracerProvider::builder()
+                    .with_batch_exporter(exporter)
+                    .with_resource(resource)
+                    .build();
+                let tracer = provider.tracer("gobblin-api");
+                let _ = TRACER_PROVIDER.set(provider);
+                Some(OpenTelemetryLayer::new(tracer).with_filter(
+                    // Per-layer: bare `info` keeps normal events (an EnvFilter
+                    // with only `=off` directives denies every unmatched
+                    // target, i.e. no spans at all); the offs stop the
+                    // exporter's own logs feeding back into it
+                    // (opentelemetry-otlp ships internal-logs).
+                    tracing_subscriber::EnvFilter::new(
+                        "info,opentelemetry=off,opentelemetry_sdk=off,opentelemetry_otlp=off",
+                    ),
+                ))
+            }
+        },
+    };
+
+    let subscriber = tracing_subscriber::registry().with(
+        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+            format!("{}={tracing_level},tower_http={tracing_level},surrealdb={tracing_level},surrealdb_client={tracing_level}",
+                    env!("CARGO_CRATE_NAME")).into()
+        })
+    );
+    match otel_layer {
+        Some(otel_layer) => subscriber.with(stdout_log).with(otel_layer).init(),
+        None => subscriber.with(stdout_log).init(),
+    }
+    if TRACER_PROVIDER.get().is_some() {
+        tracing::info!(
+            endpoint = env::var("OTEL_EXPORTER_OTLP_ENDPOINT").unwrap_or_default(),
+            "OTLP tracing enabled"
+        );
+    }
 }
 
 /// Serve `/uploads/*` in s3 mode: fetch from object storage so the bucket
@@ -114,6 +185,21 @@ async fn uploads_handler(
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     initialize_logging();
+
+    // Coolify restarts send SIGTERM; flush the span batch or every span
+    // from the dying process is dropped.
+    if let Some(provider) = TRACER_PROVIDER.get() {
+        let provider = provider.clone();
+        tokio::spawn(async move {
+            if let Ok(mut term) =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            {
+                term.recv().await;
+                let _ = provider.shutdown();
+                std::process::exit(0);
+            }
+        });
+    }
 
     let surreal_host =
         env::var("SURREAL_HOST").map_err(|_| "SURREAL_HOST environment variable not set")?;
@@ -526,7 +612,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(app_state)
         .layer(
             ServiceBuilder::new()
-                .layer(TraceLayer::new_for_http())
+                .layer(
+                    // WHY: DefaultMakeSpan is TRACE-level; the default
+                    // EnvFilter (tower_http=info) hides TRACE spans, leaving
+                    // the OTLP exporter nothing to ship.
+                    TraceLayer::new_for_http()
+                        .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO)),
+                )
                 .layer(middleware::from_fn(add_rate_limit_headers))
                 .layer(GovernorLayer::new(governor_config))
                 .layer(cors_layer)
