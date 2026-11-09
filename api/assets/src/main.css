@@ -1750,6 +1750,7 @@ h1, h2, h3, h4 { text-wrap: balance; }
   overflow: hidden;
   cursor: grab;
   min-height: 120px;
+  margin-inline: 8px;
 }
 .map-container:active { cursor: grabbing; }
 .hex-map {

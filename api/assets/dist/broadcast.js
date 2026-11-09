@@ -42,6 +42,9 @@
     }
 
     mapContainer.addEventListener("wheel", function(e) {
+      // Plain wheel scrolls the page — the map only zooms on ctrl/cmd
+      // (a trackpad pinch reaches the browser as ctrl+wheel).
+      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       var delta = e.deltaY > 0 ? 0.9 : 1.1;
       scale = Math.min(4, Math.max(0.5, scale * delta));
