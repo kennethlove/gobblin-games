@@ -1,4 +1,4 @@
-//! 2qo lethality probe: N default-format matches (4 teams x 6 goblins)
+//! 2qo lethality probe: N default-format matches (3 teams x 8 goblins)
 //! run full-day until a winner or the day cap.
 //!
 //! Prints one line per run plus a summary, so damage/heal tuning can be
@@ -12,7 +12,8 @@ use game::games::Game;
 use shared::GameStatus;
 use shared::messages::MessagePayload;
 
-const ROSTER: usize = 24;
+const ROSTER: usize =
+    shared::DEFAULT_TEAM_COUNT as usize * shared::DEFAULT_GOBLINS_PER_TEAM as usize;
 const GOBLINS_PER_TEAM: u32 = shared::DEFAULT_GOBLINS_PER_TEAM;
 const MAX_DAYS: u32 = 30;
 const TARGET_DAY: u32 = 10;

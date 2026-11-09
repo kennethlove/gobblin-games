@@ -10,6 +10,9 @@ const MAX_STRENGTH: u32 = 50;
 const MAX_BRAVERY: u32 = 100;
 
 /// Default healing amounts
+// WHY:10 (not the original5) — softens mid-game attrition;1000-run sim at
+// the 3x8 default measured the target outcome mix with this value
+// (gobblin-games-2qo). Rest still costs a full action.
 const DEFAULT_HEAL: u32 = 10;
 const DEFAULT_MENTAL_HEAL: u32 = 5;
 

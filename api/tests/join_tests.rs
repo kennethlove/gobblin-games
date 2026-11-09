@@ -152,7 +152,7 @@ async fn test_create_with_chosen_roster_skips_bots() {
 }
 
 #[tokio::test]
-async fn test_start_bot_fills_to_24_with_three_per_team() {
+async fn test_start_bot_fills_to_24_with_eight_per_team() {
     let test_db = TestDb::new().await;
     let router = create_test_router(test_db.app_state());
     let server = TestServer::new(router);
@@ -180,12 +180,12 @@ async fn test_start_bot_fills_to_24_with_three_per_team() {
     let characters = fetch_characters(&server, &user, &game_id).await;
     assert_eq!(characters.len(), 24, "start must bot-fill to 24");
     let counts = team_counts(&characters);
-    assert_eq!(counts.len(), 4, "all four teams must be represented");
+    assert_eq!(counts.len(), 3, "all three teams must be represented");
     for (team, count) in &counts {
-        assert_eq!(*count, 6, "team {team} should hold exactly 6 goblins");
+        assert_eq!(*count, 8, "team {team} should hold exactly 8 goblins");
     }
 
-    // Ready rule (24 + 4 distinct teams) now holds.
+    // Ready rule (24 + 3 distinct teams) now holds.
     let detail = server
         .get(&format!("/api/games/{}", game_id))
         .add_header("Authorization", user.auth_header())
@@ -1288,7 +1288,7 @@ async fn test_start_seeds_team_alliances_that_survive_reload() {
         let allies = character["allies"]
             .as_array()
             .unwrap_or_else(|| panic!("{} should carry seeded allies", character["identifier"]));
-        assert_eq!(allies.len(), 5, "6-per-team mesh holds 5 allies");
+        assert_eq!(allies.len(), 7, "8-per-team mesh holds 7 allies");
         for ally in allies {
             let ally_id = ally.as_str().unwrap();
             assert_eq!(
