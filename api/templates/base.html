@@ -88,5 +88,22 @@
     </div>
   </footer>
 
+  {% if auth_authenticated %}
+  <script>
+  // WHY: sessions were a hard hour — POST /api/auth/refresh and its token
+  // rotation existed (wdv) but nothing ever called it, so SSE and fetches
+  // died at the hour mark. Refresh on load (catches pages opened late in
+  // the window) and every 45 minutes after (45 < 60-minute access-token
+  // lifetime, so the window never lapses while a tab stays open).
+  (function() {
+    function refresh() {
+      fetch("/api/auth/refresh", { method: "POST", credentials: "same-origin" })
+        .catch(function() {});
+    }
+    refresh();
+    setInterval(refresh, 45 * 60 * 1000);
+  })();
+  </script>
+  {% endif %}
 </body>
 </html>
