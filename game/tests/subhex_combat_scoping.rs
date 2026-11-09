@@ -136,15 +136,28 @@ fn cross_sub_characters_never_start_a_fight() {
     game.characters.push(attacker);
     game.characters.push(defender);
 
-    // No pending-attack forcing: the brain must never even see the
-    // cross-sub goblin as a target.
-    for _ in 0..6 {
-        game.run_phase(Phase::DAY).expect("day phase ran");
-    }
+    // No pending-attack forcing. One phase only: the pair starts three
+    // sub-tiles apart (sub0 vs sub3) and travel hops one sub per beat, so
+    // no legitimate engagement can exist yet — the brain's cross-sub
+    // targeting still gets exercised and must not produce a fight. The old
+    // six-phase loop was flaky (~50%, gobblin-games-ouh): the defender
+    // WANDERS/walks into the attacker's sub over the phases and they fight
+    // there, which is correct option-A behavior (fights start in the same
+    // sub), not a scoping bug. Forced-pending recheck lives in the test
+    // above; natural-path cross-sub coverage lives here.
+    game.run_phase(Phase::DAY).expect("day phase ran");
 
     assert!(
         combat_messages(&game).is_empty(),
-        "same area but different sub-tile must never fight"
+        "same area but different sub-tile must never fight; locations: {:?}; combat msgs: {:?}",
+        game.characters
+            .iter()
+            .map(|c| (c.name.as_str(), c.location))
+            .collect::<Vec<_>>(),
+        combat_messages(&game)
+            .iter()
+            .map(|m| format!("{:?}", m.payload))
+            .collect::<Vec<_>>(),
     );
 }
 
