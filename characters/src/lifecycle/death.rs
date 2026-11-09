@@ -24,8 +24,12 @@ impl Character {
     /// Hides the character from view.
     pub(crate) fn hides(&mut self) -> bool {
         let mut rng = SmallRng::from_rng(&mut rand::rng());
-        let hidden = rng
-            .random_bool(self.effective_attribute(CharacterAttribute::Intelligence) as f64 / 100.0);
+        // WHY: raw base, not effective_attribute — that path floors at 1
+        // (scales are 1+), which would leave a 1% hide chance on zero
+        // intelligence and make "too stupid to hide" unassertable. A
+        // probability must be allowed to reach 0.
+        let hidden =
+            rng.random_bool(self.attributes.get(CharacterAttribute::Intelligence) as f64 / 100.0);
         self.attributes.is_hidden = hidden;
         hidden
     }
