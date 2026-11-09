@@ -10,6 +10,7 @@ use areas::AreaId;
 use areas::hex::SubTriangle;
 use areas::location::Location;
 use characters::Character;
+use characters::actions::Action;
 use game::games::Game;
 use shared::messages::{MessagePayload, Phase};
 use world::terrain::{BaseTerrain, TerrainType};
@@ -218,5 +219,52 @@ fn successful_flee_relocates_fleer_into_adjacent_sub() {
         adjacent.contains(&fleer.location),
         "fleer moved to {:?}, which is not adjacent to {original:?}",
         fleer.location
+    );
+}
+
+#[test]
+fn pursuer_steps_toward_the_goblin_that_fled() {
+    let mut game = single_hub_game();
+    let hub_sub0 = Location::new(AreaId::hub(), SubTriangle::new(0));
+    // The defender has already fled — two hops away on the hex ring.
+    let hub_sub2 = Location::new(AreaId::hub(), SubTriangle::new(2));
+    let mut attacker = fighter("Attacker", &game, 1, hub_sub0);
+    // Force the wander/chase pipeline deterministically: a preferred
+    // Move(None) at p=1.0 makes brain.act return Move(None) directly
+    // (skipping the single-hex "best area is occupied -> Rest" path).
+    attacker.brain.set_preferred_action(Action::Move(None), 1.0);
+    let mut defender = fighter("Defender", &game, 2, hub_sub2);
+    // Pin the fleer: stamina 0 = it rests in place, making the pursuer the
+    // only mover (deterministic step expectation).
+    defender.stamina = 0;
+    game.characters.push(attacker);
+    game.characters.push(defender);
+
+    game.run_phase(Phase::DAY).expect("day phase ran");
+
+    // The pursuer must take the FIRST step of the path toward where the
+    // fleer stands — a directed chase hop, not a random wander.
+    let pursuer_after = game
+        .characters
+        .iter()
+        .find(|c| c.name == "Attacker")
+        .expect("pursuer survived")
+        .location;
+    let expected = areas::location::shortest_path_while(
+        areas::hex::default_layout(),
+        hub_sub0,
+        hub_sub2,
+        |_| false,
+    )
+    .expect("fleer is reachable");
+    let step = expected.get(2).copied().expect("two move beats per phase");
+    assert_eq!(
+        pursuer_after,
+        step,
+        "pursuer must step toward the fled goblin; positions: {:?}",
+        game.characters
+            .iter()
+            .map(|c| (c.name.as_str(), c.location))
+            .collect::<Vec<_>>()
     );
 }

@@ -174,6 +174,10 @@ pub struct EnvironmentContext<'a> {
 pub struct EncounterContext {
     pub nearby_characters_count: u32,
     pub potential_targets: Vec<Character>,
+    /// Visible enemies in this area that are NOT in this character's
+    /// sub-tile. pick_target can't see them (same-sub rule), but ql8's
+    /// chase steps toward the first one when an attack has no target.
+    pub distant_enemies: Vec<Location>,
     pub total_living_characters: u32,
 }
 
@@ -1109,6 +1113,17 @@ impl Character {
 
             match beat {
                 Action::Move(destination) => {
+                    // ql8 chase: no same-sub target, but a known enemy is
+                    // elsewhere in this area — step toward it instead of
+                    // wandering. Wander (None) stays only for when no
+                    // enemy location is known.
+                    let destination = if destination.is_none()
+                        && let Some(&goal) = encounter_context.distant_enemies.first()
+                    {
+                        Some(goal)
+                    } else {
+                        destination
+                    };
                     self.act_move(&destination, environment_details.all_areas, events);
                 }
                 Action::Rest => {
@@ -1126,6 +1141,15 @@ impl Character {
                         environment_details.phase,
                         environment_details.combat_tuning,
                     );
+                    // ql8 chase: no same-sub target this beat — step toward
+                    // a known enemy elsewhere in the area instead of
+                    // standing (Attack alone never moves). Wander stays the
+                    // fallback when no enemy location is known.
+                    if self.pending_attack_target.is_none()
+                        && let Some(&goal) = encounter_context.distant_enemies.first()
+                    {
+                        self.act_move(&Some(goal), environment_details.all_areas, events);
+                    }
                 }
                 Action::TakeItem => {
                     self.act_take_item(
@@ -3660,6 +3684,7 @@ mod tests {
         let encounter_context = EncounterContext {
             nearby_characters_count: 1,
             potential_targets: vec![victim],
+            distant_enemies: Vec::new(),
             total_living_characters: 2,
         };
 
