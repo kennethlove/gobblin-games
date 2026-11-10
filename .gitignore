@@ -57,6 +57,8 @@ api/assets/dist/main.css
 /Avatars/
 /docs/DESIGN.md
 /art/
+# Icon source packs dropped for conversion (traced SVGs are committed, not the PNGs)
+api/assets/icons/src/narrative/mycollection*/
 
 # UX verification screenshots (local capture evidence)
 .ux/

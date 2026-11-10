@@ -86,10 +86,10 @@ fn narrative_icon(payload: &shared::messages::MessagePayload) -> Option<&'static
     if let shared::messages::MessagePayload::AreaEvent { kind, .. } = payload {
         return Some(match kind {
             AreaEventKind::Fire => "burned",
-            AreaEventKind::Flood => "drowning",
+            AreaEventKind::Flood => "river",
             AreaEventKind::Earthquake | AreaEventKind::Hazard => "falling_rocks",
             AreaEventKind::Storm => "electrocuted",
-            AreaEventKind::Mutts => "mauled",
+            AreaEventKind::Mutts => "wolf",
             AreaEventKind::Other => return None,
         });
     }
