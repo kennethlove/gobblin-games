@@ -3,14 +3,14 @@ use tera::{Kwargs, State, TeraResult, Value};
 pub fn icon_filter(value: &Value, _: Kwargs, _: &State) -> TeraResult<Value> {
     let name = value.as_str().unwrap_or("");
     Ok(Value::from(format!(
-        "<svg class=\"icon\"><use href=\"#icon_ui_{name}\"/></svg>"
+        "<svg class=\"icon\" aria-hidden=\"true\"><use href=\"/icons/sprite-ui.svg#icon_ui_{name}\"/></svg>"
     )))
 }
 
 pub fn narrative_icon_filter(value: &Value, _: Kwargs, _: &State) -> TeraResult<Value> {
     let name = value.as_str().unwrap_or("");
     Ok(Value::from(format!(
-        "<svg class=\"icon\"><use href=\"#icon_narrative_{name}\"/></svg>"
+        "<svg class=\"icon\" aria-hidden=\"true\"><use href=\"/icons/sprite-narrative.svg#icon_narrative_{name}\"/></svg>"
     )))
 }
 
