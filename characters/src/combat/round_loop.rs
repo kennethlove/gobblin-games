@@ -625,7 +625,9 @@ impl<'a> CombatRoundLoop<'a> {
             .iter()
             .find(|&&i| self.side_of(i) != actor_side)
         {
-            self.resolve_verdict(chars, round_no, order, actor_idx, cowerer, events, beats);
+            self.resolve_verdict(
+                chars, round_no, order, actor_idx, cowerer, rng, events, beats,
+            );
             return;
         }
 
@@ -702,7 +704,7 @@ impl<'a> CombatRoundLoop<'a> {
                 );
             }
             CombatActionKind::UseItem { item } => {
-                self.resolve_use_item(chars, round_no, order, actor_idx, item, events, beats);
+                self.resolve_use_item(chars, round_no, order, actor_idx, item, rng, events, beats);
             }
             CombatActionKind::Cower => {
                 // Record the cower and emit its beat; the fight continues until
@@ -792,7 +794,7 @@ impl<'a> CombatRoundLoop<'a> {
         }
         events.extend(scratch);
 
-        self.check_termination_after_beat(chars);
+        self.check_termination_after_beat(chars, rng, events);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -847,7 +849,7 @@ impl<'a> CombatRoundLoop<'a> {
             self.sides[side].retain(|&i| i != actor_idx);
             self.exited.push(actor_idx); // stays out — cycle relocates them only post-fight
         }
-        self.check_termination_after_beat(chars);
+        self.check_termination_after_beat(chars, rng, events);
     }
 
     /// The cowerer's opposing actor answers with the provider's forced
@@ -861,6 +863,7 @@ impl<'a> CombatRoundLoop<'a> {
         order: u8,
         verdict_idx: usize,
         cowerer_idx: usize,
+        rng: &mut impl Rng,
         events: &mut Vec<TaggedEvent>,
         beats: &mut Vec<CombatBeat>,
     ) {
@@ -895,7 +898,7 @@ impl<'a> CombatRoundLoop<'a> {
             let side = self.side_of(cowerer_idx);
             self.sides[side].retain(|&i| i != cowerer_idx);
             self.exited.push(cowerer_idx);
-            self.check_termination_after_beat(chars);
+            self.check_termination_after_beat(chars, rng, events);
             return;
         }
 
@@ -957,7 +960,7 @@ impl<'a> CombatRoundLoop<'a> {
             String::new(),
             MessagePayload::CombatBeat(beat),
         ));
-        self.check_termination_after_beat(chars);
+        self.check_termination_after_beat(chars, rng, events);
     }
 
     /// Consume a health/relevant consumable (brain-chosen `UseItem`). A failed
@@ -970,6 +973,7 @@ impl<'a> CombatRoundLoop<'a> {
         order: u8,
         actor_idx: usize,
         item: shared::messages::ItemRef,
+        rng: &mut impl Rng,
         events: &mut Vec<TaggedEvent>,
         beats: &mut Vec<CombatBeat>,
     ) {
@@ -1010,14 +1014,22 @@ impl<'a> CombatRoundLoop<'a> {
             String::new(),
             MessagePayload::CombatBeat(beat),
         ));
-        self.check_termination_after_beat(chars);
+        self.check_termination_after_beat(chars, rng, events);
     }
 
-    /// Check side-empty / stamina-draw after a beat and set `result` if the
-    /// fight ended (design §6): a side with no living members left loses;
-    /// everyone stamina-empty on both sides is judged on remaining blood
-    /// (the side still standing wins; an exact tie draws).
-    fn check_termination_after_beat(&mut self, chars: &[&mut Character]) {
+    /// Check side-empty / agreed-stop after a beat and set `result` if the
+    /// fight ended (design §6): a side with no living members left loses.
+    /// When BOTH sides are spent — every member at zero stamina or blood at
+    /// /below the draw floor — the goblins agree to stop and the fight ends
+    /// in a Draw (cz9). The most desperate one may instead cross its fingers
+    /// and take the sneak attack: it lands, the fight is over (rare —
+    /// `CombatTuning::fingers_crossed_chance`).
+    fn check_termination_after_beat(
+        &mut self,
+        chars: &[&mut Character],
+        rng: &mut impl Rng,
+        events: &mut Vec<TaggedEvent>,
+    ) {
         if self.result.is_some() {
             return;
         }
@@ -1034,28 +1046,66 @@ impl<'a> CombatRoundLoop<'a> {
             self.result = Some(CombatResult::Victory {
                 victors: a.iter().map(|&i| tref(&*chars[i])).collect(),
             });
-        } else if a.iter().all(|&i| chars[i].stamina == 0)
-            && b.iter().all(|&i| chars[i].stamina == 0)
+        } else if a
+            .iter()
+            .all(|&i| wants_out(chars[i], self.tuning.draw_blood_floor))
+            && b.iter()
+                .all(|&i| wants_out(chars[i], self.tuning.draw_blood_floor))
         {
-            // Both sides spent with no kill possible: nobody can keep
-            // swinging, so the fight is judged on what is left standing.
-            // A flat mutual-back-off is the rare case (exact blood tie),
-            // not the default outcome.
-            let blood_a: u32 = a.iter().map(|&i| chars[i].blood).sum();
-            let blood_b: u32 = b.iter().map(|&i| chars[i].blood).sum();
-            self.result = if blood_a > blood_b {
-                Some(CombatResult::Victory {
-                    victors: a.iter().map(|&i| tref(&*chars[i])).collect(),
-                })
-            } else if blood_b > blood_a {
-                Some(CombatResult::Victory {
-                    victors: b.iter().map(|&i| tref(&*chars[i])).collect(),
-                })
+            if rng.random_bool(self.tuning.fingers_crossed_chance) {
+                // cz9: the sneak attack instead of the honest draw — the
+                // most desperate goblin's lunge lands and the fight is over.
+                let cheater_idx = a
+                    .iter()
+                    .chain(b.iter())
+                    .copied()
+                    .min_by_key(|&i| chars[i].blood)
+                    .expect("both sides hold members");
+                let cheater_side = self.side_of(cheater_idx);
+                let cheater = tref(&*chars[cheater_idx]);
+                let victim_idx = self
+                    .active_on(1 - cheater_side, chars)
+                    .first()
+                    .copied()
+                    .expect("opposing side holds members");
+                let victim = tref(&*chars[victim_idx]);
+                self.result = Some(CombatResult::Victory {
+                    victors: self
+                        .active_on(cheater_side, chars)
+                        .iter()
+                        .map(|&i| tref(&*chars[i]))
+                        .collect(),
+                });
+                events.push(TaggedEvent::new(
+                    format!(
+                        "{} crosses their fingers and lunges instead of calling it off!",
+                        cheater.name
+                    ),
+                    MessagePayload::CombatBeat(CombatBeat {
+                        round: self.round,
+                        order: 0, // synthesized between beats — no initiative slot
+                        actor: cheater,
+                        action: CombatActionKind::Attack,
+                        target: Some(victim),
+                        weapon: None,
+                        shield: None,
+                        wear: vec![],
+                        outcome: BeatOutcome::FingersCrossed,
+                        significant: true,
+                    }),
+                ));
             } else {
-                Some(CombatResult::Draw)
-            };
+                // cz9 agreed stop: both sides spent — they call it off.
+                self.result = Some(CombatResult::Draw);
+            }
         }
     }
+}
+
+/// cz9: a fighter wants the fight called off when spent — zero stamina, or
+/// blood at/below the draw floor.
+fn wants_out(character: &Character, draw_blood_floor: u32) -> bool {
+    character.stamina == 0 || character.blood <= draw_blood_floor
 }
 
 #[cfg(test)]
@@ -1218,26 +1268,32 @@ mod tests {
         b.max_stamina = 100;
         b.blood = 1000;
 
-        let mut combat = CombatRoundLoop::new(&mut a, &mut b, "c2".into(), CombatTuning::default());
+        // Pin the honest-draw path — no finger-crossing cheat in this test.
+        let tuning = CombatTuning {
+            fingers_crossed_chance: 0.0,
+            ..CombatTuning::default()
+        };
+        let mut combat = CombatRoundLoop::new(&mut a, &mut b, "c2".into(), tuning);
         let chars = std::mem::take(&mut combat.chars);
-        combat.check_termination_after_beat(&chars);
+        let mut rng = SmallRng::seed_from_u64(7);
+        let mut events = Vec::new();
+        combat.check_termination_after_beat(&chars, &mut rng, &mut events);
         combat.chars = chars;
 
         assert!(combat.is_over());
         assert_eq!(combat.result(), Some(&CombatResult::Draw));
     }
 
-    /// Mutual stamina exhaustion judges on remaining blood: the side with
-    /// more blood standing wins instead of a flat back-off.
+    /// Mutual stamina exhaustion is an agreed stop (cz9): both sides spent,
+    /// neither can keep up with the other — the fight ends in a Draw.
     #[test]
-    fn mutual_exhaustion_awards_the_side_with_more_blood() {
+    fn mutual_exhaustion_agrees_to_stop_as_a_draw() {
         let mut a = char_named("Alice");
         a.traits.clear();
         a.stamina = 0;
         a.max_stamina = 100;
         a.attributes.strength = 0; // no damage -> no kill
         a.blood = 900;
-        let alice = tref(&a);
 
         let mut b = char_named("Bob");
         b.traits.clear();
@@ -1248,16 +1304,19 @@ mod tests {
 
         let mut rng = SmallRng::seed_from_u64(3);
         let mut events = Vec::new();
-        let mut combat = CombatRoundLoop::new(&mut a, &mut b, "c3".into(), CombatTuning::default());
+        // Pin the honest-draw path — no finger-crossing cheat in this test.
+        let tuning = CombatTuning {
+            fingers_crossed_chance: 0.0,
+            ..CombatTuning::default()
+        };
+        let mut combat = CombatRoundLoop::new(&mut a, &mut b, "c3".into(), tuning);
 
         let _ = combat.advance_round(&mut rng, &mut events);
         assert!(combat.is_over());
         assert_eq!(
             combat.result(),
-            Some(&CombatResult::Victory {
-                victors: vec![alice]
-            }),
-            "the fresher side (more blood) wins the standoff"
+            Some(&CombatResult::Draw),
+            "both sides spent — the honest end is a draw"
         );
     }
 
@@ -1852,7 +1911,11 @@ mod tests {
         }
 
         let draws_pct = draws * 100 / N;
-        assert!(draws_pct < 10, "draws must stay rare: {draws_pct}%");
+        // cz9: mutual-exhaustion / spent-both-sides fights end in an
+        // AGREED STOP by design (~15-25% of untuned fair fights), so draws
+        // are a first-class outcome now — the bar is only that they don't
+        // swallow most fights.
+        assert!(draws_pct < 30, "draws must stay a minority: {draws_pct}%");
 
         let rounds_pct = rounds_2_6 * 100 / N;
         assert!(

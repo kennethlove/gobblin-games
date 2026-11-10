@@ -1626,6 +1626,9 @@ mod day_summary_card_tests {
                 },
             },
             BeatOutcome::CalledAlly => CombatActionKind::CallAlly,
+            // The cheat lands as a lunging attack — the beat's own label
+            // ("fingers crossed") carries the story.
+            BeatOutcome::FingersCrossed => CombatActionKind::Attack,
         };
         let msg = format!("{actor} beat content");
         GameMessage::new(
