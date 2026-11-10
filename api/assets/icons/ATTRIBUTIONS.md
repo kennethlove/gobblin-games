@@ -29,8 +29,8 @@ Per-icon author and license page: <https://game-icons.net/licenses.html>
 These predate the icon-pipeline work and were already in the repository
 history; source set unknown:
 
-- `ui/delete.svg`, `ui/edit.svg`, `ui/eye_closed.svg`, `ui/eye_open.svg`,
-  `ui/lock_closed.svg`, `ui/lock_open.svg`, `ui/map_pin.svg`, `ui/uturn.svg`
+- `ui/delete.svg`, `ui/edit.svg`, `ui/lock_closed.svg`, `ui/lock_open.svg`,
+  `ui/map_pin.svg`
 - ~~mockingjay trio~~ (removed per review — not on-brand)
 
 ## Authored here
