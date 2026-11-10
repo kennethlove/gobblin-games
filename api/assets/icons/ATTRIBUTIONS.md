@@ -24,6 +24,21 @@ Fetched fresh for this set:
 Per-icon author and license page: <https://game-icons.net/licenses.html>
 (CC BY 3.0 — attribution required; this file is that attribution).
 
+## Hangry Games icon pack (`art/hg - icons/`)
+
+97 narrative icons were converted from the pack's `png/` exports
+(64×64 black line-art) with `mkbitmap -s8` + `potrace`, normalized to a
+512-unit `currentColor` viewBox — same pipeline each time, no hand edits.
+The pack's own license page ships with the art at
+`art/hg - icons/license/license.html` ("User License"); the art directory
+is gitignored, only the traced SVGs live in this repository.
+
+Of the pack's 115 files, 18 were not imported: 12 subjects the existing
+set already covers (`swords`, `sword`, `mace`, `blade`, `knife`, `spear`,
+`axe`, `broken`, `rocks`, `shield`, `location`, `poison`) and 6 alternate
+drawings of an imported subject (`desert-1`, `desert-2`, `grenade-1`,
+`grass-1`, `pill-1`, `drone-1`).
+
 ## Unverified provenance
 
 These predate the icon-pipeline work and were already in the repository
