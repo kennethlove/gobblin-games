@@ -18,18 +18,24 @@ fn main() {
         .join("icons")
         .join("src");
 
-    generate_sprite(&icons_dir.join("ui"), &out_dir.join("sprite-ui.svg"), "ui");
+    generate_sprite(
+        &icons_dir.join("ui"),
+        &out_dir.join("sprite-ui.svg"),
+        "ui",
+        "0 0 24 24",
+    );
     generate_sprite(
         &icons_dir.join("narrative"),
         &out_dir.join("sprite-narrative.svg"),
         "narrative",
+        "0 0 512 512",
     );
 
     println!("cargo:rerun-if-changed=assets/icons/src/ui/");
     println!("cargo:rerun-if-changed=assets/icons/src/narrative/");
 }
 
-fn generate_sprite(input_dir: &Path, output_path: &Path, category: &str) {
+fn generate_sprite(input_dir: &Path, output_path: &Path, category: &str, default_view_box: &str) {
     let mut symbols = Vec::new();
 
     if input_dir.is_dir() {
@@ -47,14 +53,19 @@ fn generate_sprite(input_dir: &Path, output_path: &Path, category: &str) {
                 .file_stem()
                 .unwrap()
                 .to_string_lossy()
-                .replace('-', "_");
+                .replace('_', "-");
             let id = format!("icon_{}_{}", category, file_name);
+            // Keep the source viewBox: tiers mix 24px UI glyphs with 512px
+            // game-icons, and templates reference hyphenated ids
+            // ("arrow-left"), so underscores stay as-is in the id.
+            let view_box =
+                extract_view_box(&content).unwrap_or_else(|| default_view_box.to_string());
 
             // Extract inner content from <svg>...</svg>
             let inner = extract_svg_inner(&content);
             symbols.push(format!(
-                r#"<symbol id="{}" viewBox="0 0 24 24" fill="currentColor">{}</symbol>"#,
-                id, inner
+                r#"<symbol id="{}" viewBox="{}" fill="currentColor">{}</symbol>"#,
+                id, view_box, inner
             ));
         }
     }
@@ -83,4 +94,10 @@ fn extract_svg_inner(svg: &str) -> String {
         }
     }
     svg.to_string()
+}
+
+fn extract_view_box(svg: &str) -> Option<String> {
+    let start = svg.find("viewBox=\"")? + "viewBox=\"".len();
+    let end = svg[start..].find('"')? + start;
+    Some(svg[start..end].to_string())
 }
