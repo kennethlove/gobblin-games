@@ -280,7 +280,7 @@ impl<'a> CombatRoundLoop<'a> {
         };
         if let Some(c) = self.chars.iter().find(|c| c.id == id) {
             let content = format!(
-                "🏆 {} enters the fight as CHAMPION ({} lifetime wins)",
+                "{} enters the fight as CHAMPION ({} lifetime wins)",
                 c.name, c.statistics.wins
             );
             events.push(TaggedEvent::new(content, MessagePayload::Generic));
@@ -314,9 +314,9 @@ impl<'a> CombatRoundLoop<'a> {
             _ => None,
         });
         let content = match killer {
-            Some(Some(killer)) => format!("🏆 {name} has been DETHRONED by {killer}"),
-            Some(None) => format!("🏆 {name} has been DETHRONED"),
-            None => format!("🏆 {name} has fallen — the champion is out"),
+            Some(Some(killer)) => format!("{name} has been DETHRONED by {killer}"),
+            Some(None) => format!("{name} has been DETHRONED"),
+            None => format!("{name} has fallen — the champion is out"),
         };
         events.push(TaggedEvent::new(content, MessagePayload::Generic));
         self.champion_dethroned = true;

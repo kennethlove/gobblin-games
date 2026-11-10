@@ -1203,7 +1203,7 @@ impl Game {
                             collected_events.push((
                                 attacker_ident.clone(),
                                 attacker_name.clone(),
-                                format!("⚔️ round {number}"),
+                                format!("round {number}"),
                                 Some(MessagePayload::CombatRoundStart {
                                     combat_id: combat_id.clone(),
                                     round: number,

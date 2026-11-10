@@ -8,51 +8,47 @@ impl Display for GameEvent {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             GameEvent::GameDayStart { day_number } => {
-                write!(f, "=== ☀️ Day {} begins! ===", day_number)
+                write!(f, "=== Day {} begins! ===", day_number)
             }
             GameEvent::GameDayEnd { day_number } => {
-                write!(f, "=== ☀️ Day {} ends! ===", day_number)
+                write!(f, "=== Day {} ends! ===", day_number)
             }
             GameEvent::FirstDayStart => {
-                write!(f, "=== 🎉 The Gobblin Games begin! 🎉 ===")
+                write!(f, "=== The Gobblin Games begin! ===")
             }
             GameEvent::CharactersLeft { character_count } => {
-                write!(f, "=== 📌 Goblins alive: {} ===", character_count)
+                write!(f, "=== Goblins alive: {} ===", character_count)
             }
             GameEvent::GameNightStart { day_number } => {
-                write!(f, "=== 🌙 Night {} begins ===", day_number)
+                write!(f, "=== Night {} begins ===", day_number)
             }
             GameEvent::GameNightEnd { day_number } => {
-                write!(f, "=== 🌙 Night {} ends ===", day_number)
+                write!(f, "=== Night {} ends ===", day_number)
             }
             GameEvent::DailyDeathAnnouncement { death_count } => {
-                write!(f, "=== 💀 Goblins dead: {} ===", death_count)
+                write!(f, "=== Goblins dead: {} ===", death_count)
             }
             GameEvent::DeathAnnouncement { character_name, .. } => {
-                write!(f, "=== 🪦 {} has died ===", character_name)
+                write!(f, "=== {} has died ===", character_name)
             }
             GameEvent::NoOneWins => {
-                write!(f, "=== 🎭 No one wins! ===")
+                write!(f, "=== No one wins! ===")
             }
             GameEvent::CharacterWins { character_name, .. } => {
-                write!(
-                    f,
-                    "=== 🏆 {} is the last goblin standing ===",
-                    character_name
-                )
+                write!(f, "=== {} is the last goblin standing ===", character_name)
             }
             GameEvent::CharacterRest { character_name, .. } => {
-                write!(f, "😪 {} rests", character_name)
+                write!(f, "{} rests", character_name)
             }
             GameEvent::CharacterLongRest { character_name, .. } => {
                 write!(
                     f,
-                    "💤 {} rests and recovers a little health and sanity",
+                    "{} rests and recovers a little health and sanity",
                     character_name
                 )
             }
             GameEvent::CharacterHide { character_name, .. } => {
-                write!(f, "🫥 {} tries to hide", character_name)
+                write!(f, "{} tries to hide", character_name)
             }
             GameEvent::CharacterTravel {
                 character_name,
@@ -62,7 +58,7 @@ impl Display for GameEvent {
             } => {
                 write!(
                     f,
-                    "🚶 {} moves from {} to {}",
+                    "{} moves from {} to {}",
                     character_name, from_area, to_area
                 )
             }
@@ -72,7 +68,7 @@ impl Display for GameEvent {
                 ..
             } => {
                 let object = indefinite(item_name);
-                write!(f, "🔨 {} takes {}", character_name, object)
+                write!(f, "{} takes {}", character_name, object)
             }
             GameEvent::CharacterCannotUseItem {
                 character_name,
@@ -80,7 +76,7 @@ impl Display for GameEvent {
                 ..
             } => {
                 let object = indefinite(item_name);
-                write!(f, "❌ {} cannot use {}", character_name, object)
+                write!(f, "{} cannot use {}", character_name, object)
             }
             GameEvent::CharacterUseItem {
                 character_name,
@@ -90,7 +86,7 @@ impl Display for GameEvent {
                 let object = indefinite(&item.name);
                 write!(
                     f,
-                    "💊 {} uses {}, gains {} {}",
+                    "{} uses {}, gains {} {}",
                     character_name, object, item.effect, item.attribute
                 )
             }
@@ -101,7 +97,7 @@ impl Display for GameEvent {
             } => {
                 write!(
                     f,
-                    "😴 {} is too tired to move from {}, rests instead",
+                    "{} is too tired to move from {}, rests instead",
                     character_name, area
                 )
             }
@@ -112,7 +108,7 @@ impl Display for GameEvent {
             } => {
                 write!(
                     f,
-                    "🥵 {} is too exhausted to move from {}, lacks stamina",
+                    "{} is too exhausted to move from {}, lacks stamina",
                     character_name, area
                 )
             }
@@ -123,7 +119,7 @@ impl Display for GameEvent {
             } => {
                 write!(
                     f,
-                    "🤔 {} is already in the {}, stays put",
+                    "{} is already in the {}, stays put",
                     character_name, area
                 )
             }
@@ -132,79 +128,63 @@ impl Display for GameEvent {
                 area,
                 ..
             } => {
-                write!(
-                    f,
-                    "🫡 {} follows their team mate to {}",
-                    character_name, area
-                )
+                write!(f, "{} follows their team mate to {}", character_name, area)
             }
             GameEvent::CharacterTravelStay {
                 character_name,
                 area,
                 ..
             } => {
-                write!(f, "🪑 {} stays in {}", character_name, area)
+                write!(f, "{} stays in {}", character_name, area)
             }
             GameEvent::CharacterTravelNoOptions {
                 character_name,
                 area,
                 ..
             } => {
-                write!(
-                    f,
-                    "📍 {} has nowhere to go, stays in {}",
-                    character_name, area
-                )
+                write!(f, "{} has nowhere to go, stays in {}", character_name, area)
             }
             GameEvent::CharacterBleeds { character_name, .. } => {
-                write!(f, "🩸 {} bleeds from their wounds.", character_name)
+                write!(f, "{} bleeds from their wounds.", character_name)
             }
             GameEvent::CharacterSick { character_name, .. } => {
                 write!(
                     f,
-                    "🤒 {} contracts dysentery, loses strength and speed",
+                    "{} contracts dysentery, loses strength and speed",
                     character_name
                 )
             }
             GameEvent::CharacterElectrocuted { character_name, .. } => {
-                write!(
-                    f,
-                    "🌩️ {} is struck by lightning, loses health",
-                    character_name
-                )
+                write!(f, "{} is struck by lightning, loses health", character_name)
             }
             GameEvent::CharacterFrozen { character_name, .. } => {
                 write!(
                     f,
-                    "🥶 {} suffers from hypothermia, loses speed.",
+                    "{} suffers from hypothermia, loses speed.",
                     character_name
                 )
             }
             GameEvent::CharacterOverheated { character_name, .. } => {
                 write!(
                     f,
-                    "🥵 {} suffers from heat stroke, loses speed.",
+                    "{} suffers from heat stroke, loses speed.",
                     character_name
                 )
             }
             GameEvent::CharacterDehydrated { character_name, .. } => {
                 write!(
                     f,
-                    "🌵 {} is severely dehydrated, loses strength",
+                    "{} is severely dehydrated, loses strength",
                     character_name
                 )
             }
             GameEvent::CharacterStarving { character_name, .. } => {
-                write!(
-                    f,
-                    "🍴 {} is ravenously hungry, loses strength",
-                    character_name
-                )
+                write!(f, "{} is ravenously hungry, loses strength", character_name)
             }
             GameEvent::CharacterPoisoned { character_name, .. } => {
                 write!(
                     f,
-                    "🧪 {} eats something poisonous, loses sanity",
+                    "{} eats something poisonous, loses sanity",
                     character_name
                 )
             }
@@ -217,7 +197,7 @@ impl Display for GameEvent {
             } => {
                 write!(
                     f,
-                    "🐾 {} is attacked by {} {}, takes {} damage!",
+                    "{} is attacked by {} {}, takes {} damage!",
                     character_name,
                     animal_count,
                     animal.plural(),
@@ -225,7 +205,7 @@ impl Display for GameEvent {
                 )
             }
             GameEvent::CharacterBurned { character_name, .. } => {
-                write!(f, "🔥 {} gets burned, loses health", character_name)
+                write!(f, "{} gets burned, loses health", character_name)
             }
             GameEvent::CharacterHorrified {
                 character_name,
@@ -234,33 +214,25 @@ impl Display for GameEvent {
             } => {
                 write!(
                     f,
-                    "😱 {} is horrified by the violence, loses {} sanity.",
+                    "{} is horrified by the violence, loses {} sanity.",
                     character_name, sanity_damage
                 )
             }
             GameEvent::CharacterSuffer { character_name, .. } => {
-                write!(
-                    f,
-                    "😭 {} suffers from loneliness and terror.",
-                    character_name
-                )
+                write!(f, "{} suffers from loneliness and terror.", character_name)
             }
             GameEvent::CharacterSelfHarm { character_name, .. } => {
-                write!(f, "🤦 {} tries to attack themself!", character_name)
+                write!(f, "{} tries to attack themself!", character_name)
             }
             GameEvent::CharacterSuicide { character_name, .. } => {
-                write!(f, "🪒 {} attempts suicide.", character_name)
+                write!(f, "{} attempts suicide.", character_name)
             }
             GameEvent::CharacterAttackWin {
                 character_name,
                 target_name,
                 ..
             } => {
-                write!(
-                    f,
-                    "🔪 {} attacks {}, and wins!",
-                    character_name, target_name
-                )
+                write!(f, "{} attacks {}, and wins!", character_name, target_name)
             }
             GameEvent::CharacterAttackWinExtra {
                 character_name,
@@ -269,7 +241,7 @@ impl Display for GameEvent {
             } => {
                 write!(
                     f,
-                    "🔪 {} attacks {}, and wins decisively!",
+                    "{} attacks {}, and wins decisively!",
                     character_name, target_name
                 )
             }
@@ -278,18 +250,14 @@ impl Display for GameEvent {
                 target_name,
                 ..
             } => {
-                write!(f, "🤕 {} wounds {}", character_name, target_name)
+                write!(f, "{} wounds {}", character_name, target_name)
             }
             GameEvent::CharacterAttackLose {
                 character_name,
                 target_name,
                 ..
             } => {
-                write!(
-                    f,
-                    "🤣 {} attacks {}, but loses!",
-                    character_name, target_name
-                )
+                write!(f, "{} attacks {}, but loses!", character_name, target_name)
             }
             GameEvent::CharacterAttackLoseExtra {
                 character_name,
@@ -298,7 +266,7 @@ impl Display for GameEvent {
             } => {
                 write!(
                     f,
-                    "🤣 {} attacks {}, but loses decisively!",
+                    "{} attacks {}, but loses decisively!",
                     character_name, target_name
                 )
             }
@@ -307,29 +275,21 @@ impl Display for GameEvent {
                 target_name,
                 ..
             } => {
-                write!(
-                    f,
-                    "😰 {} attacks {}, but misses!",
-                    character_name, target_name
-                )
+                write!(f, "{} attacks {}, but misses!", character_name, target_name)
             }
             GameEvent::CharacterAttackDied {
                 character_name,
                 target_name,
                 ..
             } => {
-                write!(f, "☠️ {} is killed by {}", character_name, target_name)
+                write!(f, "{} is killed by {}", character_name, target_name)
             }
             GameEvent::CharacterAttackSuccessKill {
                 character_name,
                 target_name,
                 ..
             } => {
-                write!(
-                    f,
-                    "☠️ {} successfully kills {}",
-                    character_name, target_name
-                )
+                write!(f, "{} successfully kills {}", character_name, target_name)
             }
             GameEvent::CharacterAttackHidden {
                 character_name,
@@ -338,7 +298,7 @@ impl Display for GameEvent {
             } => {
                 write!(
                     f,
-                    "🤔 {} can't attack {}, they're hidden",
+                    "{} can't attack {}, they're hidden",
                     character_name, target_name
                 )
             }
@@ -349,14 +309,14 @@ impl Display for GameEvent {
             } => {
                 write!(
                     f,
-                    "💥 {} lands a CRITICAL HIT on {}!",
+                    "{} lands a CRITICAL HIT on {}!",
                     character_name, target_name
                 )
             }
             GameEvent::CharacterCriticalFumble { character_name, .. } => {
                 write!(
                     f,
-                    "😵 {} fumbles their attack badly and hurts themself!",
+                    "{} fumbles their attack badly and hurts themself!",
                     character_name
                 )
             }
@@ -367,7 +327,7 @@ impl Display for GameEvent {
             } => {
                 write!(
                     f,
-                    "🛡️ {} perfectly blocks {}'s attack and counters!",
+                    "{} perfectly blocks {}'s attack and counters!",
                     character_name, target_name
                 )
             }
@@ -376,34 +336,39 @@ impl Display for GameEvent {
                 status,
                 ..
             } => {
-                write!(f, "💀 {} dies from {}", character_name, status)
+                if status.as_str() == "healthy" {
+                    // "dies from healthy" read like a bug report.
+                    write!(f, "{} breathes their last.", character_name)
+                } else {
+                    write!(f, "{} dies from {}", character_name, status)
+                }
             }
             GameEvent::CharacterDiesFromAreaEvent {
                 character_name,
                 area_event,
                 ..
             } => {
-                write!(f, "🪦 {} died in the {}.", character_name, area_event)
+                write!(f, "{} died in the {}.", character_name, area_event)
             }
             GameEvent::CharacterDiesFromCharacterEvent {
                 character_name,
                 character_event,
                 ..
             } => {
-                write!(f, "💀 {} dies by {}", character_name, character_event)
+                write!(f, "{} dies by {}", character_name, character_event)
             }
             GameEvent::CharacterAlreadyDead { character_name, .. } => {
-                write!(f, "‼️ {} is already dead!", character_name)
+                write!(f, "{} is already dead!", character_name)
             }
             GameEvent::CharacterDead { character_name, .. } => {
-                write!(f, "❗️ {} is dead!", character_name)
+                write!(f, "{} is dead!", character_name)
             }
             GameEvent::WeaponBreak {
                 character_name,
                 weapon_name,
                 ..
             } => {
-                write!(f, "🗡️ {} breaks their {}", character_name, weapon_name)
+                write!(f, "{} breaks their {}", character_name, weapon_name)
             }
             GameEvent::WeaponWear {
                 character_name,
@@ -412,7 +377,7 @@ impl Display for GameEvent {
             } => {
                 write!(
                     f,
-                    "🗡️ {}'s {} is showing signs of wear",
+                    "{}'s {} is showing signs of wear",
                     character_name, weapon_name
                 )
             }
@@ -421,7 +386,7 @@ impl Display for GameEvent {
                 shield_name,
                 ..
             } => {
-                write!(f, "🛡️ {} breaks their {}", character_name, shield_name)
+                write!(f, "{} breaks their {}", character_name, shield_name)
             }
             GameEvent::ShieldWear {
                 character_name,
@@ -430,7 +395,7 @@ impl Display for GameEvent {
             } => {
                 write!(
                     f,
-                    "🛡️ {}'s {} is showing signs of wear",
+                    "{}'s {} is showing signs of wear",
                     character_name, shield_name
                 )
             }
@@ -442,7 +407,7 @@ impl Display for GameEvent {
                 let object = indefinite(&item.name);
                 write!(
                     f,
-                    "🎁 {} receives {} (durability {}/{} {} +{})",
+                    "{} receives {} (durability {}/{} {} +{})",
                     character_name,
                     object,
                     item.current_durability,
@@ -457,7 +422,7 @@ impl Display for GameEvent {
             } => {
                 let area_short = area_name.replace("The ", "");
                 let event = indefinite_capitalized(area_event);
-                write!(f, "=== ⚠️ {} has occurred in the {} ===", event, area_short)
+                write!(f, "=== {} has occurred in the {} ===", event, area_short)
             }
             GameEvent::TrappedInArea {
                 character_name,
@@ -465,7 +430,7 @@ impl Display for GameEvent {
                 ..
             } => {
                 let area_short = area_name.replace("The ", "");
-                write!(f, "💥 {} is trapped in the {}.", character_name, area_short)
+                write!(f, "{} is trapped in the {}.", character_name, area_short)
             }
             GameEvent::DiedInArea {
                 character_name,
@@ -473,34 +438,30 @@ impl Display for GameEvent {
                 ..
             } => {
                 let area_short = area_name.replace("The ", "");
-                write!(f, "💥 {} died in the {}.", character_name, area_short)
+                write!(f, "{} died in the {}.", character_name, area_short)
             }
             GameEvent::CharacterDeath { character_name, .. } => {
-                write!(f, "⚰️ {} has died.", character_name)
+                write!(f, "{} has died.", character_name)
             }
             GameEvent::CharacterBetrayal {
                 character_name,
                 target_name,
                 ..
             } => {
-                write!(f, "💔 {} betrays {}!", character_name, target_name)
+                write!(f, "{} betrays {}!", character_name, target_name)
             }
             GameEvent::CharacterForcedBetrayal {
                 character_name,
                 target_name,
                 ..
             } => {
-                write!(
-                    f,
-                    "💔💔 {} is forced to betray {}!",
-                    character_name, target_name
-                )
+                write!(f, "{} is forced to betray {}!", character_name, target_name)
             }
             GameEvent::NoOneToAttack { character_name, .. } => {
-                write!(f, "🤷 {} has no one to attack!", character_name)
+                write!(f, "{} has no one to attack!", character_name)
             }
             GameEvent::AllAlone { character_name, .. } => {
-                write!(f, "😢 {} is all alone!", character_name)
+                write!(f, "{} is all alone!", character_name)
             }
             GameEvent::AllianceFormed {
                 character_a_name,

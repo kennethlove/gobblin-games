@@ -4,6 +4,7 @@
     <time class="card-timestamp">{{ ts }}</time>
   </header>
   <div class="card-body">
+    {% if icon %}<span class="event-icon">{{ icon | narrative_icon | safe }}</span>{% endif %}
     <span class="card-kind">{{ kind }}</span>
     — {{ content }}
   </div>

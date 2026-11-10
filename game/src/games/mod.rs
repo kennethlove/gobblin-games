@@ -613,10 +613,16 @@ impl Game {
                 winning_team: None,
             };
             let tick = self.tick_counter.boundary();
+            let closing = [
+                "The game has ended with no survivors.",
+                "The arena falls silent — not a goblin walked out.",
+                "Nobody is left to claim the win.",
+            ];
+            let closing = closing[rand::rng().random_range(0..closing.len())];
             self.push_message(
                 shared::messages::MessageSource::Game(game_id.clone()),
                 format!("game:{}", game_id),
-                "The game has ended with no survivors.".to_string(),
+                closing.to_string(),
                 payload,
                 tick,
             );

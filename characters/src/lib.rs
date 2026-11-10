@@ -1561,10 +1561,7 @@ impl Character {
     ) -> bool {
         let cost = stamina_cost_on(action, base, self);
         if self.stamina < cost {
-            let line = format!(
-                "🥵 {} is too exhausted to {}, lacks stamina",
-                self.name, verb
-            );
+            let line = format!("{} is too exhausted to {}, lacks stamina", self.name, verb);
             events.push(TaggedEvent::new(
                 line,
                 MessagePayload::CharacterRested {
@@ -2152,7 +2149,7 @@ impl Character {
             name: target.name.clone(),
         };
 
-        let proposed_line = format!("🤝 {} proposes an alliance to {}.", self.name, target.name);
+        let proposed_line = format!("{} proposes an alliance to {}.", self.name, target.name);
         events.push(TaggedEvent::new(
             proposed_line,
             MessagePayload::AllianceProposed {
