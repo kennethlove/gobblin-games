@@ -79,6 +79,37 @@ fn message_archetype(payload: &shared::messages::MessagePayload) -> &'static str
     }
 }
 
+/// Narrative sprite for a log card — replaces the old inline emoji in
+/// message content. `None` = the card renders text-only.
+fn narrative_icon(payload: &shared::messages::MessagePayload) -> Option<&'static str> {
+    use shared::messages::{AreaEventKind, MessageKind::*};
+    if let shared::messages::MessagePayload::AreaEvent { kind, .. } = payload {
+        return Some(match kind {
+            AreaEventKind::Fire => "burned",
+            AreaEventKind::Flood => "drowning",
+            AreaEventKind::Earthquake | AreaEventKind::Hazard => "falling_rocks",
+            AreaEventKind::Storm => "electrocuted",
+            AreaEventKind::Mutts => "mauled",
+            AreaEventKind::Other => return None,
+        });
+    }
+    Some(match payload.kind() {
+        CharacterKilled => "dead",
+        CharacterBledOut => "recently_dead",
+        Combat | CombatBeat | CombatRoundStart | CombatJoined | CombatEnded | CharacterAttacked
+        | CharacterWounded | TrapSet | TrapTriggered => "pointy_sword",
+        CharacterStarved => "starving",
+        CharacterDehydrated => "dehydrated",
+        Foraged | Ate => "trail_mix",
+        WoundInflicted | WoundBled | WoundAmputated => "wounded",
+        WoundInfected => "infection",
+        WoundHealed | WoundTreated | ConditionResolved | AfflictionHealed => "health_potion",
+        AllianceFormed => "hearts",
+        BetrayalTriggered => "switchblade",
+        _ => return None,
+    })
+}
+
 fn archetype_label(archetype: &str) -> &'static str {
     match archetype {
         "action" => "ACTION",
@@ -314,6 +345,7 @@ fn render_plain_event_card(msg: &shared::messages::GameMessage) -> String {
     ctx.insert("badge", badge);
     ctx.insert("kind", kind);
     ctx.insert("color", color);
+    ctx.insert("icon", &narrative_icon(&msg.payload));
     ctx.insert("ts", &ts);
     // Tera autoescapes .html; content passes raw (was html_escape()).
     ctx.insert("content", &msg.content);

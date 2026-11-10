@@ -1699,6 +1699,15 @@ h1, h2, h3, h4 { text-wrap: balance; }
 .event-card[data-kind-color] .card-badge,
 .combat-card[data-kind-color] .card-badge { background: var(--kc); color: var(--bg); }
 .event-card .card-kind { font-weight: 600; }
+/* Log-card narrative sprite (replaces inline emoji in content) — reads
+   the same --kc kind colour the badge/chips use. */
+.event-card .event-icon {
+  display: inline-flex;
+  vertical-align: -0.15em;
+  margin-inline-end: 6px;
+  color: var(--kc);
+}
+.event-card .event-icon .icon { width: 1.1em; height: 1.1em; }
 .combat-card .combat-sides { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
 /* Outline chips: the COMBAT badge keeps the only solid fill, so severity
    colour on chips+note reads as signal instead of decoration (qy2). */

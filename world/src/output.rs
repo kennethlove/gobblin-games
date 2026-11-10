@@ -108,144 +108,144 @@ impl<'a> Display for GameOutput<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
             GameOutput::GameDayStart(day_number) => {
-                write!(f, "=== ☀️ Day {} begins! ===", day_number)
+                write!(f, "=== Day {} begins! ===", day_number)
             }
             GameOutput::GameDayEnd(day_number) => {
-                write!(f, "=== ☀️ Day {} ends! ===", day_number)
+                write!(f, "=== Day {} ends! ===", day_number)
             }
             GameOutput::FirstDayStart => {
-                write!(f, "=== 🎉 The Gobblin Games begin! 🎉 ===")
+                write!(f, "=== The Gobblin Games begin! ===")
             }
             GameOutput::CharactersLeft(character_count) => {
-                write!(f, "=== 📌 Goblins alive: {} ===", character_count)
+                write!(f, "=== Goblins alive: {} ===", character_count)
             }
             GameOutput::GameNightStart(day_number) => {
-                write!(f, "=== 🌙 Night {} begins ===", day_number)
+                write!(f, "=== Night {} begins ===", day_number)
             }
             GameOutput::GameNightEnd(day_number) => {
-                write!(f, "=== 🌙 Night {} ends ===", day_number)
+                write!(f, "=== Night {} ends ===", day_number)
             }
             GameOutput::DailyDeathAnnouncement(death_count) => {
-                write!(f, "=== 💀 Goblins dead: {} ===", death_count)
+                write!(f, "=== Goblins dead: {} ===", death_count)
             }
             GameOutput::DeathAnnouncement(character) => {
-                write!(f, "=== 🪦 {} has died ===", character)
+                write!(f, "=== {} has died ===", character)
             }
             GameOutput::NoOneWins => {
-                write!(f, "=== 🎭 No one wins! ===")
+                write!(f, "=== No one wins! ===")
             }
             GameOutput::CharacterWins(character) => {
-                write!(f, "=== 🏆 {} is the last goblin standing ===", character)
+                write!(f, "=== {} is the last goblin standing ===", character)
             }
             GameOutput::CharacterRest(character) => {
-                write!(f, "😪 {} rests", character)
+                write!(f, "{} rests", character)
             }
             GameOutput::CharacterLongRest(character) => {
                 write!(
                     f,
-                    "💤 {} rests and recovers a little health and sanity",
+                    "{} rests and recovers a little health and sanity",
                     character
                 )
             }
             GameOutput::CharacterSleeps(character) => {
-                write!(f, "😴 {} settles in to sleep", character)
+                write!(f, "{} settles in to sleep", character)
             }
             GameOutput::CharacterWakesRested(character) => {
-                write!(f, "🌅 {} wakes, well-rested", character)
+                write!(f, "{} wakes, well-rested", character)
             }
             GameOutput::CharacterWakesInterrupted(character) => {
-                write!(f, "⚡ {} jolts awake", character)
+                write!(f, "{} jolts awake", character)
             }
             GameOutput::CharacterWakesFromIncident(character, description) => {
-                write!(f, "⚡ {} wakes abruptly — {}", character, description)
+                write!(f, "{} wakes abruptly — {}", character, description)
             }
             GameOutput::CharacterSleepFlavor(character, description) => {
-                write!(f, "💤 {} stirs in their sleep — {}", character, description)
+                write!(f, "{} stirs in their sleep — {}", character, description)
             }
             GameOutput::CharacterHide(character) => {
-                write!(f, "🫥 {} tries to hide", character)
+                write!(f, "{} tries to hide", character)
             }
             GameOutput::CharacterTravel(character, area_a, area_b) => {
-                write!(f, "🚶 {} moves from {} to {}", character, area_a, area_b)
+                write!(f, "{} moves from {} to {}", character, area_a, area_b)
             }
             GameOutput::CharacterSubHop(character, area) => {
-                write!(f, "👣 {} shifts position within {}", character, area)
+                write!(f, "{} shifts position within {}", character, area)
             }
             GameOutput::CharacterTakeItem(character, item) => {
                 let object = indefinite(item);
-                write!(f, "🔨 {} takes {}", character, object)
+                write!(f, "{} takes {}", character, object)
             }
             GameOutput::CharacterCannotUseItem(character, item) => {
                 let object = indefinite(item);
-                write!(f, "❌ {} cannot use {}", character, object)
+                write!(f, "{} cannot use {}", character, object)
             }
             GameOutput::CharacterUseItem(character, item) => {
                 let object = indefinite(&item.name);
                 write!(
                     f,
-                    "💊 {} uses {}, gains {} {}",
+                    "{} uses {}, gains {} {}",
                     character, object, item.effect, item.attribute
                 )
             }
             GameOutput::CharacterTravelTooTired(character, area) => {
                 write!(
                     f,
-                    "😴 {} is too tired to move from {}, rests instead",
+                    "{} is too tired to move from {}, rests instead",
                     character, area
                 )
             }
             GameOutput::CharacterTravelExhausted(character, area) => {
                 write!(
                     f,
-                    "🥵 {} is too exhausted to move from {}, lacks stamina",
+                    "{} is too exhausted to move from {}, lacks stamina",
                     character, area
                 )
             }
             GameOutput::CharacterTravelAlreadyThere(character, area) => {
-                write!(f, "🤔 {} is already in the {}, stays put", character, area)
+                write!(f, "{} is already in the {}, stays put", character, area)
             }
             GameOutput::CharacterTravelFollow(character, area) => {
-                write!(f, "🫡 {} follows their team mate to {}", character, area)
+                write!(f, "{} follows their team mate to {}", character, area)
             }
             GameOutput::CharacterTravelStay(character, area) => {
-                write!(f, "🪑 {} stays in {}", character, area)
+                write!(f, "{} stays in {}", character, area)
             }
             GameOutput::CharacterTravelNoOptions(character, area) => {
-                write!(f, "📍 {} has nowhere to go, stays in {}", character, area)
+                write!(f, "{} has nowhere to go, stays in {}", character, area)
             }
             GameOutput::CharacterBleeds(character) => {
-                write!(f, "🩸 {} bleeds from their wounds.", character)
+                write!(f, "{} bleeds from their wounds.", character)
             }
             GameOutput::CharacterSick(character) => {
                 write!(
                     f,
-                    "🤒 {} contracts dysentery, loses strength and speed",
+                    "{} contracts dysentery, loses strength and speed",
                     character
                 )
             }
             GameOutput::CharacterElectrocuted(character) => {
-                write!(f, "🌩️ {} is struck by lightning, loses health", character)
+                write!(f, "{} is struck by lightning, loses health", character)
             }
             GameOutput::CharacterFrozen(character) => {
-                write!(f, "🥶 {} suffers from hypothermia, loses speed.", character)
+                write!(f, "{} suffers from hypothermia, loses speed.", character)
             }
             GameOutput::CharacterOverheated(character) => {
-                write!(f, "🥵 {} suffers from heat stroke, loses speed.", character)
+                write!(f, "{} suffers from heat stroke, loses speed.", character)
             }
             GameOutput::CharacterDehydrated(character) => {
-                write!(f, "🌵 {} is severely dehydrated, loses strength", character)
+                write!(f, "{} is severely dehydrated, loses strength", character)
             }
             GameOutput::CharacterStarving(character) => {
-                write!(f, "🍴 {} is ravenously hungry, loses strength", character)
+                write!(f, "{} is ravenously hungry, loses strength", character)
             }
             GameOutput::CharacterPoisoned(character) => {
-                write!(f, "🧪 {} eats something poisonous, loses sanity", character)
+                write!(f, "{} eats something poisonous, loses sanity", character)
             }
             GameOutput::CharacterMauled(character, count, animal, damage) => {
                 let animal = Animal::from_str(animal).unwrap();
                 write!(
                     f,
-                    "🐾 {} is attacked by {} {}, takes {} damage!",
+                    "{} is attacked by {} {}, takes {} damage!",
                     character,
                     count,
                     animal.plural(),
@@ -253,147 +253,135 @@ impl<'a> Display for GameOutput<'a> {
                 )
             }
             GameOutput::CharacterBurned(character) => {
-                write!(f, "🔥 {} gets burned, loses health", character)
+                write!(f, "{} gets burned, loses health", character)
             }
             GameOutput::CharacterDiedWhileTrapped {
                 character_name,
                 kind,
             } => match kind {
                 TrapKind::Drowning => {
-                    write!(f, "💧 {} drowned.", character_name)
+                    write!(f, "{} drowned.", character_name)
                 }
                 TrapKind::Buried => {
-                    write!(f, "🪦 {} suffocated, buried alive.", character_name)
+                    write!(f, "{} suffocated, buried alive.", character_name)
                 }
                 TrapKind::Pitfall => {
-                    write!(f, "🕳️ {} fell into a pitfall.", character_name)
+                    write!(f, "{} fell into a pitfall.", character_name)
                 }
                 TrapKind::SpikedPitfall => {
-                    write!(f, "🕳️ {} impaled by a spiked pitfall.", character_name)
+                    write!(f, "{} impaled by a spiked pitfall.", character_name)
                 }
                 TrapKind::Snared => {
-                    write!(f, "🪢 {} caught in a snare.", character_name)
+                    write!(f, "{} caught in a snare.", character_name)
                 }
                 TrapKind::Pinned => {
-                    write!(f, "⛰️ {} pinned by debris.", character_name)
+                    write!(f, "{} pinned by debris.", character_name)
                 }
             },
             GameOutput::CharacterHorrified(character, damage) => {
                 write!(
                     f,
-                    "😱 {} is horrified by the violence, loses {} sanity.",
+                    "{} is horrified by the violence, loses {} sanity.",
                     character, damage
                 )
             }
             GameOutput::CharacterSuffer(character) => {
-                write!(f, "😭 {} suffers from loneliness and terror.", character)
+                write!(f, "{} suffers from loneliness and terror.", character)
             }
             GameOutput::CharacterSelfHarm(character) => {
-                write!(f, "🤦 {} tries to attack themself!", character)
+                write!(f, "{} tries to attack themself!", character)
             }
             GameOutput::CharacterSuicide(character) => {
-                write!(f, "🪒 {} attempts suicide.", character)
+                write!(f, "{} attempts suicide.", character)
             }
             GameOutput::CharacterAttackWin(character, target) => {
-                write!(f, "🔪 {} attacks {}, and wins!", character, target)
+                write!(f, "{} attacks {}, and wins!", character, target)
             }
             GameOutput::CharacterAttackWinExtra(character, target) => {
-                write!(
-                    f,
-                    "🔪 {} attacks {}, and wins decisively!",
-                    character, target
-                )
+                write!(f, "{} attacks {}, and wins decisively!", character, target)
             }
             GameOutput::CharacterAttackWound(character, target) => {
-                write!(f, "🤕 {} wounds {}", character, target)
+                write!(f, "{} wounds {}", character, target)
             }
             GameOutput::CharacterAttackLose(character, target) => {
-                write!(f, "🤣 {} attacks {}, but loses!", character, target)
+                write!(f, "{} attacks {}, but loses!", character, target)
             }
             GameOutput::CharacterAttackLoseExtra(character, target) => {
-                write!(
-                    f,
-                    "🤣 {} attacks {}, but loses decisively!",
-                    character, target
-                )
+                write!(f, "{} attacks {}, but loses decisively!", character, target)
             }
             GameOutput::CharacterAttackMiss(character, target) => {
-                write!(f, "😰 {} attacks {}, but misses!", character, target)
+                write!(f, "{} attacks {}, but misses!", character, target)
             }
             GameOutput::CharacterAttackDied(character, target) => {
-                write!(f, "☠️ {} is killed by {}", character, target)
+                write!(f, "{} is killed by {}", character, target)
             }
             GameOutput::CharacterAttackSuccessKill(character, target) => {
-                write!(f, "☠️ {} successfully kills {}", character, target)
+                write!(f, "{} successfully kills {}", character, target)
             }
             GameOutput::CharacterAttackHidden(character, target) => {
-                write!(
-                    f,
-                    "🤔 {} can't attack {}, they're hidden",
-                    character, target
-                )
+                write!(f, "{} can't attack {}, they're hidden", character, target)
             }
             GameOutput::CharacterCriticalHit(character, target) => {
-                write!(f, "💥 {} lands a CRITICAL HIT on {}!", character, target)
+                write!(f, "{} lands a CRITICAL HIT on {}!", character, target)
             }
             GameOutput::CharacterCriticalFumble(character) => {
                 write!(
                     f,
-                    "😵 {} fumbles their attack badly and hurts themself!",
+                    "{} fumbles their attack badly and hurts themself!",
                     character
                 )
             }
             GameOutput::CharacterPerfectBlock(character, target) => {
                 write!(
                     f,
-                    "🛡️ {} perfectly blocks {}'s attack and counters!",
+                    "{} perfectly blocks {}'s attack and counters!",
                     character, target
                 )
             }
             GameOutput::CharacterDiesFromStatus(character, status) => {
-                write!(f, "💀 {} dies from {}", character, status)
+                write!(f, "{} dies from {}", character, status)
             }
             GameOutput::CharacterDiesFromAreaEvent(character, area_event) => {
-                write!(f, "🪦 {} died in the {}.", character, area_event)
+                write!(f, "{} died in the {}.", character, area_event)
             }
             GameOutput::CharacterDiesFromCharacterEvent(character, character_event) => {
-                write!(f, "💀 {} dies by {}", character, character_event)
+                write!(f, "{} dies by {}", character, character_event)
             }
             GameOutput::CharacterAlreadyDead(character) => {
-                write!(f, "‼️ {} is already dead!", character)
+                write!(f, "{} is already dead!", character)
             }
             GameOutput::CharacterDead(character) => {
-                write!(f, "❗️ {} is dead!", character)
+                write!(f, "{} is dead!", character)
             }
             GameOutput::WeaponBreak(character, weapon) => {
-                write!(f, "🗡️ {} breaks their {}", character, weapon)
+                write!(f, "{} breaks their {}", character, weapon)
             }
             GameOutput::WeaponWear(character, weapon) => {
-                write!(f, "🗡️ {}'s {} is showing signs of wear", character, weapon)
+                write!(f, "{}'s {} is showing signs of wear", character, weapon)
             }
             GameOutput::ShieldBreak(character, shield) => {
-                write!(f, "🛡️ {} breaks their {}", character, shield)
+                write!(f, "{} breaks their {}", character, shield)
             }
             GameOutput::ShieldWear(character, shield) => {
-                write!(f, "🛡️ {}'s {} is showing signs of wear", character, shield)
+                write!(f, "{}'s {} is showing signs of wear", character, shield)
             }
             GameOutput::ArmorBreak(character, armor) => {
-                write!(f, "🪖 {} breaks their {}", character, armor)
+                write!(f, "{} breaks their {}", character, armor)
             }
             GameOutput::ArmorWear(character, armor) => {
-                write!(f, "🪖 {}'s {} is showing signs of wear", character, armor)
+                write!(f, "{}'s {} is showing signs of wear", character, armor)
             }
             GameOutput::WeaponShattersMidSwing(character, weapon, penalty) => {
                 write!(
                     f,
-                    "🗡️ {}'s {} shatters mid-swing! (-{} attack)",
+                    "{}'s {} shatters mid-swing! (-{} attack)",
                     character, weapon, penalty
                 )
             }
             GameOutput::ShieldShattersMidBlock(character, shield, penalty) => {
                 write!(
                     f,
-                    "🛡️ {}'s {} shatters mid-block! (-{} defense)",
+                    "{}'s {} shatters mid-block! (-{} defense)",
                     character, shield, penalty
                 )
             }
@@ -401,7 +389,7 @@ impl<'a> Display for GameOutput<'a> {
                 let object = indefinite(&item.name);
                 write!(
                     f,
-                    "🎁 {} receives {} (durability {}/{} {} +{})",
+                    "{} receives {} (durability {}/{} {} +{})",
                     character,
                     object,
                     item.current_durability,
@@ -413,30 +401,30 @@ impl<'a> Display for GameOutput<'a> {
             GameOutput::AreaEvent(area_event, area) => {
                 let area_name = area.replace("The ", "");
                 let event = indefinite_capitalized(area_event);
-                write!(f, "=== ⚠️ {} has occurred in the {} ===", event, area_name)
+                write!(f, "=== {} has occurred in the {} ===", event, area_name)
             }
             GameOutput::TrappedInArea(character, area) => {
                 let area_name = area.replace("The ", "");
-                write!(f, "💥 {} is trapped in the {}.", character, area_name)
+                write!(f, "{} is trapped in the {}.", character, area_name)
             }
             GameOutput::DiedInArea(character, area) => {
                 let area_name = area.replace("The ", "");
-                write!(f, "💥 {} died in the {}.", character, area_name)
+                write!(f, "{} died in the {}.", character, area_name)
             }
             GameOutput::CharacterDeath(character) => {
-                write!(f, "⚰️ {} has died.", character)
+                write!(f, "{} has died.", character)
             }
             GameOutput::CharacterBetrayal(character, target) => {
-                write!(f, "💔 {} betrays {}!", character, target)
+                write!(f, "{} betrays {}!", character, target)
             }
             GameOutput::CharacterForcedBetrayal(character, target) => {
-                write!(f, "💔💔 {} is forced to betray {}!", character, target)
+                write!(f, "{} is forced to betray {}!", character, target)
             }
             GameOutput::NoOneToAttack(character) => {
-                write!(f, "🤷 {} has no one to attack!", character)
+                write!(f, "{} has no one to attack!", character)
             }
             GameOutput::AllAlone(character) => {
-                write!(f, "😢 {} is all alone!", character)
+                write!(f, "{} is all alone!", character)
             }
             GameOutput::AllianceFormed(a, b, factor) => {
                 write!(f, "{} and {} form an alliance ({}).", a, b, factor)
@@ -496,7 +484,7 @@ mod tests {
         .to_string();
         assert_eq!(
             s,
-            "⚡ Snaggletooth wakes abruptly — Snaggletooth's sword is stolen while they sleep!"
+            "Snaggletooth wakes abruptly — Snaggletooth's sword is stolen while they sleep!"
         );
     }
 
@@ -506,7 +494,7 @@ mod tests {
             GameOutput::CharacterSleepFlavor("Grubworm", "a squirrel on their chest").to_string();
         assert_eq!(
             s,
-            "💤 Grubworm stirs in their sleep — a squirrel on their chest"
+            "Grubworm stirs in their sleep — a squirrel on their chest"
         );
     }
 }
