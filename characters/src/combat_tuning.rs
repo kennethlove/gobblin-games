@@ -63,6 +63,14 @@ pub struct CombatTuning {
     /// tuned so roughly a fifth of flee attempts actually escape (measured
     /// via `cargo run --example tuning_harness`).
     pub flee_contest_modifier: i32,
+    /// cz9 agreed stop: a fighter counts as spent (wants the fight called
+    /// off) at zero stamina or blood at/below this floor. When EVERY member
+    /// of both sides is spent the fight ends in a Draw — unless the
+    /// fingers-crossed roll turns it into a sneak attack.
+    pub draw_blood_floor: u32,
+    /// Chance per agreed-stop check that the most desperate fighter crosses
+    /// its fingers and lunges instead of taking the honest draw.
+    pub fingers_crossed_chance: f64,
 
     // --- Combat brain weights (spec 2026-10-09 §4, §7) ---
     /// Baseline score for Attack.
@@ -178,6 +186,8 @@ impl Default for CombatTuning {
             max_rounds: 12,
             max_combatants: 8,
             flee_contest_modifier: -7,
+            draw_blood_floor: 100,
+            fingers_crossed_chance: 0.05,
 
             brain_attack_base: 40,
             brain_attack_aggressive_bonus: 10,

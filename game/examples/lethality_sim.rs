@@ -76,6 +76,8 @@ fn main() {
     let mut wipe_day_combat = 0usize;
     let mut wipe_day_generic = 0usize;
     let mut wipe_examples = 0usize;
+    let mut draw_fights = 0usize;
+    let mut fingers_crossed = 0usize;
 
     for i in 0..runs {
         let mut game = build_game(i);
@@ -119,6 +121,17 @@ fn main() {
                     }
                 }
                 MessagePayload::CharacterBledOut { .. } => bled += 1,
+                MessagePayload::CombatEnded { .. } if m.content.contains("draw") => {
+                    draw_fights += 1;
+                }
+                MessagePayload::CombatBeat(ref beat) => {
+                    if matches!(
+                        beat.outcome,
+                        shared::combat_beat::BeatOutcome::FingersCrossed
+                    ) {
+                        fingers_crossed += 1;
+                    }
+                }
                 _ => {}
             }
         }
@@ -225,4 +238,6 @@ fn main() {
     println!(
         "  wipeout final-day death mix: hazard {wipe_day_hazard}, combat {wipe_day_combat}, generic {wipe_day_generic}"
     );
+    println!("  draw fights (cz9 agreed stop): {draw_fights}");
+    println!("  fingers-crossed sneaks (draw broken): {fingers_crossed}");
 }

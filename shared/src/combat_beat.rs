@@ -127,6 +127,9 @@ pub enum BeatOutcome {
     Executed { damage: u32 },
     /// A `CallAlly` beat — the summoned ally arrives from the next round.
     CalledAlly,
+    /// An `Attack` beat — the actor crossed its fingers on an agreed stop
+    /// and lunged instead of taking the honest draw (cz9); the sneak lands.
+    FingersCrossed,
 }
 
 /// Full record of one combatant's action within a round.
