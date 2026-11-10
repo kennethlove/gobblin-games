@@ -44,6 +44,33 @@
     {% endif %}
 
     <div class="tl-main">
+      {% if day_digest_rows %}
+      <section class="day-digest" aria-label="Day {{ digest_day }} summary">
+        <div class="digest-head">
+          <h2>Day {{ digest_day }} in brief</h2>
+        </div>
+        {% for row in day_digest_rows %}
+        <article class="digest-row digest-{{ row.kind }}">
+          {% if row.avatars %}
+          <div class="digest-avatars">
+            {% for avatar in row.avatars %}
+            <img class="digest-avatar" src="{{ avatar }}" alt="">
+            {% endfor %}
+          </div>
+          {% endif %}
+          <div class="digest-body">
+            <p class="digest-lead">{{ row.lead }}</p>
+            {% if row.lines %}
+            <ul class="digest-lines">
+              {% for line in row.lines %}<li>{{ line }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+            {% if row.more %}<p class="digest-more">+{{ row.more }} more</p>{% endif %}
+          </div>
+        </article>
+        {% endfor %}
+      </section>
+      {% endif %}
       <div class="filter-pills tl-filters tight">
         {% for f in filter_options %}
         {% set is_active = f.value == filter %}

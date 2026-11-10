@@ -2162,6 +2162,74 @@ h1, h2, h3, h4 { text-wrap: balance; }
   font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
 }
+/* Day digest — text summary rows above the timeline feed (9j4). */
+.day-digest {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--gap-md);
+  margin-bottom: var(--gap-lg);
+}
+.digest-head h2 {
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--muted);
+  margin: 0 0 var(--gap-sm);
+}
+.digest-row {
+  display: flex;
+  gap: var(--gap-sm);
+  padding: var(--gap-sm) 0;
+}
+.digest-row + .digest-row {
+  border-top: 1px solid var(--border);
+}
+.digest-avatars {
+  display: flex;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+.digest-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  background: var(--surface-2);
+  object-fit: cover;
+}
+.digest-avatar + .digest-avatar {
+  margin-left: -8px;
+}
+.digest-body {
+  min-width: 0;
+}
+.digest-lead {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  color: var(--fg);
+}
+.digest-death .digest-lead {
+  color: var(--event-death);
+  font-weight: 600;
+}
+.digest-lines {
+  margin: var(--gap-xs) 0 0;
+  padding-left: 1.1em;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+}
+.digest-lines li {
+  margin: 2px 0;
+}
+.digest-more {
+  margin: var(--gap-xs) 0 0;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+}
 .tl-head {
   display: flex;
   align-items: baseline;
