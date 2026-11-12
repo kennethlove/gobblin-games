@@ -39,6 +39,18 @@ set already covers (`swords`, `sword`, `mace`, `blade`, `knife`, `spear`,
 drawings of an imported subject (`desert-1`, `desert-2`, `grenade-1`,
 `grass-1`, `pill-1`, `drone-1`).
 
+## mycollection pack (`~/Downloads/mycollection`)
+
+65 narrative icons converted from the second pack the same way —
+`mkbitmap -s8 -t0.4` + `potrace`, potrace's transform kept, `currentColor`
+512 shell. The pack ships its own `license/license.html` ("User License")
+alongside the `png/` exports.
+
+Of the pack's 72 files, 7 were not imported: 4 subjects already in the
+set (`ghost`, `toxic`, `broken-bone`, `skull`), `heart` (the sprite
+already has `hearts`), and 2 near-duplicates of existing subjects
+(`injured` = `wounded`, `fracture` = `broken-bone`).
+
 ## Unverified provenance
 
 These predate the icon-pipeline work and were already in the repository

@@ -9,6 +9,9 @@ pub fn icon_filter(value: &Value, _: Kwargs, _: &State) -> TeraResult<Value> {
 
 pub fn narrative_icon_filter(value: &Value, _: Kwargs, _: &State) -> TeraResult<Value> {
     let name = value.as_str().unwrap_or("");
+    // build.rs makes sprite ids hyphenated ("trail_mix" -> "icon_narrative_trail-mix"),
+    // while callers hand in Rust-side snake_case names ("trail_mix").
+    let name = name.replace('_', "-");
     Ok(Value::from(format!(
         "<svg class=\"icon\" aria-hidden=\"true\"><use href=\"/icons/sprite-narrative.svg#icon_narrative_{name}\"/></svg>"
     )))
