@@ -89,7 +89,6 @@ fn narrative_icon(payload: &shared::messages::MessagePayload) -> Option<&'static
             AreaEventKind::Flood => "drowning",
             AreaEventKind::Earthquake | AreaEventKind::Hazard => "falling_rocks",
             AreaEventKind::Storm => "electrocuted",
-            AreaEventKind::Mutts => "mauled",
             AreaEventKind::Other => return None,
         });
     }
