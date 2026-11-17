@@ -599,7 +599,6 @@ fn area_kind_label(kind: AreaEventKind) -> &'static str {
     match kind {
         AreaEventKind::Hazard => "hazard",
         AreaEventKind::Storm => "storm",
-        AreaEventKind::Mutts => "mutts",
         AreaEventKind::Earthquake => "earthquake",
         AreaEventKind::Flood => "flood",
         AreaEventKind::Fire => "fire",

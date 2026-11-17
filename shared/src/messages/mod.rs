@@ -220,7 +220,6 @@ pub struct ItemRef {
 pub enum AreaEventKind {
     Hazard,
     Storm,
-    Mutts,
     Earthquake,
     Flood,
     Fire,
@@ -353,7 +352,7 @@ pub enum WakeReason {
 pub enum InterruptionKind {
     /// Another character attacked the sleeper.
     Ambush { attacker: CharacterRef },
-    /// An area event (storm, mutts, etc.) hit the sleeper's area.
+    /// An area event (storm, flood, etc.) hit the sleeper's area.
     AreaEvent { kind: AreaEventKind },
     /// An ally summoned the character (alliance event cascade).
     AllianceSummons { ally: CharacterRef },
