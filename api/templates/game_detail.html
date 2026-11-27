@@ -29,6 +29,9 @@
     {% if game.status == 'NotStarted' %}
       <a class="btn btn-ghost" href="/games/{{ game.identifier }}/join">Join with a goblin</a>
     {% endif %}
+    {% if game.private %}
+      <button class="btn btn-ghost" hx-put="/api/games/{{ game.identifier }}/publish" hx-swap="none">Make public</button>
+    {% endif %}
   </div>
 
   <div class="detail-grid">

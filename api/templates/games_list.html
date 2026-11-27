@@ -14,7 +14,7 @@
       <div class="or-divider"><span>or</span></div>
       <div class="create-form">
         <h3>Create a Game</h3>
-        <form hx-post="/api/games" hx-swap="none">
+        <form action="/games/new" method="post">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <input type="text" name="name" placeholder="Game name...">
           <button class="btn btn-primary btn-sm" type="submit">Create</button>
