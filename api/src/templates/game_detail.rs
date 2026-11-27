@@ -438,6 +438,8 @@ fn fight_result_text(result: Option<(&String, &shared::combat_beat::CombatResult
 pub struct FightGroup<'a> {
     /// Index of the run's first combat message — its placement in the stream.
     pub start: usize,
+    /// Index just past the run's last combat message (exclusive).
+    pub end: usize,
     pub beats: Vec<&'a shared::messages::GameMessage>,
     pub joins: Vec<&'a shared::messages::GameMessage>,
     pub result: Option<(&'a String, &'a shared::combat_beat::CombatResult)>,
@@ -480,6 +482,7 @@ pub fn group_fights(msgs: &[shared::messages::GameMessage]) -> Vec<FightGroup<'_
                 if !beats.is_empty() || !joins.is_empty() || result.is_some() {
                     groups.push(FightGroup {
                         start,
+                        end: i,
                         beats: std::mem::take(&mut beats),
                         joins: std::mem::take(&mut joins),
                         result: result.take(),
@@ -491,6 +494,7 @@ pub fn group_fights(msgs: &[shared::messages::GameMessage]) -> Vec<FightGroup<'_
     if !beats.is_empty() || !joins.is_empty() || result.is_some() {
         groups.push(FightGroup {
             start,
+            end: msgs.len(),
             beats,
             joins,
             result,
@@ -765,6 +769,364 @@ fn beat_line(beat: &shared::combat_beat::CombatBeat, content: &str) -> (String, 
         content.to_string()
     };
     (text, prominent)
+}
+
+/// Maximum rows the day digest emits before collapsing into one
+/// "+N more" tail row — a 100+ message day should read as <=20 rows.
+const DIGEST_MAX_ROWS: usize = 20;
+/// Lines shown per cluster row (loot / alliances / movement / misc).
+const DIGEST_CLUSTER_LINES: usize = 4;
+/// Beats quoted per fight row.
+const DIGEST_FIGHT_BEATS: usize = 3;
+
+/// One digest row as plain data — Tera escapes every field at render.
+/// `avatars` are resolved image URLs (uploaded file or DiceBear fallback).
+fn digest_row(
+    kind: &str,
+    avatars: Vec<String>,
+    lead: String,
+    lines: Vec<String>,
+    more: usize,
+) -> serde_json::Value {
+    serde_json::json!({
+        "kind": kind,
+        "avatars": avatars,
+        "lead": lead,
+        "lines": lines,
+        "more": more,
+    })
+}
+
+/// "Alice", "Alice and Bob", "Alice, Bob, and Chaz".
+fn names_list(names: &[String]) -> String {
+    match names {
+        [] => String::new(),
+        [one] => one.clone(),
+        [a, b] => format!("{a} and {b}"),
+        many => format!(
+            "{}, and {}",
+            many[..many.len() - 1].join(", "),
+            many[many.len() - 1]
+        ),
+    }
+}
+
+fn line_or(content: &str, fallback: impl FnOnce() -> String) -> String {
+    let text = content.trim();
+    if text.is_empty() {
+        fallback()
+    } else {
+        text.to_string()
+    }
+}
+
+/// Compress a day's message stream into digest rows (target: <=20 for a
+/// 100+ message day). Combat runs become fight rows — the deaths and loot
+/// that directly follow a run attach to it as its outcome — everything
+/// else clusters into one row per kind (loot, alliances, movement, misc)
+/// or stands alone (deaths, area events). Pure data; templates escape.
+/// Messages that read as a fight's outcome rather than as a boundary
+/// between fights: deaths, wounds, flee narration (the engine's flee line
+/// falls back to `SanityBreak`), and loot changing hands.
+fn is_fight_outcome(msg: &shared::messages::GameMessage) -> bool {
+    use shared::messages::MessagePayload;
+    matches!(
+        msg.payload,
+        MessagePayload::CharacterKilled { .. }
+            | MessagePayload::CharacterWounded { .. }
+            | MessagePayload::SanityBreak { .. }
+            | MessagePayload::ItemFound { .. }
+            | MessagePayload::ItemUsed { .. }
+            | MessagePayload::ItemDropped { .. }
+            | MessagePayload::PatronGift { .. }
+    )
+}
+
+pub fn day_digest_rows(
+    msgs: &[shared::messages::GameMessage],
+    avatars: &std::collections::HashMap<String, String>,
+) -> Vec<serde_json::Value> {
+    use shared::messages::MessagePayload;
+
+    let avatar_of = |c: &shared::messages::CharacterRef| {
+        avatars
+            .get(c.identifier.as_str())
+            .cloned()
+            .unwrap_or_else(|| crate::storage::goblin_avatar_url(c.identifier.as_str()))
+    };
+
+    // Cluster buckets: first index (placement), kind, member indices.
+    #[derive(PartialEq, Clone, Copy)]
+    enum Bucket {
+        Loot,
+        Alliance,
+        Movement,
+        Misc,
+    }
+    let mut clusters: Vec<(usize, Bucket, Vec<usize>)> = Vec::new();
+    let mut rows: Vec<(usize, serde_json::Value)> = Vec::new();
+
+    // One fight must yield one row: deaths, wounds and flee narration
+    // flush group_fights runs, so a fight with kills or flees arrives as
+    // several runs. Merge runs whose gap holds only those outcomes; the
+    // gap indices feed the merged row's outcome lines.
+    let mut merged: Vec<(FightGroup<'_>, Vec<usize>)> = Vec::new();
+    for g in group_fights(msgs) {
+        let merge = match merged.last() {
+            Some((prev, _)) if prev.end <= g.start => {
+                msgs[prev.end..g.start].iter().all(is_fight_outcome)
+            }
+            _ => false,
+        };
+        if merge {
+            let (prev, gap) = merged.last_mut().expect("checked above");
+            gap.extend(prev.end..g.start);
+            prev.end = g.end;
+            prev.beats.extend(g.beats);
+            prev.joins.extend(g.joins);
+            if prev.result.is_none() {
+                prev.result = g.result;
+            }
+        } else {
+            merged.push((g, Vec::new()));
+        }
+    }
+    let mut gi = 0usize;
+    let mut i = 0usize;
+    while i < msgs.len() {
+        if gi < merged.len() && merged[gi].0.start == i {
+            let (g, gap) = &merged[gi];
+            // Trailing deaths/wounds/loot read as that fight's outcome —
+            // consume them into the row while they directly follow it.
+            let mut w = g.end;
+            while w < msgs.len() && is_fight_outcome(&msgs[w]) {
+                w += 1;
+            }
+            let mut tail: Vec<&shared::messages::GameMessage> =
+                gap.iter().map(|&j| &msgs[j]).collect();
+            tail.extend(&msgs[g.end..w]);
+            rows.push((i, fight_digest_row(g, &tail, &avatar_of)));
+            gi += 1;
+            i = w;
+            continue;
+        }
+
+        let msg = &msgs[i];
+        let bucket = match &msg.payload {
+            // Server-log-only pass-through and the stats card: not story.
+            MessagePayload::CombatRoundStart { .. } | MessagePayload::DaySummary { .. } => None,
+            MessagePayload::CharacterKilled { victim, .. } => {
+                let lead = if msg.content.trim().is_empty() {
+                    format!("{} dies!", victim.name)
+                } else {
+                    msg.content.trim().to_string()
+                };
+                rows.push((
+                    i,
+                    digest_row("death", vec![avatar_of(victim)], lead, vec![], 0),
+                ));
+                None
+            }
+            MessagePayload::AreaEvent { area, kind, .. } => {
+                use shared::messages::AreaEventKind;
+                let word = match kind {
+                    AreaEventKind::Fire => "Fire",
+                    AreaEventKind::Flood => "Flood",
+                    AreaEventKind::Earthquake => "An earthquake",
+                    AreaEventKind::Hazard => "Danger",
+                    AreaEventKind::Storm => "A storm",
+                    AreaEventKind::Other => "An area event",
+                };
+                let lead = if msg.content.trim().is_empty() {
+                    format!("{word} in {}.", area.name)
+                } else {
+                    msg.content.trim().to_string()
+                };
+                rows.push((i, digest_row("area", vec![], lead, vec![], 0)));
+                None
+            }
+            MessagePayload::ItemFound { .. }
+            | MessagePayload::ItemUsed { .. }
+            | MessagePayload::ItemDropped { .. }
+            | MessagePayload::PatronGift { .. } => Some(Bucket::Loot),
+            MessagePayload::AllianceFormed { .. }
+            | MessagePayload::AllianceProposed { .. }
+            | MessagePayload::AllianceDissolved { .. }
+            | MessagePayload::BetrayalTriggered { .. }
+            | MessagePayload::TrustShockBreak { .. } => Some(Bucket::Alliance),
+            MessagePayload::CharacterMoved { .. }
+            | MessagePayload::CharacterHidden { .. }
+            | MessagePayload::AreaClosed { .. } => Some(Bucket::Movement),
+            _ => Some(Bucket::Misc),
+        };
+        if let Some(bucket) = bucket {
+            match clusters.iter_mut().find(|(_, b, _)| *b == bucket) {
+                Some((_, _, members)) => members.push(i),
+                None => clusters.push((i, bucket, vec![i])),
+            }
+        }
+        i += 1;
+    }
+
+    for (first, bucket, members) in clusters {
+        let (kind, lead) = match bucket {
+            Bucket::Loot => ("loot", "Supplies change hands."),
+            Bucket::Alliance => ("alliance", "Alliances shift."),
+            Bucket::Movement => ("movement", "The goblins reposition."),
+            Bucket::Misc => ("misc", "Elsewhere today."),
+        };
+        let lines: Vec<String> = members
+            .iter()
+            .filter_map(|&j| {
+                let text = msgs[j].content.trim();
+                (!text.is_empty()).then(|| text.to_string())
+            })
+            .take(DIGEST_CLUSTER_LINES)
+            .collect();
+        let more = members.len().saturating_sub(lines.len());
+        rows.push((
+            first,
+            digest_row(kind, vec![], lead.to_string(), lines, more),
+        ));
+    }
+
+    rows.sort_by_key(|(at, _)| *at);
+    if rows.len() > DIGEST_MAX_ROWS {
+        let dropped = rows.len() - (DIGEST_MAX_ROWS - 1);
+        rows.truncate(DIGEST_MAX_ROWS - 1);
+        rows.push((
+            usize::MAX,
+            digest_row(
+                "more",
+                vec![],
+                format!("…and {dropped} more events."),
+                vec![],
+                0,
+            ),
+        ));
+    }
+    rows.into_iter().map(|(_, row)| row).collect()
+}
+
+/// One fight row: participant avatars, a lead sentence, quoted beats,
+/// then the outcome — deaths and loot that directly follow the run.
+fn fight_digest_row(
+    g: &FightGroup<'_>,
+    tail: &[&shared::messages::GameMessage],
+    avatar_of: &impl Fn(&shared::messages::CharacterRef) -> String,
+) -> serde_json::Value {
+    use shared::messages::{CharacterRef, MessagePayload};
+
+    let mut people: Vec<CharacterRef> = Vec::new();
+    let join = |c: &CharacterRef, people: &mut Vec<CharacterRef>| {
+        if !people.iter().any(|p| p.identifier == c.identifier) {
+            people.push(c.clone());
+        }
+    };
+    if let Some(MessagePayload::CombatBeat(first)) = g.beats.first().map(|m| &m.payload) {
+        join(&first.actor, &mut people);
+        if let Some(t) = &first.target {
+            join(t, &mut people);
+        }
+    }
+    for m in &g.joins {
+        if let MessagePayload::CombatJoined { character, .. } = &m.payload {
+            join(character, &mut people);
+        }
+    }
+
+    // Beats: significant ones carry the story; a fight with none quotes
+    // ordinary swings so the row still reads as a fight.
+    let mut sig: Vec<String> = Vec::new();
+    let mut ordinary: Vec<String> = Vec::new();
+    for m in &g.beats {
+        if let MessagePayload::CombatBeat(b) = &m.payload {
+            let (text, _) = beat_line(b, &m.content);
+            if let Some(line) = text.lines().next().filter(|l| !l.is_empty()) {
+                if b.significant {
+                    sig.push(line.to_string());
+                } else {
+                    ordinary.push(line.to_string());
+                }
+            }
+        }
+    }
+    let (shown, more) = if sig.is_empty() {
+        let more = ordinary.len().saturating_sub(DIGEST_FIGHT_BEATS);
+        (ordinary, more)
+    } else {
+        let more = sig.len().saturating_sub(DIGEST_FIGHT_BEATS);
+        (sig, more)
+    };
+    let mut lines: Vec<String> = shown.into_iter().take(DIGEST_FIGHT_BEATS).collect();
+
+    let mut deaths: Vec<String> = Vec::new();
+    let mut notes: Vec<String> = Vec::new();
+    let mut loot: Vec<String> = Vec::new();
+    for m in tail {
+        match &m.payload {
+            MessagePayload::CharacterKilled { victim, .. } => {
+                join(victim, &mut people);
+                deaths.push(format!("{} dies!", victim.name));
+            }
+            MessagePayload::ItemFound {
+                character, item, ..
+            } => {
+                join(character, &mut people);
+                loot.push(line_or(&m.content, || {
+                    format!("{} takes {}.", character.name, item.name)
+                }));
+            }
+            MessagePayload::ItemUsed { character, item } => {
+                join(character, &mut people);
+                loot.push(line_or(&m.content, || {
+                    format!("{} uses {}.", character.name, item.name)
+                }));
+            }
+            MessagePayload::ItemDropped {
+                character, item, ..
+            } => {
+                join(character, &mut people);
+                loot.push(line_or(&m.content, || {
+                    format!("{} drops {}.", character.name, item.name)
+                }));
+            }
+            MessagePayload::PatronGift {
+                recipient, item, ..
+            } => {
+                join(recipient, &mut people);
+                loot.push(line_or(&m.content, || {
+                    format!("{} receives {}.", recipient.name, item.name)
+                }));
+            }
+            // The engine's flee narration falls back to SanityBreak; quote
+            // it with the fight, skip empty content.
+            MessagePayload::SanityBreak { character } if !m.content.trim().is_empty() => {
+                join(character, &mut people);
+                notes.push(m.content.trim().to_string());
+            }
+            _ => {}
+        }
+    }
+    lines.extend(deaths);
+    lines.extend(notes);
+    lines.extend(loot);
+    // No deaths to narrate -> the verdict line carries the outcome.
+    if lines.iter().all(|l| !l.ends_with("dies!")) {
+        lines.push(fight_result_text(g.result));
+    }
+
+    let names: Vec<String> = people.iter().map(|p| p.name.clone()).collect();
+    let listed = names_list(&names);
+    let lead = if listed.is_empty() {
+        "A fight breaks out.".to_string()
+    } else if people.len() <= 1 {
+        format!("{listed} clashes in combat.")
+    } else {
+        format!("{listed} clash in combat.")
+    };
+    let avatars: Vec<String> = people.iter().map(avatar_of).collect();
+    digest_row("fight", avatars, lead, lines, more)
 }
 
 pub fn render_commentary_card(seg: &announcers::CommentarySegment) -> String {
@@ -1782,6 +2144,217 @@ mod day_summary_card_tests {
         let card_at = html.find("A vs B").expect("fight card");
         let plain_at = html.find("someone fell").expect("plain card");
         assert!(card_at < plain_at, "card before closer: {html}");
+    }
+
+    fn killed(victim: &str) -> GameMessage {
+        GameMessage::new(
+            MessageSource::Game("g".into()),
+            2,
+            Phase::DAY_START,
+            5,
+            10,
+            "game:g".into(),
+            String::new(),
+            MessagePayload::CharacterKilled {
+                victim: cref(victim),
+                killer: Some(cref("Boblin")),
+                cause: shared::afflictions::DeathCause::Combat,
+            },
+        )
+    }
+
+    fn found(who: &str, item: &str) -> GameMessage {
+        GameMessage::new(
+            MessageSource::Game("g".into()),
+            2,
+            Phase::DAY_START,
+            5,
+            11,
+            "game:g".into(),
+            String::new(),
+            MessagePayload::ItemFound {
+                character: cref(who),
+                item: shared::messages::ItemRef {
+                    identifier: "i1".into(),
+                    name: item.into(),
+                },
+                area: shared::messages::AreaRef {
+                    identifier: "a1".into(),
+                    name: "Woods".into(),
+                },
+            },
+        )
+    }
+
+    fn digest(msgs: &[GameMessage]) -> Vec<serde_json::Value> {
+        day_digest_rows(msgs, &std::collections::HashMap::new())
+    }
+
+    /// One fight row carries the run, its beats, and the trailing
+    /// death/loot outcome (9j4).
+    #[test]
+    fn digest_collapses_a_fight_with_its_outcome() {
+        let msgs = vec![
+            beat(1, "Alice", "Bob", swing_miss(), false),
+            beat(2, "Bob", "Alice", swing_kill(), true),
+            ended(CombatResult::Victory {
+                victors: vec![cref("Bob")],
+            }),
+            killed("Bob"),
+            found("Alice", "Health Pack"),
+        ];
+        let rows = digest(&msgs);
+        assert_eq!(rows.len(), 1, "fight + outcome = one row: {rows:?}");
+        let row = &rows[0];
+        assert_eq!(row["kind"], "fight");
+        assert_eq!(row["lead"], "Alice and Bob clash in combat.");
+        let lines: Vec<&str> = row["lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|l| l.as_str())
+            .collect();
+        assert!(lines.iter().any(|l| l.ends_with("dies!")), "{lines:?}");
+        assert!(
+            lines.iter().any(|l| l.contains("takes")),
+            "loot outcome line: {lines:?}"
+        );
+        assert_eq!(row["avatars"].as_array().map(|a| a.len()), Some(2));
+    }
+
+    /// Standalone deaths stay their own rows; combat pass-throughs are
+    /// skipped; cluster members merge; the row count never exceeds the cap.
+    #[test]
+    fn digest_clusters_and_caps_row_count() {
+        let msgs: Vec<GameMessage> = (0..25).map(|i| killed(&format!("Victim{i}"))).collect();
+        let rows = digest(&msgs);
+        assert_eq!(rows.len(), 20, "cap at DIGEST_MAX_ROWS: {rows:?}");
+        assert_eq!(rows[19]["kind"], "more");
+        assert_eq!(rows[0]["kind"], "death");
+
+        let msgs = vec![
+            found("Alice", "Bread"),
+            found("Bob", "Wine"),
+            GameMessage::new(
+                MessageSource::Game("g".into()),
+                2,
+                Phase::DAY_START,
+                5,
+                12,
+                "game:g".into(),
+                "Alice slips into the Dell".into(),
+                MessagePayload::CharacterMoved {
+                    character: cref("Alice"),
+                    from: shared::messages::AreaRef {
+                        identifier: "a1".into(),
+                        name: "Woods".into(),
+                    },
+                    to: shared::messages::AreaRef {
+                        identifier: "a2".into(),
+                        name: "Dell".into(),
+                    },
+                    from_sub: None,
+                    to_sub: None,
+                },
+            ),
+            GameMessage::new(
+                MessageSource::Game("g".into()),
+                2,
+                Phase::DAY_START,
+                5,
+                13,
+                "game:g".into(),
+                String::new(),
+                MessagePayload::CombatRoundStart {
+                    combat_id: "c1".into(),
+                    round: 1,
+                    location: None,
+                },
+            ),
+        ];
+        let rows = digest(&msgs);
+        assert_eq!(
+            rows.len(),
+            2,
+            "loot + movement, round-start skipped: {rows:?}"
+        );
+        assert_eq!(rows[0]["kind"], "loot");
+        assert_eq!(rows[1]["kind"], "movement");
+    }
+
+    /// The timeline template compiles and renders the digest section
+    /// wired into its context (9j4).
+    #[test]
+    fn timeline_renders_day_digest_section() {
+        let auth = crate::templates::AuthState::Guest {
+            csrf_token: "csrf".into(),
+        };
+        let mut ctx = crate::templates::tera_engine::base_context("Timeline", &auth);
+        ctx.insert("game_id", "g");
+        ctx.insert("game_name", "Test Game");
+        ctx.insert("current_day", &2u32);
+        ctx.insert("current_phase", "12");
+        ctx.insert("periods", &Vec::<serde_json::Value>::new());
+        ctx.insert("filter", "");
+        ctx.insert("character_filter", "");
+        ctx.insert("characters", &Vec::<serde_json::Value>::new());
+        ctx.insert("traits", &Vec::<serde_json::Value>::new());
+        ctx.insert("rendered_events", &Vec::<String>::new());
+        ctx.insert("selected_day", &2u32);
+        ctx.insert("selected_phase", "12");
+        ctx.insert("selected_period", &serde_json::Value::Null);
+        ctx.insert("filter_options", &Vec::<serde_json::Value>::new());
+        let rows = vec![serde_json::json!({
+            "kind": "fight",
+            "avatars": vec!["/uploads/avatars/a.png"],
+            "lead": "Alice and Bob clash in combat.",
+            "lines": vec!["Bob dies!"],
+            "more": 0,
+        })];
+        ctx.insert("day_digest_rows", &rows);
+        ctx.insert("digest_day", &2u32);
+        let html = crate::templates::tera_engine::render("timeline.html", &ctx);
+        assert!(html.contains("Day 2 in brief"), "digest head: {html}");
+        assert!(html.contains("clash in combat"), "digest lead row: {html}");
+        assert!(html.contains("Bob dies!"), "digest beat line: {html}");
+    }
+
+    /// One fight fragmented by a death, a flee line and the terminal
+    /// result collapses to a single row (9j4 follow-up).
+    #[test]
+    fn digest_merges_fragments_of_one_fight() {
+        let flee = GameMessage::new(
+            MessageSource::Game("g".into()),
+            2,
+            Phase::DAY_START,
+            5,
+            14,
+            "game:g".into(),
+            "Chaz flees the fight to sub-tile 3!".into(),
+            MessagePayload::SanityBreak {
+                character: cref("Chaz"),
+            },
+        );
+        let msgs = vec![
+            beat(1, "Alice", "Bob", swing_miss(), false),
+            killed("Bob"),
+            flee,
+            ended(CombatResult::Victory {
+                victors: vec![cref("Bob")],
+            }),
+        ];
+        let rows = digest(&msgs);
+        assert_eq!(rows.len(), 1, "one fragmented fight = one row: {rows:?}");
+        assert_eq!(rows[0]["kind"], "fight");
+        assert_eq!(rows[0]["lead"], "Alice, Bob, and Chaz clash in combat.");
+        let lines: Vec<&str> = rows[0]["lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|l| l.as_str())
+            .collect();
+        assert!(lines.iter().any(|l| l.ends_with("dies!")), "{lines:?}");
+        assert!(lines.iter().any(|l| l.contains("flees")), "{lines:?}");
     }
 
     fn ended(result: CombatResult) -> GameMessage {

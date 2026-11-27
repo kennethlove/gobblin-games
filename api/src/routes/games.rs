@@ -1304,6 +1304,30 @@ pub async fn timeline_handler(
     };
     ctx.insert("traits", &selected_traits);
     ctx.insert("rendered_events", &rendered_events);
+
+    // Day digest (9j4): text summary of the selected (or current) day's
+    // events, rendered above the feed. Avatars resolve per character row.
+    let digest_day = selected_day.unwrap_or(current_day);
+    let day_msgs: Vec<shared::messages::GameMessage> = messages
+        .iter()
+        .filter(|m| m.game_day == digest_day)
+        .cloned()
+        .collect();
+    let digest_avatars: std::collections::HashMap<String, String> = character_rows
+        .iter()
+        .filter_map(|row| {
+            let id = row["identifier"].as_str()?.to_string();
+            let url = row["avatar"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_else(|| api::storage::goblin_avatar_url(&id));
+            Some((id, url))
+        })
+        .collect();
+    let digest_rows = game_detail::day_digest_rows(&day_msgs, &digest_avatars);
+    ctx.insert("day_digest_rows", &digest_rows);
+    ctx.insert("digest_day", &digest_day);
+
     ctx.insert("selected_day", &selected_day);
     ctx.insert("selected_phase", &selected_phase.map(|p| p.to_string()));
     // The selected period's summary (event/death counts) for the timeline
