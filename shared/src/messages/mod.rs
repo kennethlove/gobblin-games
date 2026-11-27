@@ -550,6 +550,15 @@ pub enum MessagePayload {
         area: AreaRef,
         kind: AreaEventKind,
         description: String,
+        /// Exact hazard name from the areas crate ("drought", "heatwave",
+        /// ...) so displays never re-parse prose. Empty on rows written
+        /// before this field existed.
+        #[serde(default)]
+        event_name: String,
+        /// Sub-tile number within the area, 1-based as the prose shows.
+        /// None on rows written before this field existed.
+        #[serde(default)]
+        triangle: Option<u8>,
     },
 
     ItemFound {

@@ -26,6 +26,8 @@ impl Game {
                 },
                 kind: AreaEventKind::Other,
                 description: String::new(),
+                event_name: String::new(),
+                triangle: None,
             },
             MessageSource::Game(_) => MessagePayload::GameEnded {
                 winner: None,

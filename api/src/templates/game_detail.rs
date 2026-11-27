@@ -824,7 +824,9 @@ fn line_or(content: &str, fallback: impl FnOnce() -> String) -> String {
 /// 100+ message day). Combat runs become fight rows — the deaths and loot
 /// that directly follow a run attach to it as its outcome — everything
 /// else clusters into one row per kind (loot, alliances, movement, misc)
-/// or stands alone (deaths, area events). Pure data; templates escape.
+/// or stands alone (deaths with no hazard row to ride, area events —
+/// which merge per hazard kind and carry that hazard's deaths). Pure
+/// data; templates escape.
 /// Messages that read as a fight's outcome rather than as a boundary
 /// between fights: deaths, wounds, flee narration (the engine's flee line
 /// falls back to `SanityBreak`), and loot changing hands.
@@ -842,45 +844,24 @@ fn is_fight_outcome(msg: &shared::messages::GameMessage) -> bool {
     )
 }
 
-/// Noun and location for an area event, read from engine prose:
-/// "=== A flood (triangle 1) has occurred in the Hub ==="
-/// -> ("Flood", "Hub Triangle 1"). Falls back to the kind's own word and
-/// the bare area name when the prose lacks either piece.
+/// Noun and location for an area event straight from its structured
+/// fields — no prose parsing. Legacy rows (written before `event_name` /
+/// `triangle` existed) degrade to the kind's word and the bare area name.
 fn area_row_parts(
     area: &shared::messages::AreaRef,
     kind: shared::messages::AreaEventKind,
-    content: &str,
+    event_name: &str,
+    triangle: Option<u8>,
 ) -> (String, String) {
-    use shared::messages::AreaEventKind;
-    let text = content.trim();
-    let noun = text
-        .split_whitespace()
-        .skip_while(|w| !matches!(*w, "A" | "An"))
-        .nth(1)
-        .filter(|w| w.chars().all(|c| c.is_ascii_alphabetic()))
-        .map(|w| {
-            let mut c = w.chars();
-            match c.next() {
-                Some(f) => format!("{}{}", f.to_uppercase(), c.as_str()),
-                None => w.to_string(),
-            }
-        })
-        .unwrap_or_else(|| {
-            match kind {
-                AreaEventKind::Fire => "Fire",
-                AreaEventKind::Flood => "Flood",
-                AreaEventKind::Earthquake => "Earthquake",
-                AreaEventKind::Hazard => "Danger",
-                AreaEventKind::Storm => "Storm",
-                AreaEventKind::Other => "Area event",
-            }
-            .to_string()
-        });
-    let triangle = text
-        .find("(triangle ")
-        .and_then(|i| text.get(i + 10..))
-        .and_then(|s| s.split(')').next())
-        .filter(|s| !s.is_empty());
+    let noun = if event_name.is_empty() {
+        kind_word(kind).to_string()
+    } else {
+        let mut c = event_name.chars();
+        match c.next() {
+            Some(f) => format!("{}{}", f.to_uppercase(), c.as_str()),
+            None => event_name.to_string(),
+        }
+    };
     let loc = match triangle {
         Some(n) => format!("{} Triangle {}", area.name, n),
         None => area.name.clone(),
@@ -888,11 +869,63 @@ fn area_row_parts(
     (noun, loc)
 }
 
+fn kind_word(kind: shared::messages::AreaEventKind) -> &'static str {
+    use shared::messages::AreaEventKind;
+    match kind {
+        AreaEventKind::Fire => "Fire",
+        AreaEventKind::Flood => "Flood",
+        AreaEventKind::Earthquake => "Earthquake",
+        AreaEventKind::Hazard => "Danger",
+        AreaEventKind::Storm => "Storm",
+        AreaEventKind::Other => "Area event",
+    }
+}
+
+/// Combatants named anywhere in a fight run — recognises the several
+/// fragments one fight leaves in the stream.
+fn fight_participants(g: &FightGroup<'_>) -> std::collections::BTreeSet<String> {
+    use shared::messages::MessagePayload;
+    let mut parts = std::collections::BTreeSet::new();
+    for m in g.beats.iter().chain(g.joins.iter()) {
+        match &m.payload {
+            MessagePayload::CombatBeat(b) => {
+                parts.insert(b.actor.identifier.to_string());
+                if let Some(t) = &b.target {
+                    parts.insert(t.identifier.to_string());
+                }
+            }
+            MessagePayload::CombatJoined { character, .. } => {
+                parts.insert(character.identifier.to_string());
+            }
+            _ => {}
+        }
+    }
+    parts
+}
+
+/// Death causes that belong to a hazard's digest row, keyed like the
+/// hazard's lowercase noun.
+fn hazard_death_key(cause: &shared::afflictions::DeathCause) -> Option<String> {
+    use shared::afflictions::DeathCause;
+    match cause {
+        DeathCause::Dehydration => Some("drought".into()),
+        DeathCause::Drowning => Some("flood".into()),
+        DeathCause::Fire => Some("fire".into()),
+        _ => None,
+    }
+}
+
+/// Lowercase hazard noun for a legacy area event with no event_name.
+fn coarse_area_noun(kind: shared::messages::AreaEventKind) -> String {
+    kind_word(kind).to_lowercase()
+}
+
 pub fn day_digest_rows(
     msgs: &[shared::messages::GameMessage],
     avatars: &std::collections::HashMap<String, String>,
 ) -> Vec<serde_json::Value> {
     use shared::messages::MessagePayload;
+    use std::collections::{BTreeSet, HashMap, HashSet};
 
     let avatar_of = |c: &shared::messages::CharacterRef| {
         avatars
@@ -913,20 +946,46 @@ pub fn day_digest_rows(
     let mut clusters: Vec<(usize, Bucket, Vec<usize>)> = Vec::new();
     let mut rows: Vec<(usize, serde_json::Value)> = Vec::new();
 
-    // One fight must yield one row: deaths, wounds and flee narration
-    // flush group_fights runs, so a fight with kills or flees arrives as
-    // several runs. Merge runs whose gap holds only those outcomes; the
-    // gap indices feed the merged row's outcome lines.
-    let mut merged: Vec<(FightGroup<'_>, Vec<usize>)> = Vec::new();
+    // Hazard deaths ride their hazard's row instead of standing alone —
+    // but only when that hazard has an event row today.
+    let mut hazard_nouns: HashSet<String> = HashSet::new();
+    let mut hazard_deaths: HashMap<String, Vec<usize>> = HashMap::new();
+    for (idx, m) in msgs.iter().enumerate() {
+        match &m.payload {
+            MessagePayload::AreaEvent {
+                event_name, kind, ..
+            } => {
+                hazard_nouns.insert(if event_name.is_empty() {
+                    coarse_area_noun(*kind)
+                } else {
+                    event_name.to_lowercase()
+                });
+            }
+            MessagePayload::CharacterKilled { cause, .. } => {
+                if let Some(key) = hazard_death_key(cause) {
+                    hazard_deaths.entry(key).or_default().push(idx);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // One fight must yield one row: deaths, wounds, flee narration and
+    // hazard events all split the stream into several runs. Merge runs
+    // that share a combatant (or carry no combatants of their own — a
+    // lone closing result). The gap's outcome messages feed the merged
+    // row's outcome lines; anything else in the gap keeps its own row.
+    let mut merged: Vec<(FightGroup<'_>, Vec<usize>, BTreeSet<String>)> = Vec::new();
     for g in group_fights(msgs) {
+        let parts = fight_participants(&g);
         let merge = match merged.last() {
-            Some((prev, _)) if prev.end <= g.start => {
-                msgs[prev.end..g.start].iter().all(is_fight_outcome)
+            Some((prev, _, prev_parts)) if prev.end <= g.start => {
+                parts.is_empty() || prev_parts.is_empty() || !prev_parts.is_disjoint(&parts)
             }
             _ => false,
         };
         if merge {
-            let (prev, gap) = merged.last_mut().expect("checked above");
+            let (prev, gap, prev_parts) = merged.last_mut().expect("checked above");
             gap.extend(prev.end..g.start);
             prev.end = g.end;
             prev.beats.extend(g.beats);
@@ -934,27 +993,56 @@ pub fn day_digest_rows(
             if prev.result.is_none() {
                 prev.result = g.result;
             }
+            prev_parts.extend(parts);
         } else {
-            merged.push((g, Vec::new()));
+            merged.push((g, Vec::new(), parts));
         }
     }
+    // Indices whose own row rides a fight row instead: combat payloads
+    // and outcome messages inside a merged fight's span.
+    let mut attached: HashSet<usize> = HashSet::new();
     let mut gi = 0usize;
     let mut i = 0usize;
     while i < msgs.len() {
+        if attached.contains(&i) {
+            i += 1;
+            continue;
+        }
         if gi < merged.len() && merged[gi].0.start == i {
-            let (g, gap) = &merged[gi];
+            let (g, gap, _) = &merged[gi];
             // Trailing deaths/wounds/loot read as that fight's outcome —
             // consume them into the row while they directly follow it.
             let mut w = g.end;
             while w < msgs.len() && is_fight_outcome(&msgs[w]) {
                 w += 1;
             }
-            let mut tail: Vec<&shared::messages::GameMessage> =
-                gap.iter().map(|&j| &msgs[j]).collect();
+            // Combat payloads and outcomes anywhere in the span ride the
+            // row; anything else (a hazard event between fragments) keeps
+            // its own row below.
+            for (offset, m) in msgs[g.start..w].iter().enumerate() {
+                let j = g.start + offset;
+                let combat = matches!(
+                    m.payload,
+                    MessagePayload::Combat(_)
+                        | MessagePayload::CombatRoundStart { .. }
+                        | MessagePayload::CombatBeat(_)
+                        | MessagePayload::CombatJoined { .. }
+                        | MessagePayload::CombatEnded { .. }
+                );
+                if combat || is_fight_outcome(m) {
+                    attached.insert(j);
+                }
+            }
+            let mut tail: Vec<&shared::messages::GameMessage> = gap
+                .iter()
+                .copied()
+                .filter(|&j| is_fight_outcome(&msgs[j]))
+                .map(|j| &msgs[j])
+                .collect();
             tail.extend(&msgs[g.end..w]);
             rows.push((i, fight_digest_row(g, &tail, &avatar_of)));
             gi += 1;
-            i = w;
+            i += 1;
             continue;
         }
 
@@ -962,17 +1050,25 @@ pub fn day_digest_rows(
         let bucket = match &msg.payload {
             // Server-log-only pass-through and the stats card: not story.
             MessagePayload::CombatRoundStart { .. } | MessagePayload::DaySummary { .. } => None,
-            MessagePayload::CharacterKilled { victim, .. } => {
-                let lead = if msg.content.trim().is_empty() {
-                    format!("{} dies!", victim.name)
+            MessagePayload::CharacterKilled { victim, cause, .. } => {
+                // A hazard death rides its hazard's row below instead.
+                let folded = hazard_death_key(cause)
+                    .as_ref()
+                    .is_some_and(|k| hazard_nouns.contains(k));
+                if folded {
+                    None
                 } else {
-                    msg.content.trim().to_string()
-                };
-                rows.push((
-                    i,
-                    digest_row("death", vec![avatar_of(victim)], lead, vec![], 0),
-                ));
-                None
+                    let lead = if msg.content.trim().is_empty() {
+                        format!("{} dies!", victim.name)
+                    } else {
+                        msg.content.trim().to_string()
+                    };
+                    rows.push((
+                        i,
+                        digest_row("death", vec![avatar_of(victim)], lead, vec![], 0),
+                    ));
+                    None
+                }
             }
             MessagePayload::AreaEvent { .. } => Some(Bucket::Area),
             MessagePayload::ItemFound { .. }
@@ -1004,12 +1100,17 @@ pub fn day_digest_rows(
             // "Flood in Hub Triangle 1 and Sector 4 Triangle 3."
             let mut kinds: Vec<(String, Vec<String>)> = Vec::new();
             for &j in &members {
-                let shared::messages::MessagePayload::AreaEvent { area, kind, .. } =
-                    &msgs[j].payload
+                let shared::messages::MessagePayload::AreaEvent {
+                    area,
+                    kind,
+                    event_name,
+                    triangle,
+                    ..
+                } = &msgs[j].payload
                 else {
                     continue;
                 };
-                let (noun, loc) = area_row_parts(area, *kind, &msgs[j].content);
+                let (noun, loc) = area_row_parts(area, *kind, event_name, *triangle);
                 let pos = kinds
                     .iter()
                     .position(|(n, _)| n.eq_ignore_ascii_case(&noun));
@@ -1028,22 +1129,44 @@ pub fn day_digest_rows(
                 if locs.is_empty() {
                     continue;
                 }
-                let more = locs.len().saturating_sub(3);
+                let more_locs = locs.len().saturating_sub(3);
                 let shown: Vec<&str> = locs.iter().take(3).map(String::as_str).collect();
                 let loc_txt = match shown.len() {
                     1 => shown[0].to_string(),
                     2 => format!("{} and {}", shown[0], shown[1]),
                     _ => format!("{}, {}, and {}", shown[0], shown[1], shown[2]),
                 };
+                // Deaths from this hazard ride the row; ones already
+                // attached to a fight row stay there.
+                let mut lines: Vec<String> = hazard_deaths
+                    .get(&noun.to_lowercase())
+                    .map(|idxs| {
+                        idxs.iter()
+                            .filter(|&&j| !attached.contains(&j))
+                            .map(|&j| {
+                                let m = &msgs[j];
+                                if m.content.trim().is_empty() {
+                                    match &m.payload {
+                                        shared::messages::MessagePayload::CharacterKilled {
+                                            victim,
+                                            ..
+                                        } => format!("{} dies!", victim.name),
+                                        _ => String::new(),
+                                    }
+                                } else {
+                                    m.content.trim().to_string()
+                                }
+                            })
+                            .filter(|l| !l.is_empty())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let more_lines = lines.len().saturating_sub(DIGEST_CLUSTER_LINES);
+                lines.truncate(DIGEST_CLUSTER_LINES);
+                let more = more_locs + more_lines;
                 rows.push((
                     first,
-                    digest_row(
-                        "area",
-                        vec![],
-                        format!("{noun} in {loc_txt}."),
-                        vec![],
-                        more,
-                    ),
+                    digest_row("area", vec![], format!("{noun} in {loc_txt}."), lines, more),
                 ));
             }
             continue;
@@ -1193,7 +1316,9 @@ fn fight_digest_row(
     lines.extend(notes);
     lines.extend(loot);
     // No deaths to narrate -> the verdict line carries the outcome.
-    if lines.iter().all(|l| !l.ends_with("dies!")) {
+    // A stream with no closing result says nothing rather than claiming
+    // a fight that is already over is still in progress.
+    if g.result.is_some() && lines.iter().all(|l| !l.ends_with("dies!")) {
         lines.push(fight_result_text(g.result));
     }
 
@@ -2272,7 +2397,9 @@ mod day_summary_card_tests {
     }
 
     /// Area events collapse to one row per hazard kind with their
-    /// locations merged and deduped.
+    /// locations merged and deduped — straight from the payload's
+    /// `event_name`/`triangle`, never from prose. A legacy row without
+    /// those fields falls back to the kind's word and the bare name.
     #[test]
     fn digest_merges_area_events_by_kind() {
         use shared::messages::AreaEventKind;
@@ -2292,14 +2419,37 @@ mod day_summary_card_tests {
                     },
                     kind,
                     description: String::new(),
+                    event_name: noun.into(),
+                    triangle: Some(tri),
                 },
             )
         };
+        // Legacy row: written before event_name/triangle existed.
+        let legacy = GameMessage::new(
+            MessageSource::Game("g".into()),
+            2,
+            Phase::DAY_START,
+            6,
+            1,
+            "game:g".into(),
+            "=== ⚠️ A flood has occurred in the Woods ===".into(),
+            MessagePayload::AreaEvent {
+                area: shared::messages::AreaRef {
+                    identifier: "Woods".into(),
+                    name: "Woods".into(),
+                },
+                kind: AreaEventKind::Flood,
+                description: String::new(),
+                event_name: String::new(),
+                triangle: None,
+            },
+        );
         let msgs = vec![
             hazard(1, "Hub", AreaEventKind::Flood, "flood"),
             hazard(3, "Sector 4", AreaEventKind::Flood, "flood"),
             hazard(1, "Hub", AreaEventKind::Flood, "flood"),
             hazard(1, "Sector 4", AreaEventKind::Earthquake, "earthquake"),
+            legacy,
         ];
         let rows = digest(&msgs);
         let areas: Vec<&str> = rows
@@ -2310,7 +2460,7 @@ mod day_summary_card_tests {
         assert_eq!(
             areas,
             vec![
-                "Flood in Hub Triangle 1 and Sector 4 Triangle 3.",
+                "Flood in Hub Triangle 1, Sector 4 Triangle 3, and Woods.",
                 "Earthquake in Sector 4 Triangle 1.",
             ],
             "{rows:?}"
@@ -2319,6 +2469,133 @@ mod day_summary_card_tests {
 
     /// One fight row carries the run, its beats, and the trailing
     /// death/loot outcome (9j4).
+    /// A hazard event between two fragments of one fight neither splits
+    /// the fight row nor disappears: the fight merges across it (shared
+    /// combatants), the hazard keeps its own row.
+    #[test]
+    fn digest_keeps_one_fight_row_across_an_area_event() {
+        use shared::messages::AreaEventKind;
+        let msgs = vec![
+            beat(1, "Alice", "Bob", swing_miss(), false),
+            GameMessage::new(
+                MessageSource::Game("g".into()),
+                2,
+                Phase::DAY_START,
+                5,
+                2,
+                "game:g".into(),
+                "=== ⚠️ A flood (triangle 2) has occurred in the Hub ===".into(),
+                MessagePayload::AreaEvent {
+                    area: shared::messages::AreaRef {
+                        identifier: "Hub".into(),
+                        name: "Hub".into(),
+                    },
+                    kind: AreaEventKind::Flood,
+                    description: String::new(),
+                    event_name: "flood".into(),
+                    triangle: Some(2),
+                },
+            ),
+            beat(2, "Bob", "Alice", swing_kill(), true),
+            killed("Alice"),
+            ended(CombatResult::Victory {
+                victors: vec![cref("Bob")],
+            }),
+        ];
+
+        let rows = digest(&msgs);
+        let fights: Vec<_> = rows.iter().filter(|r| r["kind"] == "fight").collect();
+        assert_eq!(fights.len(), 1, "{rows:?}");
+        assert_eq!(fights[0]["lead"], "Alice and Bob clash in combat.");
+        let areas: Vec<&str> = rows
+            .iter()
+            .filter(|r| r["kind"] == "area")
+            .filter_map(|r| r["lead"].as_str())
+            .collect();
+        assert_eq!(areas, vec!["Flood in Hub Triangle 2."], "{rows:?}");
+        // The death sits inside the fight's span — it rides the fight row.
+        assert!(!rows.iter().any(|r| r["kind"] == "death"), "{rows:?}");
+    }
+
+    /// A drought death rides the drought row instead of standing alone.
+    #[test]
+    fn digest_folds_hazard_deaths_into_their_row() {
+        use shared::messages::AreaEventKind;
+        let msgs = vec![
+            GameMessage::new(
+                MessageSource::Game("g".into()),
+                2,
+                Phase::DAY_START,
+                5,
+                0,
+                "game:g".into(),
+                "=== ⚠️ A drought (triangle 1) has occurred in Sector 4 ===".into(),
+                MessagePayload::AreaEvent {
+                    area: shared::messages::AreaRef {
+                        identifier: "Sector 4".into(),
+                        name: "Sector 4".into(),
+                    },
+                    kind: AreaEventKind::Hazard,
+                    description: String::new(),
+                    event_name: "drought".into(),
+                    triangle: Some(1),
+                },
+            ),
+            GameMessage::new(
+                MessageSource::Character("Rustle".into()),
+                2,
+                Phase::DAY_START,
+                6,
+                1,
+                "character:Rustle".into(),
+                "Rustle on the Candle dies from the drought [Moderate severity, rolled 3]".into(),
+                MessagePayload::CharacterKilled {
+                    victim: cref("Rustle"),
+                    killer: None,
+                    cause: shared::afflictions::DeathCause::Dehydration,
+                },
+            ),
+        ];
+
+        let rows = digest(&msgs);
+        assert!(!rows.iter().any(|r| r["kind"] == "death"), "{rows:?}");
+        let area = rows
+            .iter()
+            .find(|r| r["kind"] == "area")
+            .expect("drought row");
+        assert_eq!(area["lead"], "Drought in Sector 4 Triangle 1.");
+        let lines: Vec<&str> = area["lines"]
+            .as_array()
+            .expect("lines")
+            .iter()
+            .filter_map(|l| l.as_str())
+            .collect();
+        assert!(
+            lines.iter().any(|l| l.contains("dies from the drought")),
+            "{lines:?}"
+        );
+    }
+
+    /// A fight the stream never closes shows its beats and nothing else —
+    /// never a verdict about progress that is already over.
+    #[test]
+    fn digest_omits_the_verdict_when_the_stream_has_no_result() {
+        let msgs = vec![beat(1, "Alice", "Bob", swing_miss(), false)];
+
+        let rows = digest(&msgs);
+        let lines: Vec<&str> = rows
+            .iter()
+            .filter(|r| r["kind"] == "fight")
+            .flat_map(|r| r["lines"].as_array().expect("lines"))
+            .filter_map(|l| l.as_str())
+            .collect();
+        assert!(!lines.is_empty(), "{rows:?}");
+        assert!(
+            !lines.iter().any(|l| l.contains("in progress")),
+            "{lines:?}"
+        );
+    }
+
     #[test]
     fn digest_collapses_a_fight_with_its_outcome() {
         let msgs = vec![

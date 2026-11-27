@@ -8,6 +8,11 @@ use rand::rngs::SmallRng;
 /// (q7k: config knob comes later.)
 const MAX_HAZARD_BLOCKS: u8 = 3;
 
+/// One hazard line: display text, exact event name, triangle number.
+type AreaEventLine = (String, String, u8);
+/// One area's name and the hazard lines active in it.
+type AreaSnapshot = (String, Vec<AreaEventLine>);
+
 impl Game {
     pub(super) fn run_trauma_producers(&mut self, _phase: shared::messages::Phase) {
         crate::trauma_producers::run_trauma_producers(self);
@@ -16,13 +21,15 @@ impl Game {
     /// Announce the hazards active in an area.
     ///
     /// Emits one `MessageSource::Area` line per active hazard with a typed
-    /// `MessagePayload::AreaEvent` (kind parsed from the event name,
-    /// `description` = the rendered line). Hazards persist for
+    /// `MessagePayload::AreaEvent` (coarse `kind` parsed from the event
+    /// name; exact `event_name` + `triangle` ride along so displays never
+    /// re-parse the prose, `description` = the rendered line). Hazards
+    /// persist for
     /// `MAX_HAZARD_BLOCKS` cycles (q7k), so an active area re-announces
     /// each cycle; there is no close summary — nothing closes anymore.
     pub(super) fn announce_area_events(&mut self) -> Result<(), GameError> {
         // Snapshot to avoid borrow conflicts with self.messages below.
-        let snapshots: Vec<(String, Vec<(String, String)>)> = self
+        let snapshots: Vec<AreaSnapshot> = self
             .areas
             .iter()
             .filter(|a| !a.is_open())
@@ -35,6 +42,7 @@ impl Game {
                             (
                                 format!("{} (triangle {})", h.event, h.sub.index() + 1),
                                 h.event.to_string(),
+                                h.sub.index() + 1,
                             )
                         })
                         .collect();
@@ -43,9 +51,9 @@ impl Game {
             })
             .collect();
 
-        for (area_name, event_names) in snapshots {
+        for (area_name, event_lines) in snapshots {
             let subject = format!("area:{}", area_name);
-            for (display, kind_key) in &event_names {
+            for (display, event_name, triangle) in &event_lines {
                 let content = crate::events::GameEvent::AreaEvent {
                     area_event: display.clone(),
                     area_name: area_name.clone(),
@@ -56,8 +64,10 @@ impl Game {
                         identifier: area_name.clone().into(),
                         name: area_name.clone(),
                     },
-                    kind: Self::area_event_kind(kind_key),
+                    kind: Self::area_event_kind(event_name),
                     description: content.clone(),
+                    event_name: event_name.clone(),
+                    triangle: Some(*triangle),
                 };
                 self.push_message(
                     shared::messages::MessageSource::Area(area_name.clone()),

@@ -742,6 +742,8 @@ mod tests {
             area: ar("Forest"),
             kind: AreaEventKind::Fire,
             description: "A wildfire rages through the Forest!".into(),
+            event_name: "wildfire".into(),
+            triangle: Some(3),
         });
         let line = BroadcastPackageBuilder::classify_event(&msg).unwrap();
         assert_eq!(line.kind, EventKind::Hazard);
