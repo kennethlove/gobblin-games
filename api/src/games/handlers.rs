@@ -114,31 +114,16 @@ pub async fn create_game(
     let created_game = game;
 
     // Chosen roster: enter the caller's owned goblins (ownership, one per
-    // player, and fewest-team balance all gate inside join_game). Empty
-    // selection keeps the legacy fallback: a full 24-bot roster.
-    if payload.characters.is_empty() {
-        let character_futures = (0..roster_cap).map(|idx| {
-            crate::characters::create_character(None, &game_identifier, &db, idx % team_count)
-        });
-        let character_results = futures::future::join_all(character_futures).await;
-
-        if let Some(err) = character_results.into_iter().find_map(Result::err) {
-            return Err(AppError::InternalServerError(format!(
-                "Failed to create characters: {err}"
-            )));
-        }
-    } else {
-        for character_id in &payload.characters {
-            if let Err(err) =
-                crate::characters::join_game(&db, &game_identifier, character_id).await
-            {
-                // Best-effort cleanup so a rejected selection leaves no row.
-                let _ = db
-                    .query("DELETE $rid")
-                    .bind(("rid", game_rid.clone()))
-                    .await;
-                return Err(err);
-            }
+    // player, and fewest-team balance all gate inside join_game). A new
+    // game starts empty — no auto-filled bot roster.
+    for character_id in &payload.characters {
+        if let Err(err) = crate::characters::join_game(&db, &game_identifier, character_id).await {
+            // Best-effort cleanup so a rejected selection leaves no row.
+            let _ = db
+                .query("DELETE $rid")
+                .bind(("rid", game_rid.clone()))
+                .await;
+            return Err(err);
         }
     }
 

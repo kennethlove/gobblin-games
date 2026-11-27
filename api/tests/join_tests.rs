@@ -5,7 +5,7 @@
 mod common;
 
 use axum_test::TestServer;
-use common::{TestDb, TestUser, create_test_router};
+use common::{TestDb, TestUser, create_test_router, fill_roster};
 use serde_json::json;
 
 async fn create_authenticated_user(
@@ -342,7 +342,7 @@ async fn test_join_rejects_started_and_full_games() {
     let bob = create_authenticated_user(&test_db, &server, "gate_bob").await;
     let bob_goblin = create_owned_goblin(&server, &bob, "Billy Slick").await;
 
-    // Started game: fill via bot-fallback creation, then start.
+    // Started game: creation leaves it empty; start bot-fills and flips status.
     let response = server
         .post("/api/games")
         .add_header("Authorization", alice.auth_header())
@@ -378,6 +378,7 @@ async fn test_join_rejects_started_and_full_games() {
         .as_str()
         .unwrap()
         .to_string();
+    fill_roster(&test_db, &alice, &full_game).await;
     server
         .post(&format!("/api/games/{}/join", full_game))
         .add_header("Authorization", bob.auth_header())
@@ -564,7 +565,7 @@ async fn test_custom_roster_size() {
 
     let user = create_authenticated_user(&test_db, &server, "roster_config").await;
 
-    // 4 teams x 2 goblins = 8-slot roster, bot-filled at creation.
+    // 4 teams x 2 goblins = 8-slot roster, filled explicitly (games start empty).
     let response = server
         .post("/api/games")
         .add_header("Authorization", user.auth_header())
@@ -575,6 +576,7 @@ async fn test_custom_roster_size() {
         .as_str()
         .unwrap()
         .to_string();
+    fill_roster(&test_db, &user, &game_id).await;
 
     let characters = fetch_characters(&server, &user, &game_id).await;
     assert_eq!(characters.len(), 8, "cap = teams × goblins per team");
@@ -695,7 +697,7 @@ async fn test_roster_ceiling() {
         .await
         .assert_status(axum::http::StatusCode::BAD_REQUEST);
 
-    // 10 x 5 = exactly 50 is allowed and fills to the brim.
+    // 10 x 5 = exactly 50 is allowed; fill it to the brim explicitly.
     let response = server
         .post("/api/games")
         .add_header("Authorization", user.auth_header())
@@ -706,6 +708,7 @@ async fn test_roster_ceiling() {
         .as_str()
         .unwrap()
         .to_string();
+    fill_roster(&test_db, &user, &game_id).await;
 
     // (The shared helper pages at ?limit=24 — ask for more here.)
     let listing = server
@@ -1137,7 +1140,7 @@ async fn test_ready_rule_requires_even_fill() {
 
     let user = create_authenticated_user(&test_db, &server, "ready_even").await;
 
-    // 3 x 2 = 6, bot-filled at creation: 2 per team, ready.
+    // 3 x 2 = 6, filled explicitly: 2 per team, ready.
     let response = server
         .post("/api/games")
         .add_header("Authorization", user.auth_header())
@@ -1148,6 +1151,7 @@ async fn test_ready_rule_requires_even_fill() {
         .as_str()
         .unwrap()
         .to_string();
+    fill_roster(&test_db, &user, &game_id).await;
 
     let characters = fetch_characters(&server, &user, &game_id).await;
     assert_eq!(characters.len(), 6);
@@ -1201,7 +1205,7 @@ async fn test_fewest_team_with_space_rejects_when_all_teams_are_full() {
 
     let user = create_authenticated_user(&test_db, &server, "with_space").await;
 
-    // Full 2 x 2 roster, bot-filled at creation.
+    // Full 2 x 2 roster, filled explicitly (games start empty).
     let response = server
         .post("/api/games")
         .add_header("Authorization", user.auth_header())
@@ -1212,6 +1216,7 @@ async fn test_fewest_team_with_space_rejects_when_all_teams_are_full() {
         .as_str()
         .unwrap()
         .to_string();
+    fill_roster(&test_db, &user, &full_game).await;
 
     let err = api::characters::fewest_team_with_space(&test_db.db, &full_game, 2, 2).await;
     assert!(matches!(err, Err(api::AppError::GameFull(_))));
