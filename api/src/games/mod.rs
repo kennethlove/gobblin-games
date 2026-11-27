@@ -720,6 +720,8 @@ impl From<GameLog> for GameMessage {
                 },
                 kind: shared::messages::AreaEventKind::Other,
                 description: row.content.clone(),
+                event_name: String::new(),
+                triangle: None,
             }
         });
         GameMessage {

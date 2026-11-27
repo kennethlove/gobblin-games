@@ -233,6 +233,8 @@ fn kind_movement_variants_map_correctly() {
             area: area.clone(),
             kind: AreaEventKind::Storm,
             description: "x".into(),
+            event_name: "blizzard".into(),
+            triangle: Some(1),
         }
         .kind(),
         MessageKind::AreaEvent
@@ -663,6 +665,8 @@ fn importance_tiers_match_decision() {
                 area: area.clone(),
                 kind: AreaEventKind::Hazard,
                 description: "d".into(),
+                event_name: "drought".into(),
+                triangle: None,
             },
             Persist,
         ),
@@ -1502,6 +1506,8 @@ fn smoke_involves_matches_character_refs_for_all_variants() {
                 area: area.clone(),
                 kind: AreaEventKind::Hazard,
                 description: "d".into(),
+                event_name: "sinkhole".into(),
+                triangle: Some(3),
             },
             vec![],
         ),
