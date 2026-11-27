@@ -3,6 +3,14 @@
 <div class="container">
   <section class="hero">
     <div class="hero-copy">
+      {% if auth_authenticated %}
+      <h1>Your goblins are waiting.</h1>
+      <p>Pick up a game where you left it, or start something new.</p>
+      <div class="cta-row">
+        <a href="/games" class="btn btn-primary">All games</a>
+        <a href="/my-goblins" class="btn">Create a goblin</a>
+      </div>
+      {% else %}
       <h1>Every goblin has a story.</h1>
       <p>Build a clan, choose their battles, and write down what they did.</p>
       <div class="cta-row">
@@ -10,6 +18,7 @@
         <a href="/auth?tab=login" class="btn">Sign in</a>
       </div>
       <p class="hero-note">Gobblin Games is free to play. No download required.</p>
+      {% endif %}
     </div>
     <div class="hero-art" aria-hidden="true">🗡️</div>
   </section>

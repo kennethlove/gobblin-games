@@ -922,7 +922,7 @@ pub(crate) async fn timeline_summary(
 pub(crate) async fn publish_game(
     Path(game_identifier): Path<Uuid>,
     Extension(AuthDb(db)): Extension<AuthDb>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Response, AppError> {
     let game_identifier = game_identifier.to_string();
     let response = db
         .query("UPDATE game SET private = false WHERE identifier = $identifier")
@@ -930,7 +930,17 @@ pub(crate) async fn publish_game(
         .await;
 
     match response {
-        Ok(_) => Ok(Json(serde_json::json!({ "published": true }))),
+        Ok(_) => {
+            // HX-Refresh: reload the page so the visibility UI updates.
+            let mut headers = axum::http::HeaderMap::new();
+            headers.insert("HX-Refresh", axum::http::HeaderValue::from_static("true"));
+            Ok((
+                StatusCode::OK,
+                headers,
+                Json(serde_json::json!({ "published": true })),
+            )
+                .into_response())
+        }
         Err(e) => Err(AppError::InternalServerError(format!(
             "Failed to publish game: {e:?}"
         ))),
@@ -943,7 +953,7 @@ pub(crate) async fn publish_game(
 pub(crate) async fn unpublish_game(
     Path(game_identifier): Path<Uuid>,
     Extension(AuthDb(db)): Extension<AuthDb>,
-) -> Result<Json<serde_json::Value>, AppError> {
+) -> Result<Response, AppError> {
     let game_identifier = game_identifier.to_string();
     let response = db
         .query("UPDATE game SET private = true WHERE identifier = $identifier")
@@ -951,7 +961,16 @@ pub(crate) async fn unpublish_game(
         .await;
 
     match response {
-        Ok(_) => Ok(Json(serde_json::json!({ "published": false }))),
+        Ok(_) => {
+            let mut headers = axum::http::HeaderMap::new();
+            headers.insert("HX-Refresh", axum::http::HeaderValue::from_static("true"));
+            Ok((
+                StatusCode::OK,
+                headers,
+                Json(serde_json::json!({ "published": false })),
+            )
+                .into_response())
+        }
         Err(e) => Err(AppError::InternalServerError(format!(
             "Failed to unpublish game: {e:?}"
         ))),
