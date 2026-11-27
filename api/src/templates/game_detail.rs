@@ -842,6 +842,52 @@ fn is_fight_outcome(msg: &shared::messages::GameMessage) -> bool {
     )
 }
 
+/// Noun and location for an area event, read from engine prose:
+/// "=== A flood (triangle 1) has occurred in the Hub ==="
+/// -> ("Flood", "Hub Triangle 1"). Falls back to the kind's own word and
+/// the bare area name when the prose lacks either piece.
+fn area_row_parts(
+    area: &shared::messages::AreaRef,
+    kind: shared::messages::AreaEventKind,
+    content: &str,
+) -> (String, String) {
+    use shared::messages::AreaEventKind;
+    let text = content.trim();
+    let noun = text
+        .split_whitespace()
+        .skip_while(|w| !matches!(*w, "A" | "An"))
+        .nth(1)
+        .filter(|w| w.chars().all(|c| c.is_ascii_alphabetic()))
+        .map(|w| {
+            let mut c = w.chars();
+            match c.next() {
+                Some(f) => format!("{}{}", f.to_uppercase(), c.as_str()),
+                None => w.to_string(),
+            }
+        })
+        .unwrap_or_else(|| {
+            match kind {
+                AreaEventKind::Fire => "Fire",
+                AreaEventKind::Flood => "Flood",
+                AreaEventKind::Earthquake => "Earthquake",
+                AreaEventKind::Hazard => "Danger",
+                AreaEventKind::Storm => "Storm",
+                AreaEventKind::Other => "Area event",
+            }
+            .to_string()
+        });
+    let triangle = text
+        .find("(triangle ")
+        .and_then(|i| text.get(i + 10..))
+        .and_then(|s| s.split(')').next())
+        .filter(|s| !s.is_empty());
+    let loc = match triangle {
+        Some(n) => format!("{} Triangle {}", area.name, n),
+        None => area.name.clone(),
+    };
+    (noun, loc)
+}
+
 pub fn day_digest_rows(
     msgs: &[shared::messages::GameMessage],
     avatars: &std::collections::HashMap<String, String>,
@@ -858,6 +904,7 @@ pub fn day_digest_rows(
     // Cluster buckets: first index (placement), kind, member indices.
     #[derive(PartialEq, Clone, Copy)]
     enum Bucket {
+        Area,
         Loot,
         Alliance,
         Movement,
@@ -927,24 +974,7 @@ pub fn day_digest_rows(
                 ));
                 None
             }
-            MessagePayload::AreaEvent { area, kind, .. } => {
-                use shared::messages::AreaEventKind;
-                let word = match kind {
-                    AreaEventKind::Fire => "Fire",
-                    AreaEventKind::Flood => "Flood",
-                    AreaEventKind::Earthquake => "An earthquake",
-                    AreaEventKind::Hazard => "Danger",
-                    AreaEventKind::Storm => "A storm",
-                    AreaEventKind::Other => "An area event",
-                };
-                let lead = if msg.content.trim().is_empty() {
-                    format!("{word} in {}.", area.name)
-                } else {
-                    msg.content.trim().to_string()
-                };
-                rows.push((i, digest_row("area", vec![], lead, vec![], 0)));
-                None
-            }
+            MessagePayload::AreaEvent { .. } => Some(Bucket::Area),
             MessagePayload::ItemFound { .. }
             | MessagePayload::ItemUsed { .. }
             | MessagePayload::ItemDropped { .. }
@@ -969,7 +999,58 @@ pub fn day_digest_rows(
     }
 
     for (first, bucket, members) in clusters {
+        if bucket == Bucket::Area {
+            // One row per hazard kind with its locations merged:
+            // "Flood in Hub Triangle 1 and Sector 4 Triangle 3."
+            let mut kinds: Vec<(String, Vec<String>)> = Vec::new();
+            for &j in &members {
+                let shared::messages::MessagePayload::AreaEvent { area, kind, .. } =
+                    &msgs[j].payload
+                else {
+                    continue;
+                };
+                let (noun, loc) = area_row_parts(area, *kind, &msgs[j].content);
+                let pos = kinds
+                    .iter()
+                    .position(|(n, _)| n.eq_ignore_ascii_case(&noun));
+                let entry = match pos {
+                    Some(p) => &mut kinds[p].1,
+                    None => {
+                        kinds.push((noun, Vec::new()));
+                        &mut kinds.last_mut().expect("just pushed").1
+                    }
+                };
+                if !entry.contains(&loc) {
+                    entry.push(loc);
+                }
+            }
+            for (noun, locs) in kinds {
+                if locs.is_empty() {
+                    continue;
+                }
+                let more = locs.len().saturating_sub(3);
+                let shown: Vec<&str> = locs.iter().take(3).map(String::as_str).collect();
+                let loc_txt = match shown.len() {
+                    1 => shown[0].to_string(),
+                    2 => format!("{} and {}", shown[0], shown[1]),
+                    _ => format!("{}, {}, and {}", shown[0], shown[1], shown[2]),
+                };
+                rows.push((
+                    first,
+                    digest_row(
+                        "area",
+                        vec![],
+                        format!("{noun} in {loc_txt}."),
+                        vec![],
+                        more,
+                    ),
+                ));
+            }
+            continue;
+        }
         let (kind, lead) = match bucket {
+            // Handled above: one row per hazard kind.
+            Bucket::Area => continue,
             Bucket::Loot => ("loot", "Supplies change hands."),
             Bucket::Alliance => ("alliance", "Alliances shift."),
             Bucket::Movement => ("movement", "The goblins reposition."),
@@ -2188,6 +2269,52 @@ mod day_summary_card_tests {
 
     fn digest(msgs: &[GameMessage]) -> Vec<serde_json::Value> {
         day_digest_rows(msgs, &std::collections::HashMap::new())
+    }
+
+    /// Area events collapse to one row per hazard kind with their
+    /// locations merged and deduped.
+    #[test]
+    fn digest_merges_area_events_by_kind() {
+        use shared::messages::AreaEventKind;
+        let hazard = |tri: u8, name: &str, kind: AreaEventKind, noun: &str| {
+            GameMessage::new(
+                MessageSource::Game("g".into()),
+                2,
+                Phase::DAY_START,
+                5,
+                1,
+                "game:g".into(),
+                format!("=== ⚠️ A {noun} (triangle {tri}) has occurred in the {name} ==="),
+                MessagePayload::AreaEvent {
+                    area: shared::messages::AreaRef {
+                        identifier: name.into(),
+                        name: name.into(),
+                    },
+                    kind,
+                    description: String::new(),
+                },
+            )
+        };
+        let msgs = vec![
+            hazard(1, "Hub", AreaEventKind::Flood, "flood"),
+            hazard(3, "Sector 4", AreaEventKind::Flood, "flood"),
+            hazard(1, "Hub", AreaEventKind::Flood, "flood"),
+            hazard(1, "Sector 4", AreaEventKind::Earthquake, "earthquake"),
+        ];
+        let rows = digest(&msgs);
+        let areas: Vec<&str> = rows
+            .iter()
+            .filter(|r| r["kind"] == "area")
+            .filter_map(|r| r["lead"].as_str())
+            .collect();
+        assert_eq!(
+            areas,
+            vec![
+                "Flood in Hub Triangle 1 and Sector 4 Triangle 3.",
+                "Earthquake in Sector 4 Triangle 1.",
+            ],
+            "{rows:?}"
+        );
     }
 
     /// One fight row carries the run, its beats, and the trailing
