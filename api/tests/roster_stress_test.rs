@@ -10,7 +10,7 @@
 mod common;
 
 use axum_test::TestServer;
-use common::{TestDb, TestUser, create_test_router};
+use common::{TestDb, TestUser, create_test_router, fill_roster};
 use serde_json::json;
 use std::time::Instant;
 
@@ -84,7 +84,7 @@ async fn roster_stress_128_end_to_end() {
 
     let user = create_authenticated_user(&test_db, &server, "roster_stress").await;
 
-    // Creation bot-fills the full 16 x 8 = 128 roster.
+    // Games start empty; fill the full 16 x 8 = 128 roster explicitly.
     let t_fill = Instant::now();
     let response = server
         .post("/api/games")
@@ -96,16 +96,17 @@ async fn roster_stress_128_end_to_end() {
         }))
         .await;
     response.assert_status(axum::http::StatusCode::CREATED);
-    let fill_ms = t_fill.elapsed().as_millis();
     let game_id = response.json::<serde_json::Value>()["identifier"]
         .as_str()
         .unwrap()
         .to_string();
+    fill_roster(&test_db, &user, &game_id).await;
+    let fill_ms = t_fill.elapsed().as_millis();
 
     assert_eq!(
         fetch_character_count(&server, &user, &game_id).await,
         ROSTER,
-        "creation must bot-fill to 128"
+        "roster fill must reach 128"
     );
 
     // Read path: get_full_game + detail data at 128.
@@ -177,6 +178,7 @@ async fn message_volume_budget_at_128() {
         .as_str()
         .unwrap()
         .to_string();
+    fill_roster(&test_db, &user, &game_id).await;
     assert_eq!(
         fetch_character_count(&server, &user, &game_id).await,
         ROSTER

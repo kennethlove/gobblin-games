@@ -1642,29 +1642,18 @@ pub async fn create_game_post_handler(
 
     let mut chosen: Vec<String> = form.characters.clone();
     chosen.retain(|c| !c.is_empty());
-    if chosen.is_empty() {
-        // Legacy fallback: no goblin chosen, spawn the full bot roster.
-        let character_futures = (0..roster_cap).map(|idx| {
-            api::characters::create_character(None, &game_identifier, &user_db, idx % team_count)
-        });
-        let character_results = futures::future::join_all(character_futures).await;
-        if character_results.into_iter().any(|r| r.is_err()) {
-            tracing::warn!("bot roster creation failed for {game_identifier}");
+    // A new game starts empty — goblins join later through the game page.
+    for character_id in &chosen {
+        if api::characters::join_game(&user_db, &game_identifier, character_id)
+            .await
+            .is_err()
+        {
+            tracing::warn!(
+                character_id,
+                "join_game failed during create for {game_identifier}"
+            );
+            let _ = user_db.query("DELETE $rid").bind(("rid", game_rid)).await;
             return Redirect::to("/games/new").into_response();
-        }
-    } else {
-        for character_id in &chosen {
-            if api::characters::join_game(&user_db, &game_identifier, character_id)
-                .await
-                .is_err()
-            {
-                tracing::warn!(
-                    character_id,
-                    "join_game failed during create for {game_identifier}"
-                );
-                let _ = user_db.query("DELETE $rid").bind(("rid", game_rid)).await;
-                return Redirect::to("/games/new").into_response();
-            }
         }
     }
 

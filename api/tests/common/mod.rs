@@ -357,6 +357,43 @@ async fn surreal_jwt(
     next.run(request).await
 }
 
+/// Fill a game's roster explicitly. Games start empty now, so tests that
+/// need a full/ready roster spawn it here on a connection authenticated
+/// as the creator (`created_by = $auth` is connection-stamped) — same
+/// shape as the old create-time bot fill: `team_count x goblins_per_team`,
+/// round-robin over teams.
+pub async fn fill_roster(test_db: &TestDb, user: &TestUser, game_id: &str) {
+    let mut resp = test_db
+        .db
+        .query("SELECT team_count, goblins_per_team FROM game WHERE identifier = $id")
+        .bind(("id", game_id.to_string()))
+        .await
+        .expect("load game config");
+    let rows: Vec<serde_json::Value> = resp.take(0).expect("game config rows");
+    let row = rows.first().expect("game row");
+    let team_count = row["team_count"].as_u64().expect("team_count") as u32;
+    let goblins_per_team = row["goblins_per_team"].as_u64().expect("goblins_per_team") as u32;
+
+    let user_db = (*test_db.db).clone();
+    user_db
+        .use_ns(&test_db.namespace)
+        .use_db(&test_db.database)
+        .await
+        .expect("use test namespace");
+    user_db
+        .authenticate(surrealdb::opt::auth::Token::from(
+            user.access_token.clone().expect("test user token"),
+        ))
+        .await
+        .expect("authenticate test user");
+
+    for idx in 0..(team_count * goblins_per_team) {
+        api::characters::create_character(None, game_id, &user_db, idx % team_count)
+            .await
+            .expect("roster fill");
+    }
+}
+
 /// Test user credentials
 pub struct TestUser {
     pub username: String,

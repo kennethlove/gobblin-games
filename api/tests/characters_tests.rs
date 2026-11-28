@@ -1,7 +1,7 @@
 mod common;
 
 use axum_test::TestServer;
-use common::{TestDb, TestUser, create_test_router};
+use common::{TestDb, TestUser, create_test_router, fill_roster};
 use serde_json::json;
 
 /// Helper to create an authenticated test user
@@ -42,9 +42,10 @@ async fn create_authenticated_user(
     test_user.with_tokens(access_token, refresh_token)
 }
 
-/// Helper to create a game for testing. Auto-spawns 24 characters server-side
-/// (see `api::games::create_game` in `api/src/games.rs:226-236`).
-async fn create_test_game(server: &TestServer, user: &TestUser) -> String {
+/// Helper to create a game for testing. Games start empty now, so this
+/// spawns the 24-character roster the tests edit in place — the same shape
+/// the old create-time auto-spawn produced (3 teams x 8).
+async fn create_test_game(test_db: &TestDb, server: &TestServer, user: &TestUser) -> String {
     let response = server
         .post("/api/games")
         .add_header("Authorization", user.auth_header())
@@ -56,10 +57,13 @@ async fn create_test_game(server: &TestServer, user: &TestUser) -> String {
         .await;
 
     let body = response.json::<serde_json::Value>();
-    body["identifier"].as_str().unwrap().to_string()
+    let game_id = body["identifier"].as_str().unwrap().to_string();
+
+    fill_roster(test_db, user, &game_id).await;
+    game_id
 }
 
-/// Helper to fetch the auto-spawned character roster for a game.
+/// Helper to fetch the character roster for a game.
 async fn fetch_characters(
     server: &TestServer,
     user: &TestUser,
@@ -74,46 +78,44 @@ async fn fetch_characters(
     body["characters"].as_array().cloned().unwrap_or_default()
 }
 
-/// Helper to grab the first auto-spawned character identifier for a game.
+/// Helper to grab the first character identifier for a game.
 async fn first_character_id(server: &TestServer, user: &TestUser, game_id: &str) -> String {
     let characters = fetch_characters(server, user, game_id).await;
     characters
         .first()
         .and_then(|t| t["identifier"].as_str())
         .map(|s| s.to_string())
-        .expect("expected at least one auto-spawned character")
+        .expect("expected at least one character in the roster")
 }
 
-/// Verify that creating a game auto-spawns the full 24-character roster.
-///
-/// Replaces the old `POST /api/games/{id}/characters` test: manual
-/// character creation is intentionally not exposed.
-/// Every game starts with 24 server-generated characters which users edit in
-/// place via `PUT /api/games/{id}/characters/{id}`.
+/// Creating a game must NOT fill it: a new game has no goblins at all.
+/// (The old create-time auto-spawn is gone — `create_test_game` spawns
+/// rosters explicitly for the tests that need one.)
 #[tokio::test]
-async fn test_game_auto_spawns_characters() {
+async fn test_create_game_starts_empty() {
     let test_db = TestDb::new().await;
     let app_state = test_db.app_state();
     let router = create_test_router(app_state);
     let server = TestServer::new(router);
 
     let user = create_authenticated_user(&test_db, &server, "character_creator1").await;
-    let game_id = create_test_game(&server, &user).await;
+    let response = server
+        .post("/api/games")
+        .add_header("Authorization", user.auth_header())
+        .json(&json!({ "name": "Empty Start" }))
+        .await;
+    response.assert_status(axum::http::StatusCode::CREATED);
+    let game_id = response.json::<serde_json::Value>()["identifier"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     let characters = fetch_characters(&server, &user, &game_id).await;
-    assert_eq!(
-        characters.len(),
-        24,
-        "auto-spawn should populate 24 characters"
+    assert!(
+        characters.is_empty(),
+        "a new game should start with no goblins, found {}",
+        characters.len()
     );
-
-    for t in &characters {
-        assert!(t.get("identifier").is_some());
-        assert!(t.get("name").is_some());
-        assert!(t.get("team").is_some());
-        let team = t["team"].as_u64().expect("team is u64");
-        assert!((1..=8).contains(&team), "team {} out of range", team);
-    }
 
     test_db.cleanup().await;
 }
@@ -127,7 +129,7 @@ async fn test_get_character() {
     let server = TestServer::new(router);
 
     let user = create_authenticated_user(&test_db, &server, "character_getter").await;
-    let game_id = create_test_game(&server, &user).await;
+    let game_id = create_test_game(&test_db, &server, &user).await;
     let character_id = first_character_id(&server, &user, &game_id).await;
 
     let get_response = server
@@ -157,7 +159,7 @@ async fn test_update_character() {
     let server = TestServer::new(router);
 
     let user = create_authenticated_user(&test_db, &server, "character_updater").await;
-    let game_id = create_test_game(&server, &user).await;
+    let game_id = create_test_game(&test_db, &server, &user).await;
     let character_id = first_character_id(&server, &user, &game_id).await;
 
     let update_response = server
@@ -199,7 +201,7 @@ async fn test_delete_character() {
     let server = TestServer::new(router);
 
     let user = create_authenticated_user(&test_db, &server, "character_deleter").await;
-    let game_id = create_test_game(&server, &user).await;
+    let game_id = create_test_game(&test_db, &server, &user).await;
     let character_id = first_character_id(&server, &user, &game_id).await;
 
     let delete_response = server
@@ -232,73 +234,6 @@ async fn test_delete_character() {
     test_db.cleanup().await;
 }
 
-/// Test that the auto-spawn roster covers every team 1..=3.
-#[tokio::test]
-async fn test_auto_spawn_team_coverage() {
-    let test_db = TestDb::new().await;
-    let app_state = test_db.app_state();
-    let router = create_test_router(app_state);
-    let server = TestServer::new(router);
-
-    let user = create_authenticated_user(&test_db, &server, "multi_character_creator").await;
-    let game_id = create_test_game(&server, &user).await;
-
-    let characters = fetch_characters(&server, &user, &game_id).await;
-    assert_eq!(characters.len(), 24);
-
-    let mut teams: Vec<u64> = characters
-        .iter()
-        .map(|t| t["team"].as_u64().expect("team is u64"))
-        .collect();
-    teams.sort_unstable();
-    let unique: std::collections::BTreeSet<_> = teams.iter().copied().collect();
-    assert_eq!(
-        unique,
-        (1..=3u64).collect(),
-        "every team 1..=3 should be represented"
-    );
-
-    test_db.cleanup().await;
-}
-
-/// The auto-spawn must spread the 24-character
-/// roster evenly: exactly 8 characters in each team 1..=3.
-#[tokio::test]
-async fn test_auto_spawn_eight_characters_per_team() {
-    let test_db = TestDb::new().await;
-    let app_state = test_db.app_state();
-    let router = create_test_router(app_state);
-    let server = TestServer::new(router);
-
-    let user = create_authenticated_user(&test_db, &server, "three_per_team").await;
-    let game_id = create_test_game(&server, &user).await;
-
-    let characters = fetch_characters(&server, &user, &game_id).await;
-    assert_eq!(
-        characters.len(),
-        24,
-        "auto-spawn should populate 24 characters"
-    );
-
-    let mut per_team: std::collections::BTreeMap<u64, usize> = std::collections::BTreeMap::new();
-    for character in &characters {
-        let team = character["team"].as_u64().expect("team is u64");
-        *per_team.entry(team).or_insert(0) += 1;
-    }
-
-    assert_eq!(per_team.len(), 3, "teams must all lie within 1..=3");
-    for team in 1..=3u64 {
-        assert_eq!(
-            per_team.get(&team),
-            Some(&8),
-            "team {} should have exactly 8 characters",
-            team
-        );
-    }
-
-    test_db.cleanup().await;
-}
-
 /// A full spawn satisfies the readiness rule from `schemas/game.surql`
 /// (24 characters AND 8 distinct teams) through the real query paths:
 /// `fn::get_detail_game` behind `GET /api/games/{id}`,
@@ -312,7 +247,7 @@ async fn test_full_spawn_marks_game_ready() {
     let server = TestServer::new(router);
 
     let user = create_authenticated_user(&test_db, &server, "game_ready_checker").await;
-    let game_id = create_test_game(&server, &user).await;
+    let game_id = create_test_game(&test_db, &server, &user).await;
 
     // fn::get_detail_game via GET /api/games/{id}.
     let detail_response = server
@@ -379,7 +314,7 @@ async fn test_character_log() {
     let server = TestServer::new(router);
 
     let user = create_authenticated_user(&test_db, &server, "character_logger").await;
-    let game_id = create_test_game(&server, &user).await;
+    let game_id = create_test_game(&test_db, &server, &user).await;
     let character_id = first_character_id(&server, &user, &game_id).await;
 
     let log_response = server
@@ -407,7 +342,7 @@ async fn test_character_items() {
     let server = TestServer::new(router);
 
     let user = create_authenticated_user(&test_db, &server, "character_item_tester").await;
-    let game_id = create_test_game(&server, &user).await;
+    let game_id = create_test_game(&test_db, &server, &user).await;
     let character_id = first_character_id(&server, &user, &game_id).await;
 
     let get_response = server
@@ -435,7 +370,7 @@ async fn test_update_character_validation() {
     let server = TestServer::new(router);
 
     let user = create_authenticated_user(&test_db, &server, "character_validator").await;
-    let game_id = create_test_game(&server, &user).await;
+    let game_id = create_test_game(&test_db, &server, &user).await;
     let character_id = first_character_id(&server, &user, &game_id).await;
 
     let response = server
@@ -770,7 +705,7 @@ async fn test_foreign_game_scoped_character_mutation_rejected() {
     let alice = create_authenticated_user(&test_db, &server, "game_owner").await;
     let bob = create_authenticated_user(&test_db, &server, "game_attacker").await;
 
-    let game_id = create_test_game(&server, &alice).await;
+    let game_id = create_test_game(&test_db, &server, &alice).await;
     let character_id = first_character_id(&server, &alice, &game_id).await;
 
     server
@@ -849,7 +784,7 @@ async fn test_owned_edit_respects_started_game() {
     let server = TestServer::new(router);
     let user = create_authenticated_user(&test_db, &server, "owned_in_game").await;
 
-    let game_id = create_test_game(&server, &user).await;
+    let game_id = create_test_game(&test_db, &server, &user).await;
     let character_id = first_character_id(&server, &user, &game_id).await;
 
     // NotStarted: the owner may edit.
