@@ -811,6 +811,85 @@ fn names_list(names: &[String]) -> String {
     }
 }
 
+/// One row for the day's dead: lead from the victims, with the wounds and
+/// hardship lines that accompanied them riding along as detail.
+fn deaths_row(
+    msgs: &[shared::messages::GameMessage],
+    members: &[usize],
+    avatar_of: &impl Fn(&shared::messages::CharacterRef) -> String,
+) -> serde_json::Value {
+    use shared::messages::MessagePayload;
+
+    let mut names: Vec<String> = Vec::new();
+    let mut avatars: Vec<String> = Vec::new();
+    let mut lines: Vec<String> = Vec::new();
+    let mut record = |name: String, avatar: String, line: Option<String>| {
+        if !names.contains(&name) {
+            names.push(name);
+        }
+        if !avatars.contains(&avatar) {
+            avatars.push(avatar);
+        }
+        if let Some(line) = line {
+            lines.push(line);
+        }
+    };
+    for &j in members {
+        let m = &msgs[j];
+        let text = |fallback: String| {
+            if m.content.trim().is_empty() {
+                fallback
+            } else {
+                m.content.trim().to_string()
+            }
+        };
+        match &m.payload {
+            MessagePayload::CharacterKilled { victim, .. } => {
+                record(
+                    victim.name.clone(),
+                    avatar_of(victim),
+                    Some(text(format!("{} dies!", victim.name))),
+                );
+            }
+            MessagePayload::CharacterWounded { victim, .. } => {
+                let line = text(String::new());
+                record(
+                    victim.name.clone(),
+                    avatar_of(victim),
+                    (!line.is_empty()).then_some(line),
+                );
+            }
+            MessagePayload::CharacterStarved { character, .. }
+            | MessagePayload::CharacterDehydrated { character, .. } => {
+                let line = text(String::new());
+                record(
+                    character.name.clone(),
+                    avatar_of(character),
+                    (!line.is_empty()).then_some(line),
+                );
+            }
+            _ => {}
+        }
+    }
+    let lead = if names.is_empty() {
+        if lines.is_empty() {
+            "Elsewhere in the logs.".to_string()
+        } else {
+            lines.remove(0)
+        }
+    } else {
+        let list = names_list(&names);
+        if names.len() == 1 {
+            format!("{list} falls.")
+        } else {
+            format!("{list} fall.")
+        }
+    };
+    let more = lines.len().saturating_sub(DIGEST_CLUSTER_LINES);
+    lines.truncate(DIGEST_CLUSTER_LINES);
+    digest_row("death", avatars, lead, lines, more)
+}
+
 fn line_or(content: &str, fallback: impl FnOnce() -> String) -> String {
     let text = content.trim();
     if text.is_empty() {
@@ -938,10 +1017,8 @@ pub fn day_digest_rows(
     #[derive(PartialEq, Clone, Copy)]
     enum Bucket {
         Area,
-        Loot,
-        Alliance,
         Movement,
-        Misc,
+        Other,
     }
     let mut clusters: Vec<(usize, Bucket, Vec<usize>)> = Vec::new();
     let mut rows: Vec<(usize, serde_json::Value)> = Vec::new();
@@ -1001,37 +1078,73 @@ pub fn day_digest_rows(
     // Indices whose own row rides a fight row instead: combat payloads
     // and outcome messages inside a merged fight's span.
     let mut attached: HashSet<usize> = HashSet::new();
+    for (g, _, _) in &merged {
+        let mut w = g.end;
+        while w < msgs.len() && is_fight_outcome(&msgs[w]) {
+            w += 1;
+        }
+        for (offset, m) in msgs[g.start..w].iter().enumerate() {
+            let j = g.start + offset;
+            let combat = matches!(
+                m.payload,
+                MessagePayload::Combat(_)
+                    | MessagePayload::CombatRoundStart { .. }
+                    | MessagePayload::CombatBeat(_)
+                    | MessagePayload::CombatJoined { .. }
+                    | MessagePayload::CombatEnded { .. }
+            );
+            if combat || is_fight_outcome(m) {
+                attached.insert(j);
+            }
+        }
+    }
+
+    // One row for the day's dead: standalone deaths plus the wounds and
+    // hardship lines of characters who died. Deaths riding a fight or a
+    // hazard row stay there.
+    let mut killed_names: HashSet<&str> = HashSet::new();
+    for m in msgs {
+        if let MessagePayload::CharacterKilled { victim, .. } = &m.payload {
+            killed_names.insert(victim.identifier.as_str());
+        }
+    }
+    let mut death_members: Vec<usize> = Vec::new();
+    for (idx, m) in msgs.iter().enumerate() {
+        if attached.contains(&idx) {
+            continue;
+        }
+        let belongs = match &m.payload {
+            MessagePayload::CharacterKilled { cause, .. } => !hazard_death_key(cause)
+                .as_ref()
+                .is_some_and(|k| hazard_nouns.contains(k)),
+            MessagePayload::CharacterWounded { victim, .. } => {
+                killed_names.contains(victim.identifier.as_str())
+            }
+            MessagePayload::CharacterStarved { character, .. }
+            | MessagePayload::CharacterDehydrated { character, .. } => {
+                killed_names.contains(character.identifier.as_str())
+            }
+            _ => false,
+        };
+        if belongs {
+            death_members.push(idx);
+        }
+    }
+    let death_set: HashSet<usize> = death_members.iter().copied().collect();
+
+    let mut deaths_emitted = false;
     let mut gi = 0usize;
     let mut i = 0usize;
     while i < msgs.len() {
-        if attached.contains(&i) {
-            i += 1;
-            continue;
-        }
+        // Fight rows come first: their start index is itself `attached`.
         if gi < merged.len() && merged[gi].0.start == i {
             let (g, gap, _) = &merged[gi];
             // Trailing deaths/wounds/loot read as that fight's outcome —
             // consume them into the row while they directly follow it.
+            // (Span membership was marked `attached` above.)
             let mut w = g.end;
             while w < msgs.len() && is_fight_outcome(&msgs[w]) {
                 w += 1;
-            }
-            // Combat payloads and outcomes anywhere in the span ride the
-            // row; anything else (a hazard event between fragments) keeps
-            // its own row below.
-            for (offset, m) in msgs[g.start..w].iter().enumerate() {
-                let j = g.start + offset;
-                let combat = matches!(
-                    m.payload,
-                    MessagePayload::Combat(_)
-                        | MessagePayload::CombatRoundStart { .. }
-                        | MessagePayload::CombatBeat(_)
-                        | MessagePayload::CombatJoined { .. }
-                        | MessagePayload::CombatEnded { .. }
-                );
-                if combat || is_fight_outcome(m) {
-                    attached.insert(j);
-                }
             }
             let mut tail: Vec<&shared::messages::GameMessage> = gap
                 .iter()
@@ -1045,45 +1158,32 @@ pub fn day_digest_rows(
             i += 1;
             continue;
         }
+        if attached.contains(&i) {
+            i += 1;
+            continue;
+        }
+        if death_set.contains(&i) {
+            if !deaths_emitted {
+                deaths_emitted = true;
+                rows.push((i, deaths_row(msgs, &death_members, &avatar_of)));
+            }
+            i += 1;
+            continue;
+        }
 
         let msg = &msgs[i];
         let bucket = match &msg.payload {
             // Server-log-only pass-through and the stats card: not story.
             MessagePayload::CombatRoundStart { .. } | MessagePayload::DaySummary { .. } => None,
-            MessagePayload::CharacterKilled { victim, cause, .. } => {
-                // A hazard death rides its hazard's row below instead.
-                let folded = hazard_death_key(cause)
-                    .as_ref()
-                    .is_some_and(|k| hazard_nouns.contains(k));
-                if folded {
-                    None
-                } else {
-                    let lead = if msg.content.trim().is_empty() {
-                        format!("{} dies!", victim.name)
-                    } else {
-                        msg.content.trim().to_string()
-                    };
-                    rows.push((
-                        i,
-                        digest_row("death", vec![avatar_of(victim)], lead, vec![], 0),
-                    ));
-                    None
-                }
-            }
+            // Standalone deaths and their circumstance lines were collected
+            // into the day's death row above; hazard deaths ride theirs.
+            MessagePayload::CharacterKilled { .. } => None,
             MessagePayload::AreaEvent { .. } => Some(Bucket::Area),
-            MessagePayload::ItemFound { .. }
-            | MessagePayload::ItemUsed { .. }
-            | MessagePayload::ItemDropped { .. }
-            | MessagePayload::PatronGift { .. } => Some(Bucket::Loot),
-            MessagePayload::AllianceFormed { .. }
-            | MessagePayload::AllianceProposed { .. }
-            | MessagePayload::AllianceDissolved { .. }
-            | MessagePayload::BetrayalTriggered { .. }
-            | MessagePayload::TrustShockBreak { .. } => Some(Bucket::Alliance),
             MessagePayload::CharacterMoved { .. }
             | MessagePayload::CharacterHidden { .. }
             | MessagePayload::AreaClosed { .. } => Some(Bucket::Movement),
-            _ => Some(Bucket::Misc),
+            // Everything else — loot, alliances, conditions, the rest.
+            _ => Some(Bucket::Other),
         };
         if let Some(bucket) = bucket {
             match clusters.iter_mut().find(|(_, b, _)| *b == bucket) {
@@ -1172,12 +1272,10 @@ pub fn day_digest_rows(
             continue;
         }
         let (kind, lead) = match bucket {
-            // Handled above: one row per hazard kind.
+            // Handled above: one row per hazard kind; deaths emit during the walk.
             Bucket::Area => continue,
-            Bucket::Loot => ("loot", "Supplies change hands."),
-            Bucket::Alliance => ("alliance", "Alliances shift."),
             Bucket::Movement => ("movement", "The goblins reposition."),
-            Bucket::Misc => ("misc", "Elsewhere today."),
+            Bucket::Other => ("other", "Elsewhere in the logs."),
         };
         let lines: Vec<String> = members
             .iter()
@@ -2629,13 +2727,9 @@ mod day_summary_card_tests {
     /// Standalone deaths stay their own rows; combat pass-throughs are
     /// skipped; cluster members merge; the row count never exceeds the cap.
     #[test]
-    fn digest_clusters_and_caps_row_count() {
-        let msgs: Vec<GameMessage> = (0..25).map(|i| killed(&format!("Victim{i}"))).collect();
-        let rows = digest(&msgs);
-        assert_eq!(rows.len(), 20, "cap at DIGEST_MAX_ROWS: {rows:?}");
-        assert_eq!(rows[19]["kind"], "more");
-        assert_eq!(rows[0]["kind"], "death");
-
+    fn digest_groups_and_caps_row_count() {
+        // Loot groups with everything else, movement keeps its own row,
+        // and the round-start pass-through never becomes a row.
         let msgs = vec![
             found("Alice", "Bread"),
             found("Bob", "Wine"),
@@ -2680,10 +2774,88 @@ mod day_summary_card_tests {
         assert_eq!(
             rows.len(),
             2,
-            "loot + movement, round-start skipped: {rows:?}"
+            "other + movement, round-start skipped: {rows:?}"
         );
-        assert_eq!(rows[0]["kind"], "loot");
+        assert_eq!(rows[0]["kind"], "other");
+        assert_eq!(rows[0]["lead"], "Elsewhere in the logs.");
         assert_eq!(rows[1]["kind"], "movement");
+    }
+
+    /// Twenty-five separate fights blow past the row budget.
+    #[test]
+    fn digest_caps_rows_and_keeps_the_tail_note() {
+        let mut msgs: Vec<GameMessage> = Vec::new();
+        for n in 0..25u32 {
+            if n > 0 {
+                msgs.push(found(&format!("Picker{n}"), "Coin"));
+            }
+            msgs.push(beat(
+                n,
+                &format!("A{n}"),
+                format!("B{n}").as_str(),
+                swing_miss(),
+                true,
+            ));
+        }
+        let rows = digest(&msgs);
+        assert_eq!(rows.len(), 20, "cap at DIGEST_MAX_ROWS: {rows:?}");
+        assert_eq!(rows[19]["kind"], "more");
+    }
+
+    /// Standalone deaths, and the wounds of the fallen, read as one row.
+    #[test]
+    fn digest_groups_standalone_deaths_into_one_row() {
+        let msgs = vec![
+            killed("Warts"),
+            killed("Totter"),
+            GameMessage::new(
+                MessageSource::Game("g".into()),
+                2,
+                Phase::DAY_START,
+                5,
+                11,
+                "game:g".into(),
+                "Warts was wounded before falling.".into(),
+                MessagePayload::CharacterWounded {
+                    victim: cref("Warts"),
+                    attacker: None,
+                    hp_lost: 3,
+                },
+            ),
+            GameMessage::new(
+                MessageSource::Game("g".into()),
+                2,
+                Phase::DAY_START,
+                5,
+                12,
+                "game:g".into(),
+                "Alice is bruised.".into(),
+                MessagePayload::CharacterWounded {
+                    victim: cref("Alice"),
+                    attacker: None,
+                    hp_lost: 1,
+                },
+            ),
+        ];
+        let rows = digest(&msgs);
+        assert_eq!(rows.len(), 2, "death row + other row: {rows:?}");
+        assert_eq!(rows[0]["kind"], "death");
+        assert_eq!(rows[0]["lead"], "Warts and Totter fall.");
+        let lines: Vec<&str> = rows[0]["lines"]
+            .as_array()
+            .expect("death lines")
+            .iter()
+            .filter_map(|l| l.as_str())
+            .collect();
+        assert!(lines.contains(&"Warts dies!"), "{lines:?}");
+        assert!(lines.contains(&"Totter dies!"), "{lines:?}");
+        assert!(
+            lines.contains(&"Warts was wounded before falling."),
+            "{lines:?}"
+        );
+        assert_eq!(rows[1]["kind"], "other");
+        assert_eq!(rows[1]["lead"], "Elsewhere in the logs.");
+        assert_eq!(rows[1]["lines"][0], "Alice is bruised.");
     }
 
     /// The timeline template compiles and renders the digest section
